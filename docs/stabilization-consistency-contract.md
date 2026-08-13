@@ -141,20 +141,22 @@ a broadcast event bus.
 | Durable impact | Invalidated read projections |
 | --- | --- |
 | Daily Capture | latest Capture, Today, Today latest check-in, Daily Briefing, Exam Outlook |
-| Habit outcome | Today, Daily Briefing |
-| Habit definition/lifecycle | Today, Daily Briefing, Planner |
+| Habit outcome | Today, Today Full week, Daily Briefing |
+| Habit definition/lifecycle | Today, Today Full week, Daily Briefing, Planner |
 | Focus lifecycle | Today, Today Full week, Daily Briefing, Preparation Workload, Exam Outlook |
-| Focus reflection | Today Full week |
+| Focus reflection | no Full-week invalidation; the agenda has no reflection/rating projection |
 | Deadline Plan | Today, Today Full week, Daily Briefing, Planner, Preparation Workload, Exam Outlook |
-| Planner | Today, Daily Briefing, Preparation Workload, Exam Outlook |
+| Planner | Today, Today Full week, Daily Briefing, Preparation Workload, Exam Outlook |
 | Setup | Today, Today Full week, Daily Briefing, Recommendations, Planner, Preparation Workload, Exam Outlook |
 | Timezone | every date-bound Capture, Today including latest check-in and Full week, Briefing, Recommendation, Planner, Workload, and Outlook read |
 | Preparation budget | Preparation Workload |
+| Calendar planning import | Today, Today Full week, Planner, Preparation Workload, and Exam Outlook |
 
 Today-originated Task/Habit writes deliberately exclude Today from coordinator
 invalidation because Today performs exactly one owned reload and must retain
-its prior projection on failure. Planner similarly owns its updated/reloaded
-overview in its controller. Guest Daily Capture uses the same local
+its prior projection on failure. They still invalidate Full week, and a
+Today-originated Task also invalidates Planner and its availability consumers.
+Planner similarly owns its updated/reloaded overview in its controller. Guest Daily Capture uses the same local
 invalidation mapping but skips the authenticated Daily Snapshot refresh.
 
 Deadline lifecycle writes are a controller-owned specialization of this rule:
@@ -237,6 +239,14 @@ local date, then both boundaries are resolved independently. Proposal and
 confirmation fail closed on an invalid source. Planner reports attention;
 Today marks only the affected source unavailable and retains independent
 sources.
+
+`today-week-agenda-v1` applies that isolation across seven independently named
+sources. Its profile/timezone boundary is the only route-wide failure. Calendar
+is authoritative only when the connected owner's last import still has
+`planning_status=current`; a stale import makes only Calendar unavailable in
+both the day overview and week agenda. The server transports profile-local
+dates and wall-clock strings directly so Flutter does not introduce a second
+device-timezone projection.
 
 The Planner Overview read is resilient across its bounded recurrence horizon.
 If a confirmed Habit slot, applicable weekly Setup row, or weekly manual fixed

@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
-import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
 import 'package:my_life_graph/features/dashboard/application/today_command_controller.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_full_week.dart';
@@ -18,6 +18,8 @@ import 'package:my_life_graph/features/dashboard/presentation/widgets/dashboard_
 import 'package:my_life_graph/features/dashboard/presentation/widgets/today_action_sections.dart';
 import 'package:my_life_graph/features/dashboard/presentation/widgets/today_overview_sections.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
+
+import 'support/dashboard_full_week_fixture.dart';
 
 void main() {
   test('Dashboard page composes section APIs instead of owning their widgets',
@@ -49,7 +51,7 @@ void main() {
   });
 
   testWidgets(
-      'Today information keeps a 20px icon in an exact 24px target with semantics, keyboard, and bounded pointer operation',
+      'Today information keeps a 24px frame in an exact 44px target with semantics, keyboard, and bounded pointer operation',
       (tester) async {
     final semantics = tester.ensureSemantics();
     const description = 'A compact explanation for this Today section.';
@@ -70,19 +72,19 @@ void main() {
     final target = find.byKey(
       const ValueKey('today-info-control-Test section'),
     );
-    final layout = find.byKey(
-      const ValueKey('today-info-layout-Test section'),
-    );
-    final icon = find.descendant(
+    final frame = find.descendant(
       of: target,
-      matching: find.byIcon(AppIcons.infoOutline),
+      matching: find.byType(AnimatedContainer),
+    );
+    final iconFrame = find.byKey(
+      const ValueKey('today-info-icon-Test section'),
     );
     expect(find.text(description), findsNothing);
     expect(find.bySemanticsLabel(description), findsNothing);
-    expect(tester.getSize(layout), const Size(24, 44));
-    expect(tester.getSize(target), const Size.square(24));
-    expect(tester.getSize(icon), const Size.square(20));
-    expect(tester.getRect(icon), tester.getRect(target).deflate(2));
+    expect(tester.getSize(target), const Size.square(44));
+    expect(tester.getSize(frame), const Size.square(24));
+    expect(tester.getSize(iconFrame), const Size.square(20));
+    expect(tester.getRect(iconFrame).center, tester.getRect(frame).center);
     expect(
       find.byTooltip('Show information about Test section'),
       findsOneWidget,
@@ -247,16 +249,50 @@ void main() {
     expect(find.text('Lazy content'), findsNothing);
     expect(accordionToggles, 0);
 
-    final infoRect = tester.getRect(
+    await tester.tap(
       find.byKey(
-        const ValueKey('today-info-control-Decision feedback history'),
+        const ValueKey(
+          'dashboard-expansion-control-Decision feedback history',
+        ),
       ),
     );
-    await tester.tapAt(Offset(infoRect.center.dx, infoRect.top - 1));
     await tester.pumpAndSettle();
     expect(accordionToggles, 1);
     expect(find.text('Lazy content'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('accordion keyboard action shows a two-pixel focus ring',
+      (tester) async {
+    var accordionToggles = 0;
+    await _pump(
+      tester,
+      DashboardInlineExpansionCard(
+        title: 'Keyboard review',
+        subtitle: 'Independent information.',
+        expanded: false,
+        onToggle: () => accordionToggles += 1,
+        child: const Text('Lazy content'),
+      ),
+      theme: AppTheme.light,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    final ring = tester.widget<DecoratedBox>(
+      find.byKey(
+        const ValueKey('dashboard-expansion-focus-ring-Keyboard review'),
+      ),
+    );
+    final border = (ring.decoration as BoxDecoration).border! as Border;
+    expect(border.top.width, 2);
+    expect(border.top.color, AppVisualTokens.light.focus);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(accordionToggles, 1);
+    expect(find.text('Independent information.'), findsNothing);
   });
 
   testWidgets('Today summary owns capture, progress, and agenda callbacks',
@@ -582,7 +618,7 @@ void main() {
       onRetryFeedback: () {},
       onDeleteFeedback: (_) async {},
       onRetryFullWeek: () {},
-      onOpenPreparationPlan: (_) {},
+      onFullWeekAction: (_) {},
     );
 
     await _pump(
@@ -693,7 +729,7 @@ void main() {
             return deletion.future;
           },
           onRetryFullWeek: () {},
-          onOpenPreparationPlan: (_) {},
+          onFullWeekAction: (_) {},
         ),
       ),
     );
@@ -735,7 +771,7 @@ void main() {
           onRetryFeedback: () => retries += 1,
           onDeleteFeedback: (_) async {},
           onRetryFullWeek: () {},
-          onOpenPreparationPlan: (_) {},
+          onFullWeekAction: (_) {},
         ),
       );
     }
@@ -761,23 +797,21 @@ void main() {
     expect(retries, 1);
   });
 
-  testWidgets('Full week Preparation row opens its owning plan',
+  testWidgets('Full week Preparation row exposes its typed action',
       (tester) async {
-    String? openedPlanId;
-    final fullWeek = const DashboardFullWeekProjector().project(
-      displayedLocalDate: DateTime(2026, 8, 5),
-      preparationBlocks: const [
-        DashboardPreparationBlockFact(
+    DashboardFullWeekAction? selectedAction;
+    final fullWeek = dashboardFullWeekFixture(
+      items: [
+        dashboardFullWeekTimedItem(
           id: 'block-1',
-          planId: 'plan-1',
-          planTitle: 'Algorithms exam',
-          localDate: '2026-08-05',
-          localStartTime: '09:00',
-          localEndTime: '10:00',
-          sortMinutes: 540,
-          state: 'completed',
-          recoveryMinutes: 0,
-          reservedLocalEndTime: '10:00',
+          category: DashboardFullWeekCategory.preparation,
+          localDate: DateTime.utc(2026, 8, 5),
+          title: 'Algorithms exam',
+          status: DashboardFullWeekItemStatus.completed,
+          action: const DashboardFullWeekAction(
+            kind: DashboardFullWeekActionKind.openPreparationPlan,
+            targetId: 'plan-1',
+          ),
         ),
       ],
     );
@@ -806,7 +840,7 @@ void main() {
           onRetryFeedback: () {},
           onDeleteFeedback: (_) async {},
           onRetryFullWeek: () {},
-          onOpenPreparationPlan: (value) => openedPlanId = value,
+          onFullWeekAction: (value) => selectedAction = value,
         ),
       ),
     );
@@ -814,15 +848,30 @@ void main() {
     await tester.ensureVisible(find.text('Algorithms exam'));
     await tester.tap(find.text('Algorithms exam'));
 
-    expect(openedPlanId, 'plan-1');
+    expect(selectedAction?.targetId, 'plan-1');
+    expect(
+      selectedAction?.kind,
+      DashboardFullWeekActionKind.openPreparationPlan,
+    );
   });
 
-  testWidgets('Full week partial-source empty days do not claim both sources',
+  testWidgets('Full week reports each unavailable source without hiding days',
       (tester) async {
-    final fullWeek = const DashboardFullWeekProjector().project(
-      displayedLocalDate: DateTime(2026, 8, 5),
-      commitmentLoadError:
-          'Setup commitments could not be loaded. Available Preparation items are still shown.',
+    final fullWeek = dashboardFullWeekFixture(
+      sourceStates: DashboardFullWeekSourceStates(
+        setup: DashboardFullWeekSourceState(
+          name: 'setup',
+          label: 'Setup',
+          status: DashboardFullWeekSourceStatus.unavailable,
+          message: 'Setup commitments are unavailable.',
+        ),
+        preparation: dashboardFullWeekCurrentSources.preparation,
+        calendar: dashboardFullWeekCurrentSources.calendar,
+        focus: dashboardFullWeekCurrentSources.focus,
+        tasks: dashboardFullWeekCurrentSources.tasks,
+        habits: dashboardFullWeekCurrentSources.habits,
+        fixedCommitments: dashboardFullWeekCurrentSources.fixedCommitments,
+      ),
     );
     await _pump(
       tester,
@@ -849,13 +898,270 @@ void main() {
           onRetryFeedback: () {},
           onDeleteFeedback: (_) async {},
           onRetryFullWeek: () {},
-          onOpenPreparationPlan: (_) {},
+          onFullWeekAction: (_) {},
         ),
       ),
     );
 
-    expect(find.text('No items from the available source.'), findsNWidgets(7));
-    expect(find.text('No Setup or Preparation items.'), findsNothing);
+    expect(
+      find.text('Setup: Setup commitments are unavailable.'),
+      findsOneWidget,
+    );
+    expect(find.text('No items from available sources.'), findsWidgets);
+    expect(find.text('Nothing scheduled.'), findsNothing);
+  });
+
+  testWidgets(
+      'Full week shows 2.5 normal mobile days and exactly 2 narrow days',
+      (tester) async {
+    final projection = dashboardFullWeekFixture(
+      localToday: DateTime.utc(2026, 8, 3),
+    );
+
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
+      size: const Size(432, 800),
+    );
+    expect(find.text('Nothing scheduled.'), findsWidgets);
+    final monday = find.byKey(
+      const ValueKey('dashboard-full-week-day-2026-08-03'),
+    );
+    final tuesday = find.byKey(
+      const ValueKey('dashboard-full-week-day-2026-08-04'),
+    );
+    final wednesday = find.byKey(
+      const ValueKey('dashboard-full-week-day-2026-08-05'),
+    );
+    expect(tester.getTopLeft(tuesday).dx - tester.getTopLeft(monday).dx, 160);
+    expect(tester.getTopLeft(wednesday).dx, lessThan(416));
+    expect(tester.getTopRight(wednesday).dx, greaterThan(416));
+
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
+      size: const Size(352, 800),
+    );
+    expect(tester.getTopLeft(tuesday).dx - tester.getTopLeft(monday).dx, 160);
+    expect(tester.getTopLeft(wednesday).dx, greaterThanOrEqualTo(336));
+
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
+      size: const Size(432, 800),
+      textScaler: const TextScaler.linear(2),
+    );
+    expect(tester.getTopLeft(tuesday).dx - tester.getTopLeft(monday).dx, 200);
+    expect(tester.getTopLeft(wednesday).dx, greaterThanOrEqualTo(416));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Full week switches to seven columns only at the 208px threshold',
+      (tester) async {
+    final projection = dashboardFullWeekFixture(
+      localToday: DateTime.utc(2026, 8, 3),
+    );
+    const threshold =
+        dashboardFullWeekMinimumWebCardWidth * 7 + dashboardFullWeekDayGap * 6;
+
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
+      size: const Size(threshold + 32, 800),
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+      findsNothing,
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(
+              const ValueKey('dashboard-full-week-day-2026-08-03'),
+            ),
+          )
+          .width,
+      dashboardFullWeekMinimumWebCardWidth,
+    );
+
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
+      size: const Size(threshold + 31, 800),
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Full week clamps weekends, snaps one day, and keeps hard bounds',
+      (tester) async {
+    final sundayProjection = dashboardFullWeekFixture(
+      localToday: DateTime.utc(2026, 8, 9),
+    );
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(
+        projection: sundayProjection,
+        onAction: (_) {},
+      ),
+      size: const Size(432, 800),
+    );
+    final saturday = find.byKey(
+      const ValueKey('dashboard-full-week-day-2026-08-08'),
+    );
+    final sunday = find.byKey(
+      const ValueKey('dashboard-full-week-day-2026-08-09'),
+    );
+    expect(tester.getTopLeft(saturday).dx, greaterThanOrEqualTo(16));
+    expect(tester.getTopRight(sunday).dx, lessThanOrEqualTo(416));
+
+    final mondayProjection = dashboardFullWeekFixture(
+      localToday: DateTime.utc(2026, 8, 3),
+    );
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(
+        key: const ValueKey('monday-agenda'),
+        projection: mondayProjection,
+        onAction: (_) {},
+      ),
+      size: const Size(432, 800),
+    );
+    final strip = find.byKey(
+      const ValueKey('dashboard-full-week-day-strip'),
+    );
+    final monday = find.byKey(
+      const ValueKey('dashboard-full-week-day-2026-08-03'),
+    );
+    final tuesday = find.byKey(
+      const ValueKey('dashboard-full-week-day-2026-08-04'),
+    );
+    await tester.timedDrag(
+      strip,
+      const Offset(-110, 0),
+      const Duration(seconds: 1),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(tuesday).dx, 16);
+
+    await tester.drag(strip, const Offset(-2000, 0));
+    await tester.pumpAndSettle();
+    final terminalSaturday = tester.getTopLeft(saturday).dx;
+    final terminalSunday = tester.getTopLeft(sunday).dx;
+    expect(terminalSaturday, greaterThanOrEqualTo(16));
+    expect(tester.getTopRight(sunday).dx, lessThanOrEqualTo(416));
+    await tester.drag(strip, const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(saturday).dx, terminalSaturday);
+    expect(tester.getTopLeft(sunday).dx, terminalSunday);
+
+    await tester.drag(strip, const Offset(2000, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(monday).dx, 16);
+  });
+
+  testWidgets('dense Full week stays uncut at 320px and 200 percent text',
+      (tester) async {
+    final items = List.generate(
+      7,
+      (index) => dashboardFullWeekTimedItem(
+        id: 'dense-$index',
+        category: DashboardFullWeekCategory.values[index],
+        localDate: DateTime.utc(2026, 8, 5),
+        title: 'Dense agenda item $index with full readable text',
+      ),
+    );
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(
+        projection: dashboardFullWeekFixture(items: items),
+        onAction: (_) {},
+      ),
+      size: const Size(320, 900),
+      textScaler: const TextScaler.linear(2),
+    );
+
+    for (var index = 0; index < items.length; index++) {
+      expect(
+        find.text('Dense agenda item $index with full readable text'),
+        findsOneWidget,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Full week delegates every server-approved action identity',
+      (tester) async {
+    final actions = [
+      const DashboardFullWeekAction(
+        kind: DashboardFullWeekActionKind.startPreparationFocus,
+        targetId: 'preparation-block',
+        sourceKind: 'deadline_plan_block',
+      ),
+      const DashboardFullWeekAction(
+        kind: DashboardFullWeekActionKind.startTaskFocus,
+        targetId: 'task-block',
+        sourceKind: 'planner_task_block',
+      ),
+      const DashboardFullWeekAction(
+        kind: DashboardFullWeekActionKind.resumeFocus,
+        targetId: 'active-focus',
+      ),
+      const DashboardFullWeekAction(
+        kind: DashboardFullWeekActionKind.reflectFocus,
+        targetId: 'terminal-focus',
+      ),
+      const DashboardFullWeekAction(
+        kind: DashboardFullWeekActionKind.openPreparationPlan,
+        targetId: 'completed-plan',
+      ),
+      DashboardFullWeekAction(
+        kind: DashboardFullWeekActionKind.openHabit,
+        targetId: 'habit-today',
+        localDate: DateTime.utc(2026, 8, 5),
+      ),
+    ];
+    const categories = [
+      DashboardFullWeekCategory.preparation,
+      DashboardFullWeekCategory.task,
+      DashboardFullWeekCategory.focus,
+      DashboardFullWeekCategory.focus,
+      DashboardFullWeekCategory.preparation,
+      DashboardFullWeekCategory.habit,
+    ];
+    final items = List.generate(
+      actions.length,
+      (index) => dashboardFullWeekTimedItem(
+        id: actions[index].targetId,
+        category: categories[index],
+        localDate: DateTime.utc(2026, 8, 5),
+        title: 'Agenda action $index',
+        action: actions[index],
+      ),
+    );
+    final selected = <DashboardFullWeekAction>[];
+    await _pump(
+      tester,
+      DashboardFullWeekAgenda(
+        projection: dashboardFullWeekFixture(items: items),
+        onAction: selected.add,
+      ),
+      size: const Size(900, 1400),
+    );
+
+    for (var index = 0; index < actions.length; index++) {
+      await tester.tap(find.text('Agenda action $index'));
+    }
+    expect(selected.map((action) => action.targetId), [
+      'preparation-block',
+      'task-block',
+      'active-focus',
+      'terminal-focus',
+      'completed-plan',
+      'habit-today',
+    ]);
   });
 }
 

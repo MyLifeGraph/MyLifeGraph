@@ -166,6 +166,25 @@ owner-derived identity, one-snapshot authority, total planner-evaluation bounds,
 stable `55P03`/`40P01` conflict mapping, learned-timing permission/provenance
 CAS, all-or-none result handling, and request replay.
 
+Today Full week is tracked as shared named `today-week-agenda-v1`. Focused
+backend coverage proves bearer-derived ownership, exact profile-local
+Monday-through-Sunday bounds, one call per source seam, dedicated bounded
+owner/range queries and fixed non-rowwise relation reads, canonical
+current-revision Preparation credit/lifecycle, current Calendar-import
+authority, disconnected-empty and stale-unavailable behavior, all seven
+categories/actions, independent partial failure, route-wide profile/timezone
+`503`, and DST fold/gap behavior. Focused Flutter coverage proves the strict
+temporal envelope including overflow-component rejection and valid fractional
+offset timestamps, the identity/action/status union, no device-local time
+conversion, guest zero calls, lazy open/retry, midnight-safe Habit navigation,
+source-partial rendering, current action mapping, whole-row actionable
+semantics and two-pixel schedule-row/accordion keyboard focus rings,
+two/two-and-a-half-card mobile widths,
+weekend clamp, day snap and week bounds, the 208-pixel seven-column threshold,
+dense 320 px/200-percent layout, refresh mapping, and independent 44/24-pixel
+information/accordion controls. The old two-source rating/`fullyRated` week
+projection is not compatibility behavior; Today at a glance remains unchanged.
+
 `docs/current-contracts.json` is authoritative for exact sources and owners.
 This runbook retains the following compact current coverage because each listed
 boundary explicitly owns verification requirements:
@@ -190,6 +209,7 @@ boundary explicitly owns verification requirements:
 | Preparation workload | `preparation-workload-v1` |
 | Preparation workload detail | `preparation-workload-detail-v1` |
 | Sleep recommendation | `sleep-recommendation-v1` |
+| Today week agenda | `today-week-agenda-v1` |
 | Weekly Review | `weekly-review-v2` |
 
 Feature contracts remain the complete wire-format and compatibility authority.
@@ -250,6 +270,29 @@ large-text presentation. Changes limited to those application and
 documentation boundaries do not select the database lane because Overview V2
 adds no schema, migration, RLS, grant, or RPC; the captured task-base affected
 gate remains authoritative if another changed path broadens that scope.
+
+For a focused Today Week Agenda diagnostic, run:
+
+```bash
+cd services/ai_service
+./.venv/bin/python -m pytest -q \
+  tests/test_today_week_agenda_repository.py \
+  tests/test_today_week_agenda_service.py \
+  tests/test_today_week_agenda_api.py \
+  tests/test_today_overview_service.py \
+  tests/test_today_overview_api.py
+cd ../../apps/mobile
+"${FLUTTER_BIN:-flutter}" test \
+  test/dashboard_full_week_api_test.dart \
+  test/app_schedule_day_card_test.dart \
+  test/dashboard_sections_test.dart \
+  test/dashboard_page_test.dart \
+  test/projection_refresh_coordinator_test.dart
+```
+
+The focused run verifies contract/projection/query/action/layout boundaries but
+does not replace full Flutter analysis/tests, FastAPI Ruff/compilation/tests,
+Docs, Visual, Web, or the task-base affected selector.
 
 Database integration is deliberately separate. A deterministic fake Coach
 provider/process seam is mandatory for standard verification; Fast must not

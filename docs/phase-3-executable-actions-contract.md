@@ -341,6 +341,13 @@ between a Multi-Exam digest check and its atomic commit.
   sources through app composition providers. Their presentation pages do not
   import or construct the Supabase source, map read/write failures to retained-
   data guidance, and remain usable at 320 logical pixels with 200-percent text.
+- The read-only `today-week-agenda-v1` action union reuses these same execution
+  seams. Preparation and Planner Task blocks carry their exact source kind/id
+  into a fresh start-context read; active Focus resumes and terminal Focus opens
+  reflection. A Habit action is emitted only for the exact current profile-local
+  date because the existing Habit command is date-less. Other Habit dates and
+  Setup/Calendar/fixed-commitment facts remain static. No Week Agenda action
+  adds a write endpoint or weakens owner/date authority.
 - Habit outcome/undo captures one local target date before its write, uses that
   date for exact response-loss reconciliation, and refreshes that same date.
 - Focus start persists its local `metadata.entry_date`. Start, finish, and

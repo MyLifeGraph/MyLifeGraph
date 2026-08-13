@@ -244,7 +244,19 @@ class SupabaseTodayOverviewRepository:
             raise ValueError("Today calendar source label is invalid.")
         import_id = connection.get("last_import_id")
         if import_id is None:
-            return TodayCalendarRows(source_label=source_label, events=[])
+            raise ValueError("Today calendar import is not current.")
+        imports = await self._client.select(
+            "calendar_imports",
+            params={
+                "select": "id,planning_status",
+                "id": f"eq.{import_id}",
+                "user_id": f"eq.{user_id}",
+                "connection_id": f"eq.{connection['id']}",
+                "limit": "2",
+            },
+        )
+        if len(imports) != 1 or imports[0].get("planning_status") != "current":
+            raise ValueError("Today calendar import is not current.")
         events = await self._select_pages(
             "calendar_events",
             params={

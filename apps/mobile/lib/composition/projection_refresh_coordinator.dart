@@ -46,6 +46,7 @@ class ProjectionRefreshCoordinator {
         targetDate: targetDate,
         projections: const [
           ProductProjection.today,
+          ProductProjection.todayFullWeek,
         ],
       );
 
@@ -53,6 +54,7 @@ class ProjectionRefreshCoordinator {
         targetDate: targetDate,
         projections: const [
           ProductProjection.today,
+          ProductProjection.todayFullWeek,
           ProductProjection.planner,
           ProductProjection.examPlanHealth,
         ],
@@ -65,6 +67,7 @@ class ProjectionRefreshCoordinator {
   Future<void> todayHabitOutcomeChanged({required String targetDate}) =>
       _refresh(
         targetDate: targetDate,
+        projections: const [ProductProjection.todayFullWeek],
       );
 
   /// Refreshes foreign projections after a Task write initiated by Today.
@@ -75,6 +78,7 @@ class ProjectionRefreshCoordinator {
         targetDate: targetDate,
         projections: const [
           ProductProjection.planner,
+          ProductProjection.todayFullWeek,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
           ProductProjection.examPlanHealth,
@@ -108,6 +112,7 @@ class ProjectionRefreshCoordinator {
         targetDate: targetDate,
         projections: const [
           ProductProjection.today,
+          ProductProjection.todayFullWeek,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
           ProductProjection.examPlanHealth,
@@ -163,9 +168,7 @@ class ProjectionRefreshCoordinator {
   }) =>
       _refresh(targetDate: targetDate);
 
-  Future<void> focusReflectionChanged() => _refresh(
-        projections: const [ProductProjection.todayFullWeek],
-      );
+  Future<void> focusReflectionChanged() => _refresh();
 
   Future<void> recommendationsChanged() => _refresh(
         projections: const [

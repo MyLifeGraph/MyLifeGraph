@@ -43,6 +43,9 @@ from app.repositories.snapshot_repository import SupabaseSnapshotRepository
 from app.repositories.today_overview_repository import (
     SupabaseTodayOverviewRepository,
 )
+from app.repositories.today_week_agenda_repository import (
+    SupabaseTodayWeekAgendaRepository,
+)
 from app.repositories.today_planner_read_repository import (
     SupabaseTodayPlannerReadRepository,
 )
@@ -78,6 +81,7 @@ from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
 from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.today_overview_service import TodayOverviewService
+from app.services.today_week_agenda_service import TodayWeekAgendaService
 from app.services.today_planner_read_context import TodayPlannerReadContextFactory
 from app.services.weekly_review_service import WeeklyReviewService
 
@@ -113,6 +117,7 @@ class ApplicationComposition:
     scheduled_refresh_service: ScheduledRefreshService
     snapshot_aggregator: SnapshotAggregator
     today_overview_service: TodayOverviewService
+    today_week_agenda_service: TodayWeekAgendaService
     weekly_review_service: WeeklyReviewService
 
     @classmethod
@@ -287,6 +292,9 @@ class ApplicationComposition:
                 deadline_plan_service=deadline_plan_service,
                 planner_service=planner_service,
                 read_context_factory=today_planner_read_contexts,
+            ),
+            today_week_agenda_service=TodayWeekAgendaService(
+                repository=SupabaseTodayWeekAgendaRepository(supabase_client),
             ),
             weekly_review_service=weekly_review_service,
         )

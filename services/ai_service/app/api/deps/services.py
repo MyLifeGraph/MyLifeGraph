@@ -25,6 +25,7 @@ from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
 from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.today_overview_service import TodayOverviewService
+from app.services.today_week_agenda_service import TodayWeekAgendaService
 from app.services.weekly_review_service import WeeklyReviewService
 
 
@@ -205,6 +206,14 @@ async def get_today_overview_service(request: Request) -> TodayOverviewService:
         request,
         select=lambda composition: composition.today_overview_service,
         unavailable_detail="Today persistence is not configured.",
+    )
+
+
+async def get_today_week_agenda_service(request: Request) -> TodayWeekAgendaService:
+    return _service(
+        request,
+        select=lambda composition: composition.today_week_agenda_service,
+        unavailable_detail="Full week persistence is not configured.",
     )
 
 

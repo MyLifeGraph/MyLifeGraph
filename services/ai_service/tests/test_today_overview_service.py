@@ -37,6 +37,7 @@ class Repository:
         self.focus_sessions = []
         self.calendar = TodayCalendarRows(source_label=None, events=[])
         self.fail_tasks = False
+        self.fail_calendar = False
         self.capture_calls = []
 
     async def get_profile_timezone(self, *, user_id):
@@ -76,6 +77,8 @@ class Repository:
 
     async def load_current_calendar(self, *, user_id):
         assert user_id == USER_ID
+        if self.fail_calendar:
+            raise ValueError("Calendar import is not current.")
         return self.calendar
 
 
@@ -563,6 +566,22 @@ def test_one_counted_source_failure_nulls_progress_but_keeps_other_sources() -> 
     assert response.source_states.tasks.message == "Tasks could not be loaded."
     assert response.source_states.check_ins.status == "current"
     assert response.tasks.today == []
+
+
+def test_calendar_import_failure_is_source_isolated() -> None:
+    repository = Repository()
+    repository.fail_calendar = True
+
+    response = asyncio.run(_service(repository).get_overview(user_id=USER_ID))
+
+    assert response.source_states.calendar_events.status == "unavailable"
+    assert (
+        response.source_states.calendar_events.message
+        == "Calendar events could not be loaded."
+    )
+    assert response.source_states.check_ins.status == "current"
+    assert response.source_states.focus_sessions.status == "current"
+    assert all(item.kind != "calendar_event" for item in response.timeline)
 
 
 class PlannerReader:

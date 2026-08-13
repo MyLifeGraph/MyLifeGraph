@@ -138,10 +138,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('3 reflections cleared.'), findsOneWidget);
-    expect(invalidations, [ProductProjection.todayFullWeek]);
+    expect(invalidations, isEmpty);
   });
 
-  testWidgets('exact clear retry invalidates Full week after confirmed success',
+  testWidgets('exact clear retry leaves the rating-free week agenda untouched',
       (tester) async {
     final repository = _LearningRepository(unknownClearAttempts: 1);
     final invalidations = <ProductProjection>[];
@@ -175,7 +175,7 @@ void main() {
       repository.clearRequests[1].requestId,
       repository.clearRequests[0].requestId,
     );
-    expect(invalidations, [ProductProjection.todayFullWeek]);
+    expect(invalidations, isEmpty);
     expect(find.text('3 reflections cleared.'), findsOneWidget);
     expect(find.text('Focus reflection history cleared.'), findsOneWidget);
   });

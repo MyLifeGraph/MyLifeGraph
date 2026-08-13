@@ -409,7 +409,11 @@ check-in is independently owner/date bounded and displayed in the streak card.
 Weekly Review is a direct capability-gated navigation entry. Recommendations,
 decision-feedback history, and the current Monday-through-Sunday week are
 separate, initially collapsed supporting sections that load their projection
-only when opened. Preparation
+only when opened. Full week is the bearer-scoped `today-week-agenda-v1` FastAPI
+read, not a direct Flutter Supabase/Deadline merge. It returns seven
+server-projected profile-local dates and independent freshness for Setup,
+Preparation, Calendar, actual Focus, Planner Tasks, materialized Habit slots,
+and fixed commitments. Preparation
 workload is not duplicated on Today and remains available in Planner. The exact
 rules live in
 `docs/today-overview-v1-contract.md`.
@@ -760,15 +764,15 @@ reservations and merged weekly `schedule_items` duration as separate facts. It
 deliberately excludes proposed blocks, imported busy rows, live provider state,
 task estimates, and Focus history, so Planner labels the latter as weekly Setup
 commitments and does not present the projection as total free time. Today's
-separate lazy `Full week` projection reads the containing Monday-to-Sunday
-calendar week from owner-scoped Setup facts and active Deadline Plan revisions;
-it does not call either workload endpoint. Its exact Focus associations use
-sorted 100-block batches with repeated owner/source/block predicates and one
-global 500-row sentinel budget. Setup and the combined Deadline-read/in-week
-transform own errors independently; a 241st Preparation block yields a
-Setup-only partial projection and skips rating reads rather than discarding
-usable Setup facts. Both projections and block allocation remain
-deterministic/no-LLM.
+separate lazy `today-week-agenda-v1` read projects the containing
+Monday-to-Sunday calendar week. Its service makes one bounded, owner-filtered
+read per source family for Setup, Preparation, current Calendar import, actual
+Focus sessions, Planner Tasks, Habit slots/outcomes, and fixed commitments; it
+does not call either workload endpoint, Planner Overview, or the bounded
+Deadline list feed. Profile/timezone failure is route-wide, while every other
+source has an independent `current|unavailable` state. The wire owns local
+dates and wall-clock strings so Flutter never substitutes device timezone.
+Both projections and block allocation remain deterministic/no-LLM.
 
 `GET /v1/deadline-plans/exam-week-outlook` adds a separate read-only
 `exam-week-outlook-v1` projection. An active exam with remaining work activates

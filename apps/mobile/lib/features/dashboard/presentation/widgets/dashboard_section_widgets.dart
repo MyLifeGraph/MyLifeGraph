@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_surface.dart';
@@ -353,7 +355,7 @@ class DashboardEmptySectionCard extends StatelessWidget {
   }
 }
 
-class DashboardInlineExpansionCard extends StatelessWidget {
+class DashboardInlineExpansionCard extends StatefulWidget {
   const DashboardInlineExpansionCard({
     super.key,
     required this.title,
@@ -370,45 +372,132 @@ class DashboardInlineExpansionCard extends StatelessWidget {
   final Widget child;
 
   @override
+  State<DashboardInlineExpansionCard> createState() =>
+      _DashboardInlineExpansionCardState();
+}
+
+class _DashboardInlineExpansionCardState
+    extends State<DashboardInlineExpansionCard> {
+  final FocusNode _focusNode = FocusNode();
+  bool _showFocusHighlight = false;
+
+  @override
+  void didUpdateWidget(DashboardInlineExpansionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.title != widget.title) {
+      _focusNode.unfocus();
+      _showFocusHighlight = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AppCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          Semantics(
-            button: true,
-            expanded: expanded,
-            child: ListTile(
-              title: TodayInfoDisclosure(
-                topic: title,
-                description: subtitle,
-                headerBuilder: (context, infoButton) => Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Flexible(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.sm),
-                        child: Text(title),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+              start: AppSpacing.md,
+              end: AppSpacing.sm,
+            ),
+            child: TodayInfoDisclosure(
+              topic: widget.title,
+              description: widget.subtitle,
+              headerBuilder: (context, infoButton) => Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      container: true,
+                      button: true,
+                      expanded: widget.expanded,
+                      label:
+                          '${widget.expanded ? 'Collapse' : 'Expand'} ${widget.title}',
+                      onTap: widget.onToggle,
+                      child: ExcludeSemantics(
+                        child: FocusableActionDetector(
+                          focusNode: _focusNode,
+                          descendantsAreFocusable: false,
+                          descendantsAreTraversable: false,
+                          includeFocusSemantics: false,
+                          mouseCursor: SystemMouseCursors.click,
+                          onShowFocusHighlight: _handleFocusHighlight,
+                          actions: <Type, Action<Intent>>{
+                            ActivateIntent: CallbackAction<ActivateIntent>(
+                              onInvoke: (_) {
+                                widget.onToggle();
+                                return null;
+                              },
+                            ),
+                          },
+                          child: DecoratedBox(
+                            key: ValueKey(
+                              'dashboard-expansion-focus-ring-${widget.title}',
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(AppRadii.sm),
+                              border: Border.all(
+                                color: _showFocusHighlight
+                                    ? context.visualTokens.focus
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                            child: InkWell(
+                              key: ValueKey(
+                                'dashboard-expansion-control-${widget.title}',
+                              ),
+                              onTap: widget.onToggle,
+                              canRequestFocus: false,
+                              borderRadius: BorderRadius.circular(AppRadii.sm),
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(minHeight: 44),
+                                child: Row(
+                                  children: [
+                                    Expanded(child: Text(widget.title)),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Icon(
+                                      widget.expanded
+                                          ? AppIcons.expandLess
+                                          : AppIcons.expandMore,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    infoButton,
-                  ],
-                ),
+                  ),
+                  infoButton,
+                ],
               ),
-              trailing:
-                  Icon(expanded ? AppIcons.expandLess : AppIcons.expandMore),
-              onTap: onToggle,
             ),
           ),
-          if (expanded) ...[
+          if (widget.expanded) ...[
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: child,
+              child: widget.child,
             ),
           ],
         ],
       ),
     );
+  }
+
+  void _handleFocusHighlight(bool value) {
+    if (mounted && value != _showFocusHighlight) {
+      setState(() => _showFocusHighlight = value);
+    }
   }
 }

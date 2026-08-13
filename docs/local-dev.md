@@ -1255,7 +1255,9 @@ For local Supabase-backed app testing:
    target, Today Overview streak/progress arithmetic, all four agenda source
    categories, Today versus all Tasks, Today Habits, the `Beat yesterday`
    check-in inset, direct Weekly Review navigation plus independently
-   expandable Recommendations, feedback history, and Full week sections,
+   expandable Recommendations, feedback history, and Full week sections; Full
+   week must show seven profile-local days, seven categories/partial sources,
+   current actions, and the responsive snapped strip,
    bounded facts-only Weekly Review
    with deliberate refresh and no adjustment controls, Inbox (`/alerts`), real
    Deep Work, and Controlled Coach capability,

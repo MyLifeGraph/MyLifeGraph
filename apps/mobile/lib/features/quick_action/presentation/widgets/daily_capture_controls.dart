@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:my_life_graph/core/constants/app_radii.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/core/widgets/app_info_disclosure.dart';
 
 import '../../../../core/constants/app_spacing.dart';
@@ -183,25 +184,72 @@ class _ChoiceInfoButton extends StatefulWidget {
 
 class _ChoiceInfoButtonState extends State<_ChoiceInfoButton> {
   final _tooltipKey = GlobalKey<TooltipState>();
+  final _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocus);
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocus)
+      ..dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      key: _tooltipKey,
-      message: widget.description,
-      triggerMode: TooltipTriggerMode.tap,
-      child: Semantics(
-        button: true,
-        label: 'More information about ${widget.label}: ${widget.description}',
-        child: ExcludeSemantics(
-          child: IconButton(
-            key: ValueKey('capture-choice-info-${widget.label}'),
-            onPressed: () => _tooltipKey.currentState?.ensureTooltipVisible(),
-            icon: const Icon(AppIcons.infoOutline),
+    final tokens = context.visualTokens;
+    return SizedBox.square(
+      dimension: 44,
+      child: Tooltip(
+        key: _tooltipKey,
+        message: widget.description,
+        triggerMode: TooltipTriggerMode.tap,
+        child: Semantics(
+          button: true,
+          label:
+              'More information about ${widget.label}: ${widget.description}',
+          onTap: _showTooltip,
+          child: ExcludeSemantics(
+            child: IconButton(
+              key: ValueKey('capture-choice-info-${widget.label}'),
+              onPressed: _showTooltip,
+              focusNode: _focusNode,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(
+                width: 44,
+                height: 44,
+              ),
+              icon: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  border: Border.all(
+                    color: _focused ? tokens.focus : tokens.outlineSoft,
+                    width: _focused ? 2 : 1,
+                  ),
+                ),
+                child: const Icon(AppIcons.infoOutline, size: 20),
+              ),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _showTooltip() => _tooltipKey.currentState?.ensureTooltipVisible();
+
+  void _handleFocus() {
+    if (mounted && _focused != _focusNode.hasFocus) {
+      setState(() => _focused = _focusNode.hasFocus);
+    }
   }
 }
 

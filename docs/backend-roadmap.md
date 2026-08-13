@@ -1135,6 +1135,26 @@ reminders, Coach context, and feedback history.
 - Adds model/repository/widget tests and browser assertions for read-only load,
   persisted identity, deliberate adjustment, and real action dispatch.
 
+### Completed Slice 6: Complete Today Week Agenda
+
+- Adds the strict read-only `today-week-agenda-v1` route for the current
+  profile-local Monday-through-Sunday week, always with seven ordered dates.
+- Loads Setup, Preparation, current Calendar import, actual Focus sessions,
+  Planner Tasks, materialized Habit slots/outcomes, and fixed commitments
+  through dedicated owner-filtered bounded reads. Each source is independently
+  `current|unavailable`; profile/timezone authority alone fails the whole route.
+- Returns server-derived local dates/wall-clock strings and stable occurrence
+  ids. It never reuses Planner Overview or the bounded Deadline list and never
+  writes, generates, confirms, or moves product state.
+- Replaces the former direct Flutter Setup/Deadline two-source/rating merge.
+  Guest/mock is zero-call; the authenticated accordion loads only when opened.
+- Adds current-start-context actions, date-safe Habit behavior, partial-source
+  UI, a two/two-and-a-half-card snapped mobile strip, and seven columns only
+  above the 208-pixel-per-card threshold.
+- Standardizes every information disclosure on a real 44×44 semantics/focus
+  target around a visible 24×24 frame and separates accordion expansion from
+  its information button.
+
 ### Completed Slice 7: Scheduled Daily Preparation Backend
 
 - Extended `POST /v1/scheduled/daily-refresh` rather than adding a worker or a

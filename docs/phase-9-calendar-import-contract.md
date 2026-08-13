@@ -196,6 +196,15 @@ retained non-current event is neither displayed as current nor labeled as a
 Calendar conflict. The Calendar preference still separately controls whether
 current busy events constrain allocation.
 
+The same `planning_status=current` authority applies to Today Overview and the
+lazy `today-week-agenda-v1` Calendar source. Both resolve the connected owner's
+exact `last_import_id` before projecting events. Disconnected Calendar is a
+successful current-empty read; a missing, stale, or owner/connection-mismatched
+import makes only Calendar unavailable and never fabricates an empty current
+calendar. The week read uses one bounded overlap query for its exact
+profile-local Monday-through-Sunday range and returns server-derived local
+date/time fields without a Flutter device-time conversion.
+
 The same `(user_id, request_id)` plus exact connection and input fingerprint
 replays the still-current persisted import without applying events again; its
 original window and timezone stay pinned even across profile-local midnight or

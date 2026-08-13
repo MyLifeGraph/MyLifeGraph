@@ -56,6 +56,7 @@ void main() {
     expect(snapshotDates, ['2026-07-31']);
     expect(invalidated, [
       ProductProjection.today,
+      ProductProjection.todayFullWeek,
       ProductProjection.planner,
       ProductProjection.examPlanHealth,
     ]);
@@ -68,6 +69,7 @@ void main() {
     expect(snapshotDates, ['2026-07-31']);
     expect(invalidated, [
       ProductProjection.planner,
+      ProductProjection.todayFullWeek,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
       ProductProjection.examPlanHealth,
@@ -79,7 +81,7 @@ void main() {
     await coordinator.todayHabitOutcomeChanged(targetDate: '2026-07-31');
 
     expect(snapshotDates, ['2026-07-31']);
-    expect(invalidated, isEmpty);
+    expect(invalidated, [ProductProjection.todayFullWeek]);
     expect(invalidated, isNot(contains(ProductProjection.today)));
   });
 
@@ -117,6 +119,7 @@ void main() {
     expect(snapshotDates, ['2026-07-31']);
     expect(invalidated, [
       ProductProjection.today,
+      ProductProjection.todayFullWeek,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
       ProductProjection.examPlanHealth,
@@ -162,11 +165,12 @@ void main() {
     ]);
   });
 
-  test('reflection changes invalidate only Full week rating status', () async {
+  test('reflection changes do not refresh the rating-free week agenda',
+      () async {
     await coordinator.focusReflectionChanged();
 
     expect(snapshotDates, isEmpty);
-    expect(invalidated, [ProductProjection.todayFullWeek]);
+    expect(invalidated, isEmpty);
   });
 
   test('projection invalidation still happens when snapshot refresh fails',
@@ -182,6 +186,7 @@ void main() {
     );
     expect(invalidated, [
       ProductProjection.today,
+      ProductProjection.todayFullWeek,
     ]);
   });
 

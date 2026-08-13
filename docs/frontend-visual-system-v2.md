@@ -94,17 +94,24 @@ Status pills retain their full visible label at large text and may grow
 vertically instead of clipping, shrinking, or overflowing it.
 
 Planner `Next seven days` and Today `Full week` share the feature-neutral
-day-card and appointment-row layout. Today's trailing status box is a
-non-interactive fact, not a checkbox control: not-applicable Setup and open
-Preparation remain empty, official completion uses `onSurfaceVariant`, and
-fully rated Preparation uses the existing Preparation information/category
-color. No state uses a route-local hardcoded color. The adjacent semantic label
-distinguishes not applicable, not completed, completed, and completed plus
-fully rated in Dark, Light, and Space themes. The box is exposed only as a
-static labelled fact and never carries a button, action, or enabled/disabled
-state. The row content contributes one combined title/detail/category label:
-actionable Preparation rows expose one button/tap action, while static Setup
-rows expose neither an action nor a control state.
+day-card and appointment-row layout without sharing read authority. Full week
+uses the same category tokens for all seven `today-week-agenda-v1` categories;
+its status text remains a visible source fact and is never color-only. Static
+Setup, Calendar, fixed-commitment, and non-current Habit rows expose no enabled
+control semantics. Actionable Preparation, Task, Focus, or current-day Habit
+rows contribute one combined title/detail/category label and one tap target.
+That target covers the complete row, including the visual status box, and is at
+least 44 logical pixels high; static rows expose no button semantics.
+The retired two-source rating/`fullyRated` status box is not part of Full week.
+
+Only Full week may widen beyond Today's compact column. Its normal mobile strip
+uses 40 percent of the available viewport per card (two full plus one half);
+the named narrow/large-text mode uses exactly 50 percent (two full). The initial
+Saturday/Sunday offset is clamped to preserve two real cards, and horizontal
+movement snaps by one day without phantom space past Monday/Sunday. At a
+content width of `7 × 208 + 6 × gap` or greater, the strip becomes seven equal
+columns; one logical pixel below that threshold remains horizontal. Cards have
+no fixed content height, so dense agendas and 200-percent text remain uncut.
 
 The `planner-overview-v2` Habit collection is one initially collapsed card,
 not a second agenda. Its count remains readable at 320 logical pixels and
@@ -242,8 +249,7 @@ ribbons, orbits, constellations, input-driven parallax, mouse/scroll tracking,
 device sensors, or other camera paths are permitted. No other theme gains
 looping decorative motion.
 
-Controls use at least a 44×44 logical touch target except for the explicitly
-bounded Today information-disclosure control below. Keyboard focus uses a
+Controls use at least a 44×44 logical touch target. Keyboard focus uses a
 two-pixel strong-focus outline, including buttons, icon buttons, fields,
 switches, checkboxes, segmented controls, and interactive surfaces. Hover,
 pressed, disabled, selected, and loading states remain visually distinct
@@ -263,21 +269,18 @@ the consequence of a mutation, current/stale/error state, unavailable source
 truth, required provenance, and the action needed to continue remain visible.
 Several disclosures may stay open independently.
 
-The standard layout uses the global 44×44 target around a 20×20
-`AppIcons.infoOutline` icon. Daily Capture, Calendar import, Reminder settings,
-Personal learning, Weekly review, and Preparation-plan explanations use this
-layout. Section headings use theme typography, including the compact
-`titleMedium` role where the disclosure sits inside an existing card; they do
-not introduce raw font sizes.
-
-Today alone uses the compact layout. Its visible 20×20 icon sits in an exact
-24×24 click, hover, focus, and semantics rectangle inside a 44-pixel-tall
-alignment slot. Non-interactive vertical padding retains the previous heading
-alignment; in an accordion that padding belongs to the surrounding header
-action. This is the sole exception to the global 44×44 action-target rule. The
-information control in an accordion header remains separate from the accordion
-chevron and content action, and title/control/action groups wrap rather than
-overflow at 320 logical pixels and 200-percent text.
+Every layout uses the global 44×44 hit/focus/semantics target around a visible
+24×24 frame containing a 20×20 `AppIcons.infoOutline` icon. Daily Capture,
+Today, Calendar import, Reminder settings, Personal learning, Weekly review,
+and Preparation-plan explanations share that geometry. Section headings use
+theme typography, including the compact `titleMedium` role where the disclosure
+sits inside an existing card; they do not introduce raw font sizes. An
+information control in an accordion header is a sibling of the explicit
+44-pixel accordion button, never nested inside it; title/control/action groups
+wrap rather than overflow at 320 logical pixels and 200-percent text. The
+accordion button and every actionable shared schedule row expose the same
+two-pixel `AppVisualTokens.focus` keyboard ring; static schedule facts remain
+outside keyboard traversal.
 
 Evening pressure-source help is a separate accessible info control: hover opens
 the tooltip on web, tap opens it on touch, and neither path changes the
@@ -394,8 +397,8 @@ The objective gate is:
 - text contrast at least 4.5:1;
 - non-text and focus contrast at least 3:1;
 - two-pixel keyboard focus ring;
-- minimum 44×44 targets, except for the exact 24×24 Today information-
-  disclosure rectangle around its 20×20 icon;
+- minimum 44×44 targets, including information disclosures whose visible frame
+  remains 24×24 around a 20×20 icon;
 - no overflow or hidden action at 320 logical pixels and 2.0 text scale;
 - representative checks at 390×844 and 1280×960;
 - dark, light, and Space theme coverage;

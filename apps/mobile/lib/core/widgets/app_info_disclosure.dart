@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_radii.dart';
 import '../constants/app_spacing.dart';
 import '../theme/app_icons.dart';
 import '../theme/app_motion_tokens.dart';
+import '../theme/app_visual_tokens.dart';
 
 typedef AppInfoHeaderBuilder = Widget Function(
   BuildContext context,
@@ -61,9 +63,8 @@ class AppInfoSectionDisclosure extends StatelessWidget {
 
 /// Shared, non-persisted disclosure for optional explanatory copy.
 ///
-/// Standard controls use the product-wide 44 logical-pixel action target.
-/// The compact layout is reserved for Today headers: its visible control is
-/// 24 logical pixels inside a 44-pixel-tall layout slot.
+/// Every layout uses one 44 logical-pixel action and semantics target around a
+/// consistent visible 24 logical-pixel frame.
 class AppInfoDisclosure extends StatefulWidget {
   const AppInfoDisclosure({
     required this.topic,
@@ -87,12 +88,19 @@ class AppInfoDisclosure extends StatefulWidget {
 }
 
 class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
-  static const _standardControlSize = 44.0;
-  static const _compactControlSize = 24.0;
+  static const _controlSize = 44.0;
+  static const _visibleFrameSize = 24.0;
   static const _iconSize = 20.0;
-  static const _compactVerticalLayoutPadding = 10.0;
 
   bool _expanded = false;
+  bool _focused = false;
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocus);
+  }
 
   @override
   void didUpdateWidget(AppInfoDisclosure oldWidget) {
@@ -101,21 +109,20 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
   }
 
   @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocus)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final motion = context.motionTokens;
     final duration = motion.stateFor(context);
     final actionLabel =
         '${_expanded ? 'Hide' : 'Show'} information about ${widget.topic}';
-    final infoButton = switch (widget.layout) {
-      AppInfoDisclosureLayout.standard => _standardButton(
-          context,
-          actionLabel,
-        ),
-      AppInfoDisclosureLayout.compact => _compactButton(
-          context,
-          actionLabel,
-        ),
-    };
+    final infoButton = _button(context, actionLabel);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,63 +170,60 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
     );
   }
 
-  Widget _standardButton(BuildContext context, String actionLabel) {
+  Widget _button(BuildContext context, String actionLabel) {
+    final tokens = context.visualTokens;
     return SizedBox.square(
       key: ValueKey('${widget.keyPrefix}-control-${widget.topic}'),
-      dimension: _standardControlSize,
-      child: _button(context, actionLabel),
-    );
-  }
-
-  Widget _compactButton(BuildContext context, String actionLabel) {
-    final inheritedStyle = IconButtonTheme.of(context).style;
-    final compactStyle = (inheritedStyle ?? const ButtonStyle()).copyWith(
-      minimumSize: const WidgetStatePropertyAll(
-        Size.square(_compactControlSize),
-      ),
-      fixedSize: const WidgetStatePropertyAll(
-        Size.square(_compactControlSize),
-      ),
-      maximumSize: const WidgetStatePropertyAll(
-        Size.square(_compactControlSize),
-      ),
-      iconSize: const WidgetStatePropertyAll(_iconSize),
-      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    );
-    return Padding(
-      key: ValueKey('${widget.keyPrefix}-layout-${widget.topic}'),
-      padding: const EdgeInsets.symmetric(
-        vertical: _compactVerticalLayoutPadding,
-      ),
-      child: SizedBox.square(
-        key: ValueKey('${widget.keyPrefix}-control-${widget.topic}'),
-        dimension: _compactControlSize,
-        child: IconButtonTheme(
-          data: IconButtonThemeData(style: compactStyle),
-          child: _button(context, actionLabel),
-        ),
-      ),
-    );
-  }
-
-  Widget _button(BuildContext context, String actionLabel) {
-    return Semantics(
-      container: true,
-      button: true,
-      expanded: _expanded,
-      label: actionLabel,
-      onTap: _toggle,
-      child: ExcludeSemantics(
-        child: IconButton(
-          tooltip: actionLabel,
-          color: Theme.of(context).colorScheme.primary,
-          onPressed: _toggle,
-          icon: const Icon(AppIcons.infoOutline, size: _iconSize),
+      dimension: _controlSize,
+      child: Semantics(
+        container: true,
+        button: true,
+        expanded: _expanded,
+        label: actionLabel,
+        onTap: _toggle,
+        child: ExcludeSemantics(
+          child: IconButton(
+            tooltip: actionLabel,
+            color: Theme.of(context).colorScheme.primary,
+            onPressed: _toggle,
+            focusNode: _focusNode,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(
+              width: _controlSize,
+              height: _controlSize,
+            ),
+            icon: AnimatedContainer(
+              duration: context.motionTokens.stateFor(context),
+              width: _visibleFrameSize,
+              height: _visibleFrameSize,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                border: Border.all(
+                  color: _focused ? tokens.focus : tokens.outlineSoft,
+                  width: _focused ? 2 : 1,
+                ),
+              ),
+              child: Center(
+                child: SizedBox.square(
+                  key: ValueKey(
+                    '${widget.keyPrefix}-icon-${widget.topic}',
+                  ),
+                  dimension: _iconSize,
+                  child: const Icon(AppIcons.infoOutline, size: _iconSize),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
   void _toggle() => setState(() => _expanded = !_expanded);
+
+  void _handleFocus() {
+    if (mounted && _focused != _focusNode.hasFocus) {
+      setState(() => _focused = _focusNode.hasFocus);
+    }
+  }
 }

@@ -19,6 +19,8 @@ import 'package:my_life_graph/composition/optimization_providers.dart';
 import 'package:my_life_graph/features/quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 
+import 'support/dashboard_full_week_fixture.dart';
+
 void main() {
   testWidgets('guest Today makes zero Exam Plan Health reads', (tester) async {
     var healthReads = 0;
@@ -69,6 +71,10 @@ void main() {
     expect(find.text('Review your week'), findsOneWidget);
     expect(find.text('Recommendations'), findsOneWidget);
     expect(find.text('Decision feedback history'), findsOneWidget);
+    await _ensureExpansionVisible(
+      tester,
+      const ValueKey('dashboard-full-week'),
+    );
     expect(find.text('Full week'), findsOneWidget);
     expect(find.text('7-day preparation load'), findsNothing);
     expect(find.text('Beat yesterday'), findsOneWidget);
@@ -80,12 +86,14 @@ void main() {
     final habitsY = tester.getTopLeft(find.text("Today's habits")).dy;
     final weeklyReviewY = tester.getTopLeft(find.text('Review your week')).dy;
     final recommendationsY = tester.getTopLeft(find.text('Recommendations')).dy;
+    final fullWeekY = tester.getTopLeft(find.text('Full week')).dy;
     expect(streakY, lessThan(progressY));
     expect(progressY, lessThan(agendaY));
     expect(agendaY, lessThan(tasksY));
     expect(tasksY, lessThan(habitsY));
     expect(habitsY, lessThan(weeklyReviewY));
     expect(weeklyReviewY, lessThan(recommendationsY));
+    expect(recommendationsY, lessThan(fullWeekY));
   });
 
   testWidgets(
@@ -116,7 +124,7 @@ void main() {
       'Decision feedback history':
           'Inspect or delete previously saved feedback.',
       'Full week':
-          'This profile-local Monday–Sunday with Setup and Preparation.',
+          'Your profile-local Monday–Sunday agenda across Setup, Preparation, Calendar, Focus, Planner Tasks, Habits, and Fixed commitments.',
     };
 
     for (final description in disclosures.values) {
@@ -206,6 +214,86 @@ void main() {
     expect(fullWeekLoads, 1);
   });
 
+  testWidgets('Full week lazy failure retries only its own provider generation',
+      (tester) async {
+    var fullWeekLoads = 0;
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(),
+      fullWeekLoader: () async {
+        fullWeekLoads += 1;
+        if (fullWeekLoads == 1) throw StateError('week offline');
+        return dashboardFullWeekFixture(
+          localToday: DateTime.utc(2026, 7, 21),
+        );
+      },
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+      ),
+    );
+
+    expect(fullWeekLoads, 0);
+    await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
+    expect(fullWeekLoads, 1);
+    expect(find.text('Full week unavailable'), findsOneWidget);
+
+    final retry = find.descendant(
+      of: find.byKey(const ValueKey('dashboard-full-week')),
+      matching: find.widgetWithText(TextButton, 'Retry'),
+    );
+    await tester.ensureVisible(retry);
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+
+    expect(fullWeekLoads, 2);
+    expect(find.text('Full week unavailable'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Full week Habit action fails closed after profile midnight',
+      (tester) async {
+    final habitAction = DashboardFullWeekAction(
+      kind: DashboardFullWeekActionKind.openHabit,
+      targetId: 'habit-1',
+      localDate: DateTime.utc(2026, 7, 21),
+    );
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(),
+      fullWeek: dashboardFullWeekFixture(
+        localToday: DateTime.utc(2026, 7, 21),
+        items: [
+          dashboardFullWeekTimedItem(
+            id: 'habit-slot-1',
+            category: DashboardFullWeekCategory.habit,
+            localDate: DateTime.utc(2026, 7, 21),
+            title: 'Evening walk',
+            action: habitAction,
+          ),
+        ],
+      ),
+      profileDateSource: _FixedProfileDateSource(DateTime.utc(2026, 7, 22)),
+    );
+
+    await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
+    await tester.ensureVisible(find.text('Evening walk'));
+    await tester.tap(find.text('Evening walk'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'The day changed. Reload Full week before opening this habit.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Habit completion'), findsNothing);
+  });
+
   testWidgets('progress failure is honest while the usable agenda remains',
       (tester) async {
     final snapshot = _todaySnapshot(
@@ -258,16 +346,16 @@ void main() {
         hasMorningCapture: true,
         hasEveningCapture: true,
       ),
-      fullWeek: const DashboardFullWeekProjector().project(
-        displayedLocalDate: DateTime(2026, 7, 21),
-        commitments: const [
-          DashboardSetupCommitmentFact(
+      fullWeek: dashboardFullWeekFixture(
+        localToday: DateTime.utc(2026, 7, 21),
+        items: [
+          dashboardFullWeekTimedItem(
             id: 'setup-1',
+            category: DashboardFullWeekCategory.setup,
+            localDate: DateTime.utc(2026, 7, 21),
             title: 'Full-week lecture',
-            weekday: DateTime.tuesday,
-            startsAt: '10:00',
-            endsAt: '11:00',
-            sortMinutes: 600,
+            start: '10:00:00',
+            end: '11:00:00',
           ),
         ],
       ),
@@ -520,10 +608,40 @@ void main() {
 }
 
 Future<void> _tapExpansion(WidgetTester tester, ValueKey<String> key) async {
-  final card = find.byKey(key);
-  final tile = find.descendant(of: card, matching: find.byType(ListTile)).first;
-  tester.widget<ListTile>(tile).onTap!();
+  await _ensureExpansionVisible(tester, key);
+  final title = _expansionTitle(key);
+  final control = find.byKey(
+    ValueKey('dashboard-expansion-control-$title'),
+  );
+  await tester.tap(control);
   await tester.pumpAndSettle();
+}
+
+Future<void> _ensureExpansionVisible(
+  WidgetTester tester,
+  ValueKey<String> key,
+) async {
+  final title = _expansionTitle(key);
+  final control = find.byKey(
+    ValueKey('dashboard-expansion-control-$title'),
+  );
+  await tester.scrollUntilVisible(
+    control,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
+String _expansionTitle(ValueKey<String> key) {
+  final title = switch (key.value) {
+    'dashboard-recommendations' => 'Recommendations',
+    'dashboard-feedback-history' => 'Decision feedback history',
+    'dashboard-full-week' => 'Full week',
+    'today-all-tasks' => 'Show all tasks',
+    _ => throw StateError('Unknown expansion key ${key.value}.'),
+  };
+  return title;
 }
 
 Future<void> _tapInfo(WidgetTester tester, String topic) async {
@@ -540,6 +658,7 @@ Future<void> _pumpDashboard(
   Future<DashboardSnapshot>? snapshotFuture,
   DashboardCheckIn? latestCheckIn,
   DashboardFullWeekProjection? fullWeek,
+  Future<DashboardFullWeekProjection> Function()? fullWeekLoader,
   Future<RecommendationFeed>? recommendations,
   Size size = const Size(900, 1500),
   TextScaler textScaler = TextScaler.noScaling,
@@ -557,6 +676,8 @@ Future<void> _pumpDashboard(
     canUseSyncedHabits: true,
     canUseSyncedExecution: true,
   ),
+  ProfileLocalDateSource profileDateSource =
+      const SessionProfileLocalDateSource(session: null),
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -573,7 +694,7 @@ Future<void> _pumpDashboard(
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
         profileLocalDateSourceProvider.overrideWithValue(
-          const SessionProfileLocalDateSource(session: null),
+          profileDateSource,
         ),
         dashboardSnapshotProvider.overrideWith((ref) => value),
         examPlanHealthProvider.overrideWith((ref) async {
@@ -586,9 +707,10 @@ Future<void> _pumpDashboard(
         dashboardFullWeekProvider(displayedDate).overrideWith(
           (ref) {
             onFullWeekLoad?.call();
-            return Future.value(
-              fullWeek ?? DashboardFullWeekProjection.empty(displayedDate),
-            );
+            return fullWeekLoader?.call() ??
+                Future.value(
+                  fullWeek ?? DashboardFullWeekProjection.empty(displayedDate),
+                );
           },
         ),
         recommendationFeedProvider.overrideWith(
@@ -625,6 +747,31 @@ Future<void> _pumpDashboard(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+class _FixedProfileDateSource implements ProfileLocalDateSource {
+  const _FixedProfileDateSource(this.value);
+
+  final DateTime value;
+
+  @override
+  String? get timezoneName => 'Europe/Berlin';
+
+  @override
+  DateTime dateAt(DateTime instant) => value;
+
+  @override
+  String dateKeyAt(DateTime instant) => _key(value);
+
+  @override
+  DateTime today() => value;
+
+  @override
+  String todayKey() => _key(value);
+
+  String _key(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 }
 
 DashboardSnapshot _todaySnapshot({

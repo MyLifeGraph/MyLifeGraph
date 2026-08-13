@@ -1865,9 +1865,11 @@ does not alter capture fields, briefing generation, ranking, copy truth, or the
 read/write boundary described in this plan.
 
 Their feature adapters delegate optional explanatory text to the shared core
-information disclosure. Today retains its documented compact exception;
-Morning and Evening retain 44×44 controls and their five independent closed
-sleep explanations. Save failures use provider-neutral copy, keep the complete
-draft, and do not expose storage or transport configuration. Consent,
-validation, step progress, and the final save authority remain visible and
-unchanged.
+information disclosure. Today, Morning, and Evening now share a real 44×44
+hit/focus/semantics target around the visible 24×24 information frame and
+20×20 icon. The separate Daily Capture choice-info control uses the same
+geometry without changing its selection. The five independent sleep
+explanations remain closed initially. Save failures use provider-neutral copy,
+keep the complete draft, and do not expose storage or transport configuration.
+Consent, validation, step progress, and the final save authority remain visible
+and unchanged.

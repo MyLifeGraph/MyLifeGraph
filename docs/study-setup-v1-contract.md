@@ -185,6 +185,12 @@ ordinary Deadline allocation carries learned timing, batch confirmation also
 checks its separately stored pilot/permission/provenance marker under the same
 owner lock; an opt-out cannot leave that simulated ordering confirmable.
 
+Study Setup retains no direct Full-week item type. Its durable changes still
+invalidate the lazy `today-week-agenda-v1` read because changed Setup timing can
+affect confirmed Preparation and Planner reservations. The week endpoint only
+reads already authoritative blocks and Setup schedule facts; it neither
+materializes recovery as active Focus nor replans after a Study change.
+
 Deadline Planner always uses the current Study rhythm when a Focus rhythm is
 configured. An ordinary Planner Task has an explicit `use_study_rhythm`
 boolean, defaulting to false. When true, a current rhythm is required and the

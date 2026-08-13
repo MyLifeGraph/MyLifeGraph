@@ -107,10 +107,12 @@ Planner's range remains seven consecutive profile-local dates starting with
 its overview date. Its day cards and appointment rows use the same
 feature-neutral presentation primitive as Today `Full week`; sharing that
 primitive does not share read authority or date semantics. Today `Full week`
-instead shows the containing Monday-through-Sunday calendar week, limits its
-items to applicable Setup commitments and active-revision Preparation blocks,
-and adds its own non-interactive completion/rating-status box. Planner behavior
-and navigation are unchanged by that extraction.
+instead shows the containing Monday-through-Sunday calendar week through the
+dedicated `today-week-agenda-v1` read. Its seven independently fresh sources
+include Setup, Preparation, Calendar, actual Focus, Planner Tasks, materialized
+Habit slots, and fixed commitments. It never reuses Planner's rolling overview
+as a week source. Planner behavior and navigation are unchanged by that
+projection.
 
 Today and Planner use the same category semantics for both Add-new actions and
 complete agenda rows: Task/Setup are brand-primary, Habit/Preparation are

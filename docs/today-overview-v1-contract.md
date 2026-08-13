@@ -200,20 +200,18 @@ An information click inside `Show all tasks` or a supporting accordion does not
 toggle that accordion. In particular it does not begin Recommendations,
 feedback, or Full-week loading; those projections are still watched only after
 their content accordion opens. Each information control is a keyboard-operable
-button with an exact 24×24 logical click, hover, focus, and semantics rectangle
-around its unchanged 20×20 icon, `expanded` semantics, and the exact dynamic
+button with a real 44×44 logical hit, focus, and semantics rectangle. Its visible
+24×24 frame contains the unchanged 20×20 icon, exposes `expanded` semantics,
+and uses the exact dynamic
 label `Show information about <heading>` or
 `Hide information about <heading>`. Closed descriptions are absent from the
 accessibility tree. Open descriptions follow their heading and reveal through
 the shared state-duration vertical size/opacity transition; Reduced Motion
 makes the state change immediate. Non-interactive vertical layout padding keeps
-the previous heading alignment. Inside an accordion, a direct click in the
-central 24×24 rectangle changes only the description; the surrounding header,
-including the layout padding immediately outside that rectangle, retains the
-accordion action. This is the only Today-specific exception to the global
-minimum 44×44 action target. Heading, information control, Planner action, and
-accordion chevron wrap without hiding an action at 320 logical pixels and
-200-percent text.
+the previous heading alignment. Accordion expansion and information disclosure
+are separate sibling controls; neither action can trigger the other. Heading,
+information control, Planner action, and accordion chevron wrap without hiding
+an action at 320 logical pixels and 200-percent text.
 
 The same header controls remain available during the initial Today loading and
 load-error states. The local unread Coach control does not generate, reload, or
@@ -231,69 +229,69 @@ filters `daily_logs.user_id` to that owner, applies
 `entry_date <= displayed_local_date`, orders newest first, and requests at most
 one row. The compact mapper accepts only the existing Dashboard projections;
 malformed or unavailable data is not replaced with demo content. Guest/demo
-selects from local capture storage and makes zero Supabase calls.
+selects from local capture storage and makes zero Supabase calls. Its Full-week
+accordion constructs a local seven-day empty projection without building
+authenticated transport or issuing a FastAPI request.
 
-`Full week` always projects exactly the calendar week containing the displayed
-profile-local date: Monday through Sunday, including empty days. It combines
-active Setup-managed recurring `schedule_items` that apply on the occurrence
-date, including their inclusive optional `valid_from`/`valid_until` bounds,
-with active-revision Preparation blocks from the existing `deadline-plan-v1`
-feed. Items sort by local start time, then title and stable id. This differs
-from Planner's rolling next seven dates, but both surfaces adapt to the shared
-feature-neutral day-card and appointment-row widget.
+`Full week` is the strict read-only `today-week-agenda-v1` projection from
+`GET /v1/today/week-agenda`. The bearer principal and authoritative profile
+timezone determine the current Monday-through-Sunday week; the response always
+contains those seven ordered profile-local dates, including empty days. The
+wire carries server-derived `local_date`, `local_starts_at`, and
+`local_ends_at`; Flutter never re-derives them from browser or device time.
+Profile or timezone failure is route-wide `503`. All other reads are seven
+independent `current|unavailable` sources: Setup, Preparation, current Calendar
+import, actual Focus sessions, Planner Tasks, materialized Habit slots, and
+fixed commitments. A source failure keeps the other six authoritative facts
+visible and names only the unavailable source; it never becomes fabricated
+empty data.
 
-Each Today appointment row has a non-interactive status box:
+Each source is evaluated through one dedicated owner-filtered seam per request,
+with fixed bounded batched subreads where related identities or lifecycle facts
+must be joined; no read scales row-by-row. The projection never uses Planner's
+rolling overview or the sentinel-limited Deadline list as an input. Calendar
+facts are current only when the connected owner's
+`last_import_id` resolves to a `calendar_imports` row whose `planning_status` is
+`current`; disconnected Calendar is a current empty source, while a stale or
+invalid planning import is unavailable. Setup, Calendar, and fixed timed facts
+are clipped into every overlapped profile-local day with stable occurrence ids.
+Preparation and Planner Task blocks retain their stored `local_date`; Habits
+use their materialized occurrence date; Focus prefers `metadata.entry_date`
+and uses the UTC calendar date of its aware `started_at` only as the established
+legacy/invalid-metadata fallback. Ambiguous or nonexistent recurring wall time
+fails only its owning source. Cross-midnight and DST-fold intervals remain
+ordered by aware instants.
 
-- Setup commitment: `notApplicable`, empty and neutral because Setup owns no
-  completion fact;
-- non-completed Preparation: `open`, empty and neutral;
-- officially `completed` Preparation block: `completed`, with a neutral gray
-  check; and
-- officially completed Preparation with at least one Focus session linked by
-  that exact `deadline_plan_block` source id, every linked session terminal,
-  and every linked session carrying one valid `focus-reflection-v1` row with
-  both ratings: `fullyRated`, with a Preparation-category check.
+Static Setup, Calendar, and fixed-commitment rows expose no action. Preparation
+reuses the canonical Deadline credit allocation across the complete current
+revision, including proposal-time credit, source-bound Focus, and generic
+chronological overflow. Its block state is therefore exact
+`upcoming|partial|completed|missed`; only a block with at least five remaining
+minutes may revalidate the current start context. A completed Preparation plan
+opens its plan. Open Planner Task blocks revalidate the current start context;
+done or cancelled Task facts are static. Active
+Focus resumes and terminal Focus opens reflection. A Habit action exists only
+for the exact current profile-local date because the existing Habit mutation is
+date-less; it re-reads that profile date immediately before navigation, and a
+midnight change instead asks for a Full-week reload. All other week Habit rows
+are static. These actions reuse their
+owning Focus, Deadline, Task, and Habit contracts and add no mutation route.
 
-Optional reflection obstacles are irrelevant to `fullyRated`. Reads of
-`focus_session_schedule_sources`, `focus_sessions`, and
-`focus_session_reflections` are owner-filtered, exact-block-filtered, batched,
-and bounded. At most 240 sorted block ids are split into batches of 100; every
-association batch repeats the owner, `source_kind = deadline_plan_block`, and
-exact block-id predicates. A single 500-association budget spans all batches,
-using the remaining budget plus one as the sentinel on each read. Session and
-reflection reads retain their own 100-id batches, and duplicate or inconsistent
-session identities remain invalid across batch boundaries. If those rating
-facts cannot be loaded, a known official completion remains `completed` and
-gray while a local notice says only that
-rating status is unavailable. The Setup and Preparation reads begin
-concurrently and each owns its failure immediately. If every expected core
-source fails, the whole accordion is unavailable and the UI says that no
-partial week was invented. If exactly one core source fails, the usable sibling
-facts remain visible with a source-specific notice; an empty day says `No items
-from the available source.` instead of claiming that both sources are empty.
-Only a successful empty read from every expected core source uses `No Setup or
-Preparation items.` Rating failure remains independently isolated.
-
-The Deadline feed read and its in-week Preparation transformation are one
-immediately error-owned source operation. Encountering a 241st in-week block
-fails only Preparation with `DashboardFullWeekDataException`; already loaded
-Setup facts remain visible with the Preparation-specific partial-source notice,
-and no rating-association read starts. The projector repeats the 200 Setup and
-240 Preparation limits as defense in depth.
-
-Semantics distinguish `Completion status not applicable`, `Not completed`,
-`Completed`, and `Completed and fully rated`; the status box exposes only that
-static label, with no action or enabled/disabled control state. Each adjacent
-appointment row exposes one exact combined title/detail/category label. A
-Preparation row is a button with one tap action, while a non-actionable Setup
-row is a static fact with neither button nor enabled-state semantics.
+Full week loads only when its accordion opens. Mobile shows two and one-half
+day cards at normal width/text scale and exactly two at the narrow/large-text
+breakpoint; initial position keeps Today visible while clamping Saturday or
+Sunday so two real cards remain. Horizontal movement snaps by one day and
+cannot pass Monday or Sunday. Web switches to seven columns only when all seven
+cards can retain at least 208 logical pixels; otherwise it uses the same
+bounded horizontal strip. Day cards grow with content rather than clipping a
+dense agenda. Only Full week may escape Today's compact content width.
 
 The application-level projection coordinator invalidates `Beat yesterday`
-after a durable Daily Capture change. Setup, Deadline Planner, Focus lifecycle,
-and Focus-reflection changes invalidate Full week; this includes a successful
-exact replay of an outcome-unknown reflection-history clear. A
-profile-timezone change invalidates both date-bound projections. These
-invalidations refresh reads only and never replay the originating mutation.
+after a durable Daily Capture change. Habit outcome/definition, Today Task or
+Habit, generic Planner, Setup, Deadline Planner, Focus lifecycle,
+profile-timezone, Calendar, and preparation-budget impacts invalidate Full
+week as applicable. These invalidations refresh reads only and never replay the
+originating mutation.
 Evening Capture captures the coordinator before opening a Focus-reflection
 sheet and invokes it from each successful save/delete callback. The invalidation
 therefore still occurs exactly once if the sheet or page is dismissed while the

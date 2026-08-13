@@ -125,8 +125,11 @@ FastAPI service boundary for recommendation and future ML workflows.
   date. Normal reads remain generation-free. The visible Today surface instead
   uses read-only `GET /v1/today/overview-v2` for its streak, exact progress,
   timeline, Tasks, Habits, and confirmed Planner blocks. The V1 route remains
-  available for existing clients; neither read removes the internal briefing
-  contract or writes product state.
+  available for existing clients. Its lazy calendar-week companion is
+  `GET /v1/today/week-agenda` under `today-week-agenda-v1`: seven exact
+  profile-local days, seven independently fresh sources, and no write or
+  generation. Neither read removes the internal briefing contract or writes
+  product state.
 - Phase 7 extends the protected scheduled boundary to prepare daily snapshots
   and briefings for onboarded non-guest profiles. One UTC run instant determines
   each profile-local date; current pairs are write-free, while missing or stale
@@ -401,6 +404,27 @@ scheduled-target selection:
 curl http://localhost:8000/v1/today/overview-v2 \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
+
+Read the current profile-local Monday-through-Sunday agenda without side
+effects:
+
+```bash
+curl http://localhost:8000/v1/today/week-agenda \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+`today-week-agenda-v1` returns seven ordered days plus separate
+`current|unavailable` states for Setup, Preparation, Calendar, Focus, Planner
+Tasks, Habits, and fixed commitments. The bearer principal owns every bounded
+source seam and its fixed batched relation reads; none scale per item.
+Preparation reuses canonical current-revision Focus credit and exposes exact
+planned, credited, and remaining minutes with lifecycle-bound actions. Calendar
+events are projected only when `last_import_id` resolves to the
+same owner's `planning_status=current` import; disconnected Calendar is a
+current empty source, while stale planning data is unavailable. Profile or
+timezone authority failure is route-wide `503`. All local date/time strings
+are server-derived in the profile timezone. The endpoint never calls Planner
+Overview or the bounded Deadline list and never mutates or generates state.
 
 Personal Learning uses these bearer-authenticated contracts:
 

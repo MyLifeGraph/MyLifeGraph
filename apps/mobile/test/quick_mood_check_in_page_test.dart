@@ -412,7 +412,7 @@ void main() {
   });
 
   testWidgets(
-      'dismissed reflection sheet still invalidates Full week after save',
+      'dismissed reflection sheet saves without touching rating-free Full week',
       (tester) async {
     final source = _PendingFocusReflectionSource();
     final projection = _RecordingProjectionRefresh();
@@ -440,12 +440,12 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(projection.fullWeekInvalidations, 1);
+    expect(projection.fullWeekInvalidations, 0);
     expect(find.text('Focus reflection saved.'), findsNothing);
   });
 
   testWidgets(
-      'dismissed reflection sheet still invalidates Full week after delete',
+      'dismissed reflection sheet deletes without touching rating-free Full week',
       (tester) async {
     final source = _PendingFocusReflectionSource(withExisting: true);
     final projection = _RecordingProjectionRefresh();
@@ -472,11 +472,11 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(projection.fullWeekInvalidations, 1);
+    expect(projection.fullWeekInvalidations, 0);
     expect(find.text('Focus reflection deleted.'), findsNothing);
   });
 
-  testWidgets('reflection refresh failure does not turn save into an error',
+  testWidgets('reflection save does not refresh the rating-free week agenda',
       (tester) async {
     final source = _PendingFocusReflectionSource(immediateSave: true);
     final projection = _RecordingProjectionRefresh(throwOnFullWeek: true);
@@ -496,7 +496,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(source.saveCalls, 1);
-    expect(projection.fullWeekInvalidations, 1);
+    expect(projection.fullWeekInvalidations, 0);
     expect(find.text('Focus reflection saved.'), findsOneWidget);
     expect(find.byKey(const ValueKey('focus-reflection-error')), findsNothing);
   });

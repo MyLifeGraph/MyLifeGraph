@@ -99,14 +99,21 @@ The primary Today surface uses these exact concepts:
 
 `Beat yesterday` names the existing compact inset but does not claim a delta or
 improvement. It labels only available Mood, Energy, Sleep duration, Sleep
-quality, and Stress values and includes the saved date. Full-week status
-semantics are `Completion status not applicable`, `Not completed`, `Completed`,
-and `Completed and fully rated`. The status box is not described as a control.
-When both Full-week sources loaded successfully and a day is empty, use `No
-Setup or Preparation items.` When one source failed, use `No items from the
-available source.` for empty days and retain the source-specific inline failure
-notice. If all expected core sources failed, use `Full week unavailable` and
-`No partial week was invented.` instead of rendering empty days.
+quality, and Stress values and includes the saved date. Under
+`today-week-agenda-v1`, `Full week` is the profile-local `Monday–Sunday` agenda
+across `Setup`, `Preparation`, `Calendar`,
+`Focus`, `Planner Tasks`, `Habits`, and `Fixed commitments`. Empty days say
+`Nothing scheduled.` only when their seven independent source states permit
+that claim. With any unavailable source, an otherwise empty day instead says
+`No items from available sources.` Every unavailable source is named in an
+inline notice; its facts are omitted without hiding available siblings. A
+route-wide load failure uses
+`Full week unavailable` and offers only its week-scoped retry. Item labels may
+use `In progress`, `Completed`, `Ended`, `Missed`, `Skipped`, `Open`,
+`To do`, `Cancelled`, `Scheduled`, `Upcoming`, `Partially completed`,
+`Confirmed`, or `Tentative` according to the source fact. The old
+two-source `fullyRated`/rating-status Full-week language is retired and does not
+alter Today at a glance.
 
 The Today source/update line and ordinary explanations for streak, progress,
 agenda, Task/Habit sections, `Show all tasks` plus its `Tasks` subsection, and
@@ -117,7 +124,9 @@ Opening information reveals the existing English copy; it does not replace or
 delay an error, loading, unavailable, result, action, count, or empty-state
 message and does not open the surrounding Task/supporting accordion. The
 direct `Review your week` entry always shows its existing summary and has no
-information control or collapsed wrapper.
+information control or collapsed wrapper. Every visible information icon is a
+20-pixel glyph inside a 24-pixel frame and a real 44×44 button/semantics target;
+the accordion header is an independent sibling control.
 
 `today-overview-v2` may additionally label agenda rows `Task`, `Habit`, and
 `Fixed commitment`. A scheduled Task or Habit still appears once in progress;

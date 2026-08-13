@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_category_visuals.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
@@ -7,7 +8,7 @@ import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/core/widgets/app_schedule_day_card.dart';
 
 void main() {
-  testWidgets('status semantics distinguish all four appointment states',
+  testWidgets('whole actionable row owns status semantics and hit target',
       (tester) async {
     final semantics = tester.ensureSemantics();
     var taps = 0;
@@ -34,11 +35,13 @@ void main() {
       ('fullyRated', 'Completed and fully rated'),
     ]) {
       expect(
-        tester.getSemantics(find.byKey(ValueKey('schedule-status-$id'))),
+        tester.getSemantics(
+          find.byKey(ValueKey('schedule-day-item-semantics-$id')),
+        ),
         isSemantics(
-          label: label,
-          isButton: false,
-          hasTapAction: false,
+          label: '$id. 09:00–10:00. Preparation. $label.',
+          isButton: true,
+          hasTapAction: true,
           hasEnabledState: false,
         ),
       );
@@ -47,9 +50,19 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('schedule-status-fullyRated')),
     );
-    expect(taps, 0, reason: 'The status box is not its row action.');
+    expect(taps, 1, reason: 'The status box belongs to the row action.');
     await tester.tap(find.text('fullyRated'));
-    expect(taps, 1);
+    expect(taps, 2);
+    expect(
+      tester
+          .getSize(
+            find.byKey(
+              const ValueKey('schedule-day-item-semantics-fullyRated'),
+            ),
+          )
+          .height,
+      greaterThanOrEqualTo(44),
+    );
     semantics.dispose();
   });
 
@@ -110,6 +123,51 @@ void main() {
     await tester.tap(find.bySemanticsLabel(actionableLabel));
     expect(tappedId, 'actionable');
     semantics.dispose();
+  });
+
+  testWidgets('keyboard focus shows a two-pixel ring and Enter activates',
+      (tester) async {
+    var tappedId = '';
+    await _pump(
+      tester,
+      items: const [
+        AppScheduleDayItem(
+          id: 'static-first',
+          title: 'Static lecture',
+          detail: '08:00–09:00',
+          category: AppCategory.setup,
+          actionable: false,
+        ),
+        AppScheduleDayItem(
+          id: 'keyboard-action',
+          title: 'Open preparation',
+          detail: '09:00–10:00',
+          category: AppCategory.preparation,
+          actionable: true,
+        ),
+      ],
+      onTap: (item) => tappedId = item.id,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    final focusedMaterial = tester.widget<Material>(
+      find.byKey(
+        const ValueKey('schedule-day-item-material-keyboard-action'),
+      ),
+    );
+    final focusedShape = focusedMaterial.shape! as RoundedRectangleBorder;
+    expect(focusedShape.side.width, 2);
+    expect(focusedShape.side.color, AppVisualTokens.light.focus);
+    final staticMaterial = tester.widget<Material>(
+      find.byKey(const ValueKey('schedule-day-item-material-static-first')),
+    );
+    expect((staticMaterial.shape! as RoundedRectangleBorder).side.width, 1);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(tappedId, 'keyboard-action');
   });
 
   testWidgets('completed is neutral and fully rated uses category tokens',

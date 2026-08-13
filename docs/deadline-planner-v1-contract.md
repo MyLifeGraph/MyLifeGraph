@@ -591,9 +591,15 @@ plans can be expanded deliberately. Its independently loaded detail keeps
 loading, failure, and changed-since-summary states visible, lists the
 contributing plans, and states the exact minimum date overage when present.
 Today does not call the workload or detail route. Its separate `Full week`
-accordion projects the containing Monday-to-Sunday calendar week from
-owner-scoped Setup commitments and active-revision Preparation blocks under the
-Today contract.
+accordion calls `GET /v1/today/week-agenda`, not the bounded Deadline list.
+`today-week-agenda-v1` projects the current active revision for active and
+completed plans alongside six other owner-scoped sources for the containing
+Monday-to-Sunday calendar week. It reuses canonical proposal-time, linked, and
+generic Focus credit allocation to expose exact credited and remaining minutes.
+Only a block with at least five remaining minutes carries its exact
+`deadline_plan_block` id into the current Focus start-context check; a completed
+plan opens Preparation.
+The read never creates, confirms, moves, or completes a Deadline Plan.
 
 Optional placement methodology is initially closed behind `How times are
 placed` on an expanded plan. The compact saved-value replan review similarly

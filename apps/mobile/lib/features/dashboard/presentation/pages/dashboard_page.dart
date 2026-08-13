@@ -21,6 +21,7 @@ import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../../tasks/domain/executable_task.dart';
 import '../../../deadline_plans/domain/exam_plan_health.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
+import '../../domain/entities/dashboard_full_week.dart';
 import 'package:my_life_graph/composition/dashboard_providers.dart';
 import '../widgets/dashboard_supporting_sections.dart';
 import '../widgets/dashboard_section_widgets.dart';
@@ -197,12 +198,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               ref.invalidate(dashboardFullWeekProvider(localDate));
             }
           },
-          onOpenPreparationPlan: (planId) => context.push(
-            Uri(
-              path: AppRoutes.preparationPlans,
-              queryParameters: {'plan_id': planId},
-            ).toString(),
-          ),
+          onFullWeekAction: _openFullWeekAction,
         ),
       ),
     );
@@ -258,6 +254,59 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Future<void> _deleteFeedback(DecisionFeedback item) async {
     await ref.read(feedbackRepositoryProvider).delete(item.id);
     ref.invalidate(decisionFeedbackProvider);
+  }
+
+  void _openFullWeekAction(DashboardFullWeekAction action) {
+    switch (action.kind) {
+      case DashboardFullWeekActionKind.startPreparationFocus:
+      case DashboardFullWeekActionKind.startTaskFocus:
+        context.push(
+          Uri(
+            path: AppRoutes.deepWork,
+            queryParameters: {
+              'source_kind': action.sourceKind!,
+              'source_block_id': action.targetId,
+            },
+          ).toString(),
+        );
+      case DashboardFullWeekActionKind.resumeFocus:
+      case DashboardFullWeekActionKind.reflectFocus:
+        context.push(
+          Uri(
+            path: AppRoutes.deepWork,
+            queryParameters: {'session_id': action.targetId},
+          ).toString(),
+        );
+      case DashboardFullWeekActionKind.openPreparationPlan:
+        context.push(
+          Uri(
+            path: AppRoutes.preparationPlans,
+            queryParameters: {'plan_id': action.targetId},
+          ).toString(),
+        );
+      case DashboardFullWeekActionKind.openHabit:
+        final actionDate = action.localDate;
+        DateTime currentDate;
+        try {
+          final profileDateSource = ref.read(profileLocalDateSourceProvider);
+          if (profileDateSource.timezoneName == null) {
+            throw const FormatException('Profile timezone is unavailable.');
+          }
+          currentDate = profileDateSource.today();
+        } catch (_) {
+          _showTaskMessage(
+            'The profile date is unavailable. Reload Full week before opening this habit.',
+          );
+          return;
+        }
+        if (actionDate == null || !_sameCalendarDate(actionDate, currentDate)) {
+          _showTaskMessage(
+            'The day changed. Reload Full week before opening this habit.',
+          );
+          return;
+        }
+        context.push(AppRoutes.habitCompletion);
+    }
   }
 
   Future<void> _setHabitOutcome(
@@ -442,6 +491,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 }
 
+bool _sameCalendarDate(DateTime left, DateTime right) =>
+    left.year == right.year &&
+    left.month == right.month &&
+    left.day == right.day;
+
 class _DashboardHome extends StatelessWidget {
   const _DashboardHome({
     required this.snapshot,
@@ -473,7 +527,7 @@ class _DashboardHome extends StatelessWidget {
   final AsyncValue<ExamPlanHealth?> examPlanHealth;
   final VoidCallback onRetryExamPlanHealth;
   final ValueChanged<String> onOpenExamPlan;
-  final Widget supportingSections;
+  final DashboardSupportingSections supportingSections;
 
   @override
   Widget build(BuildContext context) {
@@ -494,7 +548,7 @@ class _DashboardHome extends StatelessWidget {
                   horizontalPadding,
                   AppSpacing.md,
                   horizontalPadding,
-                  bottomPadding,
+                  0,
                 ),
                 sliver: SliverToBoxAdapter(
                   child: Center(
@@ -564,9 +618,27 @@ class _DashboardHome extends StatelessWidget {
                             onOpenPlan: onOpenExamPlan,
                           ),
                           const SizedBox(height: AppSpacing.xl),
-                          supportingSections,
+                          supportingSections.compact,
                         ],
                       ),
+                    ),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  AppSpacing.sm,
+                  horizontalPadding,
+                  bottomPadding,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: dashboardFullWeekMaximumWidth,
+                      ),
+                      child: supportingSections.fullWeek,
                     ),
                   ),
                 ),

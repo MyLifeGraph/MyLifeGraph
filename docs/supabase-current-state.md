@@ -195,24 +195,26 @@ presence/context only. Phase 1 does not add Daily Mode, briefing ranking,
 recommendation generation on save, or LLM usage. It also does not change the
 Phase 0C revision tables, profile guard, or atomic Setup RPC.
 
-The simplified Today surface adds no migration, grant, RPC, or public HTTP
-endpoint. Its compact latest-check-in read explicitly filters `daily_logs` by
+The simplified Today surface adds no migration, grant, or RPC. Its compact
+latest-check-in read explicitly filters `daily_logs` by
 the resolved owner and `entry_date <=` the displayed profile-local date, orders
-newest first, and limits to one row. Lazy `Full week` reads only that owner's
-Setup-managed `schedule_items`, applying inclusive validity metadata, and uses
-the existing owner-authorized `deadline-plan-v1` feed for active Preparation
-blocks in the containing Monday-through-Sunday week. Rating status then reads
-only exact requested block associations from
-`focus_session_schedule_sources`. Sorted block ids are divided into batches of
-100; every batch repeats the explicit owner, `deadline_plan_block` source, and
-exact block predicates, while one remaining-plus-one sentinel enforces the
-global maximum of 500 associations across all batches. Cross-batch duplicate
-session associations are invalid. The resulting session ids feed separate
-owner-filtered, bounded 100-id batches of `focus_sessions` and
-`focus_session_reflections`. Forced RLS remains the
-database boundary; explicit owner predicates and date/block bounds remain
-application defense in depth. Guest/demo takes local/empty projections before
-constructing these reads and makes no Supabase call.
+newest first, and limits to one row. Lazy `Full week` adds only the read-only
+FastAPI `GET /v1/today/week-agenda` under `today-week-agenda-v1`; it changes no
+table, policy, grant, or RPC.
+The service evaluates each source once through a dedicated owner-filtered seam
+and uses fixed bounded batched subreads, never row-wise queries, when related
+revision, credit, or target facts must be joined. Those reads cover existing
+`schedule_items`, current-revision `deadline_plan_blocks`, current imported
+`calendar_events`, `focus_sessions` and immutable schedule-source provenance,
+Planner Task blocks/targets, Habit slots/outcomes, and `planner_commitments`.
+It neither reuses Planner Overview nor the bounded Deadline list feed.
+`calendar_connections.last_import_id` must
+resolve to the same owner's `calendar_imports.planning_status=current` before
+either Today projection consumes Calendar events; disconnected Calendar is a
+valid empty source and stale planning data is unavailable. Forced RLS remains
+the database boundary; explicit owner and week/UTC-overlap predicates remain
+application defense in depth. Guest/demo takes a local empty week before
+constructing authenticated transport and makes no Supabase or FastAPI call.
 
 Phase 2 also requires no migration. FastAPI extends existing daily and weekly
 snapshot JSON additively under `summary.daily_state` and

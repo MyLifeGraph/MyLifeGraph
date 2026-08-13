@@ -169,19 +169,21 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
      direkt den Weekly Review;
    - `Recommendations` und `Decision feedback history` laden erst beim Öffnen;
    - `Full week` zeigt Montag bis Sonntag der aktuellen profil-lokalen
-     Kalenderwoche mit Setup- und Preparation-Terminen, einschließlich leerer
-     Tage;
+     Kalenderwoche mit Setup, Preparation, Calendar, tatsächlichem Focus,
+     Planner Tasks, Habit Slots und festen Commitments, einschließlich leerer
+     Tage und je Quelle ehrlichem Teilfehler;
    - die drei Akkordeons können gleichzeitig geöffnet bleiben.
 
 `7-day preparation load` ist weiterhin im Planner verfügbar, wird auf Today
-aber nicht mehr zusätzlich angezeigt. In `Full week` bleibt der Status bei
-Setup-Terminen nicht anwendbar. Preparation zeigt einen neutralen Haken für den
-offiziell abgeschlossenen Block und die Kategorie-Farbe nur dann, wenn alle
-exakt zugeordneten terminalen Focus Sessions gültig bewertet sind. Fällt nur
-eine der beiden Terminquellen aus, bleiben ausschließlich die verfügbaren
-Fakten mit einem klaren Teilfehler sichtbar; leere Tage behaupten dann nicht,
-beide Quellen seien leer. Fallen alle erwarteten Kernquellen aus, zeigt das
-Akkordeon einen Fehler statt einer erfundenen leeren Woche.
+aber nicht mehr zusätzlich angezeigt. `Full week` liest den eigenen
+`today-week-agenda-v1`-Endpunkt erst beim Öffnen; weder Planner Overview noch
+die begrenzte Deadline-Liste dienen als Ersatzquelle. Die Profil-Zeitzone und
+der Server liefern lokale Daten/Uhrzeiten. Preparation- und Task-Blöcke prüfen
+beim Antippen den aktuellen Startkontext, aktive/terminale Focus Sessions führen
+zu Resume/Reflection, und nur das Habit des exakten heutigen Profildatums ist
+ausführbar. Andere Habit-Tage sowie Setup, Calendar und feste Commitments bleiben
+statische Fakten. Gast/Mock erzeugt lokal sieben leere Tage und ruft keinen
+authentifizierten Produktdienst auf.
 
 `Today` zeigt nur wirklich gespeicherte Werte. Fehlende Schlaf-, Stimmungs-,
 Energie-, Stress-, Bewegungs-, Screen-Time- oder Focus-Daten werden weder als
@@ -736,7 +738,7 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 | Tägliche Erfassung | `daily_logs`, `behavioral_events` | Today, Daily State, Insights |
 | Ausführung | `tasks`, `habit_logs`, `focus_sessions` | Today, Focus/Habits, Snapshot, Weekly Review, Insights |
 | Persönliches Lernen | `focus_session_reflections`, `learning_preferences`; gelernte Planner-Provenienz additiv in Planner-/Deadline-Revisionen | Focus, Evening, Insights und nach separater Freigabe nur neue Planner-Previews |
-| Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2` und Today; V1 bleibt kompatibel |
+| Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2`, `today-week-agenda-v1` und Today; V1 bleibt kompatibel |
 | Interne Tagesrangfolge | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Reminder, Historie, regelbasierte Rangfolge und bei expliziter Frage der temporäre Coach-Snapshot |
 | Wochenreview | `weekly_reviews` | Weekly Review, Reminder und bei expliziter Frage Coach-Snapshot |
 | Kalenderimport | `calendar_connections`, `calendar_imports`, `calendar_events`, technische Request-Identitäten | Calendar, optional Preparation Planner und read-only Coach-Snapshot; nie als Instruktion |
@@ -852,8 +854,8 @@ dabei lediglich lesbar.
 2. In der Streak-Karte `Beat yesterday` mit Datum und ausschließlich vorhandenen
    fünf Kernwerten prüfen. Danach `Review your week` direkt öffnen sowie
    Recommendations, Decision feedback history und Full week unabhängig und
-   gleichzeitig aufklappen; in Full week alle sieben Tage und die vier
-   Status-Semantiken prüfen.
+   gleichzeitig aufklappen; in Full week alle sieben Tage, sieben Kategorien,
+   Teilquellenstatus, Day-Snap und datumssichere Aktionen prüfen.
 3. Unter `Quick actions` die aktive Focus Session fortsetzen oder beenden und
    Habit outcomes ausführen; bei konfiguriertem Study Setup auch Checkliste und
    lokalen Recovery-Countdown prüfen.
