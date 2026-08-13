@@ -1,6 +1,9 @@
 import '../../../core/contracts/strict_contract.dart';
 import '../../../core/planning/planning_timing_preference.dart';
 
+const plannerMutationContractVersion = 'planner-v1';
+const plannerOverviewContractVersion = 'planner-overview-v2';
+
 class PlannerContractException implements Exception {
   const PlannerContractException(this.message);
 
@@ -82,6 +85,7 @@ class PlannerAttention {
     required this.target,
     required this.planId,
     required this.unplacedMinutes,
+    required this.conflictSource,
   });
 
   factory PlannerAttention.fromJson(Map<String, dynamic> json) {
@@ -95,23 +99,37 @@ class PlannerAttention {
         'target',
         'plan_id',
         'unplaced_minutes',
+        'conflict_source',
       },
       'Planner attention',
     );
+    final kind = _enumText(
+      json['kind'],
+      'attention.kind',
+      const {
+        'conflict',
+        'unscheduled',
+        'stale_preview',
+        'study_rhythm_changed',
+        'course_selection_open',
+        'course_selection_overdue',
+      },
+    );
+    final conflictSource = json['conflict_source'] == null
+        ? null
+        : _enumText(
+            json['conflict_source'],
+            'attention.conflict_source',
+            const {'setup', 'fixed_commitment', 'calendar'},
+          );
+    if ((kind == 'conflict') != (conflictSource != null)) {
+      throw const PlannerContractException(
+        'Planner conflict origin is inconsistent.',
+      );
+    }
     return PlannerAttention(
       id: _text(json['id'], 'attention.id', max: 200),
-      kind: _enumText(
-        json['kind'],
-        'attention.kind',
-        const {
-          'conflict',
-          'unscheduled',
-          'stale_preview',
-          'study_rhythm_changed',
-          'course_selection_open',
-          'course_selection_overdue',
-        },
-      ),
+      kind: kind,
       target: _enumText(
         json['target'],
         'attention.target',
@@ -125,6 +143,7 @@ class PlannerAttention {
         'attention.unplaced_minutes',
         min: 0,
       ),
+      conflictSource: conflictSource,
     );
   }
 
@@ -135,6 +154,7 @@ class PlannerAttention {
   final String target;
   final String? planId;
   final int unplacedMinutes;
+  final String? conflictSource;
 }
 
 class PlannerDayItem {
@@ -309,10 +329,92 @@ class PlannerPreparation {
   final bool hasPendingPreview;
 }
 
-class PlannerUnscheduled {
-  const PlannerUnscheduled({
+class PlannerTaskSummary {
+  const PlannerTaskSummary({
     required this.id,
-    required this.kind,
+    required this.title,
+    required this.expectedUpdatedAt,
+    required this.description,
+    required this.priority,
+    required this.estimatedMinutes,
+    required this.deadlineAt,
+    required this.preferredSessionMinutes,
+    required this.useStudyRhythm,
+  });
+
+  factory PlannerTaskSummary.fromJson(Map<String, dynamic> json) {
+    _expectKeys(
+      json,
+      const {
+        'id',
+        'title',
+        'expected_updated_at',
+        'description',
+        'priority',
+        'estimated_minutes',
+        'deadline_at',
+        'preferred_session_minutes',
+        'use_study_rhythm',
+      },
+      'Planner Task summary',
+    );
+    final session = _optionalInt(
+      json['preferred_session_minutes'],
+      'Task preferred_session_minutes',
+      min: 5,
+      max: 240,
+    );
+    if (session != null && session % 5 != 0) {
+      throw const PlannerContractException(
+        'Planner Task summary session length is invalid.',
+      );
+    }
+    return PlannerTaskSummary(
+      id: _uuid(json['id'], 'Task id'),
+      title: _text(json['title'], 'Task title', max: 160),
+      expectedUpdatedAt: _dateTime(
+        json['expected_updated_at'],
+        'Task expected_updated_at',
+      ),
+      description: _optionalText(
+        json['description'],
+        'Task description',
+        max: 2000,
+      ),
+      priority: _enumText(
+        json['priority'],
+        'Task priority',
+        const {'low', 'medium', 'high', 'critical'},
+      ),
+      estimatedMinutes: _optionalInt(
+        json['estimated_minutes'],
+        'Task estimated_minutes',
+        min: 5,
+        max: 480,
+      ),
+      deadlineAt: _optionalDateTime(json['deadline_at'], 'Task deadline_at'),
+      preferredSessionMinutes: session,
+      useStudyRhythm: _bool(
+        json['use_study_rhythm'],
+        'Task use_study_rhythm',
+      ),
+    );
+  }
+
+  final String id;
+  final String title;
+  final DateTime expectedUpdatedAt;
+  final String? description;
+  final String priority;
+  final int? estimatedMinutes;
+  final DateTime? deadlineAt;
+  final int? preferredSessionMinutes;
+  final bool useStudyRhythm;
+}
+
+class PlannerUnscheduledTask {
+  const PlannerUnscheduledTask({
+    required this.id,
     required this.title,
     required this.reason,
     required this.expectedUpdatedAt,
@@ -322,18 +424,13 @@ class PlannerUnscheduled {
     required this.deadlineAt,
     required this.preferredSessionMinutes,
     required this.useStudyRhythm,
-    required this.cadenceKind,
-    required this.scheduledWeekdays,
-    required this.weeklyTarget,
-    required this.durationMinutes,
   });
 
-  factory PlannerUnscheduled.fromJson(Map<String, dynamic> json) {
+  factory PlannerUnscheduledTask.fromJson(Map<String, dynamic> json) {
     _expectKeys(
       json,
       const {
         'id',
-        'kind',
         'title',
         'reason',
         'expected_updated_at',
@@ -343,20 +440,14 @@ class PlannerUnscheduled {
         'deadline_at',
         'preferred_session_minutes',
         'use_study_rhythm',
-        'cadence',
-        'duration_minutes',
       },
-      'Unscheduled item',
+      'Unscheduled Task',
     );
-    final kind =
-        _enumText(json['kind'], 'unscheduled kind', const {'task', 'habit'});
-    final priority = json['priority'] == null
-        ? null
-        : _enumText(
-            json['priority'],
-            'unscheduled priority',
-            const {'low', 'medium', 'high', 'critical'},
-          );
+    final priority = _enumText(
+      json['priority'],
+      'unscheduled priority',
+      const {'low', 'medium', 'high', 'critical'},
+    );
     final estimated = _optionalInt(
       json['estimated_minutes'],
       'unscheduled estimated_minutes',
@@ -373,80 +464,31 @@ class PlannerUnscheduled {
       min: 5,
       max: 240,
     );
-    final duration = _optionalInt(
-      json['duration_minutes'],
-      'unscheduled duration_minutes',
-      min: 5,
-      max: 240,
-    );
     final useStudyRhythm = _bool(
       json['use_study_rhythm'],
       'unscheduled use_study_rhythm',
     );
-    String? cadenceKind;
-    var scheduledWeekdays = const <int>[];
-    int? weeklyTarget;
-    final rawCadence = json['cadence'];
-    if (rawCadence != null) {
-      final cadence = _object(rawCadence, 'unscheduled cadence');
-      _expectKeys(
-        cadence,
-        const {'kind', 'scheduled_weekdays', 'weekly_target'},
-        'unscheduled cadence',
-      );
-      cadenceKind = _enumText(
-        cadence['kind'],
-        'unscheduled cadence kind',
-        const {'daily', 'weekdays', 'weekly_target'},
-      );
-      scheduledWeekdays = _integers(
-        cadence['scheduled_weekdays'],
-        'unscheduled cadence weekdays',
-        min: 1,
-        max: 7,
-      );
-      weeklyTarget = _int(
-        cadence['weekly_target'],
-        'unscheduled cadence target',
-        min: 1,
-        max: 7,
-      );
-      if (scheduledWeekdays.toSet().length != scheduledWeekdays.length ||
-          (cadenceKind == 'daily' &&
-              (scheduledWeekdays.isNotEmpty || weeklyTarget != 1)) ||
-          (cadenceKind == 'weekdays' &&
-              (scheduledWeekdays.isEmpty || weeklyTarget != 1)) ||
-          (cadenceKind == 'weekly_target' && scheduledWeekdays.isNotEmpty)) {
-        throw const PlannerContractException(
-          'Unscheduled Habit cadence is invalid.',
-        );
-      }
-    }
-    if (session != null && session % 5 != 0 ||
-        duration != null && duration % 5 != 0 ||
-        kind == 'task' &&
-            (priority == null || cadenceKind != null || duration != null) ||
-        kind == 'habit' &&
-            (useStudyRhythm ||
-                priority != null ||
-                estimated != null ||
-                deadline != null ||
-                session != null ||
-                cadenceKind == null)) {
+    final reason = _enumText(json['reason'], 'unscheduled reason', const {
+      'not_planned',
+      'released',
+      'missing_scheduling_inputs',
+      'no_time_available',
+    });
+    final missingInputs =
+        estimated == null || deadline == null || session == null;
+    if ((session != null && session % 5 != 0) ||
+        (reason == 'missing_scheduling_inputs' && !missingInputs) ||
+        ({'not_planned', 'no_time_available'}.contains(reason) &&
+            missingInputs)) {
       throw const PlannerContractException(
-        'Unscheduled target projection is inconsistent.',
+        'Unscheduled Task projection is inconsistent.',
       );
     }
-    return PlannerUnscheduled(
+    return PlannerUnscheduledTask(
       id: _uuid(json['id'], 'unscheduled id'),
-      kind: kind,
       title: _text(json['title'], 'unscheduled title', max: 160),
-      reason: _enumText(json['reason'], 'unscheduled reason', const {
-        'not_planned',
-        'released',
-        'missing_scheduling_inputs',
-      }),
-      expectedUpdatedAt: _optionalDateTime(
+      reason: reason,
+      expectedUpdatedAt: _dateTime(
         json['expected_updated_at'],
         'unscheduled expected_updated_at',
       ),
@@ -460,28 +502,170 @@ class PlannerUnscheduled {
       deadlineAt: deadline,
       preferredSessionMinutes: session,
       useStudyRhythm: useStudyRhythm,
+    );
+  }
+
+  final String id;
+  final String title;
+  final String reason;
+  final DateTime expectedUpdatedAt;
+  final String? description;
+  final String priority;
+  final int? estimatedMinutes;
+  final DateTime? deadlineAt;
+  final int? preferredSessionMinutes;
+  final bool useStudyRhythm;
+}
+
+class PlannerHabitSummary {
+  const PlannerHabitSummary({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.expectedUpdatedAt,
+    required this.ownership,
+    required this.cadenceKind,
+    required this.scheduledWeekdays,
+    required this.weeklyTarget,
+    required this.durationMinutes,
+    required this.planningStatus,
+    required this.planId,
+    required this.hasPendingPreview,
+  });
+
+  factory PlannerHabitSummary.fromJson(Map<String, dynamic> json) {
+    _expectKeys(
+      json,
+      const {
+        'id',
+        'title',
+        'description',
+        'expected_updated_at',
+        'ownership',
+        'cadence',
+        'duration_minutes',
+        'planning_status',
+        'plan_id',
+        'has_pending_preview',
+      },
+      'Planner Habit summary',
+    );
+    final cadence = _object(json['cadence'], 'Habit cadence');
+    _expectKeys(
+      cadence,
+      const {'kind', 'scheduled_weekdays', 'weekly_target'},
+      'Habit cadence',
+    );
+    final cadenceKind = _enumText(
+      cadence['kind'],
+      'Habit cadence kind',
+      const {'daily', 'weekdays', 'weekly_target'},
+    );
+    final weekdays = _integers(
+      cadence['scheduled_weekdays'],
+      'Habit cadence weekdays',
+      min: 1,
+      max: 7,
+    );
+    final weeklyTarget = _int(
+      cadence['weekly_target'],
+      'Habit cadence target',
+      min: 1,
+      max: 7,
+    );
+    final duration = _optionalInt(
+      json['duration_minutes'],
+      'Habit duration_minutes',
+      min: 5,
+      max: 240,
+    );
+    final planningStatus = _enumText(
+      json['planning_status'],
+      'Habit planning_status',
+      const {'scheduled', 'unplanned'},
+    );
+    final planId = _optionalUuid(json['plan_id'], 'Habit plan_id');
+    final hasPendingPreview = _bool(
+      json['has_pending_preview'],
+      'Habit has_pending_preview',
+    );
+    if (weekdays.toSet().length != weekdays.length ||
+        (cadenceKind == 'daily' &&
+            (weekdays.isNotEmpty || weeklyTarget != 1)) ||
+        (cadenceKind == 'weekdays' &&
+            (weekdays.isEmpty || weeklyTarget != 1)) ||
+        (cadenceKind == 'weekly_target' && weekdays.isNotEmpty) ||
+        (duration != null && duration % 5 != 0) ||
+        (planningStatus == 'scheduled' && planId == null) ||
+        (hasPendingPreview && planId == null)) {
+      throw const PlannerContractException(
+        'Planner Habit projection is inconsistent.',
+      );
+    }
+    return PlannerHabitSummary(
+      id: _uuid(json['id'], 'Habit id'),
+      title: _text(json['title'], 'Habit title', max: 160),
+      description: _optionalText(
+        json['description'],
+        'Habit description',
+        max: 2000,
+      ),
+      expectedUpdatedAt: _dateTime(
+        json['expected_updated_at'],
+        'Habit expected_updated_at',
+      ),
+      ownership: _enumText(
+        json['ownership'],
+        'Habit ownership',
+        const {'manual', 'setup'},
+      ),
       cadenceKind: cadenceKind,
-      scheduledWeekdays: scheduledWeekdays,
+      scheduledWeekdays: weekdays,
       weeklyTarget: weeklyTarget,
       durationMinutes: duration,
+      planningStatus: planningStatus,
+      planId: planId,
+      hasPendingPreview: hasPendingPreview,
+    );
+  }
+
+  final String id;
+  final String title;
+  final String? description;
+  final DateTime expectedUpdatedAt;
+  final String ownership;
+  final String cadenceKind;
+  final List<int> scheduledWeekdays;
+  final int weeklyTarget;
+  final int? durationMinutes;
+  final String planningStatus;
+  final String? planId;
+  final bool hasPendingPreview;
+}
+
+class PlannerHistoryItem {
+  const PlannerHistoryItem({
+    required this.id,
+    required this.kind,
+    required this.title,
+  });
+
+  factory PlannerHistoryItem.fromJson(Map<String, dynamic> json) {
+    _expectKeys(json, const {'id', 'kind', 'title'}, 'Planner history item');
+    return PlannerHistoryItem(
+      id: _uuid(json['id'], 'history id'),
+      kind: _enumText(
+        json['kind'],
+        'history kind',
+        const {'task', 'habit'},
+      ),
+      title: _text(json['title'], 'history title', max: 160),
     );
   }
 
   final String id;
   final String kind;
   final String title;
-  final String reason;
-  final DateTime? expectedUpdatedAt;
-  final String? description;
-  final String? priority;
-  final int? estimatedMinutes;
-  final DateTime? deadlineAt;
-  final int? preferredSessionMinutes;
-  final bool useStudyRhythm;
-  final String? cadenceKind;
-  final List<int> scheduledWeekdays;
-  final int? weeklyTarget;
-  final int? durationMinutes;
 }
 
 class PlannerTaskBlock {
@@ -633,6 +817,8 @@ class PlannerRevision {
     required this.targetOperation,
     required this.targetId,
     required this.targetTitle,
+    required this.targetTaskDraft,
+    required this.targetHabitDraft,
     required this.plannedMinutes,
     required this.unscheduledMinutes,
     required this.calendarImportId,
@@ -812,6 +998,8 @@ class PlannerRevision {
       targetOperation: target.operation,
       targetId: target.id,
       targetTitle: target.title,
+      targetTaskDraft: target.taskDraft,
+      targetHabitDraft: target.habitDraft,
       plannedMinutes: plannedMinutes,
       unscheduledMinutes: _int(
         json['unscheduled_minutes'],
@@ -836,6 +1024,8 @@ class PlannerRevision {
   final String targetOperation;
   final String targetId;
   final String targetTitle;
+  final PlannerTaskDraft? targetTaskDraft;
+  final PlannerHabitDraft? targetHabitDraft;
   final int plannedMinutes;
   final int unscheduledMinutes;
   final String? calendarImportId;
@@ -902,6 +1092,34 @@ class PlannerActionPlan {
     final pending =
         _optionalObject(json['pending_revision'], 'pending_revision')
             ?.let(PlannerRevision.fromJson);
+    final status = _enumText(json['status'], 'plan status', const {
+      'draft',
+      'active',
+      'unscheduled',
+      'cancelled',
+    });
+    final pendingCreate = status == 'draft' &&
+        currentRevision == 0 &&
+        active == null &&
+        pending != null &&
+        pending.targetOperation == 'create' &&
+        pending.revision == latestRevision;
+    final lifecycleInvalid = switch (status) {
+      'draft' => currentRevision != 0 || active != null || pending == null,
+      'active' =>
+        currentRevision == 0 || active == null || active.plannedMinutes == 0,
+      'unscheduled' => currentRevision == 0
+          ? active != null ||
+              pending != null ||
+              reasons.length != 1 ||
+              reasons.single != 'target_released'
+          : active == null || active.plannedMinutes != 0,
+      'cancelled' => currentRevision != 0 ||
+          active != null ||
+          pending != null ||
+          reasons.isNotEmpty,
+      _ => true,
+    };
     if (needsAttention != reasons.isNotEmpty ||
         reasons.length > 12 ||
         latestRevision < currentRevision ||
@@ -915,7 +1133,13 @@ class PlannerActionPlan {
             (pending.revision != latestRevision ||
                 pending.state != 'proposed' ||
                 pending.targetKind != targetKind ||
-                pending.targetId != targetId)) {
+                pending.targetId != targetId ||
+                pending.revision <= currentRevision) ||
+        lifecycleInvalid ||
+        pending == null &&
+            currentRevision > 0 &&
+            latestRevision != currentRevision ||
+        pending?.targetOperation == 'create' && !pendingCreate) {
       throw const PlannerContractException(
         'Planner attention state is invalid.',
       );
@@ -924,12 +1148,7 @@ class PlannerActionPlan {
       id: _uuid(json['id'], 'plan id'),
       targetKind: targetKind,
       targetId: targetId,
-      status: _enumText(json['status'], 'plan status', const {
-        'draft',
-        'active',
-        'unscheduled',
-        'cancelled',
-      }),
+      status: status,
       currentRevision: currentRevision,
       latestRevision: latestRevision,
       needsAttention: needsAttention,
@@ -959,7 +1178,7 @@ PlannerActionPlan plannerActionPlanFromResponse(Map<String, dynamic> json) {
   );
   _expectEnvelope(
     json,
-    contractVersion: 'planner-v1',
+    contractVersion: plannerMutationContractVersion,
     label: 'Planner action plan response',
   );
   return PlannerActionPlan.fromJson(_object(json['plan'], 'plan'));
@@ -1093,7 +1312,7 @@ PlannerCommitment plannerCommitmentFromResponse(Map<String, dynamic> json) {
   );
   _expectEnvelope(
     json,
-    contractVersion: 'planner-v1',
+    contractVersion: plannerMutationContractVersion,
     label: 'Planner commitment response',
   );
   _bool(json['replayed'], 'commitment replayed');
@@ -1125,7 +1344,9 @@ class PlannerOverview {
     required this.needsAttention,
     required this.days,
     required this.ongoingPreparation,
-    required this.unscheduled,
+    required this.habits,
+    required this.taskTargets,
+    required this.unscheduledTasks,
     required this.history,
   });
 
@@ -1144,14 +1365,16 @@ class PlannerOverview {
         'needs_attention',
         'days',
         'ongoing_preparation',
-        'unscheduled',
+        'habits',
+        'task_targets',
+        'unscheduled_tasks',
         'history',
       },
       'Planner overview',
     );
     _expectEnvelope(
       json,
-      contractVersion: 'planner-v1',
+      contractVersion: plannerOverviewContractVersion,
       label: 'Planner overview',
     );
     final days = _objects(json['days'], 'Planner days')
@@ -1172,11 +1395,18 @@ class PlannerOverview {
       json['ongoing_preparation'],
       'ongoing_preparation',
     ).map(PlannerPreparation.fromJson).toList(growable: false);
-    final unscheduled = _objects(json['unscheduled'], 'unscheduled')
-        .map(PlannerUnscheduled.fromJson)
+    final habits = _objects(json['habits'], 'habits')
+        .map(PlannerHabitSummary.fromJson)
         .toList(growable: false);
+    final taskTargets = _objects(json['task_targets'], 'task_targets')
+        .map(PlannerTaskSummary.fromJson)
+        .toList(growable: false);
+    final unscheduledTasks = _objects(
+      json['unscheduled_tasks'],
+      'unscheduled_tasks',
+    ).map(PlannerUnscheduledTask.fromJson).toList(growable: false);
     final history = _objects(json['history'], 'history')
-        .map(PlannerUnscheduled.fromJson)
+        .map(PlannerHistoryItem.fromJson)
         .toList(growable: false);
     final expectedDays = [
       for (var offset = 0; offset < 7; offset++)
@@ -1191,17 +1421,140 @@ class PlannerOverview {
         commitments.length > 1000 ||
         needsAttention.length > 500 ||
         ongoing.length > 50 ||
-        unscheduled.length > 1000 ||
+        habits.length > 1000 ||
+        taskTargets.length > 1000 ||
+        unscheduledTasks.length > 1000 ||
         history.length > 1000 ||
         !_unique(actionPlans.map((value) => value.id)) ||
         !_unique(commitments.map((value) => value.id)) ||
         !_unique(needsAttention.map((value) => value.id)) ||
         !_unique(ongoing.map((value) => value.planId)) ||
-        !_unique(unscheduled.map((value) => '${value.kind}:${value.id}')) ||
-        !_unique(history.map((value) => '${value.kind}:${value.id}'))) {
+        !_unique(
+          actionPlans.map((value) => '${value.targetKind}:${value.targetId}'),
+        ) ||
+        !_unique(habits.map((value) => value.id)) ||
+        !_unique(taskTargets.map((value) => value.id)) ||
+        !_unique(unscheduledTasks.map((value) => value.id)) ||
+        !_unique(history.map((value) => '${value.kind}:${value.id}')) ||
+        taskTargets
+            .map((value) => value.id)
+            .toSet()
+            .intersection(
+              history
+                  .where((value) => value.kind == 'task')
+                  .map((value) => value.id)
+                  .toSet(),
+            )
+            .isNotEmpty ||
+        habits
+            .map((value) => value.id)
+            .toSet()
+            .intersection(
+              history
+                  .where((value) => value.kind == 'habit')
+                  .map((value) => value.id)
+                  .toSet(),
+            )
+            .isNotEmpty) {
       throw const PlannerContractException(
         'Planner overview projection is inconsistent.',
       );
+    }
+    final planByTarget = {
+      for (final plan in actionPlans)
+        '${plan.targetKind}:${plan.targetId}': plan,
+    };
+    final unscheduledById = {
+      for (final task in unscheduledTasks) task.id: task,
+    };
+    for (final habit in habits) {
+      final plan = planByTarget['habit:${habit.id}'];
+      if (plan?.pendingRevision?.targetOperation == 'create') {
+        throw const PlannerContractException(
+          'Persisted Planner target is bound to a create preview.',
+        );
+      }
+      final activeSlots = plan?.activeRevision?.habitSlots
+              .where(
+                (slot) => slot.state == 'active' && slot.durationMinutes > 0,
+              )
+              .length ??
+          0;
+      if (habit.planId != plan?.id ||
+          habit.hasPendingPreview != (plan?.pendingRevision != null) ||
+          (habit.planningStatus == 'scheduled') != (activeSlots > 0)) {
+        throw const PlannerContractException(
+          'Planner Habit plan relation is inconsistent.',
+        );
+      }
+    }
+    for (final target in taskTargets) {
+      final plan = planByTarget['task:${target.id}'];
+      if (plan?.pendingRevision?.targetOperation == 'create') {
+        throw const PlannerContractException(
+          'Persisted Planner target is bound to a create preview.',
+        );
+      }
+      final activeMinutes = _plannerActiveTaskMinutes(plan);
+      final unscheduled = unscheduledById[target.id];
+      if ((unscheduled == null) != (activeMinutes > 0) ||
+          unscheduled != null &&
+              unscheduled.reason !=
+                  _plannerUnscheduledTaskReason(target, plan)) {
+        throw const PlannerContractException(
+          'Planner Task reservation relation is inconsistent.',
+        );
+      }
+    }
+    for (final task in unscheduledTasks) {
+      final target =
+          taskTargets.where((candidate) => candidate.id == task.id).firstOrNull;
+      if (target == null || !_sameTaskProjection(target, task)) {
+        throw const PlannerContractException(
+          'Unscheduled Task target snapshot is inconsistent.',
+        );
+      }
+      final plan = planByTarget['task:${task.id}'];
+      if (plan?.pendingRevision?.targetOperation == 'create') {
+        throw const PlannerContractException(
+          'Persisted Planner target is bound to a create preview.',
+        );
+      }
+      final activeMinutes = _plannerActiveTaskMinutes(plan);
+      if (activeMinutes > 0) {
+        throw const PlannerContractException(
+          'Unscheduled Task plan relation is inconsistent.',
+        );
+      }
+    }
+    for (final item in history) {
+      final plan = planByTarget['${item.kind}:${item.id}'];
+      if (plan?.pendingRevision?.targetOperation == 'create') {
+        throw const PlannerContractException(
+          'Persisted Planner target is bound to a create preview.',
+        );
+      }
+      if (plan != null && !_plannerPlanIsReleasedOrCancelled(plan)) {
+        throw const PlannerContractException(
+          'Historical Planner target plan lifecycle is inconsistent.',
+        );
+      }
+    }
+    final representedTargets = {
+      ...taskTargets.map((task) => 'task:${task.id}'),
+      ...habits.map((habit) => 'habit:${habit.id}'),
+      ...history.map((item) => '${item.kind}:${item.id}'),
+    };
+    for (final plan in actionPlans) {
+      if (_plannerPlanIsPendingCreate(plan) ||
+          _plannerPlanIsCancelledTombstone(plan)) {
+        continue;
+      }
+      if (!representedTargets.contains('${plan.targetKind}:${plan.targetId}')) {
+        throw const PlannerContractException(
+          'Persisted Planner action plan has no target snapshot.',
+        );
+      }
     }
     return PlannerOverview(
       generatedAt: _dateTime(json['generated_at'], 'generated_at'),
@@ -1215,7 +1568,9 @@ class PlannerOverview {
       needsAttention: needsAttention,
       days: days,
       ongoingPreparation: ongoing,
-      unscheduled: unscheduled,
+      habits: habits,
+      taskTargets: taskTargets,
+      unscheduledTasks: unscheduledTasks,
       history: history,
     );
   }
@@ -1229,8 +1584,79 @@ class PlannerOverview {
   final List<PlannerAttention> needsAttention;
   final List<PlannerDay> days;
   final List<PlannerPreparation> ongoingPreparation;
-  final List<PlannerUnscheduled> unscheduled;
-  final List<PlannerUnscheduled> history;
+  final List<PlannerHabitSummary> habits;
+  final List<PlannerTaskSummary> taskTargets;
+  final List<PlannerUnscheduledTask> unscheduledTasks;
+  final List<PlannerHistoryItem> history;
+}
+
+bool _sameTaskProjection(
+  PlannerTaskSummary target,
+  PlannerUnscheduledTask task,
+) =>
+    target.id == task.id &&
+    target.title == task.title &&
+    target.expectedUpdatedAt.isAtSameMomentAs(task.expectedUpdatedAt) &&
+    target.description == task.description &&
+    target.priority == task.priority &&
+    target.estimatedMinutes == task.estimatedMinutes &&
+    ((target.deadlineAt == null && task.deadlineAt == null) ||
+        (target.deadlineAt != null &&
+            task.deadlineAt != null &&
+            target.deadlineAt!.isAtSameMomentAs(task.deadlineAt!))) &&
+    target.preferredSessionMinutes == task.preferredSessionMinutes &&
+    target.useStudyRhythm == task.useStudyRhythm;
+
+bool _plannerPlanIsPendingCreate(PlannerActionPlan plan) =>
+    plan.status == 'draft' &&
+    plan.currentRevision == 0 &&
+    plan.activeRevision == null &&
+    plan.pendingRevision?.targetOperation == 'create' &&
+    plan.pendingRevision?.revision == plan.latestRevision;
+
+bool _plannerPlanIsCancelledTombstone(PlannerActionPlan plan) =>
+    plan.status == 'cancelled' &&
+    plan.currentRevision == 0 &&
+    plan.latestRevision >= 1 &&
+    plan.latestRevision <= 500 &&
+    plan.activeRevision == null &&
+    plan.pendingRevision == null &&
+    plan.attentionReasons.isEmpty;
+
+int _plannerActiveTaskMinutes(PlannerActionPlan? plan) =>
+    plan?.activeRevision?.taskBlocks
+        .where((block) => block.state == 'active')
+        .fold<int>(0, (sum, block) => sum + block.plannedMinutes) ??
+    0;
+
+bool _plannerPlanIsReleasedOrCancelled(PlannerActionPlan? plan) =>
+    plan != null &&
+    plan.currentRevision == 0 &&
+    plan.activeRevision == null &&
+    plan.pendingRevision == null &&
+    (plan.status == 'unscheduled' &&
+            plan.attentionReasons.length == 1 &&
+            plan.attentionReasons.single == 'target_released' ||
+        plan.status == 'cancelled' && plan.attentionReasons.isEmpty);
+
+bool _plannerTaskPlanIsReleased(PlannerActionPlan? plan) =>
+    _plannerPlanIsReleasedOrCancelled(plan);
+
+String _plannerUnscheduledTaskReason(
+  PlannerTaskSummary task,
+  PlannerActionPlan? plan,
+) {
+  if (_plannerTaskPlanIsReleased(plan)) return 'released';
+  if (task.estimatedMinutes == null ||
+      task.deadlineAt == null ||
+      task.preferredSessionMinutes == null) {
+    return 'missing_scheduling_inputs';
+  }
+  if (plan?.activeRevision != null &&
+      plan!.activeRevision!.unscheduledMinutes > 0) {
+    return 'no_time_available';
+  }
+  return 'not_planned';
 }
 
 class PlannerTaskDraft {
@@ -1406,6 +1832,8 @@ extension _NullableMapLet on Map<String, dynamic> {
   String title,
   bool useStudyRhythm,
   int? preferredSessionMinutes,
+  PlannerTaskDraft? taskDraft,
+  PlannerHabitDraft? habitDraft,
 }) _plannerTarget(
   Map<String, dynamic> target,
 ) {
@@ -1414,6 +1842,26 @@ extension _NullableMapLet on Map<String, dynamic> {
     'Planner target kind',
     const {'task', 'habit'},
   );
+  final operation = _enumText(
+    target['operation'],
+    'Planner target operation',
+    const {'create', 'update'},
+  );
+  final targetId = _uuid(target['target_id'], 'Planner target id');
+  final expected = _optionalDateTime(
+    target['expected_updated_at'],
+    'Planner target expected_updated_at',
+  );
+  if ((operation == 'create') != (expected == null)) {
+    throw const PlannerContractException(
+      'Planner target version is inconsistent.',
+    );
+  }
+  final title = _text(target['title'], 'Planner target title', max: 160);
+  PlannerTaskDraft? taskDraft;
+  PlannerHabitDraft? habitDraft;
+  var useStudyRhythm = false;
+  int? preferredSessionMinutes;
   if (kind == 'task') {
     _expectKeys(
       target,
@@ -1432,19 +1880,21 @@ extension _NullableMapLet on Map<String, dynamic> {
       },
       'Planner Task target',
     );
-    _optionalText(target['description'], 'Task description', max: 2000);
-    _enumText(
+    final description =
+        _optionalText(target['description'], 'Task description', max: 2000);
+    final priority = _enumText(
       target['priority'],
       'Task priority',
       const {'low', 'medium', 'high', 'critical'},
     );
-    _optionalInt(
+    final estimatedMinutes = _optionalInt(
       target['estimated_minutes'],
       'Task estimated_minutes',
       min: 5,
       max: 480,
     );
-    _optionalDateTime(target['deadline_at'], 'Task deadline_at');
+    final deadlineAt =
+        _optionalDateTime(target['deadline_at'], 'Task deadline_at');
     final session = _optionalInt(
       target['preferred_session_minutes'],
       'Task preferred_session_minutes',
@@ -1456,7 +1906,19 @@ extension _NullableMapLet on Map<String, dynamic> {
         'Planner Task session length is invalid.',
       );
     }
-    _bool(target['use_study_rhythm'], 'Task use_study_rhythm');
+    useStudyRhythm = _bool(target['use_study_rhythm'], 'Task use_study_rhythm');
+    preferredSessionMinutes = session;
+    taskDraft = PlannerTaskDraft(
+      title: title,
+      description: description,
+      priority: priority,
+      estimatedMinutes: estimatedMinutes,
+      deadlineAt: deadlineAt,
+      preferredSessionMinutes: session,
+      useStudyRhythm: useStudyRhythm,
+      targetId: operation == 'update' ? targetId : null,
+      expectedUpdatedAt: expected,
+    );
   } else {
     _expectKeys(
       target,
@@ -1472,7 +1934,8 @@ extension _NullableMapLet on Map<String, dynamic> {
       },
       'Planner Habit target',
     );
-    _optionalText(target['description'], 'Habit description', max: 2000);
+    final description =
+        _optionalText(target['description'], 'Habit description', max: 2000);
     final cadence = _object(target['cadence'], 'Habit cadence');
     _expectKeys(
       cadence,
@@ -1510,36 +1973,26 @@ extension _NullableMapLet on Map<String, dynamic> {
         (cadenceKind == 'weekly_target' && weekdays.isNotEmpty)) {
       throw const PlannerContractException('Planner Habit target is invalid.');
     }
-  }
-  final operation = _enumText(
-    target['operation'],
-    'Planner target operation',
-    const {'create', 'update'},
-  );
-  final expected = _optionalDateTime(
-    target['expected_updated_at'],
-    'Planner target expected_updated_at',
-  );
-  if ((operation == 'create') != (expected == null)) {
-    throw const PlannerContractException(
-      'Planner target version is inconsistent.',
+    habitDraft = PlannerHabitDraft(
+      title: title,
+      description: description,
+      cadenceKind: cadenceKind,
+      scheduledWeekdays: weekdays,
+      weeklyTarget: weeklyTarget,
+      durationMinutes: duration,
+      targetId: operation == 'update' ? targetId : null,
+      expectedUpdatedAt: expected,
     );
   }
   return (
     kind: kind,
     operation: operation,
-    id: _uuid(target['target_id'], 'Planner target id'),
-    title: _text(target['title'], 'Planner target title', max: 160),
-    useStudyRhythm:
-        kind == 'task' && _bool(target['use_study_rhythm'], 'use_study_rhythm'),
-    preferredSessionMinutes: kind == 'task'
-        ? _optionalInt(
-            target['preferred_session_minutes'],
-            'Task preferred_session_minutes',
-            min: 5,
-            max: 240,
-          )
-        : null,
+    id: targetId,
+    title: title,
+    useStudyRhythm: useStudyRhythm,
+    preferredSessionMinutes: preferredSessionMinutes,
+    taskDraft: taskDraft,
+    habitDraft: habitDraft,
   );
 }
 

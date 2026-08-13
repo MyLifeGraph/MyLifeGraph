@@ -414,7 +414,7 @@ workload is not duplicated on Today and remains available in Planner. The exact
 rules live in
 `docs/today-overview-v1-contract.md`.
 
-## Planner V1
+## Planner V1 Mutations And Overview V2
 
 Planner is the authenticated planning home for Tasks, Habits, exam/assignment
 Preparation, and one-off or weekly fixed commitments. Flutter uses a strict
@@ -427,6 +427,39 @@ feature-local builder owns the seven-day, preparation, unscheduled/history, and
 attention projection. Proposal persistence crosses the repository boundary as
 one validated `PlannerProposalWrite`, so target identity, revision, Task
 blocks, and Habit slots cannot drift as independent dictionaries.
+
+The atomic read cutover is `planner-overview-v2`; mutation envelopes remain
+`planner-v1`. The pure builder projects all active Habits separately from open
+unscheduled Tasks, plus authoritative current snapshots for every open
+non-Preparation Task, and filters Deadline-managed Tasks out of both Task
+projections. The full Task snapshot is a read seam for explicitly reviewed
+replans, including scheduled Tasks; it is not a second visible Task list.
+All pending creates and updates remain action-plan previews; creates are never
+invented persisted targets. Every open Task without positive active minutes is
+represented exactly once under `unscheduled_tasks` with shared reason
+precedence, and every persisted Task or Habit plan resolves to a
+lifecycle-correct current or historical snapshot. Historical Tasks and
+inactive Habits accept only released/cancelled plans. Pending creates are
+target-less only in the exact draft/current-zero/latest-proposed-create shape;
+only a cancelled current-zero plan whose latest revision remains inside the SQL
+`1..500` bound, with neither active nor pending revision or attention, may remain
+as a create-cancel tombstone without a target. A released former active plan is
+instead `unscheduled` with `target_released` and requires its historical target.
+Required plan-linked history entries
+precede deterministic repository order within the 1,000-row bound. Positive
+active blocks/slots, not revision
+presence, determine whether a Task or Habit is scheduled. FastAPI and Flutter
+both fail closed when target keys or these cross-projection relations disagree.
+Pending staleness is derived from the current target, Calendar, timezone, and
+Study facts for its exact revision; long-lived plan reasons do not migrate onto
+a later proposal. Flutter records a proposal attempt before submission under
+its exact request identity. Ambiguous reload/retry reconciles only that binding
+against an exact plan, revision, operation, and target payload match; it does
+not search unrelated retained drafts. Exact retry returns the original request
+identity with an explicit outcome classification. Repeated ambiguity retains
+that binding; conflict removes only its identity-owned source replacement;
+deterministic non-conflict failure retains the exact source draft. Confirmation
+uses the same identity guard so it cannot erase a newer replacement.
 
 Today and Planner reads share a request-local, concurrency-bounded context.
 Today V2 reuses one captured instant plus the profile timezone, active Habits,
@@ -444,7 +477,14 @@ time. Deadline Planner delegates its slot calculation to the same component and
 reads the same Planner calendar preference. The database owner lock and
 service-role RPCs recheck target version, current import, and every competing
 reservation at confirmation. Fixed commitments are authoritative: conflicts
-become attention facts and never trigger automatic movement.
+become attention facts and never trigger automatic movement. V2 identifies
+each current conflict as Setup, fixed commitment, or Calendar; Calendar facts
+participate only while their planning import is current. Preparation attention
+uses the same origins and includes exact active/pending unplaced minutes and
+timezone staleness. The attention scan generates candidates on at most 366
+profile-local reservation days; previous and next spill anchors are read-only
+support for cross-midnight overlap checks and expand authoritative
+materialization to at most 368 days.
 
 Setup is the primary timetable input. A recurring Setup commitment may have
 inclusive optional `valid_from`/`valid_until` semester bounds in its owned

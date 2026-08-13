@@ -142,13 +142,37 @@ FastAPI service boundary for recommendation and future ML workflows.
   One fingerprint-free backend request registry prevents UUID reuse across
   owners or operations. It has no provider credential, URL fetch, provider
   write, background sync, or LLM processing.
-- Planner V1 exposes a read-only seven-day overview and detail plus explicit
+- Planner exposes the strict `planner-overview-v2` read-only seven-day
+  overview, while detail/mutation responses remain `planner-v1`, plus explicit
   preference, Task/Habit proposal/confirm/cancel, and fixed-commitment commands
   under `/v1/planner`. Immutable previews use shared deterministic availability
   with Deadline Planner and reserve nothing until owner-locked confirmation.
   Setup recurring commitments may use optional inclusive `valid_from` and
-  `valid_until` dates. Existing targets remain unscheduled; GETs never create
-  revisions. When both the account choice and development pilot gate are on,
+  `valid_until` dates. V2 separates all active Habits from persisted open
+  unscheduled Tasks, returns authoritative `task_targets` snapshots for every
+  current open non-Preparation Task including scheduled Tasks, leaves pending
+  creates and updates in `action_plans`, and reports exact zero/partial placement and
+  source-specific current conflicts. Existing targets remain unscheduled; GETs
+  never create revisions. Both runtime validators require every unreserved open
+  Task exactly once under `unscheduled_tasks`, use released/missing/no-time/
+  not-planned reason precedence, and reject a persisted Task or Habit plan
+  without the lifecycle-correct current or historical target snapshot.
+  Historical Tasks and inactive Habits accept only released/cancelled plan
+  lifecycles. Pending-create absence is limited to a draft, revision-zero plan
+  whose latest proposed revision is the create; the sole terminal absence
+  exception is the exact cancelled-create tombstone with current revision zero,
+  a bounded latest revision from one through 500, no active/pending revision,
+  and no attention reason. Released former active plans remain `unscheduled`
+  with `target_released` and still require their historical target. Public
+  proposal bases stop at 499; revisions, plan revision counters, and
+  confirm/cancel expected revisions stop at 500. Active revisions and their
+  Task-block/Habit-slot children must all carry the SQL `active` state.
+  Required plan-linked history snapshots are kept
+  before deterministic `created_at`/identity fill up to 1,000; an impossible
+  relation fails closed. Pending staleness
+  is recomputed from current target, Calendar, timezone, and Study facts rather
+  than inherited from long-lived plan reasons. When both the
+  account choice and development pilot gate are on,
   mature Personal Learning timing softly precedes Setup timing only for new
   Task previews; all ordinary availability fallbacks remain. Calendar import
   remains optional and outside onboarding. See
@@ -393,7 +417,8 @@ Flutter Dart define only for the development pilot. The account Planner switch
 is still independent and default-off. Production Flutter builds stay
 fail-closed.
 
-Planner V1 uses these bearer-authenticated reads and deliberate commands:
+Planner Overview V2 and Planner V1 mutations use these bearer-authenticated
+reads and deliberate commands:
 
 ```text
 GET    /v1/planner/overview
@@ -407,6 +432,17 @@ POST   /v1/planner/commitments
 PATCH  /v1/planner/commitments/{commitment_id}
 POST   /v1/planner/commitments/{commitment_id}/archive
 ```
+
+The V2 overview omits only an individual recurring Habit, Setup, or weekly
+manual fixed-commitment occurrence whose profile-local wall time is ambiguous
+or nonexistent. It retains other valid occurrences and reports one deduplicated
+source/date/reason-specific read-only attention item for each affected Action or
+Preparation Plan; it never turns the invalid occurrence into a conflict or
+moves a saved reservation. Its 366 reservation days use only one preceding and
+one following read-only spill anchor (at most 368 authoritative local days),
+without generating candidates on either anchor. Persisted open Task versus Task-history identities
+and active-Habit versus Habit-history identities are pairwise disjoint, while
+Task and Habit UUID namespaces remain independent.
 
 Deadline Planner and its strictly read-only workload/outlook projections use:
 

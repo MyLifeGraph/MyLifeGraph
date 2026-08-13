@@ -106,6 +106,14 @@ state. The row content contributes one combined title/detail/category label:
 actionable Preparation rows expose one button/tap action, while static Setup
 rows expose neither an action nor a control state.
 
+The `planner-overview-v2` Habit collection is one initially collapsed card,
+not a second agenda. Its count remains readable at 320 logical pixels and
+200-percent text. Row status, cadence, nullable duration, `Managed in Setup`,
+and pending-preview labels wrap vertically rather than overflow. Setup-owned
+definition review uses labelled readable text with one semantics group; it does
+not encode immutable values as disabled form controls. Only duration remains a
+normal editable field.
+
 Normal content surfaces have no outline. An outline is reserved for inputs,
 keyboard focus, selected state, a conflict/warning/danger state, or a genuine
 interactive boundary. Shadows are quiet, low-spread depth cues on raised

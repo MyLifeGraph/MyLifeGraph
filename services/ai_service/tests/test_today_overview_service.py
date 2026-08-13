@@ -643,7 +643,7 @@ def test_v2_adds_planner_blocks_without_counting_a_target_twice() -> None:
         ),
     ]
     planner = PlannerOverviewResponse(
-        contract_version="planner-v1",
+        contract_version="planner-overview-v2",
         origin="authenticated_backend",
         generated_at=NOW,
         timezone="Europe/Berlin",
@@ -667,7 +667,9 @@ def test_v2_adds_planner_blocks_without_counting_a_target_twice() -> None:
             for offset in range(7)
         ],
         ongoing_preparation=[],
-        unscheduled=[],
+        habits=[],
+        task_targets=[],
+        unscheduled_tasks=[],
         history=[],
     )
     service = TodayOverviewService(

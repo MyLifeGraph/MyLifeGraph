@@ -198,6 +198,63 @@ card can open existing review/replan navigation but never creates a preview,
 changes a plan, adds a Today item, or generates a Notification. Guest/demo makes
 no outlook request.
 
+The primary Planner read is `planner-overview-v2`; proposal, confirm, cancel,
+and commitment responses stay `planner-v1`. Its separate collapsed `Habits`
+section reports `N active · X unplanned` across manual and Setup-owned Habits,
+while `Unscheduled Tasks` contains only persisted open non-Preparation Tasks
+without positive active reservations. The read also carries strict
+`task_targets` snapshots for every current open non-Preparation Task, including
+scheduled Tasks, so a replacement editor never rebases stale editable values
+onto a current version. Every pending create and update appears in its own
+preview section; creates remain absent from persisted target projections.
+Setup-owned definitions render as readable immutable title, description, and
+cadence with only duration editable; the exact current definition is
+resubmitted. These rows are disabled while a mutation or required reload is in
+flight. Before submission, the app binds the retained draft and exact stale
+replacement source to the generated proposal `request_id`. Header reload never
+replays a pending exact retry; after an ambiguous result its successful fresh
+read looks up only that request-bound attempt and binds it only when the new
+pending plan/revision and complete target snapshot match exactly. It then
+clears the exact-retry, conflict, or mutation-error state without replay. A
+mismatch binds nothing and triggers no global draft-candidate search; a failed
+read retains any required exact-retry or conflict lock. An
+ordinary reload remains read-only.
+An exact proposal retry carries its original request and an explicit
+success/ambiguous/conflict/deterministic outcome back to the page. Repeated
+ambiguity keeps that one request binding. A retry `409` drops only that attempt
+and its identity-owned stale-source draft; another deterministic rejection
+drops the attempt but keeps the exact source draft editable. Confirmation also
+removes an identity-owned source draft only when it has not since been replaced,
+so a newer edit survives while a same-source unsent draft still follows its
+own confirmation lifecycle.
+After a successful conflict reload, a pending revision with an exact current
+target-/Calendar-/timezone-/Study-stale attention identity offers
+`Create new preview`; long-lived persisted stale reasons never attach to the
+newest pending revision.
+Persisted Task and manual-Habit replacements open the editor with the complete
+current target snapshot; Setup uses its current immutable definition and only
+retains the target-bound duration. A stale pending create opens as a reviewed
+new Task or Habit with no saved-target timestamp. Replacement uses a new
+proposal request and applicable latest base revision; it does not replay
+confirm or cancel the old preview. Non-stale pending previews and ambiguous
+exact retries keep their existing paths. Editable Task/manual-Habit drafts are
+target-bound until proposal, request-bound while its outcome is ambiguous, and
+exact-preview-bound afterwards; only their own confirmation clears them. Stale
+replacement edits additionally remain bound to
+the exact stale plan/revision through Availability Back or an ordinary proposal
+failure and are invalidated by `409`. Setup retains duration only and can recover it from
+a persisted pending target after cold start while using the fresh immutable
+definition. Confirming the exact source preview also clears an unsent
+replacement for that source; a foreign preview cannot. A committed mutation
+whose Overview refresh fails exposes no
+preview/success path and disables every derived Planner action until reload.
+Invalid recurring Habit, Setup, or weekly fixed-commitment
+wall-time occurrences arrive as source- and date-specific attention while valid
+occurrences remain visible. Guest/demo keeps the existing zero-call lock.
+The Dart contract parser mirrors SQL's 500-revision ceiling, the 499 proposal
+base ceiling, the bounded cancelled tombstone shape, and exact active revision
+plus active Task-block/Habit-slot states.
+
 Planner `Add new` preserves the selected Preparation kind. `Exam` opens the
 single-plan editor; `Assignment` opens `assignment-series-v1` with 12 weekly
 occurrences by default and a 2-through-20 bound. The series preview shares one

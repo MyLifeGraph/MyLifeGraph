@@ -3,16 +3,18 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any
+from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.models.deadline_plans import DeadlinePlansResponse
+from app.models.deadline_plans import DeadlinePlanRevision, DeadlinePlansResponse
 from app.models.planner import (
     PLANNER_CONTRACT_VERSION,
+    PLANNER_OVERVIEW_CONTRACT_VERSION,
     PLANNER_PREFERENCES_CONTRACT_VERSION,
     PlannerActionPlan,
     PlannerActionProposalRequest,
@@ -24,17 +26,27 @@ from app.models.planner import (
     PlannerCommitmentUpdateRequest,
     PlannerDay,
     PlannerDayItem,
+    PlannerHabitSummary,
     PlannerHabitSlot,
     PlannerHabitTarget,
+    PlannerHistoryItem,
     PlannerOverviewResponse,
     PlannerPreferencesResponse,
     PlannerPreparationSummary,
     PlannerTaskBlock,
+    PlannerTaskSummary,
     PlannerTaskTarget,
-    PlannerUnscheduledItem,
+    PlannerUnscheduledTask,
+    planner_active_task_minutes,
+    planner_plan_is_cancelled_tombstone,
+    planner_plan_is_pending_create,
+    planner_plan_is_released_or_cancelled,
+    planner_task_plan_is_released,
+    planner_unscheduled_task_reason,
 )
 from app.models.planning_timing import PlanningTimingProvenance
 from app.services.local_time import (
+    LocalTimeResolutionError,
     resolve_local_datetime,
     resolve_local_interval,
 )
@@ -63,7 +75,6 @@ def build_planner_overview(
     local_date = generated_at.astimezone(zone).date()
     days = [local_date + timedelta(days=offset) for offset in range(7)]
     action_plans = _plans_from_projection(context.plans)
-    plan_by_id = {str(plan.id): plan for plan in action_plans}
     task_titles = _title_map(context.tasks)
     habit_titles = _title_map(context.habits)
     day_items: dict[date, list[PlannerDayItem]] = {day: [] for day in days}
@@ -138,7 +149,7 @@ def build_planner_overview(
         if projection is None and detail.plan.status == "active":
             raise ValueError("Active preparation projection is incomplete.")
 
-    attention_days = _attention_horizon(
+    attention_horizon = _attention_horizon(
         local_date=local_date,
         context=context,
         plans=action_plans,
@@ -148,14 +159,16 @@ def build_planner_overview(
     attention = _attention_items(
         context=context,
         plans=action_plans,
-        days=attention_days,
+        days=attention_horizon.reservation_days,
+        authoritative_days=attention_horizon.authoritative_days,
         zone=zone,
     )
     attention.extend(
         _preparation_attention_items(
             context=context,
             deadline_response=deadline_response,
-            days=attention_days,
+            days=attention_horizon.reservation_days,
+            authoritative_days=attention_horizon.authoritative_days,
             zone=zone,
             generated_at=generated_at,
         ),
@@ -164,10 +177,9 @@ def build_planner_overview(
         {item.id: item for item in attention}.values(),
         key=lambda item: (item.kind, item.title.casefold(), item.id),
     )[:500]
-    unscheduled, history = _unscheduled_items(
+    task_targets, habits, unscheduled_tasks, history = _target_overview_items(
         context=context,
         plans=action_plans,
-        plan_by_id=plan_by_id,
     )
     rendered_days: list[PlannerDay] = []
     for day in days:
@@ -195,7 +207,7 @@ def build_planner_overview(
         ),
     )
     return PlannerOverviewResponse(
-        contract_version=PLANNER_CONTRACT_VERSION,
+        contract_version=PLANNER_OVERVIEW_CONTRACT_VERSION,
         origin="authenticated_backend",
         generated_at=generated_at,
         timezone=context.timezone,
@@ -210,7 +222,9 @@ def build_planner_overview(
         needs_attention=attention,
         days=rendered_days,
         ongoing_preparation=ongoing_preparation,
-        unscheduled=unscheduled,
+        habits=habits,
+        task_targets=task_targets,
+        unscheduled_tasks=unscheduled_tasks,
         history=history,
     )
 
@@ -685,13 +699,18 @@ def _add_setup_commitments(
             ):
                 continue
             source_id = UUID(str(row["id"]))
-            starts_at, ends_at = resolve_local_interval(
-                local_date=day,
-                starts_at=starts,
-                ends_at=ends,
-                zone=zone,
-                source_id=f"setup:{source_id}",
-            )
+            try:
+                starts_at, ends_at = resolve_local_interval(
+                    local_date=day,
+                    starts_at=starts,
+                    ends_at=ends,
+                    zone=zone,
+                    source_id=f"setup:{source_id}",
+                )
+            except LocalTimeResolutionError:
+                # The long-horizon attention scan reports the invalid source.
+                # Only this occurrence is absent from the visible agenda.
+                continue
             day_items[day].append(
                 PlannerDayItem(
                     id=_occurrence_id("setup", source_id, day),
@@ -745,13 +764,18 @@ def _add_manual_commitments(
         for day in days:
             if day.isoweekday() != weekday:
                 continue
-            starts, ends = resolve_local_interval(
-                local_date=day,
-                starts_at=starts_local,
-                ends_at=ends_local,
-                zone=zone,
-                source_id=f"planner-commitment:{source_id}",
-            )
+            try:
+                starts, ends = resolve_local_interval(
+                    local_date=day,
+                    starts_at=starts_local,
+                    ends_at=ends_local,
+                    zone=zone,
+                    source_id=f"planner-commitment:{source_id}",
+                )
+            except LocalTimeResolutionError:
+                # Attention owns the source/date explanation. Only this weekly
+                # occurrence is absent from the visible agenda.
+                continue
             day_items[day].append(
                 PlannerDayItem(
                     id=_occurrence_id("commitment", source_id, day),
@@ -808,13 +832,18 @@ def _add_action_reservations(
                 for day in days:
                     if day.isoweekday() != slot.weekday:
                         continue
-                    starts, ends = resolve_local_interval(
-                        local_date=day,
-                        starts_at=slot.starts_at,
-                        ends_at=slot.ends_at,
-                        zone=zone,
-                        source_id=f"planner-habit-slot:{slot.id}",
-                    )
+                    try:
+                        starts, ends = resolve_local_interval(
+                            local_date=day,
+                            starts_at=slot.starts_at,
+                            ends_at=slot.ends_at,
+                            zone=zone,
+                            source_id=f"planner-habit-slot:{slot.id}",
+                        )
+                    except LocalTimeResolutionError:
+                        # Needs attention owns the source-specific explanation.
+                        # A later valid weekly occurrence remains materialized.
+                        continue
                     day_items[day].append(
                         PlannerDayItem(
                             id=_occurrence_id("habit", slot.id, day),
@@ -838,6 +867,8 @@ def _add_calendar_items(
     days: Sequence[date],
     zone: ZoneInfo,
 ) -> None:
+    if not context.calendar.available:
+        return
     day_set = set(days)
     for row in context.calendar.timed_events:
         starts = _datetime(row.get("starts_at"))
@@ -887,6 +918,7 @@ def _attention_items(
     context: PlannerOverviewContext,
     plans: Sequence[PlannerActionPlan],
     days: Sequence[date],
+    authoritative_days: Sequence[date] | None = None,
     zone: ZoneInfo,
 ) -> list[PlannerAttentionItem]:
     result = _course_selection_attention(
@@ -898,11 +930,21 @@ def _attention_items(
     calendar_enabled = bool(
         context.preference and context.preference.get("use_calendar_busy_time") is True
     )
+    authoritative_day_values = tuple(
+        authoritative_days
+        if authoritative_days is not None
+        else _attention_authoritative_days(days)
+    )
     authoritative = _authoritative_intervals(
         context=context,
-        days=days,
+        days=authoritative_day_values,
         zone=zone,
         calendar_enabled=calendar_enabled,
+    )
+    authoritative_by_day = _authoritative_intervals_by_day(
+        intervals=authoritative.intervals,
+        days=authoritative_day_values,
+        zone=zone,
     )
     for plan in plans:
         revision = plan.active_revision
@@ -915,16 +957,28 @@ def _attention_items(
                 else "Planned action"
             )
         )
+        pending = plan.pending_revision
         for reason in plan.attention_reasons:
-            kind = (
-                "study_rhythm_changed"
-                if reason == "study_rhythm_changed"
-                else "conflict"
-            )
+            # Current reservations provide the authoritative conflict origin and
+            # exact unplaced minutes. Released targets remain discoverable in
+            # their own projection instead of producing a duplicate warning.
+            # Persisted stale reasons describe an older planning event and may
+            # outlive later proposals. A pending revision is assessed only from
+            # its current target, timezone, Calendar, and Study facts below.
+            if reason in {
+                "commitment_conflict",
+                "target_released",
+                "unplaced_minutes",
+            } or pending is not None:
+                continue
             result.append(
                 PlannerAttentionItem(
                     id=f"{plan.id}:persisted:{reason}",
-                    kind=kind,
+                    kind=(
+                        "study_rhythm_changed"
+                        if reason == "study_rhythm_changed"
+                        else "stale_preview"
+                    ),
                     target="plan",
                     title=title,
                     detail=_attention_detail(reason),
@@ -932,7 +986,6 @@ def _attention_items(
                     unplaced_minutes=0,
                 ),
             )
-        pending = plan.pending_revision
         if pending is not None:
             if pending.unscheduled_minutes:
                 result.append(
@@ -941,20 +994,20 @@ def _attention_items(
                         kind="unscheduled",
                         target="plan",
                         title=pending.target.title,
-                        detail=(
-                            f"{pending.unscheduled_minutes} minutes could not "
-                            "be placed."
-                        ),
+                        detail=_unplaced_detail(pending),
                         plan_id=plan.id,
                         unplaced_minutes=pending.unscheduled_minutes,
                     ),
                 )
             preview_uses_calendar = pending.calendar_import_id is not None
-            if preview_uses_calendar != calendar_enabled or (
-                preview_uses_calendar
-                and (
-                    not context.calendar.available
-                    or pending.calendar_import_id != context.calendar.import_id
+            if (
+                preview_uses_calendar != calendar_enabled
+                or (
+                    preview_uses_calendar
+                    and (
+                        not context.calendar.available
+                        or pending.calendar_import_id != context.calendar.import_id
+                    )
                 )
             ):
                 result.append(
@@ -1002,24 +1055,92 @@ def _attention_items(
                         unplaced_minutes=0,
                     ),
                 )
-        if revision is not None and _revision_conflicts(
-            plan_id=plan.id,
-            revision=revision,
-            days=days,
-            zone=zone,
-            authoritative=authoritative,
+            if pending.timezone != context.timezone:
+                result.append(
+                    PlannerAttentionItem(
+                        id=f"{plan.id}:timezone-stale:{pending.revision}",
+                        kind="stale_preview",
+                        target="plan",
+                        title=pending.target.title,
+                        detail=(
+                            "The account timezone changed. Create a new preview "
+                            "before confirming."
+                        ),
+                        plan_id=plan.id,
+                        unplaced_minutes=0,
+                    ),
+                )
+        if (
+            revision is not None
+            and revision.unscheduled_minutes
+            and (_active_task_minutes(plan) > 0 or _active_habit_slot_count(plan) > 0)
         ):
             result.append(
                 PlannerAttentionItem(
-                    id=f"{plan.id}:current-conflict:{revision.revision}",
-                    kind="conflict",
+                    id=f"{plan.id}:unscheduled:{revision.revision}",
+                    kind="unscheduled",
                     target="plan",
                     title=title,
-                    detail="A current commitment now overlaps this plan.",
+                    detail=_unplaced_detail(revision),
                     plan_id=plan.id,
-                    unplaced_minutes=0,
+                    unplaced_minutes=revision.unscheduled_minutes,
                 ),
             )
+        if revision is not None:
+            conflict_scan = _revision_conflict_sources(
+                plan_id=plan.id,
+                revision=revision,
+                days=days,
+                zone=zone,
+                authoritative_by_day=authoritative_by_day,
+            )
+            for source in conflict_scan.sources:
+                result.append(
+                    PlannerAttentionItem(
+                        id=(f"{plan.id}:current-conflict:{source}:{revision.revision}"),
+                        kind="conflict",
+                        target="plan",
+                        title=title,
+                        detail=_conflict_detail(source, preparation=False),
+                        plan_id=plan.id,
+                        unplaced_minutes=0,
+                        conflict_source=source,
+                    ),
+                )
+            invalid_occurrences = [
+                *conflict_scan.invalid_habit_occurrences,
+                *(
+                    occurrence
+                    for occurrence in authoritative.invalid_setup_occurrences
+                    if conflict_scan.candidate_days.intersection(
+                        occurrence.affected_days,
+                    )
+                ),
+                *(
+                    occurrence
+                    for occurrence in (
+                        authoritative.invalid_fixed_commitment_occurrences
+                    )
+                    if conflict_scan.candidate_days.intersection(
+                        occurrence.affected_days,
+                    )
+                ),
+            ]
+            if invalid_occurrences:
+                result.append(
+                    PlannerAttentionItem(
+                        id=(f"{plan.id}:local-time-invalid:{revision.revision}"),
+                        kind="stale_preview",
+                        target="plan",
+                        title=title,
+                        detail=_invalid_recurrence_detail(
+                            invalid_occurrences,
+                            timezone=context.timezone,
+                        ),
+                        plan_id=plan.id,
+                        unplaced_minutes=0,
+                    ),
+                )
         if (
             revision is not None
             and isinstance(revision.target, PlannerTaskTarget)
@@ -1110,6 +1231,16 @@ def _course_selection_attention(
     ]
 
 
+_MAX_ATTENTION_RESERVATION_DAYS = 366
+_MAX_ATTENTION_AUTHORITATIVE_DAYS = _MAX_ATTENTION_RESERVATION_DAYS + 2
+
+
+@dataclass(frozen=True)
+class _AttentionHorizon:
+    reservation_days: tuple[date, ...]
+    authoritative_days: tuple[date, ...]
+
+
 def _attention_horizon(
     *,
     local_date: date,
@@ -1117,7 +1248,7 @@ def _attention_horizon(
     plans: Sequence[PlannerActionPlan],
     deadline_response: DeadlinePlansResponse,
     zone: ZoneInfo,
-) -> list[date]:
+) -> _AttentionHorizon:
     last_date = local_date + timedelta(days=365)
     values = {local_date + timedelta(days=offset) for offset in range(28)}
 
@@ -1131,24 +1262,87 @@ def _attention_horizon(
         for block in plan.active_revision.task_blocks:
             if block.state == "active":
                 add(block.local_date)
+                add(block.starts_at.astimezone(zone).date())
+                add(
+                    (block.reserved_ends_at.astimezone(UTC) - timedelta(microseconds=1))
+                    .astimezone(zone)
+                    .date(),
+                )
+    active_habit_weekdays = {
+        slot.weekday
+        for plan in plans
+        if plan.active_revision is not None
+        for slot in plan.active_revision.habit_slots
+        if slot.state == "active"
+    }
+    if active_habit_weekdays:
+        # A confirmed Habit slot recurs beyond the 28-day proposal proof.
+        # Include only its relevant weekdays through the bounded Planner
+        # horizon so later semester Setup rows and recurring commitments can
+        # produce current conflict attention without expanding past 366 days.
+        for offset in range(28, 366):
+            candidate = local_date + timedelta(days=offset)
+            if candidate.isoweekday() in active_habit_weekdays:
+                values.add(candidate)
     for detail in deadline_response.plans:
         if detail.active_revision is None:
             continue
         for block in detail.active_revision.blocks:
             add(block.local_date)
+            add(block.starts_at.astimezone(zone).date())
+            add(
+                (block.reserved_ends_at.astimezone(UTC) - timedelta(microseconds=1))
+                .astimezone(zone)
+                .date(),
+            )
     for row in context.commitments:
         if row.get("status") == "active" and row.get("recurrence") == "one_off":
-            add(_datetime(row.get("starts_at")).astimezone(zone).date())
-    for row in context.calendar.timed_events:
-        add(_datetime(row.get("starts_at")).astimezone(zone).date())
-    for row in context.calendar.all_day_events:
-        starts_on = _date(row.get("starts_on"))
-        ends_on = _date(row.get("ends_on"))
-        # Seven representative days are enough to cover every recurring
-        # Habit weekday; Task and Preparation dates were added above.
-        for offset in range(min(7, max(0, (ends_on - starts_on).days))):
-            add(starts_on + timedelta(days=offset))
-    return sorted(values)
+            starts_at = _datetime(row.get("starts_at"))
+            ends_at = _datetime(row.get("ends_at"))
+            add(starts_at.astimezone(zone).date())
+            add(
+                (ends_at.astimezone(UTC) - timedelta(microseconds=1))
+                .astimezone(zone)
+                .date(),
+            )
+    if context.calendar.available:
+        for row in context.calendar.timed_events:
+            starts_at = _datetime(row.get("starts_at"))
+            ends_at = _datetime(row.get("ends_at"))
+            add(starts_at.astimezone(zone).date())
+            add(
+                (ends_at.astimezone(UTC) - timedelta(microseconds=1))
+                .astimezone(zone)
+                .date(),
+            )
+        for row in context.calendar.all_day_events:
+            starts_on = _date(row.get("starts_on"))
+            ends_on = _date(row.get("ends_on"))
+            # Seven representative days are enough to cover every recurring
+            # Habit weekday; Task and Preparation dates were added above.
+            for offset in range(min(7, max(0, (ends_on - starts_on).days))):
+                add(starts_on + timedelta(days=offset))
+    reservation_days = tuple(sorted(values))
+    if len(reservation_days) > _MAX_ATTENTION_RESERVATION_DAYS:
+        raise ValueError("Planner attention horizon exceeds 366 local days.")
+    return _AttentionHorizon(
+        reservation_days=reservation_days,
+        authoritative_days=_attention_authoritative_days(reservation_days),
+    )
+
+
+def _attention_authoritative_days(days: Sequence[date]) -> tuple[date, ...]:
+    reservation_days = set(days)
+    if len(reservation_days) > _MAX_ATTENTION_RESERVATION_DAYS:
+        raise ValueError("Planner attention horizon exceeds 366 local days.")
+    values = (
+        reservation_days
+        | {candidate - timedelta(days=1) for candidate in reservation_days}
+        | {candidate + timedelta(days=1) for candidate in reservation_days}
+    )
+    if len(values) > _MAX_ATTENTION_AUTHORITATIVE_DAYS:
+        raise ValueError("Planner attention anchors exceed their local-day bound.")
+    return tuple(sorted(values))
 
 
 def _preparation_attention_items(
@@ -1156,17 +1350,28 @@ def _preparation_attention_items(
     context: PlannerOverviewContext,
     deadline_response: DeadlinePlansResponse,
     days: Sequence[date],
+    authoritative_days: Sequence[date] | None = None,
     zone: ZoneInfo,
     generated_at: datetime,
 ) -> list[PlannerAttentionItem]:
+    authoritative_day_values = tuple(
+        authoritative_days
+        if authoritative_days is not None
+        else _attention_authoritative_days(days)
+    )
     authoritative = _authoritative_intervals(
         context=context,
-        days=days,
+        days=authoritative_day_values,
         zone=zone,
         calendar_enabled=bool(
             context.preference
             and context.preference.get("use_calendar_busy_time") is True
         ),
+    )
+    authoritative_by_day = _authoritative_intervals_by_day(
+        intervals=authoritative.intervals,
+        days=authoritative_day_values,
+        zone=zone,
     )
     result: list[PlannerAttentionItem] = []
     current_study = _study_rhythm(context.study_setup)
@@ -1174,9 +1379,47 @@ def _preparation_attention_items(
     for detail in deadline_response.plans:
         revision = detail.active_revision
         pending = detail.pending_revision
+        for reason in detail.plan.attention_reasons:
+            if reason in {
+                "commitment_conflict",
+                "target_released",
+                "unplaced_minutes",
+            }:
+                continue
+            result.append(
+                PlannerAttentionItem(
+                    id=f"deadline:{detail.plan.id}:persisted:{reason}",
+                    kind=(
+                        "study_rhythm_changed"
+                        if reason == "study_rhythm_changed"
+                        else "stale_preview"
+                    ),
+                    target="plan",
+                    title=detail.plan.title,
+                    detail=_attention_detail(reason, preparation=True),
+                    plan_id=detail.plan.id,
+                    unplaced_minutes=0,
+                ),
+            )
+        if pending is not None and pending.unscheduled_minutes:
+            result.append(
+                PlannerAttentionItem(
+                    id=(f"deadline:{detail.plan.id}:unscheduled:{pending.revision}"),
+                    kind="unscheduled",
+                    target="plan",
+                    title=detail.plan.title,
+                    detail=(
+                        f"{pending.unscheduled_minutes} preparation minutes "
+                        "could not be placed."
+                    ),
+                    plan_id=detail.plan.id,
+                    unplaced_minutes=pending.unscheduled_minutes,
+                ),
+            )
         if (
             pending is not None
             and pending.study_setup_revision != current_study_revision
+            and "study_rhythm_changed" not in detail.plan.attention_reasons
         ):
             result.append(
                 PlannerAttentionItem(
@@ -1194,30 +1437,83 @@ def _preparation_attention_items(
             )
         if revision is None:
             continue
-        conflicts = any(
-            block.reserved_ends_at > generated_at
-            and any(
-                max(block.starts_at, starts_at) < min(block.reserved_ends_at, ends_at)
-                for starts_at, ends_at in authoritative
+        if revision.unscheduled_minutes:
+            result.append(
+                PlannerAttentionItem(
+                    id=(f"deadline:{detail.plan.id}:unscheduled:{revision.revision}"),
+                    kind="unscheduled",
+                    target="plan",
+                    title=detail.plan.title,
+                    detail=(
+                        f"{revision.unscheduled_minutes} preparation minutes "
+                        "could not be placed."
+                    ),
+                    plan_id=detail.plan.id,
+                    unplaced_minutes=revision.unscheduled_minutes,
+                ),
             )
-            for block in revision.blocks
-        )
-        if conflicts:
+        for source in _deadline_revision_conflict_sources(
+            revision=revision,
+            authoritative_by_day=authoritative_by_day,
+            zone=zone,
+            generated_at=generated_at,
+        ):
             result.append(
                 PlannerAttentionItem(
                     id=(
-                        f"deadline:{detail.plan.id}:current-conflict:"
+                        f"deadline:{detail.plan.id}:current-conflict:{source}:"
                         f"{revision.revision}"
                     ),
                     kind="conflict",
                     target="plan",
                     title=detail.plan.title,
-                    detail="A current commitment now overlaps this preparation plan.",
+                    detail=_conflict_detail(source, preparation=True),
+                    plan_id=detail.plan.id,
+                    unplaced_minutes=0,
+                    conflict_source=source,
+                ),
+            )
+        deadline_candidate_days = _deadline_revision_candidate_days(
+            revision=revision,
+            zone=zone,
+            generated_at=generated_at,
+        )
+        invalid_setup_occurrences = [
+            occurrence
+            for occurrence in authoritative.invalid_setup_occurrences
+            if deadline_candidate_days.intersection(occurrence.affected_days)
+        ]
+        invalid_fixed_commitment_occurrences = [
+            occurrence
+            for occurrence in authoritative.invalid_fixed_commitment_occurrences
+            if deadline_candidate_days.intersection(occurrence.affected_days)
+        ]
+        invalid_occurrences = [
+            *invalid_setup_occurrences,
+            *invalid_fixed_commitment_occurrences,
+        ]
+        if invalid_occurrences:
+            result.append(
+                PlannerAttentionItem(
+                    id=(
+                        f"deadline:{detail.plan.id}:local-time-invalid:"
+                        f"{revision.revision}"
+                    ),
+                    kind="stale_preview",
+                    target="plan",
+                    title=detail.plan.title,
+                    detail=_invalid_recurrence_detail(
+                        invalid_occurrences,
+                        timezone=context.timezone,
+                    ),
                     plan_id=detail.plan.id,
                     unplaced_minutes=0,
                 ),
             )
-        if revision.study_setup_revision != current_study_revision:
+        if (
+            revision.study_setup_revision != current_study_revision
+            and "study_rhythm_changed" not in detail.plan.attention_reasons
+        ):
             result.append(
                 PlannerAttentionItem(
                     id=(f"deadline:{detail.plan.id}:study-changed:{revision.revision}"),
@@ -1235,14 +1531,89 @@ def _preparation_attention_items(
     return result
 
 
+_ConflictSource = Literal["setup", "fixed_commitment", "calendar"]
+
+
+@dataclass(frozen=True)
+class _AuthoritativeInterval:
+    starts_at: datetime
+    ends_at: datetime
+    source: _ConflictSource
+
+
+_InvalidRecurrenceSource = Literal["habit", "setup", "fixed_commitment"]
+
+
+@dataclass(frozen=True)
+class _InvalidRecurrence:
+    source: _InvalidRecurrenceSource
+    local_date: date
+    local_time: time
+    reason: str
+    affected_days: frozenset[date]
+
+
+@dataclass(frozen=True)
+class _AuthoritativeProjection:
+    intervals: tuple[_AuthoritativeInterval, ...]
+    invalid_setup_occurrences: tuple[_InvalidRecurrence, ...]
+    invalid_fixed_commitment_occurrences: tuple[_InvalidRecurrence, ...]
+
+
+@dataclass(frozen=True)
+class _ActionConflictScan:
+    sources: tuple[_ConflictSource, ...]
+    invalid_habit_occurrences: tuple[_InvalidRecurrence, ...]
+    candidate_days: frozenset[date]
+
+
+def _authoritative_intervals_by_day(
+    *,
+    intervals: Sequence[_AuthoritativeInterval],
+    days: Sequence[date],
+    zone: ZoneInfo,
+) -> dict[date, tuple[_AuthoritativeInterval, ...]]:
+    requested = set(days)
+    if not requested:
+        return {}
+    first_requested = min(requested)
+    last_requested = max(requested)
+    values: dict[date, list[_AuthoritativeInterval]] = {day: [] for day in requested}
+    for interval in intervals:
+        first = max(interval.starts_at.astimezone(zone).date(), first_requested)
+        inclusive_end = interval.ends_at.astimezone(UTC) - timedelta(microseconds=1)
+        last = min(inclusive_end.astimezone(zone).date(), last_requested)
+        if last < first:
+            continue
+        for offset in range((last - first).days + 1):
+            candidate = first + timedelta(days=offset)
+            if candidate in requested:
+                values[candidate].append(interval)
+    return {
+        day: tuple(
+            sorted(
+                day_intervals,
+                key=lambda interval: (
+                    interval.starts_at,
+                    interval.ends_at,
+                    interval.source,
+                ),
+            ),
+        )
+        for day, day_intervals in values.items()
+    }
+
+
 def _authoritative_intervals(
     *,
     context: PlannerOverviewContext,
     days: Sequence[date],
     zone: ZoneInfo,
     calendar_enabled: bool,
-) -> list[tuple[datetime, datetime]]:
-    intervals: list[tuple[datetime, datetime]] = []
+) -> _AuthoritativeProjection:
+    intervals: list[_AuthoritativeInterval] = []
+    invalid_setup_occurrences: list[_InvalidRecurrence] = []
+    invalid_fixed_commitment_occurrences: list[_InvalidRecurrence] = []
     for row in context.schedule_items:
         weekday = _int(row.get("weekday"))
         starts = _time(row.get("starts_at"))
@@ -1252,21 +1623,38 @@ def _authoritative_intervals(
                 row,
                 day,
             ):
-                intervals.append(
-                    resolve_local_interval(
+                try:
+                    resolved = resolve_local_interval(
                         local_date=day,
                         starts_at=starts,
                         ends_at=ends,
                         zone=zone,
                         source_id=f"setup:{row.get('id', weekday)}",
-                    ),
+                    )
+                except LocalTimeResolutionError as error:
+                    invalid_setup_occurrences.append(
+                        _invalid_recurrence(
+                            source="setup",
+                            anchor_day=day,
+                            starts_at=starts,
+                            ends_at=ends,
+                            error=error,
+                        ),
+                    )
+                    continue
+                intervals.append(
+                    _AuthoritativeInterval(*resolved, source="setup"),
                 )
     for row in context.commitments:
         if row.get("status") != "active":
             continue
         if row.get("recurrence") == "one_off":
             intervals.append(
-                (_datetime(row.get("starts_at")), _datetime(row.get("ends_at"))),
+                _AuthoritativeInterval(
+                    _datetime(row.get("starts_at")),
+                    _datetime(row.get("ends_at")),
+                    "fixed_commitment",
+                ),
             )
         else:
             weekday = _int(row.get("weekday"))
@@ -1274,18 +1662,40 @@ def _authoritative_intervals(
             ends = _time(row.get("local_ends_at"))
             for day in days:
                 if day.isoweekday() == weekday:
-                    intervals.append(
-                        resolve_local_interval(
+                    try:
+                        resolved = resolve_local_interval(
                             local_date=day,
                             starts_at=starts,
                             ends_at=ends,
                             zone=zone,
-                            source_id=(f"planner-commitment:{row.get('id', weekday)}"),
+                            source_id=(
+                                f"planner-commitment:{row.get('id', weekday)}"
+                            ),
+                        )
+                    except LocalTimeResolutionError as error:
+                        invalid_fixed_commitment_occurrences.append(
+                            _invalid_recurrence(
+                                source="fixed_commitment",
+                                anchor_day=day,
+                                starts_at=starts,
+                                ends_at=ends,
+                                error=error,
+                            ),
+                        )
+                        continue
+                    intervals.append(
+                        _AuthoritativeInterval(
+                            *resolved,
+                            source="fixed_commitment",
                         ),
                     )
-    if calendar_enabled:
+    if calendar_enabled and context.calendar.available:
         intervals.extend(
-            (_datetime(row.get("starts_at")), _datetime(row.get("ends_at")))
+            _AuthoritativeInterval(
+                _datetime(row.get("starts_at")),
+                _datetime(row.get("ends_at")),
+                "calendar",
+            )
             for row in context.calendar.timed_events
             if row.get("busy_status") == "busy"
         )
@@ -1295,7 +1705,7 @@ def _authoritative_intervals(
             starts_on = _date(row.get("starts_on"))
             ends_on = _date(row.get("ends_on"))
             intervals.append(
-                (
+                _AuthoritativeInterval(
                     resolve_local_datetime(
                         local_date=starts_on,
                         local_time=time.min,
@@ -1308,188 +1718,528 @@ def _authoritative_intervals(
                         zone=zone,
                         source_id=f"calendar-all-day:{row.get('id', starts_on)}",
                     ),
+                    "calendar",
                 ),
             )
-    return intervals
+    return _AuthoritativeProjection(
+        intervals=tuple(intervals),
+        invalid_setup_occurrences=_dedupe_invalid_recurrences(
+            invalid_setup_occurrences,
+        ),
+        invalid_fixed_commitment_occurrences=_dedupe_invalid_recurrences(
+            invalid_fixed_commitment_occurrences,
+        ),
+    )
 
 
-def _revision_conflicts(
+def _revision_conflict_sources(
     *,
     plan_id: UUID,
     revision: PlannerActionRevision,
     days: Sequence[date],
     zone: ZoneInfo,
-    authoritative: Sequence[tuple[datetime, datetime]],
-) -> bool:
+    authoritative_by_day: Mapping[
+        date,
+        Sequence[_AuthoritativeInterval],
+    ],
+) -> _ActionConflictScan:
     del plan_id
     candidates: list[tuple[datetime, datetime]] = []
-    candidates.extend(
-        (block.starts_at, block.reserved_ends_at)
-        for block in revision.task_blocks
-        if block.state == "active" and block.local_date in days
-    )
+    candidate_days: set[date] = set()
+    invalid_habit_occurrences: list[_InvalidRecurrence] = []
+    for block in revision.task_blocks:
+        if block.state != "active" or block.local_date not in days:
+            continue
+        candidates.append((block.starts_at, block.reserved_ends_at))
+        candidate_days.update(
+            _interval_local_days(
+                starts_at=block.starts_at,
+                ends_at=block.reserved_ends_at,
+                zone=zone,
+            ),
+        )
     for slot in revision.habit_slots:
         if slot.state != "active":
             continue
-        candidates.extend(
-            resolve_local_interval(
-                local_date=day,
-                starts_at=slot.starts_at,
-                ends_at=slot.ends_at,
-                zone=zone,
-                source_id=f"planner-habit-slot:{slot.id}",
+        for day in days:
+            if day.isoweekday() != slot.weekday:
+                continue
+            candidate_days.update(
+                _wall_interval_local_days(
+                    local_date=day,
+                    starts_at=slot.starts_at,
+                    ends_at=slot.ends_at,
+                ),
             )
-            for day in days
-            if day.isoweekday() == slot.weekday
-        )
-    return any(
-        max(start, busy_start) < min(end, busy_end)
-        for start, end in candidates
-        for busy_start, busy_end in authoritative
+            try:
+                candidates.append(
+                    resolve_local_interval(
+                        local_date=day,
+                        starts_at=slot.starts_at,
+                        ends_at=slot.ends_at,
+                        zone=zone,
+                        source_id=f"planner-habit-slot:{slot.id}",
+                    ),
+                )
+            except LocalTimeResolutionError as error:
+                invalid_habit_occurrences.append(
+                    _invalid_recurrence(
+                        source="habit",
+                        anchor_day=day,
+                        starts_at=slot.starts_at,
+                        ends_at=slot.ends_at,
+                        error=error,
+                    ),
+                )
+    sources: set[_ConflictSource] = set()
+    for start, end in candidates:
+        for local_day in _interval_local_days(
+            starts_at=start,
+            ends_at=end,
+            zone=zone,
+        ):
+            for busy in authoritative_by_day.get(local_day, ()):
+                if busy.starts_at >= end:
+                    break
+                if max(start, busy.starts_at) < min(end, busy.ends_at):
+                    sources.add(busy.source)
+        if len(sources) == 3:
+            break
+    return _ActionConflictScan(
+        sources=tuple(
+            sorted(sources, key=("setup", "fixed_commitment", "calendar").index),
+        ),
+        invalid_habit_occurrences=_dedupe_invalid_recurrences(
+            invalid_habit_occurrences,
+        ),
+        candidate_days=frozenset(candidate_days),
     )
 
 
-def _unscheduled_items(
+def _interval_local_days(
+    *,
+    starts_at: datetime,
+    ends_at: datetime,
+    zone: ZoneInfo,
+) -> tuple[date, ...]:
+    first = starts_at.astimezone(zone).date()
+    last = (ends_at.astimezone(UTC) - timedelta(microseconds=1)).astimezone(zone).date()
+    count = (last - first).days + 1
+    if count < 1 or count > _MAX_ATTENTION_RESERVATION_DAYS:
+        raise ValueError("Planner attention interval exceeds its local-day bound.")
+    return tuple(first + timedelta(days=offset) for offset in range(count))
+
+
+def _wall_interval_local_days(
+    *,
+    local_date: date,
+    starts_at: time,
+    ends_at: time,
+) -> frozenset[date]:
+    values = {local_date}
+    if ends_at <= starts_at:
+        values.add(local_date + timedelta(days=1))
+    return frozenset(values)
+
+
+def _invalid_recurrence(
+    *,
+    source: _InvalidRecurrenceSource,
+    anchor_day: date,
+    starts_at: time,
+    ends_at: time,
+    error: LocalTimeResolutionError,
+) -> _InvalidRecurrence:
+    return _InvalidRecurrence(
+        source=source,
+        local_date=error.local_date,
+        local_time=error.local_time,
+        reason=error.reason,
+        affected_days=_wall_interval_local_days(
+            local_date=anchor_day,
+            starts_at=starts_at,
+            ends_at=ends_at,
+        ),
+    )
+
+
+def _dedupe_invalid_recurrences(
+    values: Iterable[_InvalidRecurrence],
+) -> tuple[_InvalidRecurrence, ...]:
+    unique = {
+        (
+            value.source,
+            value.local_date,
+            value.local_time,
+            value.reason,
+            tuple(sorted(value.affected_days)),
+        ): value
+        for value in values
+    }
+    return tuple(
+        unique[key]
+        for key in sorted(
+            unique,
+            key=lambda value: (value[1], value[2], value[0], value[3], value[4]),
+        )
+    )
+
+
+def _deadline_revision_candidate_days(
+    *,
+    revision: DeadlinePlanRevision,
+    zone: ZoneInfo,
+    generated_at: datetime,
+) -> frozenset[date]:
+    values: set[date] = set()
+    for block in revision.blocks:
+        if (
+            block.state not in {"upcoming", "partial"}
+            or block.reserved_ends_at <= generated_at
+        ):
+            continue
+        values.update(
+            _interval_local_days(
+                starts_at=block.starts_at,
+                ends_at=block.reserved_ends_at,
+                zone=zone,
+            ),
+        )
+    return frozenset(values)
+
+
+def _deadline_revision_conflict_sources(
+    *,
+    revision: DeadlinePlanRevision,
+    authoritative_by_day: Mapping[
+        date,
+        Sequence[_AuthoritativeInterval],
+    ],
+    zone: ZoneInfo,
+    generated_at: datetime,
+) -> list[_ConflictSource]:
+    sources: set[_ConflictSource] = set()
+    for block in revision.blocks:
+        if (
+            block.state not in {"upcoming", "partial"}
+            or block.reserved_ends_at <= generated_at
+        ):
+            continue
+        for local_day in _interval_local_days(
+            starts_at=block.starts_at,
+            ends_at=block.reserved_ends_at,
+            zone=zone,
+        ):
+            for busy in authoritative_by_day.get(local_day, ()):
+                if busy.starts_at >= block.reserved_ends_at:
+                    break
+                if max(block.starts_at, busy.starts_at) < min(
+                    block.reserved_ends_at,
+                    busy.ends_at,
+                ):
+                    sources.add(busy.source)
+        if len(sources) == 3:
+            break
+    return sorted(sources, key=("setup", "fixed_commitment", "calendar").index)
+
+
+@dataclass(frozen=True)
+class _PlannerHistoryProjection:
+    item: PlannerHistoryItem
+    required: bool
+    created_at: datetime
+    source_order: int
+
+
+def _target_overview_items(
     *,
     context: PlannerOverviewContext,
     plans: Sequence[PlannerActionPlan],
-    plan_by_id: Mapping[str, PlannerActionPlan],
-) -> tuple[list[PlannerUnscheduledItem], list[PlannerUnscheduledItem]]:
-    del plan_by_id
-    active_targets = {
-        (plan.target_kind, str(plan.target_id))
-        for plan in plans
-        if plan.active_revision is not None
-    }
-    released_targets = {
-        (plan.target_kind, str(plan.target_id))
-        for plan in plans
-        if plan.status == "unscheduled"
-    }
-    unscheduled: list[PlannerUnscheduledItem] = []
-    history: list[PlannerUnscheduledItem] = []
-    known: set[tuple[str, str]] = set()
-    for kind, rows in (("task", context.tasks), ("habit", context.habits)):
-        for row in rows:
-            target_id = str(row.get("id"))
-            key = (kind, target_id)
-            if target_id == "None" or key in known:
-                raise ValueError("Planner target overview projection is invalid.")
-            known.add(key)
-            terminal = (
-                row.get("status") in {"done", "cancelled", "archived"}
-                if kind == "task"
-                else row.get("active") is not True
-            )
-            item = PlannerUnscheduledItem(
-                id=UUID(target_id),
-                kind=kind,
-                title=_title(row),
-                reason=("released" if key in released_targets else "not_planned"),
-                **_target_summary(kind=kind, row=row),
-            )
-            if terminal:
-                history.append(item)
-            elif key not in active_targets:
-                unscheduled.append(item)
+) -> tuple[
+    list[PlannerTaskSummary],
+    list[PlannerHabitSummary],
+    list[PlannerUnscheduledTask],
+    list[PlannerHistoryItem],
+]:
+    plan_by_target: dict[tuple[str, str], PlannerActionPlan] = {}
     for plan in plans:
-        pending = plan.pending_revision
-        if pending is None or pending.target.operation != "create":
-            continue
         key = (plan.target_kind, str(plan.target_id))
-        if key in known:
+        if key in plan_by_target:
+            raise ValueError("Planner target has more than one action plan.")
+        plan_by_target[key] = plan
+
+    task_targets: list[PlannerTaskSummary] = []
+    habits: list[PlannerHabitSummary] = []
+    unscheduled_tasks: list[PlannerUnscheduledTask] = []
+    history_candidates: list[_PlannerHistoryProjection] = []
+    known: set[tuple[str, str]] = set()
+    history_source_order = 0
+
+    for row in context.tasks:
+        target_id = _target_identity(row, kind="task", known=known)
+        if _is_deadline_managed_task(row):
             continue
-        unscheduled.append(
-            PlannerUnscheduledItem(
-                id=plan.target_id,
-                kind=plan.target_kind,
-                title=pending.target.title,
-                reason=(
-                    "missing_scheduling_inputs"
-                    if isinstance(pending.target, PlannerTaskTarget)
-                    and (
-                        pending.target.estimated_minutes is None
-                        or pending.target.deadline_at is None
-                        or pending.target.preferred_session_minutes is None
-                    )
-                    else "not_planned"
+        plan = _persisted_target_plan(
+            plan_by_target=plan_by_target,
+            kind="task",
+            target_id=target_id,
+        )
+        if row.get("status") not in {"todo", "in_progress"}:
+            if plan is not None and not planner_task_plan_is_released(plan):
+                raise ValueError(
+                    "Historical Planner Task has a non-released action plan."
+                )
+            history_candidates.append(
+                _history_projection(
+                    row=row,
+                    plan=plan,
+                    source_order=history_source_order,
+                    item=PlannerHistoryItem(
+                        id=UUID(target_id),
+                        kind="task",
+                        title=_title(row),
+                    ),
                 ),
-                **_target_summary_from_target(pending.target),
+            )
+            history_source_order += 1
+            continue
+        summary_values = _task_summary(row)
+        task_summary = PlannerTaskSummary(
+            id=UUID(target_id),
+            title=_title(row),
+            **summary_values,
+        )
+        task_targets.append(task_summary)
+        if planner_active_task_minutes(plan) > 0:
+            continue
+        unscheduled_tasks.append(
+            PlannerUnscheduledTask(
+                **task_summary.model_dump(),
+                reason=planner_unscheduled_task_reason(task_summary, plan),
             ),
         )
-    unscheduled.sort(key=lambda item: (item.kind, item.title.casefold(), str(item.id)))
-    history.sort(key=lambda item: (item.kind, item.title.casefold(), str(item.id)))
-    return unscheduled[:1_000], history[:1_000]
+
+    for row in context.habits:
+        target_id = _target_identity(row, kind="habit", known=known)
+        plan = _persisted_target_plan(
+            plan_by_target=plan_by_target,
+            kind="habit",
+            target_id=target_id,
+        )
+        metadata = row.get("metadata")
+        if not isinstance(metadata, dict):
+            raise ValueError("Habit metadata is invalid.")
+        active = (
+            row.get("active") is True
+            and metadata.get("lifecycle", "active") == "active"
+        )
+        if not active:
+            if plan is not None and not planner_plan_is_released_or_cancelled(plan):
+                raise ValueError(
+                    "Historical Planner Habit has a non-released action plan."
+                )
+            history_candidates.append(
+                _history_projection(
+                    row=row,
+                    plan=plan,
+                    source_order=history_source_order,
+                    item=PlannerHistoryItem(
+                        id=UUID(target_id),
+                        kind="habit",
+                        title=_title(row),
+                    ),
+                ),
+            )
+            history_source_order += 1
+            continue
+        definition = _habit_definition_from_row(row)
+        active_duration = (
+            plan.active_revision.target.duration_minutes
+            if plan is not None
+            and plan.active_revision is not None
+            and isinstance(plan.active_revision.target, PlannerHabitTarget)
+            else None
+        )
+        duration = _optional_int(metadata.get("planner_duration_minutes"))
+        habits.append(
+            PlannerHabitSummary(
+                id=UUID(target_id),
+                title=_title(row),
+                description=_optional_description(row),
+                expected_updated_at=_datetime(row.get("updated_at")),
+                ownership=(
+                    "setup" if metadata.get("managed_by") == "setup" else "manual"
+                ),
+                cadence=definition["cadence"],
+                duration_minutes=duration if duration is not None else active_duration,
+                planning_status=(
+                    "scheduled"
+                    if plan is not None and _active_habit_slot_count(plan) > 0
+                    else "unplanned"
+                ),
+                plan_id=plan.id if plan is not None else None,
+                has_pending_preview=(
+                    plan is not None and plan.pending_revision is not None
+                ),
+            ),
+        )
+
+    unscheduled_tasks.sort(key=lambda item: (item.title.casefold(), str(item.id)))
+    history_candidates.sort(
+        key=lambda candidate: (
+            not candidate.required,
+            candidate.created_at,
+            str(candidate.item.id),
+            candidate.item.kind,
+            candidate.source_order,
+        ),
+    )
+    required_history_count = sum(
+        1 for candidate in history_candidates if candidate.required
+    )
+    if required_history_count > 1_000:
+        raise ValueError(
+            "Required Planner history targets exceed the overview bound.",
+        )
+    history = [candidate.item for candidate in history_candidates[:1_000]]
+    task_targets = task_targets[:1_000]
+    habits = habits[:1_000]
+    projected_task_ids = {item.id for item in task_targets}
+    unscheduled_tasks = [
+        item for item in unscheduled_tasks if item.id in projected_task_ids
+    ][:1_000]
+    represented_targets = {
+        *(("task", str(item.id)) for item in task_targets),
+        *(("habit", str(item.id)) for item in habits),
+        *((item.kind, str(item.id)) for item in history),
+    }
+    for plan in plans:
+        if planner_plan_is_pending_create(
+            plan
+        ) or planner_plan_is_cancelled_tombstone(plan):
+            continue
+        if (plan.target_kind, str(plan.target_id)) not in represented_targets:
+            raise ValueError(
+                "Persisted Planner action plan has no target projection.",
+            )
+    return (
+        task_targets,
+        habits,
+        unscheduled_tasks,
+        history,
+    )
 
 
-def _target_summary(
+def _history_projection(
     *,
-    kind: str,
     row: Mapping[str, Any],
-) -> dict[str, Any]:
-    updated_at = _datetime(row.get("updated_at"))
+    plan: PlannerActionPlan | None,
+    source_order: int,
+    item: PlannerHistoryItem,
+) -> _PlannerHistoryProjection:
+    created_at_value = row.get("created_at")
+    return _PlannerHistoryProjection(
+        item=item,
+        required=(
+            plan is not None
+            and not planner_plan_is_pending_create(plan)
+            and not planner_plan_is_cancelled_tombstone(plan)
+        ),
+        created_at=(
+            _datetime(created_at_value)
+            if created_at_value is not None
+            else datetime.max.replace(tzinfo=UTC)
+        ),
+        source_order=source_order,
+    )
+
+
+def _persisted_target_plan(
+    *,
+    plan_by_target: Mapping[tuple[str, str], PlannerActionPlan],
+    kind: Literal["task", "habit"],
+    target_id: str,
+) -> PlannerActionPlan | None:
+    plan = plan_by_target.get((kind, target_id))
+    if (
+        plan is not None
+        and planner_plan_is_pending_create(plan)
+    ):
+        raise ValueError("Persisted Planner target is bound to a create preview.")
+    return plan
+
+
+def _target_identity(
+    row: Mapping[str, Any],
+    *,
+    kind: Literal["task", "habit"],
+    known: set[tuple[str, str]],
+) -> str:
+    target_id = str(row.get("id"))
+    key = (kind, target_id)
+    if target_id == "None" or key in known:
+        raise ValueError("Planner target overview projection is invalid.")
+    known.add(key)
+    return target_id
+
+
+def _is_deadline_managed_task(row: Mapping[str, Any]) -> bool:
+    metadata = row.get("metadata")
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        raise ValueError("Planner Task metadata is invalid.")
+    return row.get("source") == "deadline-plan-v1" or (
+        metadata.get("contract_version") == "deadline-plan-v1"
+    )
+
+
+def _active_task_minutes(plan: PlannerActionPlan) -> int:
+    revision = plan.active_revision
+    if revision is None or not isinstance(revision.target, PlannerTaskTarget):
+        return 0
+    return sum(
+        block.planned_minutes
+        for block in revision.task_blocks
+        if block.state == "active"
+    )
+
+
+def _active_habit_slot_count(plan: PlannerActionPlan) -> int:
+    revision = plan.active_revision
+    if revision is None or not isinstance(revision.target, PlannerHabitTarget):
+        return 0
+    return sum(
+        1
+        for slot in revision.habit_slots
+        if slot.state == "active" and slot.duration_minutes > 0
+    )
+
+
+def _optional_description(row: Mapping[str, Any]) -> str | None:
     description = row.get("description")
     if description is not None and not isinstance(description, str):
         raise ValueError("Planner target description is invalid.")
-    if kind == "task":
-        metadata = row.get("metadata")
-        if metadata is None:
-            metadata = {}
-        if not isinstance(metadata, dict):
-            raise ValueError("Planner Task metadata is invalid.")
-        preferred = metadata.get("preferred_session_minutes")
-        return {
-            "expected_updated_at": updated_at,
-            "description": description,
-            "priority": row.get("priority"),
-            "estimated_minutes": _optional_int(row.get("estimated_minutes")),
-            "deadline_at": _optional_datetime(row.get("deadline")),
-            "preferred_session_minutes": _optional_int(preferred),
-            "use_study_rhythm": metadata.get("use_study_rhythm") is True,
-            "cadence": None,
-            "duration_minutes": None,
-        }
-    definition = _habit_definition_from_row(row)
+    return description
+
+
+def _task_summary(row: Mapping[str, Any]) -> dict[str, Any]:
+    updated_at = _datetime(row.get("updated_at"))
     metadata = row.get("metadata")
-    assert isinstance(metadata, dict)
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        raise ValueError("Planner Task metadata is invalid.")
     return {
         "expected_updated_at": updated_at,
-        "description": description,
-        "priority": None,
-        "estimated_minutes": None,
-        "deadline_at": None,
-        "preferred_session_minutes": None,
-        "use_study_rhythm": False,
-        "cadence": definition["cadence"],
-        "duration_minutes": _optional_int(
-            metadata.get("planner_duration_minutes"),
+        "description": _optional_description(row),
+        "priority": row.get("priority"),
+        "estimated_minutes": _optional_int(row.get("estimated_minutes")),
+        "deadline_at": _optional_datetime(row.get("deadline")),
+        "preferred_session_minutes": _optional_int(
+            metadata.get("preferred_session_minutes"),
         ),
-    }
-
-
-def _target_summary_from_target(target: PlannerActionTarget) -> dict[str, Any]:
-    if isinstance(target, PlannerTaskTarget):
-        return {
-            "expected_updated_at": target.expected_updated_at,
-            "description": target.description,
-            "priority": target.priority,
-            "estimated_minutes": target.estimated_minutes,
-            "deadline_at": target.deadline_at,
-            "preferred_session_minutes": target.preferred_session_minutes,
-            "use_study_rhythm": target.use_study_rhythm,
-            "cadence": None,
-            "duration_minutes": None,
-        }
-    return {
-        "expected_updated_at": target.expected_updated_at,
-        "description": target.description,
-        "priority": None,
-        "estimated_minutes": None,
-        "deadline_at": None,
-        "preferred_session_minutes": None,
-        "use_study_rhythm": False,
-        "cadence": target.cadence,
-        "duration_minutes": target.duration_minutes,
+        "use_study_rhythm": metadata.get("use_study_rhythm") is True,
     }
 
 
@@ -1570,18 +2320,84 @@ def _fingerprint(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _attention_detail(reason: str) -> str:
+def _attention_detail(reason: str, *, preparation: bool = False) -> str:
+    noun = "preparation preview" if preparation else "preview"
     return {
-        "commitment_conflict": "A fixed commitment overlaps this plan.",
-        "target_released": "The target changed and its future slots were released.",
-        "calendar_changed": "Calendar busy time changed. Create a new preview.",
+        "target_changed": f"The target changed. Create a new {noun}.",
+        "calendar_changed": f"Calendar busy time changed. Create a new {noun}.",
         "timezone_changed": (
-            "The account timezone changed. Create and confirm a new preview."
+            f"The account timezone changed. Create and confirm a new {noun}."
         ),
         "study_rhythm_changed": (
-            "The Study rhythm changed. Create and confirm a new preview."
+            f"The Study rhythm changed. Create and confirm a new {noun}."
         ),
-    }.get(reason, "This plan needs a new preview before its times can be trusted.")
+    }.get(reason, f"This plan needs a new {noun} before its times can be trusted.")
+
+
+def _unplaced_detail(revision: PlannerActionRevision) -> str:
+    assert revision.unscheduled_minutes > 0
+    missing_inputs = isinstance(revision.target, PlannerTaskTarget) and any(
+        value is None
+        for value in (
+            revision.target.estimated_minutes,
+            revision.target.deadline_at,
+            revision.target.preferred_session_minutes,
+        )
+    )
+    return (
+        f"{revision.unscheduled_minutes} minutes still need scheduling inputs."
+        if missing_inputs
+        else f"{revision.unscheduled_minutes} minutes could not be placed."
+    )
+
+
+def _conflict_detail(
+    source: _ConflictSource,
+    *,
+    preparation: bool,
+) -> str:
+    noun = "preparation plan" if preparation else "plan"
+    source_copy = {
+        "setup": "A current Setup commitment",
+        "fixed_commitment": "A current fixed commitment",
+        "calendar": "A current imported Calendar event",
+    }[source]
+    return f"{source_copy} overlaps this {noun}. Nothing moved automatically."
+
+
+def _invalid_recurrence_detail(
+    values: Sequence[_InvalidRecurrence],
+    *,
+    timezone: str,
+) -> str:
+    contexts = sorted(
+        {
+            (value.source, value.local_date, value.local_time, value.reason)
+            for value in values
+        },
+        key=lambda value: (value[1], value[2], value[0], value[3]),
+    )
+    source_copy = {
+        "habit": "Saved Habit",
+        "setup": "Weekly Setup",
+        "fixed_commitment": "Weekly fixed commitment",
+    }
+    sources = sorted(
+        {source for source, _, _, _ in contexts},
+        key=("habit", "setup", "fixed_commitment").index,
+    )
+    labels = ", ".join(source_copy[source] for source in sources)
+    _, first_day, first_time, first_reason = contexts[0]
+    occurrence_copy = (
+        "That invalid occurrence was"
+        if len(contexts) == 1
+        else f"All {len(contexts)} invalid occurrences were"
+    )
+    return (
+        f"Invalid recurring times ({labels}) include {first_day.isoformat()} "
+        f"{first_time.isoformat(timespec='minutes')} ({first_reason}) in {timezone}. "
+        f"{occurrence_copy} omitted; nothing moved automatically."
+    )
 
 
 def _kind_order(value: str) -> int:

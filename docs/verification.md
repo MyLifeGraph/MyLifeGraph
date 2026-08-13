@@ -153,6 +153,8 @@ boundary explicitly owns verification requirements:
 | Exam-Week Outlook | `exam-week-outlook-v1` |
 | Executable action | `executable-action-v1` |
 | Personal Patterns | `personal-patterns-v1` |
+| Planner mutations | `planner-v1` |
+| Planner overview | `planner-overview-v2` |
 | Preparation workload | `preparation-workload-v1` |
 | Preparation workload detail | `preparation-workload-detail-v1` |
 | Sleep recommendation | `sleep-recommendation-v1` |
@@ -191,6 +193,31 @@ These files cover kind-specific placement, budget/busy/recovery/remainder/DST
 constraints, series windows, internal fingerprinting, and Flutter default/value
 retention. A focused pass is diagnostic and does not replace Fast, Web, or the
 task-base affected gate.
+
+For a focused Planner Overview V2 diagnostic, run:
+
+```bash
+cd services/ai_service
+./.venv/bin/python -m pytest -q \
+  tests/test_planner_service.py \
+  tests/test_planner_api.py \
+  tests/test_planner_repository.py \
+  tests/test_today_overview_service.py
+cd ../../apps/mobile
+"${FLUTTER_BIN:-flutter}" analyze
+"${FLUTTER_BIN:-flutter}" test \
+  test/planner_contract_test.dart \
+  test/planner_page_test.dart
+```
+
+This pair covers the strict V2 projection and cross-runtime parser, the
+unchanged V1 mutation seam, Planner/Today integration, guest call suppression,
+bidirectional Task lifecycle/reason relations, current-fact pending staleness,
+target-/preview-bound draft cleanup, post-mutation projection locks, and narrow
+large-text presentation. Changes limited to those application and
+documentation boundaries do not select the database lane because Overview V2
+adds no schema, migration, RLS, grant, or RPC; the captured task-base affected
+gate remains authoritative if another changed path broadens that scope.
 
 Database integration is deliberately separate. A deterministic fake Coach
 provider/process seam is mandatory for standard verification; Fast must not

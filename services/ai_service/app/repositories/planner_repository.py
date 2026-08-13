@@ -401,7 +401,8 @@ class SupabasePlannerRepository:
         tasks = await self._select_pages(
             "tasks",
             params={
-                "select": "id,title,description,status,priority,source,metadata,updated_at,deadline,estimated_minutes",
+                "select": "id,title,description,status,priority,source,metadata,"
+                "created_at,updated_at,deadline,estimated_minutes",
                 "user_id": f"eq.{user_id}",
                 "order": "created_at.asc,id.asc",
             },
@@ -410,7 +411,8 @@ class SupabasePlannerRepository:
         habits = await self._select_pages(
             "habits",
             params={
-                "select": "id,title,description,frequency,target,active,metadata,updated_at",
+                "select": "id,title,description,frequency,target,active,metadata,"
+                "created_at,updated_at",
                 "user_id": f"eq.{user_id}",
                 "order": "created_at.asc,id.asc",
             },
@@ -469,7 +471,7 @@ class SupabasePlannerRepository:
             "tasks",
             params={
                 "select": "id,title,description,status,priority,source,metadata,"
-                "updated_at,deadline,estimated_minutes",
+                "created_at,updated_at,deadline,estimated_minutes",
                 "user_id": f"eq.{user_id}",
                 "order": "created_at.asc,id.asc",
             },
@@ -828,7 +830,7 @@ class SupabasePlannerRepository:
             return PlannerCalendarProjection(
                 False,
                 connection_id,
-                import_id,
+                None,
                 [],
                 [],
             )
@@ -893,10 +895,7 @@ def _planner_habits(
             str(row.get("id") or ""),
         ),
     )
-    return [
-        {key: value for key, value in row.items() if key != "created_at"}
-        for row in rows[:1_001]
-    ]
+    return rows[:1_001]
 
 
 def _postgres_error(exc: httpx.HTTPStatusError) -> tuple[str | None, str]:

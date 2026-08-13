@@ -530,6 +530,56 @@
     },
     {
       "coverage": "shared_named",
+      "key": "plannerMutations",
+      "version": "planner-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/planner/domain/planner.dart",
+          "symbol": "plannerMutationContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/planner.py",
+          "symbol": "PLANNER_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/backend-roadmap.md",
+        "docs/current-product-guide.md",
+        "docs/planner-v1-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "plannerOverview",
+      "version": "planner-overview-v2",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/planner/domain/planner.dart",
+          "symbol": "plannerOverviewContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/planner.py",
+          "symbol": "PLANNER_OVERVIEW_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/backend-roadmap.md",
+        "docs/current-product-guide.md",
+        "docs/planner-v1-contract.md",
+        "docs/today-overview-v1-contract.md",
+        "docs/ui-language-and-copy-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
       "key": "preparationWorkload",
       "version": "preparation-workload-v1",
       "sources": [

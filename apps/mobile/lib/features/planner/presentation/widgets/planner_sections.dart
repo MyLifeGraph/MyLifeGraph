@@ -223,6 +223,7 @@ class PlannerExamWeekOutlookSection extends StatelessWidget {
     required this.onEveningCheckIn,
     required this.onReviewPlan,
     required this.onReplan,
+    this.enabled = true,
   });
 
   final AsyncValue<ExamWeekOutlook?> value;
@@ -230,6 +231,7 @@ class PlannerExamWeekOutlookSection extends StatelessWidget {
   final VoidCallback onEveningCheckIn;
   final ValueChanged<String> onReviewPlan;
   final ValueChanged<String> onReplan;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => value.when(
@@ -277,6 +279,7 @@ class PlannerExamWeekOutlookSection extends StatelessWidget {
             onEveningCheckIn: onEveningCheckIn,
             onReviewPlan: onReviewPlan,
             onReplan: onReplan,
+            enabled: enabled,
           );
         },
       );
@@ -288,12 +291,14 @@ class _ExamWeekOutlookCard extends StatelessWidget {
     required this.onEveningCheckIn,
     required this.onReviewPlan,
     required this.onReplan,
+    required this.enabled,
   });
 
   final ExamWeekOutlook outlook;
   final VoidCallback onEveningCheckIn;
   final ValueChanged<String> onReviewPlan;
   final ValueChanged<String> onReplan;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -430,8 +435,8 @@ class _ExamWeekOutlookCard extends StatelessWidget {
           for (final exam in outlook.exams) ...[
             _OutlookExamRow(
               exam: exam,
-              onReview: () => onReviewPlan(exam.planId),
-              onReplan: () => onReplan(exam.planId),
+              onReview: enabled ? () => onReviewPlan(exam.planId) : null,
+              onReplan: enabled ? () => onReplan(exam.planId) : null,
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
@@ -492,8 +497,8 @@ class _OutlookExamRow extends StatelessWidget {
   });
 
   final ExamWeekPlanOutlook exam;
-  final VoidCallback onReview;
-  final VoidCallback onReplan;
+  final VoidCallback? onReview;
+  final VoidCallback? onReplan;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -600,10 +605,12 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
     super.key,
     required this.items,
     required this.onOpen,
+    this.enabled = true,
   });
 
   final List<PlannerAttention> items;
   final ValueChanged<PlannerAttention> onOpen;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => AppCard(
@@ -621,7 +628,7 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
                 children: [
                   Icon(AppIcons.checkCircleOutline),
                   SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text('No conflicts or stale previews.')),
+                  Expanded(child: Text('Nothing currently needs review.')),
                 ],
               )
             else
@@ -645,7 +652,8 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
                               ? Text('${item.unplacedMinutes} min')
                               : null)
                       : const Icon(AppIcons.chevronRight),
-                  onTap: item.planId == null && item.target != 'study_setup'
+                  onTap: !enabled ||
+                          item.planId == null && item.target != 'study_setup'
                       ? null
                       : () => onOpen(item),
                 ),
@@ -659,10 +667,12 @@ class PlannerSevenDaySection extends StatelessWidget {
     super.key,
     required this.days,
     required this.onItemTap,
+    this.enabled = true,
   });
 
   final List<PlannerDay> days;
   final ValueChanged<PlannerDayItem> onItemTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -677,7 +687,9 @@ class PlannerSevenDaySection extends StatelessWidget {
           for (final day in days) ...[
             AppScheduleDayCard(
               localDate: day.localDate,
-              items: day.items.map(_plannerDayItemView).toList(growable: false),
+              items: day.items
+                  .map((item) => _plannerDayItemView(item, enabled: enabled))
+                  .toList(growable: false),
               emptyLabel: 'No planned or fixed items.',
               onItemTap: (view) => onItemTap(view.payload! as PlannerDayItem),
             ),
@@ -687,7 +699,10 @@ class PlannerSevenDaySection extends StatelessWidget {
       );
 }
 
-AppScheduleDayItem _plannerDayItemView(PlannerDayItem item) {
+AppScheduleDayItem _plannerDayItemView(
+  PlannerDayItem item, {
+  required bool enabled,
+}) {
   final visual = _visual(item.kind);
   final time = item.allDay
       ? 'All day'
@@ -704,12 +719,13 @@ AppScheduleDayItem _plannerDayItemView(PlannerDayItem item) {
     detail: time,
     category: visual.category,
     icon: visual.icon,
-    actionable: const {
-      'manual_commitment',
-      'task_block',
-      'habit_slot',
-      'preparation',
-    }.contains(item.kind),
+    actionable: enabled &&
+        const {
+          'manual_commitment',
+          'task_block',
+          'habit_slot',
+          'preparation',
+        }.contains(item.kind),
     payload: item,
   );
 }
@@ -719,10 +735,12 @@ class PlannerPreparationSection extends StatelessWidget {
     super.key,
     required this.plans,
     required this.onOpen,
+    this.enabled = true,
   });
 
   final List<PlannerPreparation> plans;
   final ValueChanged<PlannerPreparation> onOpen;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => AppCard(
@@ -750,46 +768,165 @@ class PlannerPreparationSection extends StatelessWidget {
                   trailing: plan.hasPendingPreview
                       ? const Chip(label: Text('Preview'))
                       : const Icon(AppIcons.chevronRight),
-                  onTap: () => onOpen(plan),
+                  onTap: enabled ? () => onOpen(plan) : null,
                 ),
           ],
         ),
       );
 }
 
-class PlannerUnscheduledSection extends StatelessWidget {
-  const PlannerUnscheduledSection({
+class PlannerPendingPreviewsSection extends StatelessWidget {
+  const PlannerPendingPreviewsSection({
     super.key,
-    required this.items,
+    required this.plans,
     required this.onOpen,
+    this.enabled = true,
   });
 
-  final List<PlannerUnscheduled> items;
-  final ValueChanged<PlannerUnscheduled> onOpen;
+  final List<PlannerActionPlan> plans;
+  final ValueChanged<PlannerActionPlan> onOpen;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => AppCard(
-        key: const ValueKey('planner-unscheduled'),
+        key: const ValueKey('planner-pending-previews'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unscheduled', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Pending previews',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Review every staged Task or Habit change before confirmation.',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final plan in plans)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  plan.targetKind == 'task'
+                      ? AppIcons.taskOutlined
+                      : AppIcons.repeatOutlined,
+                ),
+                title: Text(plan.pendingRevision!.targetTitle),
+                subtitle: Text(
+                  '${plan.targetKind == 'task' ? 'Task' : 'Habit'} preview · '
+                  '${plan.pendingRevision!.plannedMinutes} min placed',
+                ),
+                trailing: const Icon(AppIcons.chevronRight),
+                onTap: enabled ? () => onOpen(plan) : null,
+              ),
+          ],
+        ),
+      );
+}
+
+class PlannerHabitsSection extends StatelessWidget {
+  const PlannerHabitsSection({
+    super.key,
+    required this.items,
+    required this.onOpen,
+    this.enabled = true,
+  });
+
+  final List<PlannerHabitSummary> items;
+  final ValueChanged<PlannerHabitSummary> onOpen;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final unplanned =
+        items.where((item) => item.planningStatus == 'unplanned').length;
+    return AppCard(
+      key: const ValueKey('planner-habits'),
+      padding: EdgeInsets.zero,
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        title: const Text('Habits'),
+        subtitle: Text('${items.length} active · $unplanned unplanned'),
+        children: [
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('No active Habits.'),
+              ),
+            )
+          else
+            for (final item in items)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                ),
+                leading: const Icon(AppIcons.repeatOutlined),
+                title: Text(item.title),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_habitCadence(item)} · '
+                      '${item.durationMinutes == null ? 'duration not set' : '${item.durationMinutes} min'} · '
+                      '${item.planningStatus == 'scheduled' ? 'Scheduled' : 'Unplanned'}',
+                    ),
+                    if (item.ownership == 'setup' || item.hasPendingPreview)
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          if (item.ownership == 'setup')
+                            const Text('Managed in Setup'),
+                          if (item.hasPendingPreview)
+                            const Text('Preview ready'),
+                        ],
+                      ),
+                  ],
+                ),
+                trailing: const Icon(AppIcons.chevronRight),
+                onTap: enabled ? () => onOpen(item) : null,
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class PlannerUnscheduledTasksSection extends StatelessWidget {
+  const PlannerUnscheduledTasksSection({
+    super.key,
+    required this.items,
+    required this.onOpen,
+    this.enabled = true,
+  });
+
+  final List<PlannerUnscheduledTask> items;
+  final ValueChanged<PlannerUnscheduledTask> onOpen;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        key: const ValueKey('planner-unscheduled-tasks'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Unscheduled Tasks',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: AppSpacing.sm),
             if (items.isEmpty)
-              const Text('No open Tasks or Habits are waiting for a plan.')
+              const Text('No open Tasks are waiting for a plan.')
             else
               for (final item in items)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    item.kind == 'task'
-                        ? AppIcons.taskOutlined
-                        : AppIcons.repeatOutlined,
-                  ),
+                  leading: const Icon(AppIcons.taskOutlined),
                   title: Text(item.title),
                   subtitle: Text(_reason(item.reason)),
                   trailing: const Icon(AppIcons.chevronRight),
-                  onTap: () => onOpen(item),
+                  onTap: enabled ? () => onOpen(item) : null,
                 ),
           ],
         ),
@@ -799,7 +936,7 @@ class PlannerUnscheduledSection extends StatelessWidget {
 class PlannerHistorySection extends StatelessWidget {
   const PlannerHistorySection({super.key, required this.items});
 
-  final List<PlannerUnscheduled> items;
+  final List<PlannerHistoryItem> items;
 
   @override
   Widget build(BuildContext context) => AppCard(
@@ -940,8 +1077,19 @@ String _reason(String value) => switch (value) {
       'released' => 'Future reservations were released. Create a new preview.',
       'missing_scheduling_inputs' =>
         'Duration, exact deadline, or session length is missing.',
+      'no_time_available' =>
+        'No time was available within the current planning limits.',
       _ => 'No confirmed reservation.',
     };
+
+String _habitCadence(PlannerHabitSummary item) => switch (item.cadenceKind) {
+      'daily' => 'Daily',
+      'weekdays' => item.scheduledWeekdays.map(_weekdayShort).join(', '),
+      _ => '${item.weeklyTarget} times per week',
+    };
+
+String _weekdayShort(int value) =>
+    const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][value - 1];
 
 String _minutes(int value) {
   final hours = value ~/ 60;

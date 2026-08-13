@@ -126,10 +126,33 @@ multiple blocks never imply multiple required actions.
 ## Planner Copy
 
 Planner leads with `Add new`, followed by `Needs attention`, the next seven
-days, `Ongoing preparation`, `Unscheduled`, and collapsed history. Use `preview`
+days, `Ongoing preparation`, optional `Pending previews`, collapsed `Habits`,
+`Unscheduled Tasks`, and collapsed history under `planner-overview-v2`. The
+preview section contains every staged create and update and says
+`Review every staged Task or Habit change before confirmation.` The
+Habit summary is exactly `N active · X unplanned`; Setup-owned rows say
+`Managed in Setup`. Empty attention is exactly
+`Nothing currently needs review.` Use `preview`
 for a staged Action Plan and `Confirm plan` only for the deliberate reservation
 step. Unplaced time must use the exact remaining minutes. Conflicts say which
-saved source now overlaps and that nothing moves automatically.
+saved Setup, fixed-commitment, or current Calendar source now overlaps and that
+nothing moves automatically. `No time was available within the current
+planning limits.` is distinct from missing duration/deadline/session copy.
+An invalid recurring wall time names the saved Habit time, weekly Setup time,
+weekly fixed commitment, or affected combination, plus the affected local date
+and wall time and whether it was ambiguous or nonexistent.
+It says that only the invalid occurrence was omitted and that nothing moved
+automatically; it must not describe the omission as a conflict.
+
+After a conflict reload proves that the same exact pending preview is stale
+from current Task/Habit target, Calendar import/preference, timezone, or Study
+rhythm facts, the action is
+`Create new preview`. For a persisted target, its explanation says the student
+will review the latest saved details and that the old preview will be neither
+confirmed nor cancelled. For a pending create, it truthfully says no saved Task
+or Habit exists yet and that the preview values will be reviewed as a deliberate
+new item. Ordinary pending previews continue to use `Review plan preview`;
+ambiguous writes keep `Retry same change`.
 
 Task copy must not suggest scheduling unless duration, exact deadline, and
 preferred session length were explicitly entered. Calendar copy must say that

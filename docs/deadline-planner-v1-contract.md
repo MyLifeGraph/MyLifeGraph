@@ -325,6 +325,13 @@ fresh proposal followed by explicit confirmation can replace reservations.
 When no Study rhythm is configured, all prior block-splitting and zero-recovery
 behavior remains unchanged.
 
+`planner-overview-v2` projects Preparation attention without changing the
+public `deadline-plan-v1` payload. Active and pending revisions expose exact
+unplaced minutes; persisted `timezone_changed`, `target_changed`, Calendar, and
+Study reasons become stale-preview facts. Current overlaps distinguish Setup,
+fixed commitment, and current Calendar import. Read-time facts replace generic
+persisted conflict/unplaced duplicates and never replan or write.
+
 The ordered rule-based planning windows are frozen by
 `best_energy_window`:
 

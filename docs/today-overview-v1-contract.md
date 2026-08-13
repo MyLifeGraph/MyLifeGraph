@@ -396,6 +396,11 @@ projection are loaded once. Independent source families run with a fixed
 concurrency bound, while response assembly order, per-source failure isolation,
 and both wire contracts remain unchanged. The context is settled at request end
 and is never reused as a cross-request cache.
+The internal Planner branch now validates `planner-overview-v2`; Today keeps
+its own public wire version and continues to consume only Planner day/action
+facts. The new Habit and unscheduled-Task overview arrays do not alter Today
+selection, create duplicate progress targets, or add another authenticated
+guest/mock read.
 Today orders its local view of the shared active Habit rows by the established
 `updated_at DESC, id ASC` key; it does not mutate the shared value or Planner's
 separate `created_at ASC, id ASC` view.

@@ -214,6 +214,12 @@ active Planner Tasks that explicitly use Study rhythm appear under
 replace their reservations. Ordinary Planner Tasks, Habits, and all plans made
 without a Study rhythm retain their previous behavior.
 
+Under `planner-overview-v2`, every active Setup-owned Habit appears in the
+collapsed Habit overview even when it has no positive active slot. Planner may
+edit only its temporal duration/preview. The title, description, and cadence
+are presented read-only and their exact persisted values are resubmitted;
+Settings remains the sole definition authority.
+
 ## Course Selection Attention
 
 Planner evaluates the next semester's course-selection window using the

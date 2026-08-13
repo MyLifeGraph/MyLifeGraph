@@ -12,6 +12,7 @@ from app.models.planning_timing import PlanningTimingProvenance
 
 
 PLANNER_CONTRACT_VERSION = "planner-v1"
+PLANNER_OVERVIEW_CONTRACT_VERSION = "planner-overview-v2"
 PLANNER_PREFERENCES_CONTRACT_VERSION = "planner-preferences-v1"
 
 
@@ -173,7 +174,7 @@ class PlannerActionProposalRequest(BaseModel):
 
     request_id: UUID = Field(strict=False)
     plan_id: UUID = Field(strict=False)
-    base_revision: int = Field(ge=0)
+    base_revision: int = Field(ge=0, le=499)
     planning_start_on: date = Field(strict=False)
     target: PlannerActionTarget
 
@@ -194,7 +195,7 @@ class PlannerActionMutationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     request_id: UUID = Field(strict=False)
-    expected_revision: int = Field(ge=1)
+    expected_revision: int = Field(ge=1, le=500)
 
     @model_validator(mode="before")
     @classmethod
@@ -256,8 +257,8 @@ class PlannerHabitSlot(BaseModel):
 class PlannerActionRevision(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    revision: int = Field(ge=1)
-    base_revision: int = Field(ge=0)
+    revision: int = Field(ge=1, le=500)
+    base_revision: int = Field(ge=0, le=499)
     state: Literal["proposed", "active", "superseded"]
     target: PlannerActionTarget
     timezone: str = Field(min_length=1, max_length=100)
@@ -304,6 +305,11 @@ class PlannerActionRevision(BaseModel):
             raise ValueError("active planner revision timestamps are invalid")
         if self.state == "superseded" and self.superseded_at is None:
             raise ValueError("superseded planner revision requires a timestamp")
+        expected_child_state = "proposed" if self.state == "proposed" else self.state
+        if any(
+            block.state != expected_child_state for block in self.task_blocks
+        ) or any(slot.state != expected_child_state for slot in self.habit_slots):
+            raise ValueError("planner revision child state is inconsistent")
         if isinstance(self.target, PlannerTaskTarget):
             if self.habit_slots:
                 raise ValueError("task revision cannot contain habit slots")
@@ -319,8 +325,7 @@ class PlannerActionRevision(BaseModel):
                     or self.target.preferred_session_minutes is None
                     or any(
                         block.recovery_minutes != self.recovery_minutes
-                        or block.planned_minutes
-                        > self.target.preferred_session_minutes
+                        or block.planned_minutes > self.target.preferred_session_minutes
                         for block in self.task_blocks
                     )
                 ):
@@ -328,8 +333,7 @@ class PlannerActionRevision(BaseModel):
                 short = [
                     block
                     for block in self.task_blocks
-                    if block.planned_minutes
-                    < self.target.preferred_session_minutes
+                    if block.planned_minutes < self.target.preferred_session_minutes
                 ]
                 if short and short != self.task_blocks[-1:]:
                     raise ValueError("only the final Study Task block may be short")
@@ -356,8 +360,8 @@ class PlannerActionPlan(BaseModel):
     target_kind: Literal["task", "habit"]
     target_id: UUID
     status: Literal["draft", "active", "unscheduled", "cancelled"]
-    current_revision: int = Field(ge=0)
-    latest_revision: int = Field(ge=1)
+    current_revision: int = Field(ge=0, le=500)
+    latest_revision: int = Field(ge=1, le=500)
     needs_attention: bool
     attention_reasons: list[str] = Field(default_factory=list, max_length=12)
     active_revision: PlannerActionRevision | None
@@ -374,13 +378,71 @@ class PlannerActionPlan(BaseModel):
         if self.active_revision is not None:
             if self.active_revision.revision != self.current_revision:
                 raise ValueError("planner current revision is inconsistent")
-            if self.active_revision.target.kind != self.target_kind:
+            if self.active_revision.state != "active":
+                raise ValueError("planner active revision state is invalid")
+            if (
+                self.active_revision.target.kind != self.target_kind
+                or self.active_revision.target.target_id != self.target_id
+            ):
                 raise ValueError("planner target kind is inconsistent")
         if self.pending_revision is not None:
             if self.pending_revision.revision != self.latest_revision:
                 raise ValueError("planner latest revision is inconsistent")
             if self.pending_revision.state != "proposed":
                 raise ValueError("planner pending revision state is invalid")
+            if (
+                self.pending_revision.target.kind != self.target_kind
+                or self.pending_revision.target.target_id != self.target_id
+            ):
+                raise ValueError("planner pending target identity is invalid")
+            if self.pending_revision.revision <= self.current_revision:
+                raise ValueError("planner pending revision is not newer")
+        if self.status == "draft":
+            if (
+                self.current_revision != 0
+                or self.active_revision is not None
+                or self.pending_revision is None
+            ):
+                raise ValueError("planner draft lifecycle is inconsistent")
+        elif self.status == "active":
+            if (
+                self.current_revision == 0
+                or self.active_revision is None
+                or self.active_revision.planned_minutes == 0
+            ):
+                raise ValueError("planner active lifecycle is inconsistent")
+        elif self.status == "unscheduled":
+            if self.current_revision == 0:
+                if (
+                    self.active_revision is not None
+                    or self.pending_revision is not None
+                    or self.attention_reasons != ["target_released"]
+                ):
+                    raise ValueError("planner released lifecycle is inconsistent")
+            elif (
+                self.active_revision is None
+                or self.active_revision.planned_minutes != 0
+            ):
+                raise ValueError("planner unscheduled lifecycle is inconsistent")
+        elif (
+            self.current_revision != 0
+            or self.active_revision is not None
+            or self.pending_revision is not None
+            or self.attention_reasons
+        ):
+            raise ValueError("planner cancelled lifecycle is inconsistent")
+        if (
+            self.pending_revision is None
+            and self.current_revision > 0
+            and self.latest_revision != self.current_revision
+        ):
+            raise ValueError("planner terminal revision projection is inconsistent")
+        if (
+            self.pending_revision is not None
+            and self.pending_revision.target.operation == "create"
+            and not planner_plan_is_pending_create(self)
+        ):
+            raise ValueError("planner pending create lifecycle is inconsistent")
         return self
 
 
@@ -584,6 +646,13 @@ class PlannerAttentionItem(BaseModel):
     detail: str = Field(min_length=1, max_length=240)
     plan_id: UUID | None
     unplaced_minutes: int = Field(ge=0)
+    conflict_source: Literal["setup", "fixed_commitment", "calendar"] | None = None
+
+    @model_validator(mode="after")
+    def validate_conflict_source(self) -> Self:
+        if (self.kind == "conflict") != (self.conflict_source is not None):
+            raise ValueError("planner conflict origin is inconsistent")
+        return self
 
 
 class PlannerPreparationSummary(BaseModel):
@@ -602,59 +671,97 @@ class PlannerPreparationSummary(BaseModel):
         return self
 
 
-class PlannerUnscheduledItem(BaseModel):
+class PlannerTaskSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    id: UUID
+    title: str = Field(min_length=1, max_length=160)
+    expected_updated_at: datetime
+    description: str | None = Field(default=None, max_length=2_000)
+    priority: Literal["low", "medium", "high", "critical"]
+    estimated_minutes: int | None = Field(default=None, ge=5, le=480)
+    deadline_at: datetime | None
+    preferred_session_minutes: int | None = Field(default=None, ge=5, le=240)
+    use_study_rhythm: bool
+
+    @model_validator(mode="after")
+    def validate_task(self) -> Self:
+        _trimmed(self.title, "task summary title")
+        _trimmed_or_none(self.description, "task summary description")
+        _aware_or_none(self.expected_updated_at, "task summary version")
+        _aware_or_none(self.deadline_at, "task summary deadline")
+        if self.preferred_session_minutes is not None and (
+            self.preferred_session_minutes % 5 != 0
+        ):
+            raise ValueError("task summary session must use five-minute steps")
+        return self
+
+
+class PlannerUnscheduledTask(PlannerTaskSummary):
+    reason: Literal[
+        "not_planned",
+        "released",
+        "missing_scheduling_inputs",
+        "no_time_available",
+    ]
+
+    @model_validator(mode="after")
+    def validate_reason(self) -> Self:
+        missing_inputs = any(
+            value is None
+            for value in (
+                self.estimated_minutes,
+                self.deadline_at,
+                self.preferred_session_minutes,
+            )
+        )
+        if self.reason == "missing_scheduling_inputs" and not missing_inputs:
+            raise ValueError("unscheduled task reason is inconsistent")
+        if self.reason in {"not_planned", "no_time_available"} and missing_inputs:
+            raise ValueError("unscheduled task reason is inconsistent")
+        return self
+
+
+class PlannerHabitSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    id: UUID
+    title: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=2_000)
+    expected_updated_at: datetime
+    ownership: Literal["manual", "setup"]
+    cadence: PlannerHabitCadence
+    duration_minutes: int | None = Field(default=None, ge=5, le=240)
+    planning_status: Literal["scheduled", "unplanned"]
+    plan_id: UUID | None
+    has_pending_preview: bool
+
+    @model_validator(mode="after")
+    def validate_habit(self) -> Self:
+        _trimmed(self.title, "habit title")
+        _trimmed_or_none(self.description, "habit description")
+        _aware_or_none(self.expected_updated_at, "habit version")
+        if self.duration_minutes is not None and self.duration_minutes % 5 != 0:
+            raise ValueError("habit duration must use five-minute steps")
+        if self.planning_status == "scheduled" and self.plan_id is None:
+            raise ValueError("scheduled habit requires a plan")
+        if self.has_pending_preview and self.plan_id is None:
+            raise ValueError("pending habit preview requires a plan")
+        return self
+
+
+class PlannerHistoryItem(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     id: UUID
     kind: Literal["task", "habit"]
     title: str = Field(min_length=1, max_length=160)
-    reason: Literal["not_planned", "released", "missing_scheduling_inputs"]
-    expected_updated_at: datetime | None
-    description: str | None = Field(default=None, max_length=2_000)
-    priority: Literal["low", "medium", "high", "critical"] | None
-    estimated_minutes: int | None = Field(default=None, ge=5, le=480)
-    deadline_at: datetime | None
-    preferred_session_minutes: int | None = Field(default=None, ge=5, le=240)
-    use_study_rhythm: bool
-    cadence: PlannerHabitCadence | None
-    duration_minutes: int | None = Field(default=None, ge=5, le=240)
-
-    @model_validator(mode="after")
-    def validate_target_summary(self) -> Self:
-        _trimmed(self.title, "unscheduled target title")
-        _trimmed_or_none(self.description, "unscheduled target description")
-        _aware_or_none(self.expected_updated_at, "unscheduled target version")
-        _aware_or_none(self.deadline_at, "unscheduled task deadline")
-        if self.preferred_session_minutes is not None and (
-            self.preferred_session_minutes % 5 != 0
-        ):
-            raise ValueError("unscheduled task session must use five-minute steps")
-        if self.duration_minutes is not None and self.duration_minutes % 5 != 0:
-            raise ValueError("unscheduled habit duration must use five-minute steps")
-        if self.kind == "task":
-            if (
-                self.priority is None
-                or self.cadence is not None
-                or self.duration_minutes is not None
-            ):
-                raise ValueError("unscheduled task summary is inconsistent")
-        elif self.use_study_rhythm or any(
-            value is not None
-            for value in (
-                self.priority,
-                self.estimated_minutes,
-                self.deadline_at,
-                self.preferred_session_minutes,
-            )
-        ) or self.cadence is None:
-            raise ValueError("unscheduled habit summary is inconsistent")
-        return self
 
 
 class PlannerOverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["planner-v1"]
+    contract_version: Literal["planner-overview-v2"]
     origin: Literal["authenticated_backend"]
     generated_at: datetime
     timezone: str = Field(min_length=1, max_length=100)
@@ -677,11 +784,19 @@ class PlannerOverviewResponse(BaseModel):
         default_factory=list,
         max_length=50,
     )
-    unscheduled: list[PlannerUnscheduledItem] = Field(
+    habits: list[PlannerHabitSummary] = Field(
         default_factory=list,
         max_length=1_000,
     )
-    history: list[PlannerUnscheduledItem] = Field(
+    task_targets: list[PlannerTaskSummary] = Field(
+        default_factory=list,
+        max_length=1_000,
+    )
+    unscheduled_tasks: list[PlannerUnscheduledTask] = Field(
+        default_factory=list,
+        max_length=1_000,
+    )
+    history: list[PlannerHistoryItem] = Field(
         default_factory=list,
         max_length=1_000,
     )
@@ -701,7 +816,210 @@ class PlannerOverviewResponse(BaseModel):
         ]
         if [day.local_date for day in self.days] != expected_days:
             raise ValueError("planner overview must contain seven consecutive days")
+        for values, label in (
+            (self.habits, "habits"),
+            (self.task_targets, "task targets"),
+            (self.unscheduled_tasks, "unscheduled tasks"),
+        ):
+            if len({str(value.id) for value in values}) != len(values):
+                raise ValueError(f"planner {label} identities must be unique")
+        if len({(value.kind, str(value.id)) for value in self.history}) != len(
+            self.history,
+        ):
+            raise ValueError("planner history identities must be unique")
+        task_history_ids = {value.id for value in self.history if value.kind == "task"}
+        if task_history_ids & {value.id for value in self.task_targets}:
+            raise ValueError(
+                "planner current tasks and task history must be disjoint"
+            )
+        habit_history_ids = {
+            value.id for value in self.history if value.kind == "habit"
+        }
+        if habit_history_ids & {value.id for value in self.habits}:
+            raise ValueError("planner active habits and habit history must be disjoint")
+        plan_by_target: dict[tuple[str, UUID], PlannerActionPlan] = {}
+        for plan in self.action_plans:
+            key = (plan.target_kind, plan.target_id)
+            if key in plan_by_target:
+                raise ValueError("planner action-plan targets must be unique")
+            plan_by_target[key] = plan
+        for habit in self.habits:
+            plan = plan_by_target.get(("habit", habit.id))
+            if (
+                plan is not None
+                and plan.pending_revision is not None
+                and plan.pending_revision.target.operation == "create"
+            ):
+                raise ValueError("persisted habit is bound to a create preview")
+            active_slots = (
+                sum(
+                    1
+                    for slot in plan.active_revision.habit_slots
+                    if slot.state == "active" and slot.duration_minutes > 0
+                )
+                if plan is not None and plan.active_revision is not None
+                else 0
+            )
+            if (
+                habit.plan_id != (plan.id if plan is not None else None)
+                or habit.has_pending_preview
+                != (plan is not None and plan.pending_revision is not None)
+                or (habit.planning_status == "scheduled") != (active_slots > 0)
+            ):
+                raise ValueError("planner habit plan relation is inconsistent")
+        task_target_by_id = {task.id: task for task in self.task_targets}
+        unscheduled_by_id = {task.id: task for task in self.unscheduled_tasks}
+        for task in self.task_targets:
+            plan = plan_by_target.get(("task", task.id))
+            if (
+                plan is not None
+                and plan.pending_revision is not None
+                and plan.pending_revision.target.operation == "create"
+            ):
+                raise ValueError("persisted task is bound to a create preview")
+            active_minutes = planner_active_task_minutes(plan)
+            unscheduled = unscheduled_by_id.get(task.id)
+            if (unscheduled is None) != (active_minutes > 0):
+                raise ValueError(
+                    "planner task reservation relation is inconsistent"
+                )
+            if unscheduled is not None:
+                expected_reason = planner_unscheduled_task_reason(task, plan)
+                if unscheduled.reason != expected_reason:
+                    raise ValueError(
+                        "planner unscheduled task reason is inconsistent"
+                    )
+        for task in self.unscheduled_tasks:
+            current = task_target_by_id.get(task.id)
+            if current is None or current.model_dump() != task.model_dump(
+                exclude={"reason"}
+            ):
+                raise ValueError(
+                    "planner unscheduled task target snapshot is inconsistent"
+                )
+            plan = plan_by_target.get(("task", task.id))
+            if (
+                plan is not None
+                and plan.pending_revision is not None
+                and plan.pending_revision.target.operation == "create"
+            ):
+                raise ValueError("persisted task is bound to a create preview")
+            active_minutes = planner_active_task_minutes(plan)
+            if active_minutes > 0:
+                raise ValueError("unscheduled task has an active reservation")
+        for item in self.history:
+            plan = plan_by_target.get((item.kind, item.id))
+            if (
+                plan is not None
+                and plan.pending_revision is not None
+                and plan.pending_revision.target.operation == "create"
+            ):
+                raise ValueError("persisted history is bound to a create preview")
+            if plan is not None and not planner_plan_is_released_or_cancelled(plan):
+                raise ValueError(
+                    f"planner historical {item.kind} plan lifecycle is inconsistent"
+                )
+        represented_target_ids = {
+            *(('task', target_id) for target_id in task_target_by_id),
+            *(('habit', habit.id) for habit in self.habits),
+            *((item.kind, item.id) for item in self.history),
+        }
+        for plan in self.action_plans:
+            if planner_plan_is_pending_create(
+                plan
+            ) or planner_plan_is_cancelled_tombstone(plan):
+                continue
+            if (plan.target_kind, plan.target_id) not in represented_target_ids:
+                raise ValueError(
+                    "planner persisted action plan has no target snapshot"
+                )
         return self
+
+
+def planner_plan_is_pending_create(plan: PlannerActionPlan) -> bool:
+    pending = plan.pending_revision
+    return (
+        plan.status == "draft"
+        and plan.current_revision == 0
+        and plan.active_revision is None
+        and pending is not None
+        and pending.target.operation == "create"
+        and pending.revision == plan.latest_revision
+    )
+
+
+def planner_plan_is_cancelled_tombstone(plan: PlannerActionPlan) -> bool:
+    return (
+        plan.status == "cancelled"
+        and plan.current_revision == 0
+        and 1 <= plan.latest_revision <= 500
+        and plan.active_revision is None
+        and plan.pending_revision is None
+        and not plan.attention_reasons
+    )
+
+
+def planner_active_task_minutes(plan: PlannerActionPlan | None) -> int:
+    revision = plan.active_revision if plan is not None else None
+    if revision is None or not isinstance(revision.target, PlannerTaskTarget):
+        return 0
+    return sum(
+        block.planned_minutes
+        for block in revision.task_blocks
+        if block.state == "active"
+    )
+
+
+def planner_plan_is_released_or_cancelled(
+    plan: PlannerActionPlan | None,
+) -> bool:
+    if plan is None:
+        return False
+    return (
+        plan.current_revision == 0
+        and plan.active_revision is None
+        and plan.pending_revision is None
+        and (
+            (
+                plan.status == "unscheduled"
+                and plan.attention_reasons == ["target_released"]
+            )
+            or (plan.status == "cancelled" and not plan.attention_reasons)
+        )
+    )
+
+
+def planner_task_plan_is_released(plan: PlannerActionPlan | None) -> bool:
+    return planner_plan_is_released_or_cancelled(plan)
+
+
+def planner_unscheduled_task_reason(
+    task: PlannerTaskSummary,
+    plan: PlannerActionPlan | None,
+) -> Literal[
+    "not_planned",
+    "released",
+    "missing_scheduling_inputs",
+    "no_time_available",
+]:
+    if planner_task_plan_is_released(plan):
+        return "released"
+    if any(
+        value is None
+        for value in (
+            task.estimated_minutes,
+            task.deadline_at,
+            task.preferred_session_minutes,
+        )
+    ):
+        return "missing_scheduling_inputs"
+    if (
+        plan is not None
+        and plan.active_revision is not None
+        and plan.active_revision.unscheduled_minutes > 0
+    ):
+        return "no_time_available"
+    return "not_planned"
 
 
 def _commitment_shape(value: object) -> None:

@@ -178,6 +178,13 @@ import timezone differs from the profile starts as
 current revision. Disconnect and local deletion remain separate, readable
 lifecycle states.
 
+The `planner-overview-v2` reload projection uses that same status for displayed
+Calendar facts and source-specific conflicts. It derives scheduled Task/Habit
+state from positive active reservations, preserves confirmed zero-placement as
+`no_time_available`, and reports a partial active plan's exact remaining
+minutes once. Persisted `target_released`, generic conflict, and unplaced reason
+codes cannot create a second read-time attention item.
+
 ## Setup-Owned And Manual Row Integrity
 
 Database triggers prevent application roles from creating Setup/Intake
@@ -205,6 +212,15 @@ local date, then both boundaries are resolved independently. Proposal and
 confirmation fail closed on an invalid source. Planner reports attention;
 Today marks only the affected source unavailable and retains independent
 sources.
+
+The Planner Overview read is resilient across its bounded recurrence horizon.
+If a confirmed Habit slot, applicable weekly Setup row, or weekly manual fixed
+commitment has one ambiguous or nonexistent occurrence, only that occurrence is
+omitted. Other resolvable occurrences and conflict checks remain current. Each
+affected Action or Preparation Plan receives one deduplicated read-only
+attention item naming every affected source kind, the local date and wall time,
+resolution reason, and explicit no-automatic-move truth; the invalid occurrence
+is never projected as a conflict.
 
 ## Observed Projection Consistency
 
@@ -254,7 +270,25 @@ Planner uses `current`, `refreshingAfterMutation`, and
 `projectionCurrent`. After a committed write and failed overview reload, the
 old overview stays visible, all derived mutation controls are disabled, and
 the app shows `Change saved. Planner could not reload.` The only retry reloads
-the overview; it never resends the mutation.
+the overview; it never resends the mutation. A committed proposal or
+confirmation cannot open a preview or success path until that reload proves
+the exact persisted result. Before submission Flutter records the exact
+proposal body and retained/source-draft identities under the generated
+`request_id`. For an ambiguous proposal, reload consults only that request-bound
+attempt and binds it after a freshly read pending plan matches its plan/target
+identity, base-to-pending revision, operation, and complete target snapshot;
+otherwise it binds nothing before clearing retry state. No global retained-draft
+candidate search participates. Pending-preview staleness is recalculated from
+current target, Calendar/import preference, timezone, and Study revision;
+persisted reasons from older revisions remain history rather than a freshness
+claim about the newest pending proposal.
+Exact retry returns its original mutation identity with a classified outcome.
+Repeated ambiguity retains the same proposal-attempt binding; a definitive
+conflict removes only the attempt's identity-owned source replacement, while an
+ordinary deterministic rejection removes the attempt and leaves the exact
+source draft editable. Confirmation likewise uses identity ownership, so an
+edit that replaced the bound draft cannot be erased by the older preview's
+completion.
 
 Today derives authenticated Task/Habit mutation dates only from
 `DashboardSnapshot.localDate`. After a durable write it refreshes the Snapshot

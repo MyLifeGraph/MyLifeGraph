@@ -157,7 +157,8 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Add Task'),
+        title:
+            Text(widget.initial?.targetId == null ? 'Add Task' : 'Plan Task'),
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(
@@ -171,6 +172,7 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
                   decoration: const InputDecoration(labelText: 'Title *'),
                 ),
                 TextField(
+                  key: const ValueKey('planner-task-description'),
                   controller: _description,
                   maxLength: 2000,
                   maxLines: 3,
@@ -179,6 +181,7 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
                   ),
                 ),
                 DropdownButtonFormField<String>(
+                  key: const ValueKey('planner-task-priority'),
                   initialValue: _priority,
                   decoration: const InputDecoration(labelText: 'Priority'),
                   items: const [
@@ -342,9 +345,14 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
 }
 
 class PlannerHabitDialog extends StatefulWidget {
-  const PlannerHabitDialog({super.key, required this.initial});
+  const PlannerHabitDialog({
+    super.key,
+    required this.initial,
+    this.definitionReadOnly = false,
+  }) : assert(!definitionReadOnly || initial != null);
 
   final PlannerHabitDraft? initial;
+  final bool definitionReadOnly;
 
   @override
   State<PlannerHabitDialog> createState() => _HabitDialogState();
@@ -383,7 +391,9 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Add Habit'),
+        title: Text(
+          widget.initial?.targetId == null ? 'Add Habit' : 'Plan Habit',
+        ),
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(
@@ -391,37 +401,58 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
-                  key: const ValueKey('planner-habit-title'),
-                  controller: _title,
-                  maxLength: 160,
-                  decoration: const InputDecoration(labelText: 'Title *'),
-                ),
-                TextField(
-                  controller: _description,
-                  maxLength: 2000,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Description (optional)',
+                if (widget.definitionReadOnly) ...[
+                  const Text(
+                    'Managed in Setup',
+                    key: ValueKey('planner-habit-managed-in-setup'),
                   ),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: _cadence,
-                  decoration: const InputDecoration(labelText: 'Cadence *'),
-                  items: const [
-                    DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                    DropdownMenuItem(
-                      value: 'weekdays',
-                      child: Text('Selected weekdays'),
+                  const SizedBox(height: AppSpacing.xs),
+                  const Text(
+                    'Title, description, and cadence stay managed in Settings. You can change the duration used for this preview.',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+                if (widget.definitionReadOnly) ...[
+                  _ReadOnlyHabitDefinition(
+                    title: widget.initial!.title,
+                    description: widget.initial!.description,
+                    cadence: _habitCadenceLabel(widget.initial!),
+                  ),
+                ] else ...[
+                  TextField(
+                    key: const ValueKey('planner-habit-title'),
+                    controller: _title,
+                    maxLength: 160,
+                    decoration: const InputDecoration(labelText: 'Title *'),
+                  ),
+                  TextField(
+                    key: const ValueKey('planner-habit-description'),
+                    controller: _description,
+                    maxLength: 2000,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Description (optional)',
                     ),
-                    DropdownMenuItem(
-                      value: 'weekly_target',
-                      child: Text('Times per week'),
-                    ),
-                  ],
-                  onChanged: (value) => setState(() => _cadence = value),
-                ),
-                if (_cadence == 'weekdays') ...[
+                  ),
+                  DropdownButtonFormField<String>(
+                    key: const ValueKey('planner-habit-cadence'),
+                    initialValue: _cadence,
+                    decoration: const InputDecoration(labelText: 'Cadence *'),
+                    items: const [
+                      DropdownMenuItem(value: 'daily', child: Text('Daily')),
+                      DropdownMenuItem(
+                        value: 'weekdays',
+                        child: Text('Selected weekdays'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'weekly_target',
+                        child: Text('Times per week'),
+                      ),
+                    ],
+                    onChanged: (value) => setState(() => _cadence = value),
+                  ),
+                ],
+                if (!widget.definitionReadOnly && _cadence == 'weekdays') ...[
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(
                     spacing: AppSpacing.xs,
@@ -440,7 +471,7 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
                     ],
                   ),
                 ],
-                if (_cadence == 'weekly_target')
+                if (!widget.definitionReadOnly && _cadence == 'weekly_target')
                   DropdownButtonFormField<int>(
                     initialValue: _weeklyTarget,
                     decoration:
@@ -491,7 +522,9 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
       );
 
   void _submit() {
-    final title = _title.text.trim();
+    final initial = widget.initial;
+    final title =
+        widget.definitionReadOnly ? initial!.title : _title.text.trim();
     final duration = int.tryParse(_duration.text.trim());
     if (title.isEmpty || _cadence == null) {
       setState(() => _error = 'Enter a title and choose a cadence.');
@@ -512,12 +545,21 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
       context,
       PlannerHabitDraft(
         title: title,
-        description:
-            _description.text.trim().isEmpty ? null : _description.text.trim(),
-        cadenceKind: _cadence!,
-        scheduledWeekdays:
-            _cadence == 'weekdays' ? (_weekdays.toList()..sort()) : const [],
-        weeklyTarget: _cadence == 'weekly_target' ? _weeklyTarget : 1,
+        description: widget.definitionReadOnly
+            ? initial!.description
+            : (_description.text.trim().isEmpty
+                ? null
+                : _description.text.trim()),
+        cadenceKind:
+            widget.definitionReadOnly ? initial!.cadenceKind : _cadence!,
+        scheduledWeekdays: widget.definitionReadOnly
+            ? initial!.scheduledWeekdays
+            : (_cadence == 'weekdays'
+                ? (_weekdays.toList()..sort())
+                : const []),
+        weeklyTarget: widget.definitionReadOnly
+            ? initial!.weeklyTarget
+            : (_cadence == 'weekly_target' ? _weeklyTarget : 1),
         durationMinutes: duration,
         targetId: widget.initial?.targetId,
         expectedUpdatedAt: widget.initial?.expectedUpdatedAt,
@@ -525,6 +567,69 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
     );
   }
 }
+
+class _ReadOnlyHabitDefinition extends StatelessWidget {
+  const _ReadOnlyHabitDefinition({
+    required this.title,
+    required this.description,
+    required this.cadence,
+  });
+
+  final String title;
+  final String? description;
+  final String cadence;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        key: const ValueKey('planner-habit-read-only-definition'),
+        container: true,
+        label: _habitDefinitionSemanticsLabel(
+          title: title,
+          description: description,
+          cadence: cadence,
+        ),
+        readOnly: true,
+        child: ExcludeSemantics(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Title', style: Theme.of(context).textTheme.labelLarge),
+              Text(title),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Description',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              Text(description ?? 'None'),
+              const SizedBox(height: AppSpacing.sm),
+              Text('Cadence', style: Theme.of(context).textTheme.labelLarge),
+              Text(cadence),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+          ),
+        ),
+      );
+}
+
+String _habitDefinitionSemanticsLabel({
+  required String title,
+  required String? description,
+  required String cadence,
+}) {
+  final spokenDescription = (description ?? 'none').replaceFirst(
+    RegExp(r'[.!?;:]+$'),
+    '',
+  );
+  return 'Habit definition: title $title; description $spokenDescription; '
+      'cadence $cadence.';
+}
+
+String _habitCadenceLabel(PlannerHabitDraft habit) =>
+    switch (habit.cadenceKind) {
+      'daily' => 'Daily',
+      'weekdays' => habit.scheduledWeekdays.map(_weekdayLabel).join(', '),
+      _ => '${habit.weeklyTarget} times per week',
+    };
 
 class PlannerCommitmentDialog extends StatefulWidget {
   const PlannerCommitmentDialog({super.key, required this.initial});

@@ -1,6 +1,7 @@
-# Planner V1 Contract
+# Planner V1 Mutation And Overview V2 Contract
 
-Status: implemented, including the Study Setup, shell-navigation, read-only
+Status: implemented, including `planner-overview-v2`, the unchanged
+`planner-v1` mutations, Study Setup, shell-navigation, read-only
 Exam-Week Outlook, optional Personal Learning timing, and focused Replanning
 follow-ups, as of 2026-07-30.
 
@@ -44,12 +45,41 @@ Planner renders:
    open/overdue course selection;
 3. seven consecutive profile-local days;
 4. `Ongoing preparation`;
-5. `Unscheduled`; and
-6. collapsed completed and archived history.
+5. a separate, initially collapsed `Habits` overview;
+6. `Unscheduled Tasks`; and
+7. collapsed completed and archived history.
+
+Every pending create or update remains discoverable in a separate
+`Pending previews` section derived from `action_plans` until the student
+confirms it. Pending creates are not persisted Tasks or Habits. The Habit
+header uses the exact summary
+`N active · X unplanned`. It includes every active manual and Setup-owned Habit;
+`scheduled` means that a positive active Habit slot exists, not merely that an
+action-plan revision exists. Duration is nullable when no current persisted or
+active-plan value exists. Setup-owned rows show `Managed in Setup`: title,
+description, and cadence are readable but immutable in Planner, while duration
+may be changed through a new preview carrying the original definition exactly.
+
+`Unscheduled Tasks` includes only persisted open, non-Preparation Tasks with no
+positive active Task-block reservation. It distinguishes missing scheduling
+inputs, a released plan, genuine zero-placement capacity (`no_time_available`),
+and a Task that has never been planned. A partially placed active plan remains
+scheduled and reports its exact remaining active minutes once under
+`Needs attention`. A confirmed zero-minute plan reloads as
+`no_time_available`; pending creates never contaminate this list.
+Every open `task_targets` row appears exactly once in `unscheduled_tasks` if
+and only if it has no positive active reservation. Its reason is derived in
+the fixed order released plan, missing inputs, zero-placement capacity, then
+never planned. Every non-create Task plan must resolve to the current Task
+snapshot or a lifecycle-consistent released/cancelled historical Task. An
+inactive Habit with a plan follows the same history rule; an active plan cannot
+be projected against an inactive Habit. The current and historical identity
+sets remain disjoint within each target kind.
 
 The seven-day agenda distinguishes Setup commitments, manual fixed
 commitments, Task blocks, Habit slots, Preparation blocks, and current imported
-Calendar events with icon, text, and color. Setup-owned definitions still
+Calendar events with icon, text, and color. Imported events appear only when
+the planning import is currently authoritative. Setup-owned definitions still
 belong to Settings. Exam and Assignment creation continues through the strict
 Deadline Planner boundary. Selecting `Exam` opens the existing single-plan
 editor with Exam already fixed. Selecting `Assignment` opens the additive
@@ -138,11 +168,99 @@ side-effect free. A read may derive current conflict attention but never stores
 a revision, moves a block, changes a target, or refreshes another product
 projection. A new immutable revision exists only after an explicit proposal.
 
+`GET /v1/planner/overview` returns `planner-overview-v2`; action-plan and
+commitment mutation responses remain `planner-v1`. V2 removes the mixed
+`unscheduled` array and returns strict `habits`, `task_targets`,
+`unscheduled_tasks`, and compact `history` arrays. `task_targets` is the
+read-only authoritative snapshot of every current open non-Preparation Task,
+including scheduled Tasks; it does not create another visible Task section.
+Every `unscheduled_tasks` row must match its `task_targets` snapshot exactly.
+Both runtimes reject duplicate target plans and inconsistent Habit-plan,
+pending-preview, active-slot, or unscheduled-Task relations. A persisted Task
+cannot appear in both `task_targets` and Task history, and an active Habit
+cannot also appear in Habit history. Every open Task without positive active
+minutes appears exactly once in `unscheduled_tasks`; a positive active
+reservation excludes it. The exact reason precedence is `released`,
+`missing_scheduling_inputs`, `no_time_available`, then `not_planned`, and a
+historical Task or Habit may reference only a matching released/cancelled plan.
+Every persisted Task or Habit plan resolves to the matching current or
+historical target snapshot. Action-plan status is itself a strict lifecycle: a
+pending create is exempt from a persisted target only while it is `draft`, has
+`current_revision = 0`, no active revision, and a latest proposed create
+revision; released plans are `unscheduled` with only `target_released`, while
+cancelled plans have revision zero, no active or pending revision, and no
+attention reason. The only reverse-relation tombstone exception is that exact
+cancelled shape with `latest_revision` inside the persisted `1..500` bound. An
+actually released former active plan is `unscheduled` with `target_released`
+and still requires its matching historical snapshot; every near shape fails
+closed. The bounded `history` projection first keeps
+every snapshot required by a plan relation, then fills the remaining positions
+in repository `created_at`, identity order; more than 1,000 required snapshots
+fails closed instead of returning a broken relation. Task and Habit identities
+remain separate namespaces, so the same UUID across those two kinds is valid.
+
 Flutter and FastAPI reject unknown keys, coerced identities/dates/times,
 invalid unions, inconsistent minute totals, invalid lifecycle projections, and
-calendar/source mismatches. Ambiguous transport failure retains the exact
+calendar/source mismatches. Plan current/latest revisions and immutable
+revisions are bounded at 500, proposal bases at 499, and confirm/cancel expected
+revisions at 500, matching the SQL checks. An active plan contains an exact
+`active` revision whose Task blocks or Habit slots are also `active`; pending
+revision children are `proposed`. Ambiguous transport failure retains the exact
 request identity and body for unchanged retry; an exact `409` requires reload
-and a new preview.
+and a new preview. Before submission Flutter records one proposal-attempt
+binding under the exact generated `request_id`; it contains the immutable
+request body, retained draft owner, and exact source plan/revision for a stale
+replacement. The visible header reload never replays the mutation. After an
+ambiguous result it looks up only that request-bound attempt and compares its
+plan, target, base-to-pending revision, operation, and complete target snapshot
+with the freshly read pending revision. An exact match transfers the binding to
+that one preview before retry state is cleared; a non-match binds nothing,
+performs no global draft-candidate search, and replays no mutation. A failed
+read keeps any required
+exact-retry or conflict lock, and an ordinary error-free header reload remains
+a simple overview read. When that fresh overview still
+contains the same pending revision with a current target-, Calendar-,
+timezone-, or Study-stale attention identity for that exact revision, opening
+it offers `Create new preview` instead of another confirmation. Long-lived
+persisted attention reasons describe older events and are suppressed while a
+pending revision exists; only the current target version/lifecycle, Calendar
+preference and import, profile timezone, and applicable Study revision decide
+whether that pending preview is stale. With no pending revision, truthful
+persisted attention remains visible. The replacement first opens the editor:
+a persisted Task or manual Habit starts entirely from its current authoritative snapshot, never
+from an older editable draft paired with a fresh timestamp. A Setup-owned Habit
+uses the current immutable definition and timestamp while retaining only its
+target-bound duration draft. A stale pending create has no persisted target;
+the editor is prefilled from that preview as an explicitly reviewed new create
+without `expected_updated_at`. Submission uses a new request identity and the
+applicable latest base revision. It neither confirms nor cancels the stale
+revision. A normal non-stale pending revision remains directly reviewable, and
+an ambiguous result keeps its exact-retry path.
+
+An exact proposal retry returns the outcome classification together with the
+original request identity instead of consulting a now-cleared mutation slot.
+Another ambiguous result keeps the same attempt. A definitive `409` removes
+that request attempt and removes its source-replacement draft only when the
+currently stored draft is the identical one owned by the attempt. An ordinary
+deterministic non-conflict rejection removes the request attempt but retains
+the exact source draft for editing. Successful confirmation applies the same
+identity check: a newer replacement for that source survives, while an unsent
+replacement for the confirmed source preview itself is still cleared.
+
+Task and manual-Habit editable values are retained by target before a proposal
+and by exact plan/revision after a proposal; they are never global drafts. A
+stale-replacement edit is separately bound to the exact stale plan/revision and
+target version (or exact create preview), so Availability Back and an ordinary
+proposal failure reopen only that replacement. A `409` invalidates that binding.
+Confirmation clears only its own exact preview binding and its exact source
+replacement, including deferred and exact-retry confirmation. Confirmation of
+the source preview also clears an unsent replacement bound to that same
+plan/revision; an unrelated confirmation cannot clear either. A `409` reload
+never pairs retained editable Task/manual-Habit values with a newer target
+version. Setup-owned Habits retain only duration by target; after a cold start,
+a stale replacement may take that duration from its persisted pending target
+while title, description, cadence, and timestamp come from the fresh Setup
+snapshot.
 
 Inside FastAPI, overview assembly is a deterministic pure builder over one
 repository context and the current Deadline projection. The service performs
@@ -226,8 +344,31 @@ The Planner calendar preference is a one-time explicit read-only consent. It is
 also the availability preference used by Deadline Planner. A preview records
 the current import identity. Confirmation rechecks preference state and the
 exact current import; a disconnect, delete, or replacement yields `409` and
-leaves an active revision unchanged. Calendar rows are displayed read-only even
-when they are not consented as planning busy time.
+leaves an active revision unchanged. Calendar rows are displayed read-only only
+while the import remains current; consent independently decides whether those
+current rows are planning busy time.
+
+`Needs attention` suppresses duplicate persisted `target_released`,
+`unplaced_minutes`, and generic conflict rows when a more precise V2 projection
+owns the fact. Current overlaps carry one explicit source: `setup`,
+`fixed_commitment`, or `calendar`, with copy that says nothing moved
+automatically. Preparation plans use the same origins and also surface active
+or pending unplaced minutes plus `timezone_changed`, `target_changed`, Calendar,
+and Study staleness. Empty state copy is exactly
+`Nothing currently needs review.`
+
+The bounded read-time recurrence scan omits only a Habit, weekly Setup, or
+weekly manual fixed-commitment occurrence whose wall time is nonexistent or
+ambiguous in the profile timezone. It retains every independently resolvable
+occurrence and reports one deduplicated `stale_preview` item per affected Action
+or Preparation Plan, naming every affected source kind plus the local date,
+wall time, and resolution reason. An omitted occurrence is not a conflict and
+no reservation moves automatically. Candidate reservations remain limited to
+exactly 366 profile-local days. Read-only authoritative materialization adds
+only the preceding and following spill day (at most 368 distinct local days)
+so a first- or final-day cross-midnight reservation can still detect Setup,
+fixed-commitment, and current Calendar overlaps; spill anchors never generate
+an additional Task, Habit, or Preparation candidate.
 
 ## Task And Habit Plans
 
@@ -393,8 +534,11 @@ attention, including cross-midnight intervals.
 Flutter keeps `current`, `refreshingAfterMutation`, and
 `staleAfterMutation` projection states. A durable mutation followed by a
 failed overview reload leaves the old overview visible but disables every
-derived mutation control. `Reload Planner` performs only the read and never
-replays the committed mutation. The shared unread Coach and Settings header
+derived mutation control, including attention, agenda, Preparation, preview,
+Task/Habit, and replan actions. A committed proposal or confirmation exposes
+neither a preview dialog nor success action until the refreshed overview proves
+the exact result. `Reload Planner` performs only the read and never replays the
+committed mutation. The shared unread Coach and Settings header
 controls do not change this projection or call a Planner/Coach endpoint.
 After a successful Planner mutation, the Planner controller owns its overview
 state while the app-level projection coordinator invalidates affected Today,

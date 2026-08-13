@@ -80,6 +80,11 @@ results are treated as unavailable/invalid transitions, not success.
   cancel may atomically project the managed task to matching `done`/`cancelled`
   state and terminal timestamp. No generic task command may replace that
   authority or erase terminal user state.
+- The `planner-overview-v2` unscheduled-Task projection excludes these exact
+  Deadline-managed sources (`source` or metadata contract version
+  `deadline-plan-v1`) so Preparation work cannot re-enter the ordinary Task
+  editor. A positive active Task block also excludes an open Task; partial
+  remainder stays Planner attention rather than a second executable target.
 
 ### Habits
 
@@ -95,6 +100,11 @@ The canonical `habits.frequency` compatibility projection is `daily` for daily
 and selected-weekday cadence, and `weekly` for weekly target cadence. Typed
 cadence details live in `habits.metadata` under contract version
 `habit-v1`.
+
+Every active manual or Setup-owned Habit appears once in the
+`planner-overview-v2` Habit summary. It is `scheduled` only with a positive
+active Habit slot. Pending creation remains an unconfirmed Planner preview and
+does not fabricate a Habit row or executable action.
 
 An outcome is one of `completed`, `skipped`, or open. Open means no row exists
 for that local date. Completion uses `value = 1`; skip uses `value = 0`; the

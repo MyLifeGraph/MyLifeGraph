@@ -190,7 +190,11 @@ Only an import whose persisted `planning_status` is `current` contributes
 read-only busy time to Planner or Deadline Planner. A profile timezone change
 marks retained imported data `profile_timezone_changed`; disconnect and local
 deletion use their matching terminal planning states. Rows remain readable but
-stay excluded until a deliberate new import.
+stay excluded until a deliberate new import. `planner-overview-v2` applies the
+same authority to both its seven-day Calendar rows and conflict projection: a
+retained non-current event is neither displayed as current nor labeled as a
+Calendar conflict. The Calendar preference still separately controls whether
+current busy events constrain allocation.
 
 The same `(user_id, request_id)` plus exact connection and input fingerprint
 replays the still-current persisted import without applying events again; its

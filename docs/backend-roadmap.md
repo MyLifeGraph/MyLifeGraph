@@ -316,9 +316,24 @@ Already implemented:
     Notifications, guest/demo, and background paths do not request or fabricate
     it.
 - Planner V1:
-  - Central authenticated read-only overview plus explicit preference,
+  - The central authenticated read-only overview is `planner-overview-v2`;
+    explicit preference,
     Task/Habit proposal/confirm/cancel, and fixed-commitment commands under
-    `/v1/planner`; guest/demo stays zero-call.
+    `/v1/planner` retain `planner-v1`; guest/demo stays zero-call.
+  - Overview V2 separates all active manual/Setup Habits from open
+    non-Preparation `unscheduled_tasks`, keeps pending creates in action-plan
+    previews, and derives scheduled state only from positive active
+    reservations. Zero-placement and partial-placement minutes stay exact.
+    Every non-create/non-tombstone Task or Habit plan has a current or
+    historical target snapshot; inactive Habit and historical Task plans must
+    be released/cancelled. Required history relations are retained first inside
+    the deterministic 1,000-row bound. A pending create is exempt only in the
+    draft/current-zero/latest-proposed-create lifecycle; the exact cancelled,
+    current-zero/latest-bounded-`1..500`/no-revision/no-attention tombstone is
+    the only terminal absence exception. Released former active plans retain
+    their historical target relation. Public proposal bases are limited to 499;
+    plan/revision counters and confirm/cancel expectations are limited to 500,
+    and active revisions expose only active reservation children.
   - Strict Task/Habit proposal unions require user-entered scheduling facts.
     Five-minute Task blocks may split; Habit slots follow daily, selected-
     weekday, or weekly-target cadence over a bounded four-week preview. Exact
@@ -326,7 +341,11 @@ Already implemented:
   - A shared deterministic Availability component combines profile-local
     time/DST, energy window, current time, Setup/manual commitments, active
     Planner and Preparation reservations, and separately consented current
-    imported busy time. Deadline Planner reuses this component and preference.
+    imported busy time while that import remains current. Deadline Planner
+    reuses this component and preference. Read-time conflicts identify Setup,
+    fixed-commitment, or Calendar origin without duplicating persisted reasons.
+    The 366-day candidate horizon materializes only previous/next read-only
+    spill anchors (at most 368 local days) for cross-midnight checks.
     Setup recurring commitments may carry inclusive optional semester bounds;
     the same applicability rule is used across planning, workload, Today, and
     snapshot facts.

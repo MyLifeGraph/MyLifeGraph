@@ -28,7 +28,7 @@ class Service:
         self.calls.append(("overview", user_id))
         local_date = date(2026, 7, 21)
         return PlannerOverviewResponse(
-            contract_version="planner-v1",
+            contract_version="planner-overview-v2",
             origin="authenticated_backend",
             generated_at=datetime(2026, 7, 21, 8, tzinfo=UTC),
             timezone="Europe/Berlin",
@@ -52,7 +52,9 @@ class Service:
                 for offset in range(7)
             ],
             ongoing_preparation=[],
-            unscheduled=[],
+            habits=[],
+            task_targets=[],
+            unscheduled_tasks=[],
             history=[],
         )
 
@@ -62,6 +64,14 @@ class Service:
 
     async def propose(self, *, user_id, request):
         self.calls.append(("proposal", user_id))
+        raise PlannerConflictError("Preview conflict.")
+
+    async def confirm(self, *, user_id, plan_id, request):
+        self.calls.append(("confirm", user_id))
+        raise PlannerConflictError("Preview conflict.")
+
+    async def cancel(self, *, user_id, plan_id, request):
+        self.calls.append(("cancel", user_id))
         raise PlannerConflictError("Preview conflict.")
 
 
@@ -83,7 +93,25 @@ def test_planner_overview_is_bearer_scoped_read_only_and_exact() -> None:
     response, service = asyncio.run(_request("GET", "/v1/planner/overview"))
 
     assert response.status_code == 200
-    assert response.json()["contract_version"] == "planner-v1"
+    assert response.json()["contract_version"] == "planner-overview-v2"
+    assert set(response.json()) == {
+        "contract_version",
+        "origin",
+        "generated_at",
+        "timezone",
+        "local_date",
+        "preferences",
+        "action_plans",
+        "commitments",
+        "needs_attention",
+        "days",
+        "ongoing_preparation",
+        "habits",
+        "task_targets",
+        "unscheduled_tasks",
+        "history",
+    }
+    assert "unscheduled" not in response.json()
     assert len(response.json()["days"]) == 7
     assert service.calls == [("overview", "planner-user")]
 
@@ -135,6 +163,100 @@ def test_planner_contract_accepts_canonical_json_transport_values() -> None:
 
     assert response.status_code == 409
     assert service.calls == [("proposal", "planner-user")]
+
+
+def test_planner_mutations_reject_revision_numbers_above_sql_bounds() -> None:
+    proposal = {
+        "request_id": "10000000-0000-4000-8000-000000000001",
+        "plan_id": "20000000-0000-4000-8000-000000000001",
+        "base_revision": 500,
+        "planning_start_on": "2026-07-21",
+        "target": {
+            "kind": "task",
+            "operation": "create",
+            "target_id": "30000000-0000-4000-8000-000000000001",
+            "expected_updated_at": None,
+            "title": "Prepare slides",
+            "description": None,
+            "priority": "medium",
+            "estimated_minutes": 90,
+            "deadline_at": "2026-07-24T12:00:00+00:00",
+            "preferred_session_minutes": 30,
+        },
+    }
+    cases = [
+        ("/v1/planner/action-plans/proposals", proposal),
+        (
+            "/v1/planner/action-plans/20000000-0000-4000-8000-000000000001/confirm",
+            {
+                "request_id": "10000000-0000-4000-8000-000000000002",
+                "expected_revision": 501,
+            },
+        ),
+        (
+            "/v1/planner/action-plans/20000000-0000-4000-8000-000000000001/cancel",
+            {
+                "request_id": "10000000-0000-4000-8000-000000000003",
+                "expected_revision": 501,
+            },
+        ),
+    ]
+
+    for path, body in cases:
+        response, service = asyncio.run(_request("POST", path, body=body))
+
+        assert response.status_code == 422
+        assert service.calls == []
+
+
+def test_planner_mutations_accept_inclusive_sql_revision_boundaries() -> None:
+    proposal = {
+        "request_id": "10000000-0000-4000-8000-000000000011",
+        "plan_id": "20000000-0000-4000-8000-000000000011",
+        "base_revision": 499,
+        "planning_start_on": "2026-07-21",
+        "target": {
+            "kind": "task",
+            "operation": "create",
+            "target_id": "30000000-0000-4000-8000-000000000011",
+            "expected_updated_at": None,
+            "title": "Prepare slides",
+            "description": None,
+            "priority": "medium",
+            "estimated_minutes": 90,
+            "deadline_at": "2026-07-24T12:00:00+00:00",
+            "preferred_session_minutes": 30,
+        },
+    }
+    cases = [
+        (
+            "/v1/planner/action-plans/proposals",
+            proposal,
+            ("proposal", "planner-user"),
+        ),
+        (
+            "/v1/planner/action-plans/20000000-0000-4000-8000-000000000011/confirm",
+            {
+                "request_id": "10000000-0000-4000-8000-000000000012",
+                "expected_revision": 500,
+            },
+            ("confirm", "planner-user"),
+        ),
+        (
+            "/v1/planner/action-plans/20000000-0000-4000-8000-000000000011/cancel",
+            {
+                "request_id": "10000000-0000-4000-8000-000000000013",
+                "expected_revision": 500,
+            },
+            ("cancel", "planner-user"),
+        ),
+    ]
+
+    for path, body, expected_call in cases:
+        response, service = asyncio.run(_request("POST", path, body=body))
+
+        assert response.status_code == 409
+        assert service.calls == [expected_call]
 
 
 def test_planner_conflicts_are_public_409_without_mutation_fallback() -> None:

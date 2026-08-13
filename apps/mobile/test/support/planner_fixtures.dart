@@ -1,7 +1,7 @@
 Map<String, dynamic> plannerOverviewEnvelope() {
   final firstDay = DateTime.utc(2026, 7, 21);
   return {
-    'contract_version': 'planner-v1',
+    'contract_version': 'planner-overview-v2',
     'origin': 'authenticated_backend',
     'generated_at': '2026-07-21T08:00:00Z',
     'timezone': 'Europe/Berlin',
@@ -18,6 +18,7 @@ Map<String, dynamic> plannerOverviewEnvelope() {
         'detail': 'A fixed commitment overlaps this plan.',
         'plan_id': '10000000-0000-4000-8000-000000000001',
         'unplaced_minutes': 0,
+        'conflict_source': 'fixed_commitment',
       },
     ],
     'days': [
@@ -112,12 +113,44 @@ Map<String, dynamic> plannerOverviewEnvelope() {
         'has_pending_preview': false,
       },
     ],
-    'unscheduled': [
+    'habits': [
+      {
+        'id': '40000000-0000-4000-8000-000000000002',
+        'title': 'Read',
+        'description': 'Keep up with the course reader.',
+        'expected_updated_at': '2026-07-20T08:00:00Z',
+        'ownership': 'setup',
+        'cadence': {
+          'kind': 'daily',
+          'scheduled_weekdays': <dynamic>[],
+          'weekly_target': 1,
+        },
+        'duration_minutes': 20,
+        'planning_status': 'unplanned',
+        'plan_id': null,
+        'has_pending_preview': false,
+      },
+      {
+        'id': '80000000-0000-4000-8000-000000000002',
+        'title': 'Walk',
+        'description': null,
+        'expected_updated_at': '2026-07-20T08:00:00Z',
+        'ownership': 'manual',
+        'cadence': {
+          'kind': 'weekly_target',
+          'scheduled_weekdays': <dynamic>[],
+          'weekly_target': 3,
+        },
+        'duration_minutes': null,
+        'planning_status': 'unplanned',
+        'plan_id': null,
+        'has_pending_preview': false,
+      },
+    ],
+    'task_targets': [
       {
         'id': '80000000-0000-4000-8000-000000000001',
-        'kind': 'task',
         'title': 'Undated reading',
-        'reason': 'not_planned',
         'expected_updated_at': '2026-07-20T08:00:00Z',
         'description': null,
         'priority': 'medium',
@@ -125,8 +158,20 @@ Map<String, dynamic> plannerOverviewEnvelope() {
         'deadline_at': null,
         'preferred_session_minutes': null,
         'use_study_rhythm': false,
-        'cadence': null,
-        'duration_minutes': null,
+      },
+    ],
+    'unscheduled_tasks': [
+      {
+        'id': '80000000-0000-4000-8000-000000000001',
+        'title': 'Undated reading',
+        'reason': 'missing_scheduling_inputs',
+        'expected_updated_at': '2026-07-20T08:00:00Z',
+        'description': null,
+        'priority': 'medium',
+        'estimated_minutes': null,
+        'deadline_at': null,
+        'preferred_session_minutes': null,
+        'use_study_rhythm': false,
       },
     ],
     'history': [
@@ -134,20 +179,6 @@ Map<String, dynamic> plannerOverviewEnvelope() {
         'id': '90000000-0000-4000-8000-000000000001',
         'kind': 'habit',
         'title': 'Archived walk',
-        'reason': 'released',
-        'expected_updated_at': '2026-07-20T08:00:00Z',
-        'description': null,
-        'priority': null,
-        'estimated_minutes': null,
-        'deadline_at': null,
-        'preferred_session_minutes': null,
-        'use_study_rhythm': false,
-        'cadence': {
-          'kind': 'daily',
-          'scheduled_weekdays': <dynamic>[],
-          'weekly_target': 1,
-        },
-        'duration_minutes': null,
       },
     ],
   };
