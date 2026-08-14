@@ -1,6 +1,7 @@
 # MyLifeGraph AI Service
 
-FastAPI service boundary for recommendation and future ML workflows.
+FastAPI service boundary for deterministic planning, learning, and Coach
+workflows.
 
 ## Current Status
 
@@ -10,8 +11,10 @@ FastAPI service boundary for recommendation and future ML workflows.
   row for exact retry/resume, otherwise the latest applied revision.
   `POST /v1/intake/complete` handles both authenticated Intake V1 completion
   and later Setup edits.
-- `/v1/recommendations` and `/v1/recommendations/generate` expose the
-  authenticated backend v1 recommendation contract.
+- The former generic Today Recommendation and Decision Feedback routes are
+  retired. Their `recommendations`, `recommendations/generate`, and `feedback`
+  endpoint names are not composed into the application. The independent
+  `sleep-recommendation-v1` Insights route remains current.
 - `GET/PATCH /v1/learning/preferences` exposes the revisioned complete
   `learning-preferences-v1` state, and
   `POST /v1/learning/focus-reflections/clear` is the retry-safe confirmed bulk
@@ -90,12 +93,9 @@ FastAPI service boundary for recommendation and future ML workflows.
   Habit/schedule/Study/energy-memory reconciliation, the compact
   onboarding snapshot, applied intake state, and profile projection commit
   atomically. The current RPC has no Goal parameter, leaves notification
-  preferences unchanged, and Setup completion generates no Recommendation. Recommendation
-  endpoints load recent user-scoped app data from canonical snake_case tables,
-  verify deterministic recommendations, and persist accepted results to
-  `recommendations`. Snapshot generation reuses `user_state_snapshots`, keeps
-  recommendation rules unchanged, excludes capture free text from Daily State,
-  and does not require an LLM provider.
+  preferences unchanged, and Setup completion generates no generic
+  Recommendation. Snapshot generation reuses `user_state_snapshots`, excludes
+  capture free text from Daily State, and does not require an LLM provider.
 - API routes catch only their operation-specific service failures and delegate
   HTTP translation to typed, feature-owned modules under `app/api/problems`.
   Those mappings preserve the existing status, detail, header, and unexpected-
@@ -112,15 +112,7 @@ FastAPI service boundary for recommendation and future ML workflows.
   `providers/bounded_process.py` and event/output validation in
   `providers/codex_events.py`. Existing service/provider import paths remain
   compatible for callers and tests.
-- Recommendation context ignores terminal done/cancelled/archived tasks for
-  overdue and workload candidates. Focus warnings use real terminal sessions
-  and require at least three sessions plus two abandonments in 14 days; a short
-  completed session is not automatically insufficient. Future Daily Log dates
-  are excluded. Sleep uses valid V4 quality/target deviation and movement
-  requires measured values; when two fields trigger on one date, evidence names
-  the stronger normalized field. A deliberate refresh atomically replaces the
-  prior current `new` set while retaining history.
-- `GET /v1/briefings/today` reads one persisted `daily-briefing-v1` decision;
+- `GET /v1/briefings/today` reads one persisted `daily-briefing-v2` decision;
   deliberate `POST /v1/briefings/generate` refreshes its exact profile-local
   date. Normal reads remain generation-free. The visible Today surface instead
   uses read-only `GET /v1/today/overview-v2` for its streak, exact progress,
@@ -136,7 +128,7 @@ FastAPI service boundary for recommendation and future ML workflows.
   state converges on the existing daily identities with isolated per-user stage
   results.
 - Phase 8 exposes read-only completed-week review GETs and deliberate,
-  facts-only deterministic review generation under `weekly-review-v2`. New or
+  facts-only deterministic review generation under `weekly-review-v3`. New or
   refreshed reviews always store an empty proposal array.
 - Phase 9 exposes the strict `calendar-import-v2` projection for one optional
   `.ics` connection. Consent, file import, stable paginated event reads,
@@ -234,7 +226,7 @@ FastAPI service boundary for recommendation and future ML workflows.
   opposite branch can downgrade an existing V5 container.
 - `/v1/account/profile` and `/v1/account/preparation-budget` use strict V2
   request ids and independent expected revisions. `/v1/account/export` returns
-  `account-export-v4`, and `/v1/account` remains the confirmed permanent
+  `account-export-v5`, and `/v1/account` remains the confirmed permanent
   deletion boundary. The client never supplies an owner id.
   See `../../docs/v1-account-controls-contract.md`.
 - `POST /v1/notifications/{notification_id}/actions` exposes strict,
@@ -328,18 +320,6 @@ If the read status is `pending`, keep its payload and `request_id` unchanged and
 retry that operation; do not start a new edit until it is applied or reloaded.
 Applied replays are idempotent and may only repair the newest revision's missing
 profile projection.
-
-```bash
-curl http://localhost:8000/v1/recommendations \
-  -H 'Authorization: Bearer <supabase_access_token>'
-```
-
-```bash
-curl -X POST http://localhost:8000/v1/recommendations/generate \
-  -H 'Authorization: Bearer <supabase_access_token>' \
-  -H 'Content-Type: application/json' \
-  -d '{"window_days":28,"force":false,"allow_llm_wording":false}'
-```
 
 ```bash
 curl -X POST http://localhost:8000/v1/snapshots/generate \
@@ -544,7 +524,7 @@ calendar.
 Batch storage is private derived orchestration metadata exposed only through
 service-role RPC projections. Actual plan content remains in existing Deadline
 revisions/blocks. This boundary does not change the shapes or versions of
-`account-export-v4` or `personal-snapshot-v2`.
+`account-export-v5` or `personal-snapshot-v3`.
 
 Read today's persisted internal briefing without side effects:
 
@@ -574,7 +554,7 @@ belongs in Flutter or browser runtime configuration:
 curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
   -H 'X-Scheduled-Refresh-Token: <scheduled_refresh_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"window_days":7,"limit":100,"include_recommendations":false}'
+  -d '{"window_days":7,"limit":100}'
 ```
 
 The endpoint captures one UTC `run_at`, derives each eligible profile's local
@@ -590,14 +570,13 @@ A privileged operational retry can be narrowed to at most 20 eligible profiles:
 curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
   -H 'X-Scheduled-Refresh-Token: <scheduled_refresh_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"profile_ids":["11111111-1111-4111-8111-111111111111"],"window_days":7,"limit":1,"include_recommendations":false}'
+  -d '{"profile_ids":["11111111-1111-4111-8111-111111111111"],"window_days":7,"limit":1}'
 ```
 
 The filter never bypasses onboarding or guest exclusion. Failures are isolated
-per profile and identify `profile_date`, `snapshot`, `briefing`, or optional
-`recommendations` as the stage. Recommendation generation is off by default;
-explicit `include_recommendations=true` remains deterministic and forces LLM
-wording off. `include_notifications=true` requests the exact current profile-
+per profile and identify `profile_date`, `snapshot`, or `briefing` as the
+stage. Retired recommendation scheduler fields are rejected as unknown input.
+`include_notifications=true` requests the exact current profile-
 local day only; the local runner enables it every 15 minutes. Missing/stale
 Phase 7 preparation remains eligible, but a fully current notification-only
 target must already have active separate in-app consent. Database guards then
@@ -709,15 +688,16 @@ accepts V3 only and emits `started`, allowlisted `activity`, and one
 `completed|failed` SSE event. Client disconnect cancels the turn.
 
 Each non-safety V3 turn creates a fresh owner-only
-`personal-snapshot-v2` SQLite database from the relevant Account Export table
-set under `free-coach-agent-prompt-v3`. Goals and Weekly Review proposals are
-excluded from that snapshot. The prompt's non-overridable output
+`personal-snapshot-v3` SQLite database from the relevant Account Export table
+set under `free-coach-agent-prompt-v4`. Goals, generic Recommendations,
+Decision Feedback, and Weekly Review proposals are excluded from that snapshot.
+The prompt's non-overridable output
 rule requires English for both the reply and uncertainty explanation regardless
 of the question or stored-data language. Clearly German provider output is
 rejected as retryable `invalid_output` before an assistant message is stored.
 Exact V1 prompt replays remain valid. The snapshot contains sanitized retained
 Setup/Capture/Task/Habit/Focus/Planner/
-Preparation/Calendar/Review/Insight/Recommendation/Memory/Coach detail plus a
+Preparation/Calendar/Review/Insight/Memory/Coach detail plus a
 catalog, relationships, counts, periods, and helper views. It excludes auth,
 profile email/role/provider identity, credentials, cross-user rows,
 Coach request/usage/selection ledgers, provider internals, and operational
@@ -839,7 +819,7 @@ without `CASCADE`, cleans structurally Goal-dependent data, upgrades surviving
 reviews to V2, and admits the current Coach prompt/snapshot pair while retaining
 valid historical pairs.
 
-Personal Learning persistence requires
+Personal Learning persistence historically introduced
 `20260726120000_personal_learning_v1.sql`, followed by
 `20260726150000_learned_focus_planning_v1.sql`,
 `20260726170000_recommendation_refresh_v2.sql`,
@@ -852,15 +832,15 @@ then requires `20260728160000_free_read_only_coach_agent_v1.sql`. Together they
 add forced-RLS terminal Focus reflections, revisioned settings and retry
 identities, immutable Planner/Deadline timing provenance, strict replay-safe
 delegation, monotone confirmation timestamps, truthful allocation-fallback
-provenance, atomic current-Recommendation replacement, compatible fixed-mode
+provenance, the later-retired atomic Recommendation replacement, compatible fixed-mode
 Coach V2 replay, and message-only V3 evidence/trace/Fast-tier persistence.
 Account Export
 includes the two owner-content projections and omits the backend retry ledger
 explicitly.
 
 The typed `app/owner_data_catalog.py` module is the single backend inventory for
-all repo-owned public tables. It derives the exact 43-table Account Export and
-39-table personal Coach Snapshot from separate per-table policies, including
+all repo-owned public tables. It derives the exact 41-table Account Export and
+37-table personal Coach Snapshot from separate per-table policies, including
 owner/cursor/watermark read shapes, sanitized export allowlists, omissions, and
 snapshot descriptions. A focused test compares that inventory with every
 public table created by the migration history, so a new table cannot silently
@@ -941,17 +921,17 @@ unconfigured fail-closed boundary. Intake tests cover authenticated read/save,
 blank optional materialization, candidate cadence validation, request replay,
 stale revision conflicts, convergent retry/edit identities, lifecycle removal,
 legacy-key stripping, `responses.goals` rejection, unchanged Reminder
-preferences, no post-Setup Recommendation generation, and preservation of
+preferences, no post-Setup generic Recommendation generation, and preservation of
 non-Setup-owned rows. Daily State tests cover strict V2/V3/V4 parsing, explicit
 mixed-branch compatibility, V4 sleep-interval validation, friction sanitization,
 and the V2 output contract. Phase 3 tests cover strict executable
 action parser parity, explicit habit/focus snapshot summaries and local-date
-filtering, preservation of Phase 2 Daily State behavior, and terminal-task
-exclusion from recommendation pressure. Phase 4 through Phase 7 coverage adds
+filtering and preservation of Phase 2 Daily State behavior. Phase 4 through
+Phase 7 coverage adds
 strict persisted briefings, profile-local scheduled dates, missing/stale/current
-write behavior, bounded targeted retry, per-user failure isolation, and default
-no-recommendation/no-LLM preparation. Phase 8/9 coverage adds weekly-review
-freshness/proposals plus strict calendar consent, retry-safe `.ics` identity,
+write behavior, bounded targeted retry, per-user failure isolation, and no-LLM
+preparation. Phase 8/9 coverage adds Weekly Review V3 empty-only proposal
+parity plus strict calendar consent, retry-safe `.ics` identity,
 timezone/all-day/recurrence/cancellation handling, stable event pagination,
 disconnect/delete separation, schedule preservation, and RLS ownership.
 Deadline Planner/Planner coverage includes proposal/confirmation/lifecycle,
@@ -964,8 +944,11 @@ separation. Personal Learning tests cover terminal reflection
 guards, preference replay/dependency, disabled short-circuit, profile
 timezone/DST, sleep assignment/deduplication, every maturity gate,
 half-consistency, night exclusion, deterministic fingerprints, learned
-free/busy/fallback ordering, confirmation permission, and atomic
-Recommendation replacement. A documented test suite alone is not a pass claim.
+free/busy/fallback ordering and confirmation permission. P7 coverage additionally
+proves absent retired routes/scheduler fields, Briefing V2, Weekly Review V3,
+Export V5/Snapshot V3/Prompt V4, preserved independent concepts, and the
+isolated erase/rollback/final-state database contract. A documented test suite
+alone is not a pass claim.
 Exact current results live in
 [Current Verified Baseline](../../docs/verification.md#current-verified-baseline).
 

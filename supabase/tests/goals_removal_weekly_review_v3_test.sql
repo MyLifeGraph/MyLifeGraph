@@ -133,82 +133,6 @@ insert into public.user_state_snapshots (
   '{}'::jsonb
 );
 
-insert into public.weekly_reviews (
-  id,
-  user_id,
-  period_key,
-  week_start,
-  week_end,
-  timezone,
-  data_quality,
-  narrative,
-  facts,
-  proposals,
-  evidence_refs,
-  provenance,
-  source_fingerprint,
-  source_observed_at,
-  generated_at,
-  created_at,
-  updated_at
-) values (
-  'd1000000-0000-4000-8000-000000000201',
-  'd1000000-0000-4000-8000-000000000001',
-  '2026-W31',
-  '2026-07-27',
-  '2026-08-02',
-  'Europe/Berlin',
-  'sufficient',
-  'Historical proposal transport fixture.',
-  '{"tasks":{"completed":1,"carried":0,"overdue_carried":0,"cancelled":0}}',
-  '[{
-    "id":"weekly-review:2026-W31:habit:legacy:shrink",
-    "operation":"shrink",
-    "target_kind":"habit",
-    "target_id":"d1000000-0000-4000-8000-000000000301",
-    "target_title":"Historical habit",
-    "ownership":"manual",
-    "application_mode":"direct_habit",
-    "expected_updated_at":"2026-08-02T18:00:00Z",
-    "reason_code":"legacy_adjustment",
-    "reason":"Historical transport only.",
-    "evidence_refs":[],
-    "change":{
-      "before":{"lifecycle":"active","cadence":{"kind":"weekly_target","weekly_target":4,"scheduled_weekdays":[]}},
-      "after":{"lifecycle":"active","cadence":{"kind":"weekly_target","weekly_target":3,"scheduled_weekdays":[]}}
-    }
-  }]'::jsonb,
-  '[]'::jsonb,
-  '{
-    "engine":"deterministic",
-    "contract_version":"weekly-review-v2",
-    "source_snapshot_id":"d1000000-0000-4000-8000-000000000101",
-    "source_snapshot_generated_at":"2026-08-03T09:00:00Z",
-    "evidence_window":{"starts_on":"2026-07-27","ends_on":"2026-08-02","days":7},
-    "source_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "baseline":"none",
-    "limitations":[],
-    "llm_used":false
-  }'::jsonb,
-  repeat('a', 64),
-  '2026-08-03T09:00:00Z',
-  '2026-08-03T09:00:00Z',
-  '2026-08-03T09:00:00Z',
-  '2026-08-03T09:00:00Z'
-);
-
-select is(
-  jsonb_array_length(
-    (
-      select proposals
-      from public.weekly_reviews
-      where id = 'd1000000-0000-4000-8000-000000000201'
-    )
-  ),
-  1,
-  'a historical proposal array remains stored and transport-readable'
-);
-
 create temporary table current_weekly_payload on commit drop as
 select '{
   "user_id":"d1000000-0000-4000-8000-000000000001",
@@ -222,14 +146,13 @@ select '{
     "tasks":{"completed":2,"carried":0,"overdue_carried":0,"cancelled":0},
     "habits":{"active":1,"paused":0,"archived":0,"stable_definitions":1,"changed_definitions":0,"scheduled_opportunities":4,"completed":4,"skipped":0,"missed":0,"recovery_open":0,"unknown":0},
     "focus":{"completed_sessions":1,"abandoned_sessions":0,"active_sessions":0,"actual_minutes":45},
-    "recovery":{"observed_days":7,"recovery_days":1},
-    "feedback":{"total":1,"done":0,"later":0,"not_helpful":0,"too_much":1,"does_not_fit":0}
+    "recovery":{"observed_days":7,"recovery_days":1}
   },
   "proposals":[],
   "evidence_refs":[],
   "provenance":{
     "engine":"deterministic",
-    "contract_version":"weekly-review-v2",
+    "contract_version":"weekly-review-v3",
     "source_snapshot_id":"d1000000-0000-4000-8000-000000000101",
     "source_snapshot_generated_at":"2026-08-03T09:00:00Z",
     "evidence_window":{"starts_on":"2026-07-27","ends_on":"2026-08-02","days":7},
@@ -246,32 +169,31 @@ select '{
 
 select lives_ok(
   $$
-    select public.persist_weekly_review_v2(
+    select public.persist_weekly_review_v3(
       'd1000000-0000-4000-8000-000000000001',
       '2026-W31',
       '2026-08-03T09:00:00Z',
       (select value from current_weekly_payload)
     )
   $$,
-  'a current V2 refresh persists only observational facts'
+  'a current V3 refresh persists only observational facts'
 );
 
 select ok(
   (
-    select id = 'd1000000-0000-4000-8000-000000000201'
-      and proposals = '[]'::jsonb
+    select proposals = '[]'::jsonb
       and not ((facts #> '{tasks}') ? 'goal_linked_completed')
-      and provenance ->> 'contract_version' = 'weekly-review-v2'
+      and provenance ->> 'contract_version' = 'weekly-review-v3'
     from public.weekly_reviews
     where user_id = 'd1000000-0000-4000-8000-000000000001'
       and period_key = '2026-W31'
   ),
-  'refresh preserves identity while replacing legacy proposals with an empty array'
+  'V3 persists only Goal-free observational facts'
 );
 
 select throws_ok(
   $$
-    select public.persist_weekly_review_v2(
+    select public.persist_weekly_review_v3(
       'd1000000-0000-4000-8000-000000000001',
       '2026-W31',
       '2026-08-03T09:00:00Z',
@@ -284,7 +206,7 @@ select throws_ok(
   $$,
   '22023',
   'Weekly review persistence payload is invalid.',
-  'the V2 persistence RPC rejects every new non-empty proposal array'
+  'the V3 persistence RPC rejects every non-empty proposal array'
 );
 
 select throws_ok(
@@ -301,12 +223,17 @@ select throws_ok(
       'Europe/Berlin',
       'sufficient',
       'Invalid retired fact.',
-      '{"tasks":{"goal_linked_completed":0}}',
+      '{
+        "tasks":{"completed":0,"carried":0,"goal_linked_completed":0},
+        "habits":{"completed":0,"skipped":0},
+        "focus":{"actual_minutes":0},
+        "recovery":{"recovery_days":0}
+      }',
       '[]',
       '[]',
       '{
         "engine":"deterministic",
-        "contract_version":"weekly-review-v2",
+        "contract_version":"weekly-review-v3",
         "source_snapshot_id":"d1000000-0000-4000-8000-000000000101",
         "source_snapshot_generated_at":"2026-08-03T09:00:00Z",
         "evidence_window":{"starts_on":"2026-07-20","ends_on":"2026-07-26","days":7},

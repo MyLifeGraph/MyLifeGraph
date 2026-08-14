@@ -131,14 +131,14 @@ select ok(
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
@@ -147,18 +147,18 @@ select ok(
     select proconfig = array['search_path=pg_catalog, pg_temp']
     from pg_proc
     where oid = (
-      'public.claim_coach_request_v5('
+      'public.claim_coach_request_v6('
         'uuid,uuid,text,date,text,text,text,text,'
         'timestamp with time zone,timestamp with time zone,integer)'
     )::regprocedure
   ),
-  'Coach V5 claim is backend-only with a hardened fixed search path'
+  'Coach V6 claim is backend-only with a hardened fixed search path'
 );
 
 set local role service_role;
 select is(
   (
-    public.claim_coach_request_v5(
+    public.claim_coach_request_v6(
       'c5000000-0000-4000-8000-000000000004',
       'c5000000-0000-4000-8000-000000000104',
       repeat('4', 64),
@@ -173,13 +173,13 @@ select is(
     ) ->> 'state'
   ),
   'pending',
-  'Coach V5 creates a pending current-contract request'
+  'Coach V6 creates a pending current-contract request'
 );
 
 select is(
   concat_ws(
     '|',
-    public.claim_coach_request_v5(
+    public.claim_coach_request_v6(
       'c5000000-0000-4000-8000-000000000004',
       'c5000000-0000-4000-8000-000000000104',
       repeat('4', 64),
@@ -192,7 +192,7 @@ select is(
       '2026-08-02T10:03:00Z',
       20
     ) ->> 'state',
-    public.claim_coach_request_v5(
+    public.claim_coach_request_v6(
       'c5000000-0000-4000-8000-000000000004',
       'c5000000-0000-4000-8000-000000000104',
       repeat('4', 64),
@@ -207,7 +207,7 @@ select is(
     ) #>> '{error,code}'
   ),
   'failed|interrupted',
-  'an expired Coach V5 replay still atomically records and returns interruption'
+  'an expired Coach V6 replay still atomically records and returns interruption'
 );
 reset role;
 

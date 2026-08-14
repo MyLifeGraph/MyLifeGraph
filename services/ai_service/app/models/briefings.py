@@ -1,12 +1,12 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.executable_actions import ExecutableActionTarget
 
 
-DAILY_BRIEFING_CONTRACT_VERSION = "daily-briefing-v1"
+DAILY_BRIEFING_CONTRACT_VERSION = "daily-briefing-v2"
 
 BriefingMode = Literal["push", "steady", "recover", "plan"]
 BriefingDataQuality = Literal["missing", "partial", "current", "stale"]
@@ -27,32 +27,17 @@ class BriefingAction(BaseModel):
     target: ExecutableActionTarget
     title: str = Field(min_length=1, max_length=200)
     reason: str = Field(min_length=1, max_length=300)
-    recommendation_id: str | None = None
     evidence_refs: list[BriefingEvidenceRef] = Field(
         default_factory=list,
         max_length=8,
     )
-
-    @model_serializer(mode="plain")
-    def serialize_action(self) -> dict[str, object]:
-        payload: dict[str, object] = {
-            "target": self.target.model_dump(mode="json", exclude_none=True),
-            "title": self.title,
-            "reason": self.reason,
-            "evidence_refs": [
-                ref.model_dump(mode="json") for ref in self.evidence_refs
-            ],
-        }
-        if self.recommendation_id is not None:
-            payload["recommendation_id"] = self.recommendation_id
-        return payload
 
 
 class BriefingProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     engine: Literal["deterministic"]
-    contract_version: Literal["daily-briefing-v1"]
+    contract_version: Literal["daily-briefing-v2"]
     daily_state_contract_version: Literal[
         "explainable-daily-state-v1",
         "explainable-daily-state-v2",
@@ -63,18 +48,6 @@ class BriefingProvenance(BaseModel):
     source_snapshot_generated_at: datetime
     baseline: Literal["none"]
     llm_used: Literal[False]
-    feedback_ranking: "FeedbackRankingProvenance"
-
-
-class FeedbackRankingProvenance(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-
-    contract_version: Literal["feedback-ranking-v1"]
-    lookback_days: Literal[28]
-    event_count: int = Field(ge=0, le=200)
-    applied_count: int = Field(ge=0, le=200)
-    primary_contribution: int = Field(ge=-240, le=120)
-    reasons: list[str] = Field(default_factory=list, max_length=4)
 
 
 class DailyBriefing(BaseModel):
@@ -104,7 +77,7 @@ class DailyBriefing(BaseModel):
 class BriefingReadResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    contract_version: Literal["daily-briefing-v1"]
+    contract_version: Literal["daily-briefing-v2"]
     briefing_date: date
     freshness: BriefingFreshness
     needs_generation: bool

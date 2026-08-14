@@ -749,7 +749,6 @@ class _NotificationCardContent extends StatelessWidget {
   String _sourceLabel(String sourceKind) {
     return switch (sourceKind) {
       'daily_state' => 'your current check-in state',
-      'daily_briefing' => 'today\'s current plan',
       'weekly_review' => 'the completed Weekly Review',
       _ => 'saved app data',
     };

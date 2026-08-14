@@ -147,7 +147,7 @@ defines.
 
 `USE_MOCK_DATA=true` is a deliberate whole-product local/demo boundary even if
 the browser still has a Supabase auth session. Setup, Evening Shutdown, Morning
-Calibration, Dashboard, Recommendations, Insights, and the Inbox stay
+Calibration, Dashboard, Insights, and the Inbox stay
 local; synced task, habit, and focus commands are unavailable; and snapshot
 refresh is skipped. Set it to `false` to exercise real authenticated
 Supabase/FastAPI sources.
@@ -245,12 +245,13 @@ Health check:
 curl http://localhost:8000/v1/health
 ```
 
-Recommendation contract endpoints require an authenticated bearer token. PR1
-defined the contract; backend Supabase settings are now required for real
-token verification and recommendation persistence. In real backend mode,
-successful Intake V1 completion or edit does not generate Recommendations.
-Runtime generation remains an explicit or scheduled action. Read the newest
-Setup row with:
+Authenticated product routes require a verified bearer token; backend Supabase
+settings are required for real token verification and persisted workflows. The
+former generic Recommendation and Decision Feedback routes are not composed
+and return `404`. In real backend mode,
+successful Intake V1 completion or edit does not generate a generic
+Recommendation; that former feed and its refresh boundary are retired. Read
+the newest Setup row with:
 
 ```bash
 curl http://localhost:8000/v1/intake/setup \
@@ -280,18 +281,6 @@ Client validation and HTTP 4xx responses leave the draft editable; 409 also
 offers `Reload saved setup`. A timeout, transport failure, 5xx, or invalid
 success envelope locks the exact submitted draft and request id for unchanged
 retry or explicit reload.
-
-```bash
-curl http://localhost:8000/v1/recommendations \
-  -H 'Authorization: Bearer <supabase_access_token>'
-```
-
-```bash
-curl -X POST http://localhost:8000/v1/recommendations/generate \
-  -H 'Authorization: Bearer <supabase_access_token>' \
-  -H 'Content-Type: application/json' \
-  -d '{"window_days":28,"force":false,"allow_llm_wording":false}'
-```
 
 ```bash
 curl -X POST http://localhost:8000/v1/snapshots/generate \
@@ -407,20 +396,10 @@ curl -X POST http://localhost:8000/v1/briefings/generate \
   -d '{"force":false}'
 ```
 
-Phase 6 feedback is authenticated, tied to an exact action in an owned briefing,
-and retry-safe through `request_id`:
-
-```bash
-curl -X POST http://localhost:8000/v1/feedback \
-  -H 'Authorization: Bearer <supabase_access_token>' \
-  -H 'Content-Type: application/json' \
-  -d '{"request_id":"11111111-1111-4111-8111-111111111111","briefing_id":"22222222-2222-4222-8222-222222222222","action_id":"open_task:33333333-3333-4333-8333-333333333333","feedback_type":"too_much"}'
-```
-
-`GET /v1/feedback` lists the recent 28-day history and
-`DELETE /v1/feedback/{feedback_id}` corrects an entry. Feedback never executes
-the action. A deliberate later briefing generation applies only bounded,
-decayed context matches and reports the result under `feedback-ranking-v1`.
+The former Phase 6 Decision Feedback endpoints and generic Recommendation
+endpoints are retired. Requests to those paths return `404`; use the independent
+Insights Sleep Recommendation or ordinary Coach advice only for their owning
+workflows.
 
 Phase 8 weekly review reads the latest completed profile-local ISO week without
 generation:
@@ -649,7 +628,7 @@ Flutter client endpoint:
 curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
   -H 'X-Scheduled-Refresh-Token: <local scheduler token>' \
   -H 'Content-Type: application/json' \
-  -d '{"window_days":7,"limit":100,"include_recommendations":false}'
+  -d '{"window_days":7,"limit":100}'
 ```
 
 The backend captures one UTC `run_at`, resolves one local `briefing_date` from
@@ -668,18 +647,17 @@ most 20 UUIDs:
 curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
   -H 'X-Scheduled-Refresh-Token: <local scheduler token>' \
   -H 'Content-Type: application/json' \
-  -d '{"profile_ids":["11111111-1111-4111-8111-111111111111"],"window_days":7,"limit":1,"include_recommendations":false}'
+  -d '{"profile_ids":["11111111-1111-4111-8111-111111111111"],"window_days":7,"limit":1}'
 ```
 
 `profile_ids` narrows selection only; it does not bypass the onboarded non-guest
 eligibility checks. The response carries the batch `run_at` plus per-user local
 date, selection reason, snapshot and briefing ids/statuses, and a sanitized
-failure stage. Snapshot, briefing, timezone, or optional recommendation failure
-for one profile does not stop other selected profiles.
+failure stage. Snapshot, briefing, or timezone failure for one profile does not
+stop other selected profiles. Retired recommendation scheduler fields are
+strictly rejected.
 
-Recommendation refresh is off by default. Explicit
-`include_recommendations=true` runs only the deterministic recommendation path
-and keeps LLM wording disabled. The supported local stack runner sends
+The supported local stack runner sends
 `include_notifications=true` every 15 minutes. Only separately consented real
 accounts can receive fixed deterministic recovery or exact completed-week rows;
 a current briefing alone creates no generic Today reminder. The database
@@ -771,7 +749,7 @@ production or present its response as a real model answer.
 For each real V3 question FastAPI creates a fresh owner-only SQLite snapshot.
 The snapshot includes retained relevant product detail from Setup, Daily
 Capture, Tasks, Habits, Focus/reflections, Planner, Preparation, Calendar,
-Weekly Reviews, Insights, Recommendations, Memories, and Coach history. It
+Weekly Reviews, Insights, Memories, and current Coach history. It
 excludes other owners, authentication data, email/role/provider identity,
 credentials, anti-replay ledgers, usage ledgers, memory-selection ledgers, and
 purely operational state. The Account Export ceilings apply without silent
@@ -1000,7 +978,7 @@ check at `scripts/lib/multi_exam_plan_migration_harness.sh`. The repository
 validating the exact normal local target; the library file is not a standalone
 operator command.
 
-It runs the 103-assertion Multi-Exam pgTAP contract twice against one labeled
+It runs the 104-assertion Multi-Exam pgTAP contract twice against one labeled
 RAM-only Postgres container, including independent sessions that prove direct
 Task and Habit writes cannot pass a concurrently held Proposal or Confirm owner
 lock. The second pass proves committed fixtures, helper objects, and optional
@@ -1175,8 +1153,9 @@ confirmation timestamps monotone under clock skew, and record actual Setup
 allocation fallback without discarding learned evidence. The earlier Personal
 Learning migration adds the forced-RLS reflection, preference, and
 request-identity boundaries; its learned-planning follow-up adds immutable
-Planner/Deadline evidence provenance, and the Recommendation follow-up installs
-atomic current-feed replacement. The earlier small account-export grant gives
+Planner/Deadline evidence provenance. A historical Recommendation follow-up
+installed atomic current-feed replacement; P7 later removes that RPC and table.
+The earlier small account-export grant gives
 only `service_role` the `lifestyle_entries` read authority required by the
 existing Account Export V1 table set. The account-delete
 migration installs the service-role-only full-account delete transaction; it
@@ -1254,9 +1233,9 @@ For local Supabase-backed app testing:
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
    target, Today Overview streak/progress arithmetic, all four agenda source
    categories, Today versus all Tasks, Today Habits, the `Beat yesterday`
-   check-in inset, direct Weekly Review navigation plus independently
-   expandable Recommendations, feedback history, and Full week sections; Full
-   week must show seven profile-local days, seven categories/partial sources,
+   check-in inset, direct Weekly Review navigation plus the independently
+   expandable Full week section; Full week must show seven profile-local days,
+   seven categories/partial sources,
    current actions, and the responsive snapped strip,
    bounded facts-only Weekly Review
    with deliberate refresh and no adjustment controls, Inbox (`/alerts`), real
@@ -1303,7 +1282,7 @@ The script:
   separately seeded `demo_seed` objects non-Setup-owned;
 - replaces their base demo app rows, then enriches `student@example.test`
   through the real FastAPI service classes with current snapshots/briefings,
-  feedback, Weekly Review, Personal Learning, Calendar Import, Preparation
+  Weekly Review, Personal Learning, Calendar Import, Preparation
   Plans, foreground notification consent, conditional recovery/weekly
   generation, and fake-provider Coach persistence;
 - verifies the student coverage and realistic Capture bounds before reporting
@@ -1356,10 +1335,9 @@ For the two-origin live presentation setup, Coach cleanup/preflight, and timed
 rehearsal, follow `docs/presentation-demo-2026-07-30.md`. Seeding recreates the
 four Auth users and invalidates their sessions, so do not seed again after the
 presentation tabs sign in.
-Seeded recommendations are visible through the FastAPI recommendation endpoint
-when the AI service is running with the same local Supabase project settings;
-without FastAPI, an authenticated account shows a recoverable recommendation
-error and never substitutes local mock recommendations.
+The seed does not create the retired generic Recommendation or Decision
+Feedback records. The independent Sleep Recommendation remains computed from
+eligible Capture and Focus evidence rather than seeded feed rows.
 
 Automated local preflight without resetting the database:
 

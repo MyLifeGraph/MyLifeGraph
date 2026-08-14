@@ -11,12 +11,11 @@ persisted account of durable facts. It never loads Goals, produces a new
 proposal, applies an action, or changes a user-owned Task, Habit, schedule,
 calendar, or plan.
 
-The current contract is `weekly-review-v2`. The persisted and transported
-`proposals` array remains solely so historical V1 rows can still be read and
-exported without rewriting their meaning. Every newly generated or refreshed
-review must store `proposals=[]`. Flutter never renders or executes historical
-proposal entries, and Coach context construction removes them before a turn is
-claimed.
+The current contract is `weekly-review-v3`. Every generated or refreshed review
+stores `proposals=[]`; Flutter renders no proposal controls. The Recommendation
+and Decision Feedback retirement erases pre-cutover review content, so no old
+Feedback facts or proposal prose crosses into the current review or Coach
+context.
 
 Weekly Review does not add an LLM, notification, background worker, deployed
 weekly schedule, or autonomous plan rewrite.
@@ -31,7 +30,7 @@ timezone:
 - `week_end`: exactly six calendar days later;
 - `timezone`: the IANA timezone used to resolve timestamp-backed facts.
 
-Timestamp-backed Task, feedback, and Focus inputs use the profile-local Monday
+Timestamp-backed Task and Focus inputs use the profile-local Monday
 start and following-Monday exclusive boundary converted to UTC. Date-backed
 Habit outcomes and daily snapshots use the exact seven local calendar dates.
 The service handles ISO-year and daylight-saving boundaries without using the
@@ -72,7 +71,7 @@ recomputes that identity. Generation persists derived review output only.
 Both routes return the same strict envelope:
 
 ```text
-contract_version: weekly-review-v2
+contract_version: weekly-review-v3
 period_key
 starts_on
 ends_on
@@ -85,7 +84,7 @@ review: WeeklyReview | null
 
 `WeeklyReview` contains the stable id, `data_quality`, one bounded narrative,
 structured facts, the compatibility `proposals` array, bounded evidence,
-deterministic provenance, and generation/update timestamps. A current V2 row
+deterministic provenance, and generation/update timestamps. A current V3 row
 always has an empty proposal array.
 
 ## Persistence And Compatibility
@@ -100,27 +99,36 @@ always has an empty proposal array.
 
 Database checks require an exact ISO period/week match, a Monday-to-Sunday
 window, a non-empty bounded timezone and narrative, known data quality, bounded
-JSON objects/arrays, at most two legacy proposal entries, at most 40 evidence
+JSON objects/arrays, an empty proposal array, at most 40 evidence
 references, and a lowercase 64-character hexadecimal source fingerprint.
 
-The Goal-removal migration updates surviving rows in place to V2 while
+Before P7, the Goal-removal migration updated then-surviving rows in place to V2 while
 preserving their id, period, fingerprint, timestamps, and historical proposal
 array. It removes `facts.tasks.goal_linked_completed` and updates provenance.
 The backend persistence RPC rejects the retired counter and any non-empty
-proposal array for a new or refreshed review. A deliberate refresh of a
-historical row therefore replaces its proposal array with `[]`.
+proposal array for a new or refreshed review. At that earlier boundary, a
+deliberate refresh replaced a historical proposal array with `[]`.
 
 Additive migration
-`20260804192406_harden_goal_removal_dependencies.sql` does not update any
-surviving Weekly Review. Before deletion it closes temporary dependency sets
+`20260804192406_harden_goal_removal_dependencies.sql` did not update any
+surviving Weekly Review. Before deletion it closed temporary dependency sets
 across source snapshots, recommendation/briefing foreign identities, and
 `decision_feedback` evidence. A review is retired when its source snapshot or
-a referenced feedback row is missing or belongs to the Goal-derived deletion
+a referenced feedback row was missing or belonged to the Goal-derived deletion
 set. A clean row retains its exact id, period, fingerprint, observation and
 persistence timestamps, and historical proposal transport. Final assertions
-reject dangling snapshot/feedback references. The migration takes the complete
+rejected dangling snapshot/feedback references. The migration took the complete
 cleanup table-lock set in alphabetical `SHARE ROW EXCLUSIVE` order with a
 five-second timeout, so a concurrent writer causes a full rollback.
+
+Additive migration
+`20260813200057_retire_recommendations_and_decision_feedback.sql` deletes the
+remaining Weekly Review content, installs the exact V3 facts/provenance checks,
+and replaces the V2 writer with service-role-only
+`persist_weekly_review_v3`. It preserves RLS/forced RLS and rejects structured
+Recommendation or Feedback references without treating ordinary prose as a
+reference. Current V3 parsers in FastAPI and Flutter reject every non-empty
+proposal list; there is no post-P7 transport compatibility for old proposals.
 
 ## Fact Semantics
 
@@ -137,9 +145,7 @@ The strict fact object contains exactly these nonnegative counters:
   `missed`, `recovery_open`, `unknown`;
 - `focus`: `completed_sessions`, `abandoned_sessions`, `active_sessions`,
   `actual_minutes`;
-- `recovery`: `observed_days`, `recovery_days`, each bounded by seven;
-- `feedback`: `total`, `done`, `later`, `not_helpful`, `too_much`,
-  `does_not_fit`.
+- `recovery`: `observed_days`, `recovery_days`, each bounded by seven.
 
 ### Tasks
 
@@ -176,7 +182,7 @@ the profile timezone.
 Recovery overlap never fabricates a completion or erases an intentional skip.
 It remains explanatory evidence only.
 
-### Focus, Recovery, And Feedback
+### Focus And Recovery
 
 - Focus uses persisted local `metadata.entry_date`, with the established UTC
   `started_at` fallback only for legacy or invalid metadata.
@@ -186,17 +192,14 @@ It remains explanatory evidence only.
   is `recover`.
 - Missing daily snapshots remain missing evidence; averages do not fabricate a
   recovery day.
-- Decision feedback is historical preference evidence. `feedback_type=done`
-  never substitutes for a Task, Habit, or Focus outcome.
 
 `data_quality` is `insufficient`, `partial`, or `sufficient`; it is independent
 of proposals and distinct from freshness. Missing coverage and every known
 limitation remain visible in facts and provenance.
 
 The narrative describes only observed counts, recovery coverage, and known
-limitations. Feedback such as `too_much` or `not_helpful`, skipped Habits, and
-high or low completion may change reported facts but never produces adaptation
-language or an action recommendation.
+limitations. Skipped Habits and high or low completion may change reported
+facts but never produce adaptation language or an action recommendation.
 
 ## Freshness
 
@@ -210,12 +213,12 @@ facts. `GET` recomputes that fingerprint without writing:
 - changed source facts: `stale` with bounded reason codes;
 - no persisted row: `missing`.
 
-Habit outcomes, feedback deletion, Task state changes, Focus completion, or a
+Habit outcomes, Task state changes, Focus completion, or a
 valid Daily State replacement can make a review stale. Stale facts remain
 visible. Flutter places the deliberate update action with the facts; there are
 no proposal controls.
 
-`persist_weekly_review_v2` takes the owner and review-row locks, requires the
+`persist_weekly_review_v3` takes the owner and review-row locks, requires the
 referenced weekly Snapshot still to be current, rejects a candidate observed
 before the stored review, and binds exact Snapshot identity and provenance.
 After persistence, FastAPI reloads Snapshot, Review, and source context.
@@ -240,17 +243,15 @@ never refreshes a review.
 Focused backend, Flutter, migration, and browser coverage must prove:
 
 - profile-local ISO-week and DST boundaries;
-- strict V2 model parsing and owner-derived identity;
+- strict V3 model parsing and owner-derived identity;
 - read-only GET and idempotent same-row POST;
-- exact completed, carried, completed/skipped/missed/unknown, Focus, recovery,
-  and feedback facts without the retired Goal counter;
+- exact completed, carried, completed/skipped/missed/unknown, Focus, and
+  recovery facts without the retired Goal counter or Feedback family;
 - fully paginated stable source reads;
-- no generated proposals for `too_much`, `not_helpful`, skips, or high Habit
-  completion;
-- historical proposal parsing, invisibility in Flutter and Coach, and
-  replacement by `[]` on deliberate refresh;
-- migration preservation of clean historical rows plus deletion of reviews
-  with missing/retired snapshots or feedback, including notification cascade;
+- no generated proposals for skips or high Habit completion;
+- exact rejection of non-empty proposals and retired structured sources;
+- retirement-migration erasure of old review content and exactly typed Briefing
+  notifications, while current Weekly Review notifications remain intact;
 - source-change-to-stale transition and fact refresh;
 - missing, stale, retry, error, and guest states;
 - authenticated owner-only reads and rejection of direct writes;
@@ -261,8 +262,6 @@ current-checkout browser command before claiming the journey passed.
 
 Flutter Weekly Review models reuse framework-neutral strict primitives for
 exact keys, objects, strings, integers, local dates, and aware timestamps.
-Historical proposal models remain transport readers only and grant no mutation
-authority.
 
 ## Visual Presentation
 

@@ -91,8 +91,14 @@ Daily State validation accepts historical V1/V2 and current
 date and mode; it does not read or restore retired Day Shape context or
 `constrained_capacity`.
 
-A current daily briefing alone creates no notification. On an ordinary steady
-day without a current Monday review, generation returns `no_candidate`.
+A current daily briefing alone creates no notification. The Recommendation /
+Decision Feedback retirement removes exactly typed historical
+`daily_briefing` generated notifications and rejects that source kind at the
+current generator; retained `daily_state` and `weekly_review` rows/actions are
+unchanged. The generator also rejects a missing or unknown category, type,
+priority, action destination, or source kind with `22023` before it reads owner
+state. On an ordinary steady day without a current Monday review, generation
+returns `no_candidate`.
 
 The database RPC revalidates the profile timezone, local date, active explicit
 consent, current category flag, quiet hours, daily limit, and owner-scoped

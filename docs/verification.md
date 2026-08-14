@@ -11,25 +11,31 @@ contract. Test source or a historical pass is not current evidence.
 
 ## Current Verified Baseline
 
-The Context Preflight and documentation-context optimization working tree was
-verified locally on 2026-08-11 against task base
-`8e564c54447c1d790fa8d55d284770f042ed60f2`. `npm run verify:docs` passed the
-52-Markdown/75-FastAPI-route consistency inventory, and
-`npm run verify:visual` passed the frontend visual contract. The required
-affected invocation classified every changed path as `docs`, selected only
-Docs and Visual, and passed both gates. `git diff --check` passed. No product
-code, schema, migration, dependency, or CI behavior changed; no database reset,
-migration application, remote mutation, deployment, push, model call, or
-installed-device check occurred.
+The P7 generic Recommendation and Decision Feedback retirement working tree was
+verified locally on 2026-08-14 against task base
+`70828e1530a499a3663ea48dac622ea97aac8bd4`. Documentation consistency passed
+for 52 Markdown files and 78 FastAPI routes; the Visual contract, Flutter
+analysis, all 1,051 Flutter tests, the Flutter web build, Ruff, Python
+compilation, and `1543 passed, 2 skipped` FastAPI tests passed. The physically
+isolated Recommendation-retirement harness proved one real `55P03` rollback,
+53 transition assertions, and 368 final-state assertions across 15 pgTAP files
+while preserving a SHA-256 over every ordered normal-history `version`, `name`,
+and `statements` fact. The reviewed P4, P5, and P7 migrations were subsequently
+applied to the exact normal local database through the separate explicit apply
+gate. A following default `npm run verify:db`, without apply authority,
+confirmed matching history, every isolated harness, and all 368 normal pgTAP
+assertions. All eight independent browser journeys then passed against that
+same local checkout and removed their temporary Auth identities. No reset, remote mutation,
+deployment, push, real model call, or installed-device check occurred.
 
-The latest recorded evidence entering the current documentation-only task was
-captured at task base `8e564c54447c1d790fa8d55d284770f042ed60f2`:
+The latest recorded lane evidence for this checkout is:
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Docs, visual, Flutter, and FastAPI | On 2026-08-11, `verify:fast` passed the documentation, source/process/visual, clean Flutter analysis, all 928 Flutter tests, and `1383 passed, 2 skipped` FastAPI tests. | Local task-base checkout only. |
+| Docs, visual, Flutter, FastAPI, and web | On 2026-08-14, the P7 working tree passed Docs, Visual, Flutter analysis, all 1,051 Flutter tests, the web build, Ruff/compile, and `1543 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
 | Representative browser smoke | On 2026-08-11, all four profile-mode Setup, Auth/Capture/Today, Planner-confirmation, and fake-Coach journeys passed and removed their temporary Auth identities. | Deterministic local browser integration only. |
-| Full browser, database, and web | On 2026-08-10, the full eight-journey profile-mode suite passed; migration history matched, the isolated Goal transition harness passed 27 assertions, the database gate passed 218 assertions across 12 pgTAP files, and the Flutter web build passed. | Local checkout and local Supabase only; no remote state. |
+| Database transition/final state | On 2026-08-14, the isolated Goal, Exam Health, Multi-Exam, and P7 chains passed `27`, `6`, `104` twice, and `53 + 368` assertions. After the separately authorized normal apply, default `npm run verify:db` confirmed matching history and all 368 normal pgTAP assertions. | Physically isolated RAM-only transition targets plus the exact normal local database; no reset or remote state. |
+| Full browser | On 2026-08-14, the full eight-journey profile-mode suite passed and removed every temporary Auth identity. | Deterministic local browser integration against the P7 working tree only. |
 | Android source/build | On 2026-08-02, Android JVM/lint and debug APK gates passed. | No current installed-device or OEM behavior claim. |
 | Local database safety | On 2026-08-05, a full archive restore-verification and the reset preview passed; destructive reset execution was not run. | The ignored local archive and exact local database only. |
 | Demo seed | On 2026-08-04, the four local demo identities were recreated and the enriched Student fixture passed its focused verification. | Not a remote seed or full-product gate. |
@@ -185,18 +191,31 @@ dense 320 px/200-percent layout, refresh mapping, and independent 44/24-pixel
 information/accordion controls. The old two-source rating/`fullyRated` week
 projection is not compatibility behavior; Today at a glance remains unchanged.
 
+The generic Today Recommendation and Decision Feedback retirement is verified
+across FastAPI route composition, strict scheduler input, Briefing V2, Weekly
+Review V3, Account Export V5, Personal Snapshot V3, Coach prompt V4/context V3,
+Flutter provider/surface absence, notification source parsing, and preserved
+Sleep Recommendation/Skillset/Insight/Memory/controlled-Coach concepts. The
+isolated migration proof uses two owners, a real concurrent lock timeout with
+SQLSTATE `55P03`, rollback residue checks, exact structured sanitization,
+content-free Coach tombstones with usage retention, current writer/grant/RLS
+checks, and the complete final-state pgTAP suite. Historical immutable
+Recommendation transition tests remain source evidence but are not current
+product-surface evidence.
+
 `docs/current-contracts.json` is authoritative for exact sources and owners.
 This runbook retains the following compact current coverage because each listed
 boundary explicitly owns verification requirements:
 
 | Boundary | Current version |
 | --- | --- |
-| Account export | `account-export-v4` |
+| Account export | `account-export-v5` |
 | Assignment series | `assignment-series-v1` |
 | Calendar import | `calendar-import-v2` |
 | Calendar consent | `calendar-import-consent-v1` |
-| Coach snapshot | `personal-snapshot-v2` |
-| Coach prompt | `free-coach-agent-prompt-v3` |
+| Coach snapshot | `personal-snapshot-v3` |
+| Coach prompt | `free-coach-agent-prompt-v4` |
+| Daily briefing | `daily-briefing-v2` |
 | Daily Capture | `daily-capture-v5` |
 | Daily State | `explainable-daily-state-v3` |
 | Deadline Plan | `deadline-plan-v1` |
@@ -210,7 +229,7 @@ boundary explicitly owns verification requirements:
 | Preparation workload detail | `preparation-workload-detail-v1` |
 | Sleep recommendation | `sleep-recommendation-v1` |
 | Today week agenda | `today-week-agenda-v1` |
-| Weekly Review | `weekly-review-v2` |
+| Weekly Review | `weekly-review-v3` |
 
 Feature contracts remain the complete wire-format and compatibility authority.
 
@@ -312,10 +331,10 @@ credit, confirmed consumer inclusion, and authenticated denial. This isolated
 gate is wired into the migration-aware fast/local verification scripts; a
 normal local apply still requires the repository's separate explicit opt-in.
 
-The pending Multi-Exam migration has its own
+The Multi-Exam migration has its own
 `scripts/lib/multi_exam_plan_migration_harness.sh` full-chain proof. It uses the
 same labeled RAM-only isolation and history-before/after checks, then runs
-`supabase/tests/multi_exam_plan_v1_test.sql`. Each of its 103-assertion passes
+`supabase/tests/multi_exam_plan_v1_test.sql`. Each of its 104-assertion passes
 is run twice against the same isolated database to prove fixture cleanup and
 repeatability. The assertions cover the five
 private tables, forced RLS and least privilege, composite ownership and bounds,
@@ -323,7 +342,19 @@ referencing indexes, service-role-only public RPCs, ungranted inner helpers,
 canonical context and learned-timing marker sources, the shared owner-lock
 triggers on legacy direct-write authorities, real concurrent Proposal/Task and
 Confirm/Habit owner-lock exclusion, explicit committed-fixture/helper cleanup,
-owner/request/row-lock order,
+owner/request/row-lock order, and failure-reentrant cleanup of its fixed test
+owner, helpers, and login. Its second sessions use an expiring test login with
+a random SCRAM secret held only in `pg_temp`: normal non-superuser verification
+connects through the server interface where password authentication is
+required, while the physically isolated superuser target uses its allowed
+loopback path. The login receives only exact execution of the Proposal and
+Confirm RPCs plus its private fixture/helpers; it never receives
+`service_role`. No credential is hard-coded, printed, or retained. If the test
+must install `dblink`, the same transaction persists a marker bound to the
+extension OID, owner, schema, and version. Cleanup drops an extension without
+`CASCADE` only when that exact marker validates; a markerless pre-existing
+extension is preserved, and a later run repairs an interrupted marker-owned
+installation. Coverage also includes
 append-only identity, all single-plan proposal/replan/confirm/complete/cancel
 batch-child guards, exact batch replay, cancel cleanup, preference/pilot stale
 confirmation, cancel-only-staged semantics, the disjoint
@@ -331,6 +362,18 @@ retained/shifted/removed/added review math, and a transactional two-Exam
 proposal/stale-confirm/cancel/re-proposal/atomic-confirm lifecycle. The harness
 never applies the migration to the normal local database and does not claim
 remote state.
+
+The Recommendation/Decision Feedback erase migration has the dedicated
+`scripts/lib/recommendation_retirement_migration_harness.sh` full-chain proof.
+It uses the same labeled RAM-only isolation and compares a deterministic
+SHA-256 over every ordered normal-history `version`, `name`, and `statements`
+fact after each stage, applies filled two-owner fixtures, forces a
+concurrent-writer `55P03` timeout and verifies full rollback/no helper residue,
+then succeeds and runs 53
+transition assertions plus the complete final-state pgTAP suite. Its disposable
+bootstrap mirrors normal Supabase `service_role BYPASSRLS` and
+`"$user", public, extensions` session semantics. The proof never applies the
+erase migration to the normal local database and grants no remote authority.
 
 Read `docs/supabase-current-state.md` and
 `docs/local-database-safety.md` before database work. Inspect installed CLI

@@ -27,16 +27,16 @@ FastAPI -> local Codex CLI/OAuth (explicit Phase 10 development adapter only)
 ```
 
 The Flutter app is the main product surface. Supabase is the intended auth and
-persistence backend. The FastAPI service is an independent AI boundary that
-currently serves authenticated Intake V1 and deterministic recommendation
-and daily-briefing workflows when backend Supabase settings are configured. It
+persistence backend. The FastAPI service is an independent backend boundary
+that currently serves authenticated Intake V1 and deterministic daily-briefing
+workflows when backend Supabase settings are configured. It
 also owns deterministic user-state snapshot aggregation plus the protected
 scheduled preparation boundary for backend-generated daily state and briefings,
 the bounded deterministic weekly-review boundary, and the optional bounded
 read-only `.ics` import boundary.
 It also owns the bounded authenticated Coach boundary. Only a deliberate
 `POST /v1/coach/respond` may invoke a configured provider; capability, history,
-memory, Dashboard, capture, action, scheduler, recommendation, and weekly-review
+memory, Dashboard, capture, action, scheduler, and weekly-review
 paths remain generation-free. The first real provider is explicitly enabled and
 development-only; the CLI/OAuth process is not a new Flutter or Supabase
 connection.
@@ -67,8 +67,8 @@ do not read providers or perform writes.
 
 Cross-feature Riverpod factories, shared shell actions, and UI adapters that
 combine two feature-owned contracts live in `composition`. This includes Auth,
-profile-date, Capture, Dashboard, Deadline, Recommendation, Briefing, Weekly
-Review, Notification, Habit-action, projection-refresh, and Today-command wiring. The guest Dashboard
+profile-date, Capture, Dashboard, Deadline, Weekly Review, Notification,
+Habit-action, projection-refresh, and Today-command wiring. The guest Dashboard
 snapshot adapter combines the Quick Action store with the Dashboard projection
 there, while `DashboardRepositoryImpl` depends only on a snapshot-loader
 function. Auth likewise receives a guest-capture migration callback instead of
@@ -180,10 +180,10 @@ arbitrary line limit. `TodayOverviewSections` owns capture streak, progress,
 agenda, and the independently loaded latest-check-in inset;
 `TodayTaskSections` and `TodayHabitSection` own their typed display state and
 action callbacks; `DashboardSupportingSections` owns the direct
-capability-gated Weekly Review navigation entry plus three independent
-accordions for Recommendations, decision-feedback history, and the current
-profile-local full week. Those three narrow providers are watched only while
-their own accordion is open.
+capability-gated Weekly Review navigation entry plus the independently lazy
+current profile-local Full Week accordion. The former Recommendation and
+Decision Feedback sections/providers are retired. The Full Week provider is
+watched only while its accordion is open.
 `_DashboardHome` composes those section APIs instead of forwarding
 each leaf callback and optimistic collection independently. Shared visual
 primitives contain no feature command or data access. The feature-neutral
@@ -229,7 +229,7 @@ Source selection is explicit rather than a recovery fallback:
    network failures as recoverable errors. Do not substitute personalized-looking
    mock content. A successful empty response remains a separate valid state.
 
-Dashboard, Recommendations, Insights, and the Inbox follow this source
+Dashboard, Insights, and the Inbox follow this source
 boundary. `AppSurfaceCapabilities` also uses it to hide Supabase-only task,
 habit, and focus commands from local guests and to validate route capabilities.
 Calendar import follows the same rule: a real authenticated account uses the
@@ -249,8 +249,8 @@ later delivery. Guest/demo persistence can continue locally on the current
 device; failed synced forms retain their own draft/retry behavior.
 
 `USE_MOCK_DATA=true` wins over the presence of a Supabase client, access token,
-or authenticated profile. Setup, canonical check-in, Dashboard,
-Recommendations, Insights, and the Inbox stay on their local/demo sources,
+or authenticated profile. Setup, canonical check-in, Dashboard, Insights, and
+the Inbox stay on their local/demo sources,
 and synced execution plus snapshot actions remain unavailable. This prevents a
 partly real, partly demo session during local exploration. Auth boot also skips
 remote profile reads/creation and guest check-in migration in this mode, then
@@ -350,8 +350,8 @@ Flutter resolves account-local calendar dates through one
 authenticated profile's IANA timezone and fails closed for an invalid account
 timezone. Guest and no-account flows deliberately retain device-local dates.
 Daily Capture identity, standalone Habit writes, Focus `entry_date`, Weekly
-Review application refresh, recommendation refresh, and managed Preparation
-refresh use that boundary; real timestamps remain independent UTC instants.
+Review application refresh, and managed Preparation refresh use that boundary;
+real timestamps remain independent UTC instants.
 The inline Today handlers continue to use the exact `local_date` returned by
 the Today projection.
 
@@ -374,7 +374,7 @@ become zero, a mode, or a derived readiness score.
 The former wellness/optimization/recovery score, fake steps, derived sleep,
 invented screen time, hydration estimate, and schedule activity bars are
 removed. Tasks retain their own description, deadline, priority, status, and
-optional estimate; recommendation reasons are no longer copied into unrelated
+optional estimate; retired recommendation reasons are not copied into unrelated
 task descriptions. Authenticated users can execute typed task commands from the
 existing task section. The primary Today area now reads the strict owner-scoped
 `today-overview-v2` contract through `GET /v1/today/overview-v2`; the V1 route
@@ -385,7 +385,7 @@ itself sufficient evidence. FastAPI captures
 one UTC instant, resolves the profile-local date, and isolates check-in, task,
 habit, recurring Setup, confirmed Preparation, current imported Calendar, and
 actual Focus reads. Normal load is GET-only and never generates or adjusts a
-briefing or recommendation.
+briefing or generic Recommendation.
 
 Today leads with a strict both-capture streak and transparent dynamic progress,
 then renders `Today at a glance` as a vertical agenda. Planner Task blocks,
@@ -406,10 +406,10 @@ manual V1 lifecycle writes after a definitive missing-route response; scheduled
 or already persisted V2 sessions never downgrade. All daily and learning
 projections continue to consume actual Focus timestamps. The latest saved
 check-in is independently owner/date bounded and displayed in the streak card.
-Weekly Review is a direct capability-gated navigation entry. Recommendations,
-decision-feedback history, and the current Monday-through-Sunday week are
-separate, initially collapsed supporting sections that load their projection
-only when opened. Full week is the bearer-scoped `today-week-agenda-v1` FastAPI
+Weekly Review is a direct capability-gated navigation entry. The current
+Monday-through-Sunday week is the sole initially collapsed supporting section
+and loads its projection only when opened. Full week is the bearer-scoped
+`today-week-agenda-v1` FastAPI
 read, not a direct Flutter Supabase/Deadline merge. It returns seven
 server-projected profile-local dates and independent freshness for Setup,
 Preparation, Calendar, actual Focus, Planner Tasks, materialized Habit slots,
@@ -510,14 +510,13 @@ The additive forced-RLS schema and exact routes are specified in
 `docs/planner-v1-contract.md`; the Study extension is specified in
 `docs/study-setup-v1-contract.md`.
 
-Persisted `daily-briefing-v1` rows remain deterministic backend inputs for the
-scheduler, reminder generation, Coach context, and historical feedback. The
-Today UI no longer presents their ranking as a decision made for the user, and
-Flutter has no direct `/v1/briefings/*` repository or provider: Today V2 is its
-read authority and deliberate briefing generation remains backend-owned. This
-client cleanup does not remove the persisted backend contract, scheduled
-preparation, notification provenance, Coach context, or readable history. A
-local guest dashboard derives only its real locally saved capture state and
+Persisted `daily-briefing-v2` rows remain deterministic backend inputs for the
+scheduler and current state preparation. V2 contains no Recommendation IDs or
+Decision Feedback ranking/provenance. The Today UI has no generic
+Recommendation or Feedback surface, and Flutter has no direct
+`/v1/briefings/*` repository or provider: Today V2 is its read authority and
+deliberate briefing generation remains backend-owned. A local guest dashboard
+derives only its real locally saved capture state and
 otherwise shows honest empty sections; it does not call FastAPI/Supabase or
 invent a personalized briefing, task, habit, or schedule.
 
@@ -525,9 +524,9 @@ Authenticated real accounts can open `/weekly-review` from Dashboard or a
 strict `review_plan` action. Flutter reads the latest completed profile-local
 ISO week without generation, preserves `not_ready`, missing, current, stale,
 and error truth, and generates or refreshes only after an explicit control next
-to the facts. Weekly Review V2 is observational: new and refreshed rows always
-store `proposals=[]`, historical proposal arrays are parsed but never rendered
-or executed, and no Goal counter exists. Guest/mock sessions never call the
+to the facts. Weekly Review V3 is observational and accepts only
+`proposals=[]`; P7 erased pre-cutover rows instead of carrying proposal arrays
+forward. No Goal counter exists. Guest/mock sessions never call the
 weekly-review API.
 
 Goal retirement is a one-time database repair, not a read-path side effect.
@@ -678,10 +677,10 @@ Task, and Habit writers acquire the same owner lock from fixed-search-path,
 ungranted `BEFORE` triggers; the Task/Habit triggers run before their
 reservation-release `AFTER` triggers. RPC-owned context writers already use
 the same ordering.
-Existing Deadline revisions and blocks remain the exported/snapshotted user
-content. Consequently `account-export-v4` and `personal-snapshot-v2` retain
-their exact shapes; projecting private orchestration metadata would require new
-versions owned by later work.
+Existing Deadline revisions and blocks remain exported/snapshotted user
+content. `account-export-v5` and `personal-snapshot-v3` omit the private batch
+orchestration metadata as well as the retired Recommendation and Decision
+Feedback tables.
 
 `deadline-plan-v1` is a separate authenticated FastAPI workflow for explicit
 exam and assignment preparation. `/preparation-plans` asks the user for their
@@ -901,8 +900,8 @@ surface. The canonical application schema is now snake_case and centered on:
 - `behavioral_events` for granular AI signal history.
 - `tasks`, `schedule_items`, `notifications`, and `coach_messages` for the
   current product workflows.
-- `memory_entries`, `ai_insights`, `recommendations`, and
-  `skillset_profiles` for AI-generated context and output.
+- `memory_entries`, `ai_insights`, and `skillset_profiles` for learned context
+  and output. The generic `recommendations` table is retired.
 - `habits`, `habit_logs`, and `focus_sessions` for executable
   habit-outcome and focus workflows.
 - `intake_responses` and `user_state_snapshots` for revisioned typed Setup
@@ -911,8 +910,6 @@ surface. The canonical application schema is now snake_case and centered on:
   projection; authenticated owners read it and only the Intake backend writes.
 - `daily_briefings` for one persisted deterministic decision per user/local
   date; authenticated users may read their row, while FastAPI owns writes.
-- `decision_feedback` for retry-safe owner-scoped outcome/preference events;
-  users may read/delete history while FastAPI validates and inserts it.
 - `weekly_reviews` for one backend-owned deterministic completed-ISO-week
   review per user/period; authenticated owners may read but only FastAPI writes.
 - `calendar_connections`, `calendar_imports`, and `calendar_events` for one
@@ -967,8 +964,9 @@ Current responsibilities:
 - Serve `/v1/health`.
 - Serve authenticated Setup read at `GET /v1/intake/setup` and Intake V1
   completion/edit at `POST /v1/intake/complete`.
-- Serve authenticated recommendation contract endpoints at
-  `/v1/recommendations` and `/v1/recommendations/generate`.
+- Keep the retired generic Recommendation and Decision Feedback paths absent
+  from route composition while preserving the independent authenticated
+  `sleep-recommendation-v1` Insights route.
 - Serve authenticated deterministic snapshot refresh at
   `/v1/snapshots/generate`.
 - Serve scheduler-triggered deterministic daily preparation at
@@ -982,7 +980,7 @@ Current responsibilities:
   database boundary revalidates explicit consent, timezone/local date, quiet
   hours, category, daily cap, and dedupe under the owner lock.
 - Serve read-only latest/explicit weekly-review GETs plus deliberate
-  `POST /v1/weekly-reviews/generate` under `weekly-review-v2`.
+  `POST /v1/weekly-reviews/generate` under `weekly-review-v3`.
 - Serve authenticated calendar connection/read endpoints plus deliberate file
   import, disconnect, and imported-data deletion under `calendar-import-v2`.
   The service parses bounded caller-selected UTF-8 `.ics` text; it does not
@@ -1005,7 +1003,8 @@ Current responsibilities:
   service-tier truth, and retained usage. Fixed-mode V1/V2 history remains
   readable; failed/deleted requests remain terminal, and history deletion does
   not free budget.
-- Keep recommendation generation behind a service boundary.
+- Keep the retired generic Recommendation/Feedback paths absent while
+  preserving the independent Sleep Recommendation Insights route.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
 - Claim revisioned structured intake responses, then call the service-role-only
@@ -1015,10 +1014,6 @@ Current responsibilities:
   `setup:intake-v1` onboarding snapshot; marks the intake applied; and advances
   the profile projection only from its canonical stored response. It does not
   change notification preferences.
-- Load recent user-scoped data from `daily_logs`, `behavioral_events`, and
-  `tasks` plus latest `user_state_snapshots`, run the deterministic v1
-  recommendation engine, and persist verified recommendations to
-  `recommendations`.
 - Create or refresh compact `daily` and `weekly` `user_state_snapshots` from
   recent `daily_logs`, `behavioral_events`, `tasks`, `habits`, explicit
   `habit_logs`, `focus_sessions`, `schedule_items`, and `memory_entries` without
@@ -1049,23 +1044,20 @@ Current responsibilities:
 - Load capture metadata with daily rows and events. Event queries use a broadened
   UTC read window, then prefer the explicit local `metadata.entry_date` during
   in-memory filtering and fall back to `occurred_at` for legacy events.
-- Do not generate Recommendations during Setup completion. Runtime
-  Recommendations remain deliberate and use current Tasks, check-ins, and other
-  live state rather than retired onboarding personalization.
-- Support a deliberate dashboard recommendation refresh action that first
-  refreshes the daily snapshot best-effort, then calls the deterministic
-  recommendation generate endpoint with LLM wording disabled.
+- Do not generate generic Recommendations during Setup completion, Dashboard
+  reads, or scheduled preparation. The generic feed and refresh endpoint are
+  retired; Sleep Recommendation remains owned by Insights.
 - Support a bounded scheduler-triggered preparation pass that finds onboarded
   non-guest profiles, pins one local date per profile from one UTC run instant,
   and prepares deterministic daily snapshots plus persisted briefings. Current
   pairs are write-free; missing prerequisites and stale briefings converge on
-  their existing daily identities. Recommendations remain disabled by default,
-  and explicit opt-in still forces LLM wording off.
+  their existing daily identities. Retired recommendation scheduler fields are
+  rejected rather than accepted as compatibility input.
 
 FastAPI owns one pooled `httpx.AsyncClient` for Supabase Auth and REST during
 its application lifespan. One typed `ApplicationComposition` builds the
 repository/service graph over that shared `SupabaseRestClient` and reuses the
-same Snapshot, Briefing, Weekly Review, Recommendation, Learning, learned-
+same Snapshot, Briefing, Weekly Review, Learning, learned-
 timing, Deadline, Planner, Today, Scheduled, Notification, Account, and Coach
 collaborators where their contracts overlap. Router modules retain explicit
 FastAPI endpoints and delegate service-failure mapping to feature-owned,
@@ -1094,28 +1086,12 @@ their deterministic projection/availability builders live in
 Codex adapter separates process limits/termination (`bounded_process.py`) and
 strict event validation (`codex_events.py`) from provider command composition.
 
-Flutter reads persisted recommendations through `GET /v1/recommendations` when
-`USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
-access token is available. The app attaches that token as a bearer token for the
-FastAPI request. The typed response preserves provenance, `needs_generation`,
-generation time, period key, and current/missing/older/period-mismatch freshness.
-Guest/mock sessions receive a visibly labeled local demo feed. Missing real
-configuration or auth, network failures, and invalid envelopes propagate as
-errors and never read mock recommendations. Flutter does not automatically call
-`POST /v1/recommendations/generate` during a normal read.
-Authenticated Intake V1 completion writes no Recommendation. Normal dashboard
-reads also never generate recommendations. The dashboard refresh command is the
-explicit user-visible path:
-it calls `POST /v1/recommendations/generate` with `allow_llm_wording=false`
-after a best-effort daily snapshot refresh, then reloads persisted
-recommendations. A failed refresh retains the previously displayed feed and
-shows a recoverable failure; local demo sessions do not call the backend.
-Persisted recommendation `action_label` values are rendered as informational
-"Suggested next step" text, not as controls. Current Today Overview actions
+Flutter has no generic Recommendation or Decision Feedback domain, provider,
+repository, refresh control, or Today section. Real and guest/mock sessions
+therefore make zero calls to the retired paths. Current Today Overview actions
 come from owner-scoped Today data and invoke the existing Task, Habit, Focus,
-capture, and Weekly Review flows directly. Persisted `daily-briefing-v1`
-targets remain validated backend data but are not rendered as an executable
-briefing card.
+capture, and Weekly Review flows directly. The independent Insights Sleep
+Recommendation and ordinary Coach answers retain their separate contracts.
 
 Snapshot refresh is a deliberate authenticated backend action through
 `POST /v1/snapshots/generate`. The request can select `daily` or `weekly`
@@ -1164,13 +1140,11 @@ identities make retries converge. A token holder may narrow an operational retry
 with at most 20 `profile_ids`; those ids are still intersected with eligible
 profiles and never bypass onboarding or guest exclusion. Per-user results expose
 the local date, selection reason, snapshot/briefing ids and statuses, and a
-sanitized failing stage (`profile_date`, `snapshot`, `briefing`, or
-`recommendations`). One user's failure does not stop the rest of the bounded
-batch.
+sanitized failing stage (`profile_date`, `snapshot`, or `briefing`). One user's
+failure does not stop the rest of the bounded batch. The strict request rejects
+retired recommendation scheduler fields.
 
-Recommendation generation is disabled by default. Explicit
-`include_recommendations=true` remains deterministic and forces LLM wording off;
-snapshot and briefing preparation never call an LLM. This endpoint is not a
+Snapshot and briefing preparation never call an LLM. This endpoint is not a
 Flutter or browser runtime endpoint, and normal Dashboard load remains GET-only.
 The repository contains no deployed cron manifest or production worker. The
 local stack runner requests current-day deterministic notification generation
@@ -1239,9 +1213,9 @@ no model or standard-tier fallback.
 FastAPI exports relevant retained data through the owner-filtered Account
 Export paging boundary. The snapshot covers Setup, Daily Capture, Tasks,
 Habits/outcomes, Focus/reflections, Planner, Preparation, Calendar, Weekly
-Reviews, Insights, Recommendations, Memories, and earlier Coach messages,
-including retained detail text. It omits Goals and removes historical Weekly
-Review proposals before Coach use. It excludes authentication, email/role/provider
+Reviews, Insights, Memories, and current earlier Coach messages, including
+retained detail text. It omits Goals, generic Recommendations, Decision
+Feedback, and erased pre-P7 Weekly Review/Coach content. It excludes authentication, email/role/provider
 identity, credentials, provider internals, anti-replay/usage/selection ledgers,
 operational state, and other owners. It contains an explanatory catalog,
 relationships, record counts, periods, and helper views. It fails instead of
@@ -1267,8 +1241,9 @@ text and calendar values are untrusted data, never instructions.
 The HTTP boundary is message-only `coach-request-v3`,
 `coach-response-v2`, `coach-capabilities-v2`, `coach-history-v2`, and a
 `started|activity|completed|failed` SSE stream. The current agent pair is
-`free-coach-agent-prompt-v3` with `personal-snapshot-v2`; stored V1/V2 prompt
-responses and exact replay remain valid. V3 makes English the non-overridable
+`free-coach-agent-prompt-v4` with `personal-snapshot-v3`; P7 erases old free-
+agent content while retaining content-free request/usage identities. V4 makes
+English the non-overridable
 output language for reply and uncertainty. FastAPI rejects clearly German
 provider output as retryable `invalid_output` before persistence. Activity is
 allowlisted lifecycle copy rather than hidden reasoning; a real client
@@ -1313,7 +1288,7 @@ The exact boundary is `docs/v1-account-controls-contract.md`. Real authenticated
 accounts use bearer-derived FastAPI routes for revision-checked, retry-safe
 IANA timezone and daily preparation-budget changes,
 an optional bounded account-wide daily preparation rule, a strict bounded
-`account-export-v4` JSON portability export, and permanent deletion.
+`account-export-v5` JSON portability export, and permanent deletion.
 Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
@@ -1323,11 +1298,11 @@ current Study Setup and Personal Learning projections, applies field
 allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
 it omits, includes Deadline Planner and finite Assignment Series content rows
 while omitting both request ledgers, and fails rather than truncating at a V1
-bound. The exact 43-table set includes `learning_preferences`,
+bound. The exact 41-table set includes `learning_preferences`,
 `focus_session_reflections`, `focus_session_schedule_sources`, and the three
 Assignment Series content projections, while all eight anti-replay ledgers are
 explicitly omitted. FastAPI's typed owner-data catalog is the single code owner
-for all 51 repo-owned public tables: each entry separately declares Account
+for all 49 repo-owned public tables: each entry separately declares Account
 Export and Coach Snapshot participation, the bounded read shape when applicable,
 and the human-readable snapshot description. A focused migration-history
 completeness test fails when a newly created repo table has no deliberate
@@ -1396,13 +1371,10 @@ provenance; that provenance also records when actual allocation had to use a
 Setup window. Habits, commitments, active revisions, and confirmed blocks are
 never changed.
 
-Recommendation generation now loads profile-local structured terminal Focus
-and valid V4 sleep evidence. Focus pressure requires at least three terminal
-sessions and two abandonments in 14 days; intentionally short completed
-sessions are not treated as failure. Movement rules require actual measurements
-and state fixed thresholds. The service-role replacement RPC atomically retires
-the previous `new` feed and inserts the verified current set, preserving
-accepted and historical rows even when the new set is empty.
+The generic Recommendation generator and its service-role replacement RPC are
+retired. Profile-local terminal Focus and valid V4/V5 sleep evidence continue
+to feed only their current owners, including Personal Learning and the
+independent Sleep Recommendation.
 
 ## Security Posture
 
@@ -1511,21 +1483,14 @@ accepted and historical rows even when the new set is empty.
   ranks only strict Phase 3 targets. `GET /v1/briefings/today` is read-only and
   reports missing/current/stale state; deliberate
   `POST /v1/briefings/generate` refreshes the daily snapshot when generation is
-  needed and upserts the same daily identity. Phase 5 consumes this strict
-  contract in Flutter: a normal
-  Dashboard read never posts, stale actions are disabled until deliberate
-  `force=true` adjustment, and current primary/support actions reuse Phase 3
-  handlers. Phase 6 adds the strict `decision-feedback-v1` boundary through
-  `/v1/feedback` GET/POST/DELETE, exact owned-action validation, and a
-  deterministic 28-day `feedback-ranking-v1` contribution.
-  Original action reasons remain immutable; bounded contribution and reason
-  codes are additive briefing provenance. Insights starts with one cautious
-  observation and keeps full correlation analytics as advanced exploration.
+  needed and upserts the same daily identity. `daily-briefing-v2` has no generic
+  Recommendation IDs or Decision Feedback ranking. The former Phase 5/6 Today
+  Recommendation and Decision Feedback surfaces, routes, and storage are
+  retired; Insights Sleep Recommendation remains independent.
 - Phase 8 persists a deterministic weekly review only after explicit
   generation. `review_plan` is a real synced navigation handler, not an enabled
-  no-op. The V2 review is facts-only; it produces no adaptation, and Flutter
-  exposes no proposal controls. Historical proposal arrays remain readable in
-  transport but are excluded from Coach context and cleared on refresh. There
+  no-op. The V3 review is facts-only, accepts only an empty proposal array, and
+  exposes no proposal controls. P7 erased the pre-cutover review rows. There
   is no Goal counter, task-transition history, or habit-definition history
   claim.
 - Phase 9 accepts one explicitly consented, user-selected `.ics` source for a

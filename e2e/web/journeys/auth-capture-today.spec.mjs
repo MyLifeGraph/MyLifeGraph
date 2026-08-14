@@ -82,21 +82,25 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
     name: 'Show information about Today at a glance',
     exact: true,
   });
-  const closedInformationBounds = await showAgendaInformation.boundingBox();
-  expect(closedInformationBounds).not.toBeNull();
-  expect(closedInformationBounds.width).toBe(24);
-  expect(closedInformationBounds.height).toBe(24);
-  await showAgendaInformation.click();
+  const closedHitTargetBounds = await showAgendaInformation.boundingBox();
+  expect(closedHitTargetBounds).not.toBeNull();
+  expect(closedHitTargetBounds.width).toBe(44);
+  expect(closedHitTargetBounds.height).toBe(44);
+  // Flutter exposes the real semantics target to the browser; the centered
+  // 24px visual frame remains covered by the exact widget geometry test.
+  await showAgendaInformation.click({
+    position: { x: 2, y: closedHitTargetBounds.height / 2 },
+  });
   await expectFlutterText(page, agendaInformation);
   const hideAgendaInformation = page.getByRole('button', {
     name: 'Hide information about Today at a glance',
     exact: true,
   });
   await expect(hideAgendaInformation).toBeVisible();
-  const openInformationBounds = await hideAgendaInformation.boundingBox();
-  expect(openInformationBounds).not.toBeNull();
-  expect(openInformationBounds.width).toBe(24);
-  expect(openInformationBounds.height).toBe(24);
+  const openHitTargetBounds = await hideAgendaInformation.boundingBox();
+  expect(openHitTargetBounds).not.toBeNull();
+  expect(openHitTargetBounds.width).toBe(44);
+  expect(openHitTargetBounds.height).toBe(44);
   await expectFlutterText(page, 'Beat yesterday');
   await expectFlutterText(page, 'Edit Evening check-in');
 });

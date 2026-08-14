@@ -98,11 +98,7 @@ class Repository:
             key=lambda row: str(row[table.cursor_column]),
         )
         if after_cursor is not None:
-            rows = [
-                row
-                for row in rows
-                if str(row[table.cursor_column]) > after_cursor
-            ]
+            rows = [row for row in rows if str(row[table.cursor_column]) > after_cursor]
         return rows[:limit]
 
     async def get_export_watermark(
@@ -113,10 +109,7 @@ class Repository:
         max_response_bytes: int,
     ):
         self.watermark_calls.append((user_id, table, max_response_bytes))
-        if (
-            not self.rows.get(table.name)
-            and table.name != self.oversized_source_table
-        ):
+        if not self.rows.get(table.name) and table.name != self.oversized_source_table:
             return None
         return NOW.isoformat()
 
@@ -232,9 +225,9 @@ def test_export_is_owner_scoped_versioned_complete_and_sanitizes_ledgers() -> No
     prepared = asyncio.run(service.export_account(user_id="owner-1"))
     result = prepared.envelope
 
-    assert result.contract_version == "account-export-v4"
+    assert result.contract_version == "account-export-v5"
     assert "goals" not in result.data
-    assert len(result.data) == 43
+    assert len(result.data) == 41
     assert result.exported_at == NOW
     assert list(result.data) == [table.name for table in ACCOUNT_EXPORT_TABLES]
     assert result.record_counts["profiles"] == 1
@@ -251,14 +244,18 @@ def test_export_is_owner_scoped_versioned_complete_and_sanitizes_ledgers() -> No
         table.name for table in ACCOUNT_EXPORT_TABLES
     }
     assert all(call[0] == "owner-1" for call in repository.export_calls)
-    assert next(
-        call[1] for call in repository.export_calls if call[1].name == "profiles"
-    ).owner_column == "id"
-    assert next(
-        call[1]
-        for call in repository.export_calls
-        if call[1].name == "daily_logs"
-    ).owner_column == "user_id"
+    assert (
+        next(
+            call[1] for call in repository.export_calls if call[1].name == "profiles"
+        ).owner_column
+        == "id"
+    )
+    assert (
+        next(
+            call[1] for call in repository.export_calls if call[1].name == "daily_logs"
+        ).owner_column
+        == "user_id"
+    )
 
 
 def test_export_paginates_stably_and_rejects_partial_table_output() -> None:
@@ -299,8 +296,7 @@ def test_export_keyset_does_not_skip_after_an_earlier_row_is_deleted() -> None:
     repository = MutatingRepository()
     row_count = ACCOUNT_EXPORT_PAGE_SIZE + 30
     repository.rows["daily_logs"] = [
-        {"id": f"log-{index:05d}", "user_id": "owner-1"}
-        for index in range(row_count)
+        {"id": f"log-{index:05d}", "user_id": "owner-1"} for index in range(row_count)
     ]
     service = AccountService(repository=repository, now=lambda: NOW)
 
@@ -321,8 +317,7 @@ def test_export_rejects_a_repository_row_for_another_owner() -> None:
         asyncio.run(service.export_account(user_id="owner-1"))
 
 
-def test_export_rejects_oversized_json_instead_of_returning_truncated_data(
-) -> None:
+def test_export_rejects_oversized_json_instead_of_returning_truncated_data() -> None:
     repository = Repository()
     repository.rows["profiles"] = [
         {"id": "owner-1", "display_name": "x" * ACCOUNT_EXPORT_MAX_JSON_BYTES},
@@ -365,7 +360,7 @@ def test_export_maps_a_stream_bounded_source_page_to_413_outcome() -> None:
     assert repository.export_calls[0][5] <= ACCOUNT_EXPORT_MAX_JSON_BYTES
 
 
-def test_export_models_reject_non_v4_tables_policy_and_limits() -> None:
+def test_export_models_reject_non_v5_tables_policy_and_limits() -> None:
     data = {name: [] for name in ACCOUNT_EXPORT_TABLE_NAMES}
     counts = {name: 0 for name in ACCOUNT_EXPORT_TABLE_NAMES}
     policy = AccountExportLedgerPolicy(
@@ -378,21 +373,21 @@ def test_export_models_reject_non_v4_tables_policy_and_limits() -> None:
         max_json_bytes=ACCOUNT_EXPORT_MAX_JSON_BYTES,
     )
 
-    with pytest.raises(ValidationError, match="exact V4 export table set"):
+    with pytest.raises(ValidationError, match="exact V5 export table set"):
         AccountExportResponse(
-            contract_version="account-export-v4",
+            contract_version="account-export-v5",
             exported_at=NOW,
             data={"profiles": []},
             record_counts={"profiles": 0},
             ledger_policy=policy,
             limits=limits,
         )
-    with pytest.raises(ValidationError, match="V4 ledger policy"):
+    with pytest.raises(ValidationError, match="V5 ledger policy"):
         AccountExportLedgerPolicy(
             sanitized_tables=["coach_requests"],
             omitted_tables=dict(ACCOUNT_EXPORT_OMITTED_TABLES),
         )
-    with pytest.raises(ValidationError, match="account-export-v4"):
+    with pytest.raises(ValidationError, match="account-export-v5"):
         AccountExportLimits(
             max_rows_per_table=1,
             max_total_rows=2,
@@ -400,7 +395,7 @@ def test_export_models_reject_non_v4_tables_policy_and_limits() -> None:
         )
 
     valid = AccountExportResponse(
-        contract_version="account-export-v4",
+        contract_version="account-export-v5",
         exported_at=NOW,
         data=data,
         record_counts=counts,

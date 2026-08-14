@@ -228,6 +228,35 @@ complete repository chain there, run only
 `supabase/tests/multi_exam_plan_v1_test.sql`, trap-clean the target, and compare
 the normal local migration history byte-for-byte before and after. Passing it
 does not authorize applying `multi-exam-plan-v1` to the normal local stack.
+The concurrency assertions are also safe in the normal non-superuser pgTAP
+session: they create one expiring test login with a random SCRAM secret held
+only in `pg_temp`, connect through the server interface where that password is
+actually authenticated, and revoke/drop the login after both sessions close.
+The login has exact Proposal/Confirm RPC and private fixture/helper rights only;
+it is never a `service_role` member. The isolated superuser target uses its
+permitted loopback path. Before fixture creation and after success, the test
+removes only its fixed synthetic owner, private helper objects, and exact login
+so an interrupted committed phase is retry-safe without touching another local
+identity. When the test itself installs `dblink`, that transaction also writes
+one marker bound to the extension OID, owner, schema, and version. Only a
+matching marker permits a later non-`CASCADE` drop; markerless pre-existing
+installations remain unchanged, while an interrupted marker-owned installation
+is recovered on the next run.
+
+The Recommendation/Decision Feedback retirement migration uses
+`scripts/lib/recommendation_retirement_migration_harness.sh` under the same
+physical-isolation contract. It applies the full immutable chain only inside a
+labeled RAM-only container, loads filled two-owner transition fixtures, proves
+a real concurrent writer produces SQLSTATE `55P03` with a complete rollback,
+then applies the migration successfully and runs both its transition assertions
+and the complete final-state pgTAP suite. The disposable bootstrap mirrors the
+normal Supabase session boundary: `service_role` is `BYPASSRLS`, and
+`anon`/`authenticated`/`service_role` have `USAGE` on the `extensions` schema
+because the normal database search path is `"$user", public, extensions`.
+Normal local migration history is serialized as ordered `version`, `name`, and
+`statements` facts and SHA-256 hashed before and after every isolated stage.
+Passing this harness does not authorize applying the erase migration to the
+normal local database.
 
 The shared isolation helper deliberately does not create a second database in
 `supabase_db_mylifegraph`. It starts a separate Docker container with:
@@ -339,6 +368,7 @@ Treat changes to the following as one safety boundary:
 - `scripts/backup_local_supabase.sh`;
 - `scripts/reset_local_supabase.sh`;
 - `scripts/lib/goal_removal_migration_harness.sh`;
+- `scripts/lib/recommendation_retirement_migration_harness.sh`;
 - `scripts/verify_supabase_local.sh`;
 - `scripts/e2e_web.sh` and `scripts/start_local_stack.sh`;
 - `scripts/test_local_supabase_migrations.sh`;

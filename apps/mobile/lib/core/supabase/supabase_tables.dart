@@ -17,7 +17,6 @@ class SupabaseTables {
   static const habitLogs = 'habit_logs';
   static const skillsetProfiles = 'skillset_profiles';
   static const studySetupProfiles = 'study_setup_profiles';
-  static const recommendations = 'recommendations';
   static const notificationPreferences = 'notification_preferences';
   static const deadlinePlans = 'deadline_plans';
   static const deadlinePlanBlocks = 'deadline_plan_blocks';

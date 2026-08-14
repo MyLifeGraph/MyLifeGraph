@@ -10,7 +10,7 @@ from app.owner_data_catalog import (
     ACCOUNT_EXPORT_TABLE_NAMES,
 )
 
-ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v4"
+ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v5"
 ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE = 10_000
 ACCOUNT_EXPORT_MAX_TOTAL_ROWS = 50_000
 ACCOUNT_EXPORT_MAX_JSON_BYTES = 8 * 1024 * 1024
@@ -103,11 +103,11 @@ class AccountExportLedgerPolicy(BaseModel):
     omitted_tables: dict[str, str]
 
     @model_validator(mode="after")
-    def validate_exact_v4_policy(self) -> "AccountExportLedgerPolicy":
+    def validate_exact_v5_policy(self) -> "AccountExportLedgerPolicy":
         if tuple(self.sanitized_tables) != ACCOUNT_EXPORT_SANITIZED_TABLES:
-            raise ValueError("sanitized_tables must match the V4 ledger policy")
+            raise ValueError("sanitized_tables must match the V5 ledger policy")
         if self.omitted_tables != ACCOUNT_EXPORT_OMITTED_TABLES:
-            raise ValueError("omitted_tables must match the V4 ledger policy")
+            raise ValueError("omitted_tables must match the V5 ledger policy")
         return self
 
 
@@ -119,7 +119,7 @@ class AccountExportLimits(BaseModel):
     max_json_bytes: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def validate_exact_v4_limits(self) -> "AccountExportLimits":
+    def validate_exact_v5_limits(self) -> "AccountExportLimits":
         if (
             self.max_rows_per_table,
             self.max_total_rows,
@@ -129,14 +129,14 @@ class AccountExportLimits(BaseModel):
             ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
             ACCOUNT_EXPORT_MAX_JSON_BYTES,
         ):
-            raise ValueError("limits must match the account-export-v4 contract")
+            raise ValueError("limits must match the account-export-v5 contract")
         return self
 
 
 class AccountExportResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["account-export-v4"]
+    contract_version: Literal["account-export-v5"]
     exported_at: datetime
     data: dict[str, list[dict[str, Any]]]
     record_counts: dict[str, int]
@@ -149,9 +149,9 @@ class AccountExportResponse(BaseModel):
             raise ValueError("exported_at must be timezone-aware")
         expected_tables = set(ACCOUNT_EXPORT_TABLE_NAMES)
         if set(self.data) != expected_tables:
-            raise ValueError("data must contain the exact V4 export table set")
+            raise ValueError("data must contain the exact V5 export table set")
         if set(self.record_counts) != expected_tables:
-            raise ValueError("record_counts must contain the exact V4 table set")
+            raise ValueError("record_counts must contain the exact V5 table set")
         if any(
             self.record_counts[name] != len(rows) for name, rows in self.data.items()
         ):
@@ -160,7 +160,7 @@ class AccountExportResponse(BaseModel):
             count > ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE
             for count in self.record_counts.values()
         ):
-            raise ValueError("record_counts exceed the V4 per-table bound")
+            raise ValueError("record_counts exceed the V5 per-table bound")
         if sum(self.record_counts.values()) > ACCOUNT_EXPORT_MAX_TOTAL_ROWS:
-            raise ValueError("record_counts exceed the V4 total bound")
+            raise ValueError("record_counts exceed the V5 total bound")
         return self

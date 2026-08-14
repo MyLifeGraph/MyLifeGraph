@@ -26,7 +26,6 @@ class WeeklyReviewContext:
     habit_logs: list[dict[str, Any]]
     focus_sessions: list[dict[str, Any]]
     daily_snapshots: list[dict[str, Any]]
-    feedback: list[dict[str, Any]]
 
 
 class WeeklyReviewRepository(Protocol):
@@ -117,9 +116,7 @@ class SupabaseWeeklyReviewRepository:
         rows = await self._client.select(
             "user_state_snapshots",
             params={
-                "select": (
-                    "id,period_key,source_observed_at,generated_at,metadata"
-                ),
+                "select": ("id,period_key,source_observed_at,generated_at,metadata"),
                 "user_id": f"eq.{user_id}",
                 "scope": "eq.weekly",
                 "period_key": f"eq.{period_key}",
@@ -224,8 +221,7 @@ class SupabaseWeeklyReviewRepository:
             params=[
                 (
                     "select",
-                    "id,period_key,summary,source_observed_at,"
-                    "generated_at,metadata",
+                    "id,period_key,summary,source_observed_at,generated_at,metadata",
                 ),
                 ("user_id", f"eq.{user_id}"),
                 ("scope", "eq.daily"),
@@ -234,27 +230,12 @@ class SupabaseWeeklyReviewRepository:
                 ("order", "period_key.asc,id.asc"),
             ],
         )
-        feedback = await self._select_all_pages(
-            "decision_feedback",
-            params=[
-                (
-                    "select",
-                    "id,action_id,action_kind,feedback_type,context_mode,rule_key,"
-                    "created_at",
-                ),
-                ("user_id", f"eq.{user_id}"),
-                ("created_at", f"gte.{starts_at.isoformat()}"),
-                ("created_at", f"lt.{ends_at.isoformat()}"),
-                ("order", "created_at.asc,id.asc"),
-            ],
-        )
         return WeeklyReviewContext(
             tasks=tasks,
             habits=habits,
             habit_logs=habit_logs,
             focus_sessions=focus_sessions,
             daily_snapshots=daily_snapshots,
-            feedback=feedback,
         )
 
     async def persist_weekly_review(
@@ -268,7 +249,7 @@ class SupabaseWeeklyReviewRepository:
         if not isinstance(source_observed_at, str):
             raise ValueError("Weekly review observation timestamp is missing.")
         result = await self._client.rpc(
-            "persist_weekly_review_v2",
+            "persist_weekly_review_v3",
             params={
                 "p_user_id": user_id,
                 "p_period_key": period_key,
@@ -304,6 +285,8 @@ def _weekly_review(row: dict[str, Any]) -> WeeklyReview:
         raise ValueError("Persisted weekly review facts are invalid.")
     if not isinstance(proposals, list) or not isinstance(evidence_refs, list):
         raise ValueError("Persisted weekly review lists are invalid.")
+    if proposals:
+        raise ValueError("Persisted weekly-review-v3 proposals must be empty.")
     if not isinstance(provenance, dict):
         raise ValueError("Persisted weekly review provenance is invalid.")
     if row.get("source_fingerprint") != provenance.get("source_fingerprint"):

@@ -10,7 +10,6 @@ from app.api.routes import scheduled
 from app.api.deps.services import get_scheduled_refresh_service
 from app.main import create_app
 from app.models.notifications import NotificationGenerationResult
-from app.models.recommendations import RecommendationListResponse
 from app.models.scheduled import ScheduledRefreshRequest
 from app.repositories.scheduled_refresh_repository import (
     ScheduledRefreshTarget,
@@ -107,24 +106,6 @@ class FakeBriefingService:
             response=SimpleNamespace(briefing=briefing),
             snapshot_status=snapshot_status,
             briefing_status=briefing_status,
-        )
-
-
-class FakeRecommendationEngine:
-    def __init__(self, *, failing_users: set[str] | None = None) -> None:
-        self.failing_users = failing_users or set()
-        self.calls: list[tuple[str, object]] = []
-
-    async def generate_recommendations(self, *, user_id: str, request):
-        self.calls.append((user_id, request))
-        if user_id in self.failing_users:
-            raise RuntimeError("recommendation refresh failed")
-        return RecommendationListResponse(
-            items=[],
-            needs_generation=False,
-            generated_at=RUN_AT,
-            period_key="2026-W28",
-            stale_reason=None,
         )
 
 
@@ -286,11 +267,9 @@ def test_scheduled_service_uses_pinned_local_dates_and_reports_stage_results() -
     briefing_service = FakeBriefingService(
         outcomes={USER_2: ("reused", "refreshed")},
     )
-    recommendation_engine = FakeRecommendationEngine()
     service = ScheduledRefreshService(
         repository=repository,
         briefing_service=briefing_service,
-        recommendation_engine=recommendation_engine,
         now_provider=lambda: RUN_AT,
     )
 
@@ -311,7 +290,7 @@ def test_scheduled_service_uses_pinned_local_dates_and_reports_stage_results() -
             "target_date": None,
             "profile_ids": [USER_1, USER_2],
             "include_current": False,
-            "current_selection_reason": "recommendation_refresh",
+            "current_selection_reason": "notification_delivery",
         },
     ]
     assert response.run_at == RUN_AT
@@ -336,7 +315,6 @@ def test_scheduled_service_uses_pinned_local_dates_and_reports_stage_results() -
     assert results[USER_2].briefing_date == LOS_ANGELES_TODAY
     assert results[USER_2].snapshot_status == "reused"
     assert results[USER_2].briefing_status == "refreshed"
-    assert recommendation_engine.calls == []
 
 
 def test_scheduled_service_isolates_profile_snapshot_and_briefing_failures() -> None:
@@ -392,56 +370,6 @@ def test_scheduled_service_isolates_profile_snapshot_and_briefing_failures() -> 
         USER_3,
         USER_4,
     }
-
-
-def test_current_preparation_retries_recommendations_without_rewriting_briefing() -> (
-    None
-):
-    target = ScheduledRefreshTarget(
-        user_id=USER_1,
-        briefing_date=TODAY,
-        selection_reason="recommendation_refresh",
-    )
-    repository = FakeScheduledRefreshRepository([target])
-    briefing_service = FakeBriefingService(
-        outcomes={USER_1: ("reused", "unchanged")},
-    )
-    recommendation_engine = FakeRecommendationEngine(failing_users={USER_1})
-    service = ScheduledRefreshService(
-        repository=repository,
-        briefing_service=briefing_service,
-        recommendation_engine=recommendation_engine,
-        now_provider=lambda: RUN_AT,
-    )
-    request = ScheduledRefreshRequest(
-        include_recommendations=True,
-        recommendation_window_days=21,
-    )
-
-    failed = run(service.refresh_daily(request))
-
-    assert failed.failed == 1
-    assert failed.results[0].failed_stage == "recommendations"
-    assert failed.results[0].error == "RuntimeError"
-    assert repository.calls[0]["include_current"] is True
-    assert repository.calls[0]["current_selection_reason"] == ("recommendation_refresh")
-    assert briefing_service.calls[0]["briefing_date"] == TODAY
-    recommendation_request = recommendation_engine.calls[0][1]
-    assert recommendation_request.window_days == 21
-    assert recommendation_request.force is False
-    assert recommendation_request.allow_llm_wording is False
-
-    recommendation_engine.failing_users.clear()
-    retried = run(service.refresh_daily(request))
-
-    assert retried.succeeded == 1
-    assert retried.results[0].selection_reason == "recommendation_refresh"
-    assert retried.results[0].snapshot_status == "reused"
-    assert retried.results[0].briefing_status == "unchanged"
-    assert retried.results[0].recommendation_count == 0
-    assert len(briefing_service.calls) == 2
-    assert len(recommendation_engine.calls) == 2
-    assert repository.calls[1]["include_current"] is True
 
 
 def test_current_preparation_generates_notifications_with_one_pinned_run_time() -> None:
@@ -537,7 +465,7 @@ def test_repository_selects_local_missing_and_stale_targets_only() -> None:
             target_date=None,
             profile_ids=[],
             include_current=False,
-            current_selection_reason="recommendation_refresh",
+            current_selection_reason="notification_delivery",
         ),
     )
 
@@ -572,11 +500,18 @@ def test_repository_selects_local_missing_and_stale_targets_only() -> None:
     )
 
 
-def test_repository_selects_current_target_for_recommendation_retry() -> None:
+def test_repository_selects_current_target_for_notification_delivery() -> None:
     client = FakeSupabaseClient(
         profiles=[_profile(USER_4)],
         snapshots=[_snapshot(USER_4, TODAY)],
         briefings=[_briefing(USER_4, TODAY)],
+        notification_preferences=[
+            {
+                "user_id": USER_4,
+                "in_app_delivery_enabled": True,
+                "in_app_delivery_consent_version": ("in-app-notification-consent-v1"),
+            },
+        ],
     )
     repository = SupabaseScheduledRefreshRepository(client)
 
@@ -587,7 +522,7 @@ def test_repository_selects_current_target_for_recommendation_retry() -> None:
             target_date=None,
             profile_ids=[],
             include_current=False,
-            current_selection_reason="recommendation_refresh",
+            current_selection_reason="notification_delivery",
         ),
     )
     retry_targets = run(
@@ -597,7 +532,7 @@ def test_repository_selects_current_target_for_recommendation_retry() -> None:
             target_date=None,
             profile_ids=[],
             include_current=True,
-            current_selection_reason="recommendation_refresh",
+            current_selection_reason="notification_delivery",
         ),
     )
 
@@ -606,7 +541,7 @@ def test_repository_selects_current_target_for_recommendation_retry() -> None:
         ScheduledRefreshTarget(
             user_id=USER_4,
             briefing_date=TODAY,
-            selection_reason="recommendation_refresh",
+            selection_reason="notification_delivery",
         ),
     ]
 
@@ -688,7 +623,7 @@ def test_repository_profile_ids_are_bounded_to_eligible_requested_profiles() -> 
             target_date=TODAY,
             profile_ids=[USER_2, GUEST_USER, INCOMPLETE_USER, USER_2],
             include_current=False,
-            current_selection_reason="recommendation_refresh",
+            current_selection_reason="notification_delivery",
         ),
     )
 
@@ -759,6 +694,8 @@ def test_scheduled_refresh_endpoint_rejects_wrong_token() -> None:
         {"profile_ids": ["not-a-uuid"]},
         {"profile_ids": [USER_1] * 21},
         {"target_date": TODAY.isoformat(), "include_notifications": True},
+        {"include_recommendations": True},
+        {"recommendation_window_days": 7},
         {"unexpected": True},
     ],
 )

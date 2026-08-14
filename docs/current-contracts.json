@@ -5,7 +5,7 @@
     {
       "coverage": "shared_named",
       "key": "accountExport",
-      "version": "account-export-v4",
+      "version": "account-export-v5",
       "sources": [
         {
           "path": "apps/mobile/lib/features/settings/domain/account_settings.dart",
@@ -122,7 +122,7 @@
     {
       "coverage": "shared_named",
       "key": "coachContext",
-      "version": "personal-snapshot-v2",
+      "version": "personal-snapshot-v3",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -173,7 +173,7 @@
     {
       "coverage": "shared_named",
       "key": "coachPrompt",
-      "version": "free-coach-agent-prompt-v3",
+      "version": "free-coach-agent-prompt-v4",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -241,6 +241,25 @@
         "docs/daily-briefing-implementation-plan.md",
         "docs/phase-10-controlled-coach-plan.md",
         "docs/supabase-current-state.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "coverage": "explicit",
+      "key": "dailyBriefing",
+      "version": "daily-briefing-v2",
+      "sources": [
+        {
+          "path": "services/ai_service/app/models/briefings.py",
+          "symbol": "DAILY_BRIEFING_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "docs/architecture.md",
+        "docs/backend-roadmap.md",
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/supabase-current-state.md",
+        "docs/verification.md",
         "services/ai_service/README.md"
       ]
     },
@@ -317,25 +336,6 @@
         "docs/phase-3-executable-actions-contract.md",
         "docs/phase-9-calendar-import-contract.md",
         "docs/verification.md"
-      ]
-    },
-    {
-      "coverage": "shared_named",
-      "key": "decisionFeedback",
-      "version": "decision-feedback-v1",
-      "sources": [
-        {
-          "path": "apps/mobile/lib/features/briefings/domain/decision_feedback.dart",
-          "symbol": "decisionFeedbackContractVersion"
-        },
-        {
-          "path": "services/ai_service/app/models/feedback.py",
-          "symbol": "DECISION_FEEDBACK_CONTRACT_VERSION"
-        }
-      ],
-      "owners": [
-        "docs/architecture.md",
-        "docs/backend-roadmap.md"
       ]
     },
     {
@@ -779,7 +779,7 @@
     {
       "coverage": "shared_named",
       "key": "weeklyReview",
-      "version": "weekly-review-v2",
+      "version": "weekly-review-v3",
       "sources": [
         {
           "path": "apps/mobile/lib/features/weekly_review/domain/weekly_review.dart",

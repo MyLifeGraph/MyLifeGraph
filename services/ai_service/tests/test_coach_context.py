@@ -59,7 +59,7 @@ def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
         briefing={"id": "briefing"},
         freshness="current",
         payload={
-            "contract_version": "daily-briefing-v1",
+            "contract_version": "daily-briefing-v2",
             "freshness": "current",
             "briefing": {"summary": "Keep the primary action small."},
         },
@@ -68,7 +68,7 @@ def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
         review={"id": "weekly"},
         freshness="stale",
         payload={
-            "contract_version": "weekly-review-v2",
+            "contract_version": "weekly-review-v3",
             "freshness": "stale",
             "review": {"narrative": "SECRET_STALE_WEEKLY"},
         },
@@ -137,7 +137,7 @@ def test_current_weekly_review_is_included() -> None:
         review={"id": "weekly"},
         freshness="current",
         payload={
-            "contract_version": "weekly-review-v2",
+            "contract_version": "weekly-review-v3",
             "freshness": "current",
             "review": {
                 "narrative": "Current deterministic review.",
@@ -263,7 +263,6 @@ def test_v3_patterns_context_contains_only_digest_and_shared_sources() -> None:
         "daily_capture",
         "focus_reflections",
         "habit_outcomes",
-        "decision_feedback",
         "weekly_reviews",
         "task_lifecycle",
         "memories",
@@ -416,7 +415,6 @@ def _evidence() -> CoachEvidenceDigest:
         "daily_capture",
         "focus_reflections",
         "habit_outcomes",
-        "decision_feedback",
         "weekly_reviews",
         "task_lifecycle",
     )

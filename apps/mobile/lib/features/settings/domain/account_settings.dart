@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import '../../../core/contracts/strict_contract.dart';
 
-const accountExportContractVersion = 'account-export-v4';
+const accountExportContractVersion = 'account-export-v5';
 const accountExportTableNames = <String>[
   'profiles',
   'notification_preferences',
@@ -17,7 +17,6 @@ const accountExportTableNames = <String>[
   'coach_messages',
   'memory_entries',
   'ai_insights',
-  'recommendations',
   'skillset_profiles',
   'habits',
   'habit_logs',
@@ -28,7 +27,6 @@ const accountExportTableNames = <String>[
   'study_setup_profiles',
   'user_state_snapshots',
   'daily_briefings',
-  'decision_feedback',
   'weekly_reviews',
   'calendar_connections',
   'calendar_imports',
@@ -387,7 +385,7 @@ class AccountExportEnvelope {
           accountExportV1OmittedTables,
         )) {
       throw const AccountSettingsContractException(
-        'The account export ledger policy does not match V2.',
+        'The account export ledger policy does not match V5.',
       );
     }
 
@@ -435,7 +433,7 @@ class AccountExportEnvelope {
         maxTotalRows != accountExportV1MaxTotalRows ||
         maxJsonBytes != accountExportV1MaxJsonBytes) {
       throw const AccountSettingsContractException(
-        'The account export limits do not match V2.',
+        'The account export limits do not match V5.',
       );
     }
     if (recordCounts.values.any((count) => count > maxRowsPerTable) ||

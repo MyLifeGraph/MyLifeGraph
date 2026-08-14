@@ -79,7 +79,7 @@ const scenarios = [
       ['Prepare physics lab notes', 'Bring one question for the lab session.', 'cancelled', 'medium', 3, 45],
       ['Review flashcards', 'Twenty-minute spaced repetition block.', 'done', 'low', -1, 20],
     ],
-    recommendations: [
+    coachAdvice: [
       ['Protect the first study block', 'Your rated Focus sessions show stronger useful progress between 09:00 and 13:00.', 'Schedule block', 'focus', 0.86, 'high'],
       ['Keep exam preparation distributed', 'The upcoming exam and essay both need several manageable study blocks.', 'Plan prep', 'planning', 0.78, 'medium'],
       ['Keep the sleep window steady', 'Recent sleep estimates stay close to the saved eight-hour target.', 'Review recovery', 'recovery', 0.73, 'medium'],
@@ -142,7 +142,7 @@ const scenarios = [
       ['Clean up inbox commitments', 'Turn open email promises into tasks.', 'todo', 'medium', 0],
       ['Send client recap', 'Capture decisions and owners from the last sync.', 'done', 'medium', -1],
     ],
-    recommendations: [
+    coachAdvice: [
       ['Hold one meeting-free block', 'Focus drops on days with meetings across every work segment.', 'Protect calendar', 'focus', 0.81, 'high'],
       ['Add transition buffers', 'Stress stays elevated after back-to-back calls.', 'Add reset', 'recovery', 0.76, 'medium'],
       ['Convert email promises into tasks', 'Untracked commitments are driving the highest-risk deadlines.', 'Create tasks', 'planning', 0.82, 'high'],
@@ -203,7 +203,7 @@ const scenarios = [
       ['Book light movement slot', 'Choose a walk window before the day fills up.', 'todo', 'low', 0],
       ['Reflect on energy pattern', 'Note what helped energy feel steadier.', 'done', 'low', -1],
     ],
-    recommendations: [
+    coachAdvice: [
       ['Keep tomorrow smaller', 'Energy is improving, but high-load days still reduce recovery.', 'Trim plan', 'recovery', 0.83, 'high'],
       ['Use a gentle walk reset', 'Movement consistency is better than intensity for this scenario.', 'Add walk', 'movement', 0.77, 'medium'],
       ['Plan a minimum viable day', 'A fallback plan reduces stress on lower-energy mornings.', 'Create fallback', 'planning', 0.74, 'medium'],
@@ -698,36 +698,12 @@ async function seedScenario(userId, scenario) {
       description,
       category,
       priority: index === 0 ? 'high' : 'medium',
-      recommendation: scenario.recommendations[index]?.[0] ?? null,
+      recommendation: scenario.coachAdvice[index]?.[0] ?? null,
       confidence,
       source: 'demo_seed',
       metadata,
       created_at: addDays(now, -index).toISOString(),
     })),
-  );
-
-  await insertRows(
-    'recommendations',
-    scenario.recommendations.map(
-      ([title, reason, actionLabel, category, confidence, priority], index) => ({
-        id: deterministicUuid(`demo-seed:recommendation:${userId}:${index}`),
-        user_id: userId,
-        title,
-        reason,
-        action_label: actionLabel,
-        category,
-        confidence,
-        status: index === 2 ? 'accepted' : 'new',
-        priority,
-        metadata: {
-          ...metadata,
-          model: null,
-          source_engine_version: 'demo-seed-v1',
-        },
-        generated_at: addDays(now, -index).toISOString(),
-        updated_at: addDays(now, -index).toISOString(),
-      }),
-    ),
   );
 
   await insertRows('skillset_profiles', [
@@ -759,7 +735,7 @@ async function seedScenario(userId, scenario) {
       id: deterministicUuid(`demo-seed:legacy-coach-message:${userId}:assistant`),
       user_id: userId,
       role: 'assistant',
-      content: scenario.recommendations[0][1],
+      content: scenario.coachAdvice[0][1],
       metadata,
       created_at: addDays(now, -1).toISOString(),
     },
@@ -795,8 +771,8 @@ async function seedScenario(userId, scenario) {
       scope: 'daily',
       period_key: today,
       summary: {
-        focus_hint: scenario.recommendations[0][0],
-        recovery_hint: scenario.recommendations[1][0],
+        focus_hint: scenario.coachAdvice[0][0],
+        recovery_hint: scenario.coachAdvice[1][0],
         risk_flags: scenario.baseline.stress >= 7 ? ['deadline_pressure'] : [],
       },
       signals: {
@@ -818,12 +794,12 @@ async function seedScenario(userId, scenario) {
       period_key: weekKey,
       summary: {
         weekly_theme: scenario.priorities[0][0],
-        next_focus: scenario.recommendations[0][0],
+        next_focus: scenario.coachAdvice[0][0],
       },
       signals: {
         input_counts: {
           daily_logs: dailyLogs.length,
-          recommendations: scenario.recommendations.length,
+          priorities: scenario.priorities.length,
         },
       },
       source: 'demo_seed',

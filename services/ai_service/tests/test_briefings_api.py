@@ -32,7 +32,7 @@ class FakeBriefingService:
 
 def empty_response() -> dict:
     return {
-        "contract_version": "daily-briefing-v1",
+        "contract_version": "daily-briefing-v2",
         "briefing_date": date.today(),
         "freshness": "missing",
         "needs_generation": True,

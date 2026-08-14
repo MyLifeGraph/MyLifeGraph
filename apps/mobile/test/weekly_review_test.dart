@@ -15,11 +15,7 @@ void main() {
     expect(feed.review?.facts.habits.skipped, 1);
     expect(feed.review?.facts.habits.missed, 1);
     expect(feed.review?.facts.recovery.recoveryDays, 2);
-    expect(feed.review?.proposals, hasLength(1));
-    expect(
-      feed.review?.proposals.single.applicationMode,
-      WeeklyReviewApplicationMode.directHabit,
-    );
+    expect(feed.review?.proposals, isEmpty);
   });
 
   test('not-ready, missing, and stale state invariants stay distinct', () {
@@ -62,73 +58,20 @@ void main() {
     }
   });
 
-  test('cadence parser enforces nullable target and sorted unique weekdays',
-      () {
-    final invalid = [
-      weeklyHabitState(kind: 'daily', weeklyTarget: 1),
-      weeklyHabitState(
-        kind: 'weekdays',
-        weeklyTarget: null,
-        scheduledWeekdays: [3, 1],
-      ),
-      weeklyHabitState(
-        kind: 'weekdays',
-        weeklyTarget: null,
-        scheduledWeekdays: [1, 1],
-      ),
-      weeklyHabitState(kind: 'weekly_target', weeklyTarget: null),
-    ];
-
-    for (final state in invalid) {
-      final json = weeklyReviewResponseJson(before: state);
-      expect(
-        () => WeeklyReviewFeed.fromJson(json),
-        throwsA(isA<WeeklyReviewContractException>()),
-      );
-    }
-  });
-
-  test('proposal operation and application modes are exact', () {
-    final keep = WeeklyReviewFeed.fromJson(
-      weeklyReviewResponseJson(
-        operation: 'keep',
-        applicationMode: 'none',
-        after: weeklyHabitState(weeklyTarget: 3),
-      ),
+  test('weekly-review-v3 rejects every non-empty proposal list', () {
+    final json = _copy(weeklyReviewResponseJson());
+    ((json['review'] as Map<String, dynamic>)['proposals'] as List<Object?>)
+        .add(
+      {'legacy': true},
     );
-    final staged = WeeklyReviewFeed.fromJson(
-      weeklyReviewResponseJson(
-        operation: 'replace',
-        applicationMode: 'staged_only',
-        after: null,
-      ),
-    );
-
-    expect(keep.review?.proposals.single.operation, WeeklyReviewOperation.keep);
-    expect(staged.review?.proposals.single.change.after, isNull);
 
     expect(
-      () => WeeklyReviewFeed.fromJson(
-        weeklyReviewResponseJson(
-          operation: 'pause',
-          applicationMode: 'direct_habit',
-        ),
-      ),
-      throwsA(isA<WeeklyReviewContractException>()),
-    );
-    expect(
-      () => WeeklyReviewFeed.fromJson(
-        weeklyReviewResponseJson(
-          operation: 'replace',
-          applicationMode: 'direct_habit',
-          after: weeklyHabitState(weeklyTarget: 2),
-        ),
-      ),
+      () => WeeklyReviewFeed.fromJson(json),
       throwsA(isA<WeeklyReviewContractException>()),
     );
   });
 
-  test('period, provenance, recovery, and feedback invariants are strict', () {
+  test('period, provenance, recovery, and exact fact keys are strict', () {
     final badPeriod = _copy(weeklyReviewResponseJson())
       ..['period_key'] = '2026-W29';
     final badFingerprint = _copy(weeklyReviewResponseJson());
@@ -139,9 +82,8 @@ void main() {
             as Map<String, dynamic>)['recovery']
         as Map<String, dynamic>))['recovery_days'] = 8;
     final badFeedback = _copy(weeklyReviewResponseJson());
-    ((((badFeedback['review'] as Map<String, dynamic>)['facts']
-            as Map<String, dynamic>)['feedback']
-        as Map<String, dynamic>))['total'] = 6;
+    ((badFeedback['review'] as Map<String, dynamic>)['facts']
+        as Map<String, dynamic>)['feedback'] = {'total': 1};
 
     for (final json in [badPeriod, badFingerprint, badRecovery, badFeedback]) {
       expect(

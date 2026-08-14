@@ -291,7 +291,6 @@ class NotificationsSupabaseRowMapper {
         timezone.isEmpty ||
         sourceKind is! String ||
         !const {
-          'daily_briefing',
           'daily_state',
           'weekly_review',
         }.contains(sourceKind) ||

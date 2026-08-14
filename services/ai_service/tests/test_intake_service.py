@@ -48,15 +48,11 @@ class FakeIntakeRepository:
             (
                 deepcopy(row)
                 for row in self.intakes
-                if row["user_id"] == user_id
-                and row["request_id"] == str(request_id)
+                if row["user_id"] == user_id and row["request_id"] == str(request_id)
             ),
             None,
         )
-        if (
-            row is not None
-            and self.return_stale_pending_once_for == str(request_id)
-        ):
+        if row is not None and self.return_stale_pending_once_for == str(request_id):
             self.return_stale_pending_once_for = None
             row["state"] = "pending"
         return row
@@ -171,9 +167,7 @@ class FakeIntakeRepository:
                 existing_snapshot = self.snapshots.get(snapshot_key)
                 snapshot = {
                     "id": (
-                        existing_snapshot["id"]
-                        if existing_snapshot
-                        else "snapshot-123"
+                        existing_snapshot["id"] if existing_snapshot else "snapshot-123"
                     ),
                     **deepcopy(apply.snapshot),
                 }
@@ -261,7 +255,9 @@ class FakeIntakeRepository:
 
 def _is_setup(row: dict) -> bool:
     metadata = row.get("metadata", {})
-    return metadata.get("managed_by") == "setup" or metadata.get("source") == "intake-v1"
+    return (
+        metadata.get("managed_by") == "setup" or metadata.get("source") == "intake-v1"
+    )
 
 
 def _apply_result(row: dict) -> dict:
@@ -548,7 +544,6 @@ def test_same_request_twice_returns_same_ids_without_duplicates() -> None:
     assert len(repository.habits) == 1
     assert len(repository.schedule) == 1
     assert len(repository.snapshots) == 1
-    assert first.recommendations == second.recommendations == []
 
 
 def test_parallel_same_request_workers_converge_through_atomic_apply() -> None:
@@ -624,7 +619,9 @@ def test_later_revision_cannot_claim_while_atomic_apply_is_in_flight() -> None:
     assert len(repository.intakes) == 1
 
 
-def test_reusing_request_id_with_only_retired_changes_replays_canonical_payload() -> None:
+def test_reusing_request_id_with_only_retired_changes_replays_canonical_payload() -> (
+    None
+):
     repository = FakeIntakeRepository()
     service = IntakeService(repository, now_provider=lambda: NOW)
     first = run(service.complete_intake(user_id=USER_ID, request=request()))
@@ -700,9 +697,7 @@ def test_edit_keeps_stable_habit_id_and_updates_title() -> None:
     assert first.revision == 1
     assert second.revision == 2
     assert list(repository.habits) == [record_id]
-    assert repository.habits[record_id]["title"] == (
-        "Take a longer walk after lunch"
-    )
+    assert repository.habits[record_id]["title"] == ("Take a longer walk after lunch")
     assert second.snapshot_id == first.snapshot_id
 
 
@@ -799,9 +794,10 @@ def test_stale_duplicate_worker_cannot_reapply_after_newer_revision() -> None:
     assert repository.memories == state_before_stale_worker["memories"]
     assert repository.snapshots == state_before_stale_worker["snapshots"]
     assert repository.profile_values == state_before_stale_worker["profile"]
-    assert len(repository.profile_updates) == state_before_stale_worker[
-        "profile_update_count"
-    ]
+    assert (
+        len(repository.profile_updates)
+        == state_before_stale_worker["profile_update_count"]
+    )
 
 
 def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
@@ -864,8 +860,7 @@ def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
         "Manual",
     }
     assert all(
-        row["title"] != "Intake context note"
-        for row in repository.memories.values()
+        row["title"] != "Intake context note" for row in repository.memories.values()
     )
 
 

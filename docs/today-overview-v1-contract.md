@@ -5,10 +5,10 @@ the simplified supporting dashboard, and Daily Capture V5/V4 compatibility as
 of 2026-08-05. The V1 endpoint remains available and unchanged.
 
 Today Overview V1 replaces the briefing-first presentation on the `Today`
-surface. It does not remove `daily-briefing-v1`: persisted briefings remain a
-backend input for deterministic notification generation, Coach context, and
-historical feedback. The primary Today UI no longer presents that ranking as a
-decision made for the user.
+surface. Persisted `daily-briefing-v2` rows remain a backend-owned deterministic
+input, but no generic Recommendation feed, Decision Feedback history, or
+Briefing-derived notification source remains. The primary Today UI does not
+present that ranking as a decision made for the user.
 
 ## Endpoint And Authority
 
@@ -162,10 +162,9 @@ The primary Today order is:
 4. `Today at a glance` vertical agenda;
 5. `Today's tasks`, followed by collapsed `Show all tasks`;
 6. `Today's habits`;
-7. a direct `Review your week` navigation entry, followed by independently
-   collapsed `Recommendations`, `Decision feedback history`, and `Full week`
-   sections. The Weekly Review entry is omitted when its existing capability
-   is unavailable.
+7. a direct `Review your week` navigation entry, followed by the independently
+   collapsed `Full week` section. The Weekly Review entry is omitted when its
+   existing capability is unavailable.
 
 The streak card includes a compact `Beat yesterday` inset. It independently
 loads the latest saved check-in at or before the displayed profile-local Today
@@ -174,21 +173,20 @@ Energy, Sleep duration, Sleep quality, and Stress. It calculates no delta,
 improvement, score, or judgment. Loading, no-data, and error copy stays inside
 the inset, so the streak and Morning/Evening actions remain usable.
 
-Recommendations, decision-feedback history, and Full week watch their narrow
-projections only while their own accordion is open. `Review your week` keeps
-its existing navigation and capability boundary but is no longer wrapped in a
-second accordion. Multiple remaining accordions may remain open simultaneously.
+Full week watches its narrow projection only while its accordion is open.
+`Review your week` keeps its existing navigation and capability boundary but is
+not wrapped in a second accordion.
 Today no longer contains a `More` grouping, saved-signal
 summary, or `7-day preparation load`; the existing workload projection and
-Preparation behavior remain available in Planner. Feedback history exposes
-loading, error/retry, empty, list, per-row delete-in-progress, and delete error
-states inside its own accordion.
+Preparation behavior remain available in Planner. The former generic
+Recommendation and Decision Feedback accordions are retired rather than hidden
+behind compatibility UI.
 
 Explanatory copy is initially hidden behind an independent circled information
 control beside each affected heading. This applies to the Today source/updated
 line, the normal streak explanation, the progress-inclusion explanation,
 `Today at a glance`, `Today's tasks`, `Show all tasks`, its expanded `Tasks`
-subsection, `Today's habits`, and the three supporting accordion descriptions.
+subsection, `Today's habits`, and the Full-week accordion description.
 The direct `Review your week` entry keeps its summary visible and has no
 information control. Each disclosure has local, non-persisted state; several
 may remain open at the same time, and a newly created Today route starts them
@@ -197,9 +195,8 @@ empty-state content remains visible according to its owning state and is never
 gated by an information control.
 
 An information click inside `Show all tasks` or a supporting accordion does not
-toggle that accordion. In particular it does not begin Recommendations,
-feedback, or Full-week loading; those projections are still watched only after
-their content accordion opens. Each information control is a keyboard-operable
+toggle that accordion. In particular it does not begin Full-week loading; that
+projection is watched only after its content accordion opens. Each information control is a keyboard-operable
 button with a real 44×44 logical hit, focus, and semantics rectangle. Its visible
 24×24 frame contains the unchanged 20×20 icon, exposes `expanded` semantics,
 and uses the exact dynamic
@@ -218,9 +215,8 @@ load-error states. The local unread Coach control does not generate, reload, or
 acknowledge a Coach turn; it only presents the current in-memory notice.
 
 Guest/demo builds the same conceptual overview from local capture storage. It
-performs no authenticated Today, Supabase, briefing, recommendation, or
-preparation request and does not fabricate tasks, blocks, streak days, or a
-personalized decision.
+performs no authenticated Today, Supabase, briefing, or preparation request and
+does not fabricate tasks, blocks, streak days, or a personalized decision.
 
 ## Latest Check-In And Full-Week Projections
 

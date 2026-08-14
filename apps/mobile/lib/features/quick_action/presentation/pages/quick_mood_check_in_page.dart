@@ -262,7 +262,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          'Optional blanks stay absent. They do not become tasks, memories, or recommendations.',
+          'Optional blanks stay absent. They do not become tasks or memories.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         if (_todayFocusSessions.isNotEmpty) ...[

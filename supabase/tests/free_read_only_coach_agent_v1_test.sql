@@ -30,21 +30,21 @@ insert into auth.users (
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
@@ -149,7 +149,7 @@ select ok(
 );
 
 create temporary table coach_v3_claim on commit drop as
-select public.claim_coach_request_v3(
+select public.claim_coach_request_v6(
   'b3000000-0000-4000-8000-000000000001',
   'b3000000-0000-4000-8000-000000000201',
   encode(
@@ -200,13 +200,13 @@ select is(
     from public.coach_requests
     where request_id = 'b3000000-0000-4000-8000-000000000201'
   ),
-  'coach-request-v3|today|{}|2026-07-29|fake|deterministic_test_only|null|not_applicable|free-coach-agent-prompt-v1|personal-snapshot-v1|pending',
+  'coach-request-v3|today|{}|2026-07-29|fake|deterministic_test_only|null|not_applicable|free-coach-agent-prompt-v4|personal-snapshot-v3|pending',
   'the claim persists the exact V3 contract and fixed context projection'
 );
 
 select is(
   (
-    select public.claim_coach_request_v3(
+    select public.claim_coach_request_v6(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000201',
       encode(
@@ -242,7 +242,7 @@ select is(
 
 select throws_ok(
   $$
-    select public.claim_coach_request_v3(
+    select public.claim_coach_request_v6(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000201',
       repeat('f', 64),
@@ -278,7 +278,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    select public.claim_coach_request_v3(
+    select public.claim_coach_request_v6(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000299',
       repeat('a', 64),
@@ -401,8 +401,8 @@ select jsonb_build_object(
     'model_requested', null,
     'model_reported', null,
     'model_source', 'not_applicable',
-    'prompt_version', 'free-coach-agent-prompt-v1',
-    'context_version', 'personal-snapshot-v1',
+    'prompt_version', 'free-coach-agent-prompt-v4',
+    'context_version', 'personal-snapshot-v3',
     'generated_at', '2026-07-29T10:01:00Z',
     'provider_called', true,
     'service_tier', 'not_applicable',
@@ -736,7 +736,7 @@ select is(
       result ->> 'remaining_requests'
     )
     from (
-      select public.claim_coach_request_v3(
+      select public.claim_coach_request_v6(
         'b3000000-0000-4000-8000-000000000001',
         'b3000000-0000-4000-8000-000000000201',
         repeat('0', 64),
@@ -817,7 +817,7 @@ select lives_ok(
         from coach_v3_failure_cases
         order by claimed_at
       loop
-        select public.claim_coach_request_v3(
+        select public.claim_coach_request_v6(
           'b3000000-0000-4000-8000-000000000001',
           failure_case.request_id,
           encode(

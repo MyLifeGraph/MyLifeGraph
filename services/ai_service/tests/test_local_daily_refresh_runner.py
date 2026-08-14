@@ -45,8 +45,7 @@ def success_payload(*, processed: int = 0) -> dict[str, object]:
         "succeeded": processed,
         "failed": 0,
         "results": [
-            {"user_id": PROFILE_1, "status": "succeeded"}
-            for _ in range(processed)
+            {"user_id": PROFILE_1, "status": "succeeded"} for _ in range(processed)
         ],
     }
 
@@ -73,9 +72,7 @@ def invoke(
 
 def config(**overrides: Any) -> runner.RunnerConfig:
     values: dict[str, object] = {
-        "endpoint_url": (
-            "http://127.0.0.1:8000/v1/scheduled/daily-refresh"
-        ),
+        "endpoint_url": ("http://127.0.0.1:8000/v1/scheduled/daily-refresh"),
         "token": TOKEN,
     }
     values.update(overrides)
@@ -96,14 +93,11 @@ def test_once_posts_exact_safe_default_payload_and_environment_token() -> None:
     assert exit_code == 0
     assert len(calls) == 1
     request, timeout = calls[0]
-    assert request.full_url == (
-        "http://127.0.0.1:8000/v1/scheduled/daily-refresh"
-    )
+    assert request.full_url == ("http://127.0.0.1:8000/v1/scheduled/daily-refresh")
     assert request.get_method() == "POST"
     assert json.loads(request.data or b"") == {
         "window_days": 7,
         "limit": 100,
-        "include_recommendations": False,
         "include_notifications": True,
     }
     assert request.get_header("X-scheduled-refresh-token") == TOKEN
@@ -130,7 +124,6 @@ def test_profile_ids_are_canonical_bounded_and_sent_only_in_request() -> None:
     assert payload == {
         "window_days": 7,
         "limit": 100,
-        "include_recommendations": False,
         "include_notifications": True,
         "profile_ids": [PROFILE_1, PROFILE_2],
     }

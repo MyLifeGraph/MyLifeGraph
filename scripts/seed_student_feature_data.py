@@ -466,107 +466,6 @@ async def _seed_deadline_plans(
     return service
 
 
-def _briefing_actions(briefing: object) -> list[object]:
-    return [briefing.primary_action, *briefing.support_actions]
-
-
-async def _seed_feedback(
-    *,
-    client: SupabaseRestClient,
-    user_id: str,
-    weekly_habit_id: str,
-    other_habit_ids: set[str],
-    briefings: list[tuple[date, object]],
-    timezone: str,
-) -> None:
-    actions = [
-        (briefing_date, briefing, action)
-        for briefing_date, briefing in briefings
-        for action in _briefing_actions(briefing)
-    ]
-    weekly_action = next(
-        (
-            item
-            for item in actions
-            if item[2].target.kind == "habit"
-            and item[2].target.target_id == weekly_habit_id
-        ),
-        None,
-    )
-    other_habit_action = next(
-        (
-            item
-            for item in actions
-            if item[2].target.kind == "habit"
-            and item[2].target.target_id in other_habit_ids
-        ),
-        None,
-    )
-    task_actions = [item for item in actions if item[2].target.kind == "task"]
-    preferred = [
-        weekly_action,
-        other_habit_action,
-        task_actions[0] if task_actions else None,
-        task_actions[1] if len(task_actions) > 1 else None,
-        task_actions[-1] if task_actions else None,
-    ]
-    selected_actions: list[tuple[date, object, object]] = []
-    for preferred_action in preferred:
-        if preferred_action is not None and preferred_action not in selected_actions:
-            selected_actions.append(preferred_action)
-    for action in actions:
-        if action not in selected_actions:
-            selected_actions.append(action)
-        if len(selected_actions) >= 5:
-            break
-    if len(selected_actions) < 5:
-        raise RuntimeError(
-            "Student briefings did not expose five runtime actions for feedback."
-        )
-    selections = list(
-        zip(
-            ["too_much", "does_not_fit", "done", "later", "not_helpful"],
-            selected_actions[:5],
-            strict=True,
-        )
-    )
-    zone = ZoneInfo(timezone)
-    rows: list[dict[str, object]] = []
-    for index, (feedback_type, selected) in enumerate(selections):
-        briefing_date, briefing, action = selected
-        created_at = _aware_local(briefing_date, 18, index, zone).astimezone(UTC)
-        rows.append(
-            {
-                "id": str(
-                    _stable_uuid(
-                        f"demo-seed:decision-feedback:{user_id}:{feedback_type}"
-                    )
-                ),
-                "user_id": user_id,
-                "request_id": str(
-                    _stable_uuid(
-                        f"demo-seed:decision-feedback-request:{user_id}:{feedback_type}"
-                    )
-                ),
-                "briefing_id": briefing.id,
-                "recommendation_id": action.recommendation_id,
-                "action_id": action.target.id,
-                "action_kind": action.target.kind,
-                "feedback_type": feedback_type,
-                "context_mode": briefing.mode,
-                "estimated_minutes": action.target.estimated_minutes,
-                "rule_key": action.target.command,
-                "metadata": {
-                    "contract_version": "decision-feedback-v1",
-                    "briefing_date": briefing_date.isoformat(),
-                    "source": "demo_seed_v2",
-                },
-                "created_at": created_at.isoformat(),
-            }
-        )
-    await client.insert("decision_feedback", rows=rows)
-
-
 async def _seed_coach(
     *,
     client: SupabaseRestClient,
@@ -915,7 +814,6 @@ async def _verify(
         "focus_sessions": 38,
         "focus_session_reflections": 36,
         "daily_briefings": 8,
-        "decision_feedback": 5,
         "weekly_reviews": 1,
         "calendar_events": 5,
         "notifications": 3,
@@ -1033,7 +931,6 @@ async def main() -> None:
                 window_days=7,
             ),
         )
-    review_briefings: list[tuple[date, object]] = []
     for target_date in review_days:
         prepared = await briefing_service.prepare_for_date(
             user_id=user_id,
@@ -1041,33 +938,6 @@ async def main() -> None:
         )
         if prepared.response.briefing is None:
             raise RuntimeError("Student historical briefing was not persisted.")
-        review_briefings.append((target_date, prepared.response.briefing))
-
-    habits = await client.select(
-        "habits",
-        params={
-            "select": "id,metadata",
-            "user_id": f"eq.{user_id}",
-            "order": "id.asc",
-            "limit": "20",
-        },
-    )
-    weekly_habits = [
-        str(row["id"])
-        for row in habits
-        if isinstance(row.get("metadata"), dict)
-        and row["metadata"].get("cadence") == "weekly_target"
-    ]
-    if len(weekly_habits) != 1:
-        raise RuntimeError("Student demo requires one weekly-target habit.")
-    await _seed_feedback(
-        client=client,
-        user_id=user_id,
-        weekly_habit_id=weekly_habits[0],
-        other_habit_ids={str(row["id"]) for row in habits} - set(weekly_habits),
-        briefings=review_briefings,
-        timezone=timezone,
-    )
     await briefing_service.generate_today(
         user_id=user_id,
         request=BriefingGenerateRequest(force=True),

@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/today_command_providers.dart';
-import '../../../../composition/briefing_providers.dart';
 import '../../../../composition/deadline_plan_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
@@ -14,8 +12,6 @@ import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
-import 'package:my_life_graph/composition/optimization_providers.dart';
-import '../../../briefings/domain/decision_feedback.dart';
 import '../../../quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../../tasks/domain/executable_task.dart';
@@ -39,11 +35,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _showCompletedTasks = false;
   bool _showCancelledTasks = false;
   bool _showAllTasks = false;
-  bool _showRecommendations = false;
-  bool _showFeedback = false;
   bool _showFullWeek = false;
-  bool _isRefreshingRecommendations = false;
-  String? _recommendationRefreshError;
 
   @override
   Widget build(BuildContext context) {
@@ -86,9 +78,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             StackTrace.current,
           )
         : ref.watch(dashboardLatestCheckInProvider(localDate));
-    final recommendations =
-        _showRecommendations ? ref.watch(recommendationFeedProvider) : null;
-    final feedback = _showFeedback ? ref.watch(decisionFeedbackProvider) : null;
     final fullWeek = _showFullWeek && localDate != null
         ? ref.watch(dashboardFullWeekProvider(localDate))
         : null;
@@ -163,36 +152,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         '${AppRoutes.preparationPlans}?plan_id=$planId',
       ),
       supportingSections: DashboardSupportingSections(
-        recommendationsExpanded: _showRecommendations,
-        feedbackExpanded: _showFeedback,
         fullWeekExpanded: _showFullWeek,
         state: DashboardSupportingState(
-          accountData: data.origin == DashboardOrigin.account,
           canUseWeeklyReview: capabilities.canUseWeeklyReview,
-          recommendations: recommendations,
-          feedback: feedback,
           fullWeek: fullWeek,
-          isRefreshingRecommendations: _isRefreshingRecommendations,
-          recommendationRefreshError: _recommendationRefreshError,
         ),
         actions: DashboardSupportingActions(
-          onToggleRecommendations: () {
-            setState(() => _showRecommendations = !_showRecommendations);
-          },
-          onToggleFeedback: () {
-            setState(() => _showFeedback = !_showFeedback);
-          },
           onToggleFullWeek: () {
             setState(() => _showFullWeek = !_showFullWeek);
           },
           onOpenWeeklyReview: () => context.push(AppRoutes.weeklyReview),
-          onRetryRecommendations: () {
-            setState(() => _recommendationRefreshError = null);
-            ref.invalidate(recommendationFeedProvider);
-          },
-          onRefreshRecommendations: _refreshRecommendations,
-          onRetryFeedback: () => ref.invalidate(decisionFeedbackProvider),
-          onDeleteFeedback: _deleteFeedback,
           onRetryFullWeek: () {
             if (localDate != null) {
               ref.invalidate(dashboardFullWeekProvider(localDate));
@@ -202,58 +171,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ),
       ),
     );
-  }
-
-  Future<void> _refreshRecommendations() async {
-    if (_isRefreshingRecommendations) {
-      return;
-    }
-
-    setState(() {
-      _isRefreshingRecommendations = true;
-      _recommendationRefreshError = null;
-    });
-    try {
-      await ref
-          .read(projectionRefreshCoordinatorProvider)
-          .recommendationInputsChanged(
-            targetDate: ref.read(profileLocalDateSourceProvider).todayKey(),
-          );
-      await ref
-          .read(optimizationServiceProvider)
-          .refreshActionableRecommendations();
-      await ref
-          .read(projectionRefreshCoordinatorProvider)
-          .recommendationsChanged();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recommendations checked.')),
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _recommendationRefreshError =
-            'Refresh failed. Existing recommendations were kept.';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Recommendations could not be refreshed.'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isRefreshingRecommendations = false);
-      }
-    }
-  }
-
-  Future<void> _deleteFeedback(DecisionFeedback item) async {
-    await ref.read(feedbackRepositoryProvider).delete(item.id);
-    ref.invalidate(decisionFeedbackProvider);
   }
 
   void _openFullWeekAction(DashboardFullWeekAction action) {
@@ -617,8 +534,10 @@ class _DashboardHome extends StatelessWidget {
                             onRetry: onRetryExamPlanHealth,
                             onOpenPlan: onOpenExamPlan,
                           ),
-                          const SizedBox(height: AppSpacing.xl),
-                          supportingSections.compact,
+                          if (supportingSections.hasCompactContent) ...[
+                            const SizedBox(height: AppSpacing.xl),
+                            supportingSections.compact,
+                          ],
                         ],
                       ),
                     ),

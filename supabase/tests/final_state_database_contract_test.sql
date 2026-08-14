@@ -72,7 +72,7 @@ select is_empty(
       and c.relname in (
         'notifications',
         'ai_insights',
-        'recommendations',
+        'daily_briefings',
         'skillset_profiles'
       )
       and (
@@ -106,8 +106,11 @@ select is_empty(
       'public.delete_account_v1(uuid,text)'::regprocedure,
       'public.apply_notification_action_v1('
         'uuid,uuid,uuid,text,timestamp with time zone)'::regprocedure,
-      'public.replace_current_recommendations_v2('
-        'uuid,jsonb,timestamp with time zone)'::regprocedure,
+      'public.claim_coach_request_v6('
+        'uuid,uuid,text,date,text,text,text,text,timestamp with time zone,'
+        'timestamp with time zone,integer)'::regprocedure,
+      'public.persist_weekly_review_v3('
+        'uuid,text,timestamp with time zone,jsonb)'::regprocedure,
       'public.start_focus_session_v2('
         'uuid,uuid,text,text,uuid,integer,integer,text,uuid,text,'
         'timestamp with time zone)'::regprocedure

@@ -10,7 +10,7 @@ the authenticated user, and recoverable. It also defines the typed action
 target that a later deterministic briefing may return.
 
 Phase 3 does not rank actions, persist a daily briefing, redesign Dashboard as
-Today, generate recommendations during normal writes, call an LLM, expose
+Today, generate generic recommendations during normal writes, call an LLM, expose
 Coach, import a calendar, or change the Phase 2 Daily State classifier.
 
 Guest and mock sessions remain local and do not receive Supabase-backed task,
@@ -236,8 +236,8 @@ immutable source row retains the planned origin.
 
 `request_id` is also the Focus session id. Exact content replay returns the
 same `focus-session-v2` row; different content returns
-`409 focus_request_conflict`. Reflection, local-day assignment, Today,
-Personal Learning, and recommendations continue to use only actual
+`409 focus_request_conflict`. Reflection, local-day assignment, Today, and
+Personal Learning continue to use only actual
 `started_at`, `ended_at`, and `actual_minutes`; planned provenance is display
 and credit-routing context only.
 
@@ -365,8 +365,8 @@ between a Multi-Exam digest check and its atomic commit.
   owns advancement and final-page detection while retaining the compound
   keyset filter, `id` tie-breaker, owner/date filters, and validation errors.
 - Snapshot refresh failure never rolls back the original durable write.
-- Normal Dashboard reads remain read-only for recommendations.
-- Task/habit/focus writes never generate recommendations or call an LLM.
+- Normal Dashboard reads do not generate derived advice.
+- Task/habit/focus writes never generate generic Recommendations or call an LLM.
 - Finishing a linked focus session may change a later read of Deadline Planner
   progress, but does not generate a revision, move a dated block, complete the
   plan, or call a planner mutation. Replanning always requires a deliberate

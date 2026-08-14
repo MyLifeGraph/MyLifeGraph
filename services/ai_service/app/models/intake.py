@@ -386,4 +386,3 @@ class IntakeCompleteResponse(IntakeSetupResponse):
     completed_at: datetime
     responses: IntakeResponses
     summary: SnapshotSummary
-    recommendations: list[dict[str, Any]] = Field(default_factory=list)

@@ -1,6 +1,6 @@
 import '../../../core/contracts/strict_contract.dart';
 
-const weeklyReviewContractVersion = 'weekly-review-v2';
+const weeklyReviewContractVersion = 'weekly-review-v3';
 
 enum WeeklyReviewOrigin { authenticatedBackend, localDemo }
 
@@ -277,7 +277,12 @@ class WeeklyReview {
     required this.updatedAt,
   })  : proposals = List.unmodifiable(proposals),
         evidenceRefs = List.unmodifiable(evidenceRefs) {
-    if (proposals.length > 2 || evidenceRefs.length > 40) {
+    if (proposals.isNotEmpty) {
+      throw const WeeklyReviewContractException(
+        'Weekly-review-v3 requires an empty proposals list.',
+      );
+    }
+    if (evidenceRefs.length > 40) {
       throw const WeeklyReviewContractException(
         'Weekly review list bounds are invalid.',
       );
@@ -326,6 +331,11 @@ class WeeklyReview {
         'Weekly review fields are invalid.',
       );
     }
+    if (rawProposals.isNotEmpty) {
+      throw const WeeklyReviewContractException(
+        'Weekly-review-v3 requires an empty proposals list.',
+      );
+    }
     return WeeklyReview(
       id: _requiredString(json['id'], 'review.id', maxLength: 200),
       dataQuality: quality,
@@ -362,13 +372,12 @@ class WeeklyReviewFacts {
     required this.habits,
     required this.focus,
     required this.recovery,
-    required this.feedback,
   });
 
   factory WeeklyReviewFacts.fromJson(Map<String, dynamic> json) {
     _expectExactKeys(
       json,
-      const {'tasks', 'habits', 'focus', 'recovery', 'feedback'},
+      const {'tasks', 'habits', 'focus', 'recovery'},
       'weekly review facts',
     );
     return WeeklyReviewFacts(
@@ -378,9 +387,6 @@ class WeeklyReviewFacts {
       recovery: WeeklyRecoveryFacts.fromJson(
         _requiredMap(json['recovery'], 'recovery'),
       ),
-      feedback: WeeklyFeedbackFacts.fromJson(
-        _requiredMap(json['feedback'], 'feedback'),
-      ),
     );
   }
 
@@ -388,7 +394,6 @@ class WeeklyReviewFacts {
   final WeeklyHabitFacts habits;
   final WeeklyFocusFacts focus;
   final WeeklyRecoveryFacts recovery;
-  final WeeklyFeedbackFacts feedback;
 }
 
 class WeeklyTaskFacts {
@@ -581,59 +586,6 @@ class WeeklyRecoveryFacts {
 
   final int observedDays;
   final int recoveryDays;
-}
-
-class WeeklyFeedbackFacts {
-  WeeklyFeedbackFacts({
-    required this.total,
-    required this.done,
-    required this.later,
-    required this.notHelpful,
-    required this.tooMuch,
-    required this.doesNotFit,
-  }) {
-    if (done + later + notHelpful + tooMuch + doesNotFit != total) {
-      throw const WeeklyReviewContractException(
-        'Weekly feedback counts do not match their total.',
-      );
-    }
-  }
-
-  factory WeeklyFeedbackFacts.fromJson(Map<String, dynamic> json) {
-    _expectExactKeys(
-      json,
-      const {
-        'total',
-        'done',
-        'later',
-        'not_helpful',
-        'too_much',
-        'does_not_fit',
-      },
-      'weekly feedback facts',
-    );
-    return WeeklyFeedbackFacts(
-      total: _nonNegativeInt(json['total'], 'feedback.total'),
-      done: _nonNegativeInt(json['done'], 'feedback.done'),
-      later: _nonNegativeInt(json['later'], 'feedback.later'),
-      notHelpful: _nonNegativeInt(
-        json['not_helpful'],
-        'feedback.not_helpful',
-      ),
-      tooMuch: _nonNegativeInt(json['too_much'], 'feedback.too_much'),
-      doesNotFit: _nonNegativeInt(
-        json['does_not_fit'],
-        'feedback.does_not_fit',
-      ),
-    );
-  }
-
-  final int total;
-  final int done;
-  final int later;
-  final int notHelpful;
-  final int tooMuch;
-  final int doesNotFit;
 }
 
 class WeeklyReviewProposal {

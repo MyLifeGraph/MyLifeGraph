@@ -254,6 +254,10 @@ assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   'run_exam_plan_health_migration_harness "$ROOT_DIR"'
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'source "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh"'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'run_recommendation_retirement_migration_harness "$ROOT_DIR"'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   'source "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh"'
 assert_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
   'isolated_postgres_start'
@@ -273,6 +277,46 @@ assert_not_contains "$ROOT_DIR/scripts/lib/exam_plan_health_migration_harness.sh
   'create database'
 assert_not_contains "$ROOT_DIR/scripts/lib/exam_plan_health_migration_harness.sh" \
   'drop database'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'isolated_postgres_start'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'supabase_cli migration up'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'SQLSTATE[[:space:]]+55P03'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  "'version', version"
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  "'name', name"
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  "'statements', statements"
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  ') order by version, name, statements'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  "'sha256'"
+assert_not_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'string_agg(version'
+assert_not_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'db reset'
+assert_not_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'create database'
+assert_not_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'drop database'
+assert_contains "$ROOT_DIR/supabase/migration_tests/goal_removal/bootstrap.sql" \
+  'alter role service_role bypassrls;'
+assert_contains "$ROOT_DIR/supabase/migration_tests/goal_removal/bootstrap.sql" \
+  'grant usage on schema extensions to anon, authenticated, service_role;'
 assert_contains "$ROOT_DIR/scripts/reset_local_supabase.sh" \
   'local_supabase_execute_guarded_reset'
 assert_contains "$ROOT_DIR/scripts/backup_local_supabase.sh" \

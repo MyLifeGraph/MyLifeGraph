@@ -253,7 +253,7 @@ const STALE_CURRENT_CLAIMS = [
   },
   {
     pattern: /\bcoach-context-v1 data\b/gi,
-    message: 'Current Coach agent context uses personal-snapshot-v2.',
+    message: 'Current Coach agent context uses personal-snapshot-v3.',
   },
   {
     pattern: /\breconciles notification preferences\b/gi,

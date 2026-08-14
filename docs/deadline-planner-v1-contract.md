@@ -842,7 +842,7 @@ service-role RPC projections cross the FastAPI boundary; forced RLS, explicit
 least-privilege grants, composite owner foreign keys, and the single-plan child
 guard remain database authority. Actual user plan content continues to live in
 the existing Deadline revision and block tables already covered by
-`account-export-v4` and `personal-snapshot-v2`. The private batch bookkeeping is
+`account-export-v5` and `personal-snapshot-v3`. The private batch bookkeeping is
 intentionally absent from those public shapes; this feature does not reuse a
 version with a second shape. Any future export/snapshot projection belongs to a
 new contract version.

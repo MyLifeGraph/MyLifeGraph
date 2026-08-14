@@ -202,9 +202,9 @@ their authority. Feature panels, auth/recovery regions, Inbox groups, Weekly
 facts, and Insights regions use the appropriate shared surface variant instead
 of route-local borders, radii, and shadows.
 
-Category color and status color are separate vocabularies. Recommendation
-categories use brand/data colors; they do not borrow success, attention, or
-danger merely to distinguish one category from another. Freshness, stale,
+Category color and status color are separate vocabularies. Data categories use
+brand/data colors; they do not borrow success, attention, or danger merely to
+distinguish one category from another. Freshness, stale,
 unavailable, and destructive meaning uses `AppStatusPill`, `AppStatePanel`, or
 another labelled semantic primitive.
 
@@ -414,7 +414,7 @@ includes:
 | Loop | Routes and states |
 | --- | --- |
 | Daily | Quick actions, Morning, Evening, Focus, Habits, Preparation |
-| Reflection | Insights, Personal learning, Recommendations, Weekly review |
+| Reflection | Insights, Personal learning, Weekly review |
 | Controls | Coach, Inbox, Reminder, Calendar, Settings, Account flows |
 | Cross-cutting | loading, empty, error, stale, offline, conflict, disabled |
 

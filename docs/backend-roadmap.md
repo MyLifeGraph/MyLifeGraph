@@ -10,6 +10,15 @@ The implemented Setup-personalization retirement in
 older roadmap history below mentions Setup Goals, focus/friction/style answers,
 or Setup-owned Reminder preferences.
 
+The 2026-08-14 P7 retirement is authoritative wherever older roadmap history
+below mentions the generic Today Recommendation feed, Recommendation refresh,
+Decision Feedback, or feedback-based ranking. Those routes, Flutter surfaces,
+runtime modules, tables, and scheduler fields are removed. Current contracts
+are `daily-briefing-v2`, `weekly-review-v3`, `account-export-v5`,
+`personal-snapshot-v3`, and `free-coach-agent-prompt-v4`. The independent
+Insights Sleep Recommendation, `ai_insights.recommendation`, memory type
+`recommendation`, skillset, and ordinary Coach advice remain.
+
 ## Product Goal
 
 MyLifeGraph should become a personal coaching app that can start with a small
@@ -94,21 +103,12 @@ Already implemented:
     Mode, action ranking, briefing persistence, recommendation generation on
     save, or LLM usage.
 - FastAPI `/v1/health`.
-- FastAPI authenticated recommendation endpoints:
-  - `GET /v1/recommendations`
-  - `POST /v1/recommendations/generate`
+- The former generic Recommendation and Decision Feedback endpoints are absent
+  from FastAPI route composition; concrete requests return `404`.
 - Supabase bearer token verification in FastAPI when backend Supabase settings
   are configured.
-- Deterministic recommendation generation from `daily_logs`,
-  `behavioral_events`, `tasks`, and latest `user_state_snapshots`.
-- Recommendation verification, dedupe fingerprints, freshness checks, and
-  persistence to `recommendations`.
-- Setup completion deliberately performs no Recommendation refresh.
-- Deliberate dashboard recommendation refresh/generate UX that calls the
-  deterministic backend generate endpoint with LLM wording disabled.
-- Flutter reads persisted recommendations through FastAPI in real backend mode.
-  Only explicit guest/mock sessions receive labeled demo data; missing real
-  session/config, network errors, and invalid responses remain errors.
+- Setup, Dashboard, and scheduled preparation perform no generic Recommendation
+  generation. Flutter contains no generic feed, refresh, or Feedback seam.
 - Intake V1 and First-Run/Setup integrity without LLM:
   - Authenticated `GET /v1/intake/setup` plus completion/edit through
     `POST /v1/intake/complete`, both derived from the verified bearer token.
@@ -199,23 +199,23 @@ Already implemented:
     `target_date` as a deterministic operator override.
   - Selects only missing snapshots, missing briefings, or briefings stale
     against snapshot id/time provenance. Current snapshot/briefing pairs are
-    write-free; when optional recommendation retry is requested, the current
-    briefing is still reused unchanged.
+    write-free.
   - Creates a missing daily snapshot exactly once, reuses an existing snapshot,
     and generates or refreshes the same `(user_id, briefing_date)` briefing.
     One bounded post-write check repairs a concurrent snapshot change or
     reports a briefing-stage failure.
   - Supports a bounded `profile_ids` UUID filter that still intersects
     onboarded non-guest eligibility, bounded batch size and concurrency, and
-    per-user `profile_date|snapshot|briefing|recommendations` failure results.
-  - Optional recommendation refresh remains deterministic with LLM wording
-    disabled. Normal Dashboard GET, capture, task, habit, and focus paths do not
-    invoke scheduled preparation or gain hidden generation.
+    per-user `profile_date|snapshot|briefing` failure results. Retired
+    recommendation request fields are rejected as unknown input.
+  - Normal Dashboard GET, capture, task, habit, and focus paths do not invoke
+    scheduled preparation or gain hidden generation.
   - No notification is sent, no production worker is added, and repository
     implementation does not claim that a deployed cron/job invokes the endpoint.
 - Phase 4 deterministic briefing service:
   - Persists one `daily_briefings` row per user and profile-local date under the
-    strict `daily-briefing-v1` contract.
+    strict `daily-briefing-v2` contract without Recommendation IDs or feedback
+    ranking.
   - `GET /v1/briefings/today` remains read-only and distinguishes missing,
     current, and stale output by comparing source snapshot identity and time.
   - Deliberate `POST /v1/briefings/generate` derives the user from the bearer
@@ -224,29 +224,22 @@ Already implemented:
   - Recovery-first deterministic ranking chooses one executable primary action
     and at most two support actions from open tasks, due habits, and conservative
     capture fallback. Every target passes `executable-action-v1`; no LLM is used.
-- Phase 6 feedback and useful Insights:
-  - `GET|POST|DELETE /v1/feedback` uses the strict `decision-feedback-v1`
-    boundary, derives the owner from the bearer token, validates an exact action
-    inside an owned briefing, and makes create retries idempotent through
-    `(user_id, request_id)`.
-  - `decision_feedback` remains separate append-only evidence; users can delete
-    a mistaken entry and original briefing/recommendation reasons never change.
-  - `feedback-ranking-v1` applies only a 28-day mode/kind/rule match, decays by
-    age, caps contribution, and keeps missing/stale capture plus urgent facts
-    ahead of preference fit. Briefing provenance exposes every applied effect.
-  - Insights defaults to one cautious observation with an evidence window,
-    confidence/data quality, non-causal copy, and optional bounded experiment;
-    the existing correlation tools remain available as advanced exploration.
+- P7 Recommendation and Decision Feedback retirement:
+  - Removes the generic routes, modules, Today surfaces, scheduler fields,
+    ranking inputs, and tables without a compatibility adapter.
+  - Erases old Briefing, Weekly Review, and Coach content while preserving only
+    content-free append-only usage/audit identity where required.
+  - Keeps Sleep Recommendation and other explicitly independent recommendation
+    concepts unchanged.
 - Phase 8 bounded observational Weekly Review:
   - Read-only latest and explicit-period GETs resolve one completed
     profile-local ISO week; deliberate POST persists one stable
-    `weekly-review-v2` identity with no LLM.
+    `weekly-review-v3` identity with no LLM or Feedback facts.
   - Canonical source fingerprints distinguish missing, current, and stale
     derived output while completed, carried, skipped, missed, unknown, recovery,
-    focus, and feedback facts remain explicit.
-  - New and refreshed reviews always persist `proposals=[]`. Historical
-    proposal arrays remain transport-readable but are hidden from Flutter and
-    Coach and cannot invoke a command.
+    and focus facts remain explicit.
+  - Current V3 reviews accept only `proposals=[]`; P7 erases pre-cutover review
+    rows instead of transporting historical proposal arrays.
 - Phase 9 bounded calendar import:
   - One authenticated `ical_file` source requires exact explicit read/store
     consent. Creating the source does not import anything.
@@ -396,12 +389,11 @@ Already implemented:
     it cannot reset budget or permit request reinterpretation.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
-  no post-intake Recommendation generation, backend daily snapshot refresh
-  after check-ins, exact Daily State V2 recomputation, core Supabase-backed app
-  writes, Phase 4 read-only/generate/idempotent briefing persistence, and Phase
-  5 GET-only Today load, deliberate adjustment, primary action dispatch, and
-  Phase 6 feedback persistence/ranking/deletion plus useful default Insights,
-  the Phase 8 observational weekly-review contract, and Phase
+  no post-intake generic Recommendation generation, backend daily snapshot
+  refresh after check-ins, exact Daily State V3 recomputation, core
+  Supabase-backed app writes, current Today/Full Week behavior, absent retired
+  Recommendation/Feedback surfaces, the Phase 8 observational weekly-review
+  contract, and Phase
   9 calendar import. Phase 10 browser coverage uses the deterministic fake
   provider; its focused rerun and the subsequent full non-destructive local
   journey passed in the recorded 2026-07-13 checkout.
@@ -441,8 +433,8 @@ Not yet implemented:
   data-quality state where history is required.
 - Every production-visible primary action must execute a real command, persist
   correctly, and expose stale/error/rollback behavior.
-- Recommendations may propose tasks, habits, focus sessions, or schedule changes,
-  but must not create user-owned commitments without confirmation.
+- Derived planning or Coach advice must not create user-owned commitments
+  without confirmation.
 
 ## Target Backend Services
 
@@ -453,26 +445,24 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | --- | --- | --- | --- | --- |
 | Intake service | First completed onboarding | Sanitized Intake payload, profile | `intake_responses`, `profiles`, `habits`, `schedule_items`, `study_setup_profiles`, energy `memory_entries`, `user_state_snapshots` | None for v1 |
 | Signal aggregator | Daily check-in, task/habit/focus changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `habits`, `habit_logs`, `focus_sessions`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
-| Recommendation service | Explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
-| Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
-| Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
-| Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
+| Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, tasks, habits, habit outcomes | `daily_briefings` | None |
+| Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, habits/outcomes, focus, daily snapshots | `weekly_reviews` derived output only | None |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
 | Deadline planning service | Explicit user proposal/confirmation/lifecycle command | User-entered estimate, profile timezone/energy window, app commitments, confirmed blocks, optional current imported busy time | `deadline_plans`, immutable revisions/blocks, one first-confirm managed task, opaque request identities | None |
 | Coach service | Deliberate authenticated free question | Fresh owner-only SQLite snapshot; required read-only inspect/SQL/isolated-Python MCP | Validated `coach_messages`, backend-derived evidence/trace/provenance, request/usage state only | One configured `gpt-5.5` Fast agent turn, budgeted |
 | Legacy memory selection service | Pre-V3 compatibility call only | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate legacy selection projection; current Coach ignores it and content changes only through its owner | None |
-| Planning service | Explicit user planning request | Tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
+| Planning service | Explicit user planning request | Tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `coach_messages` | Optional for complex plans |
 | Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
 | Notification generation service | Protected current-day local scheduler run | Explicit delivery consent, profile timezone, current snapshot/briefing, exact completed weekly review | Bounded deduplicated `notifications` rows with strict provenance | None |
 | In-app delivery service | Foreground authenticated Flutter poll | Current consent/category/quiet settings plus one due generated row | At-most-once `in_app_delivered_at` receipt | None |
 
-The intake foundation, retired post-intake recommendation side effect, first
-authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
+The intake foundation, retired post-intake Recommendation side effect, first
+authenticated snapshot aggregator endpoint,
 the Phase 3 task/habit/focus execution contracts, scheduler-triggered daily
 refresh endpoint, and deterministic Insights correlation exploration now
 exist. Phase 4's deterministic Daily Briefing service supplies the backend
 decision contract, Phase 5 consumes it in the decision-first Today surface,
-Phase 6 closes the bounded feedback/Insight loop, and the minimal Phase 7
+P7 removes the former Phase 6 generic Recommendation/Feedback loop, and the minimal Phase 7
 backend prepares timezone-pinned daily snapshots and briefings through the
 existing protected endpoint. Phase 8 adds a bounded observational Weekly Review
 without adaptation authority. Phase 9 adds the first optional
@@ -591,7 +581,6 @@ The current canonical schema already has useful tables:
 - `coach_messages`
 - `memory_entries`
 - `ai_insights`
-- `recommendations`
 - `skillset_profiles`
 - `notification_preferences`
 - `habits`, `habit_logs`, `focus_sessions`
@@ -607,8 +596,7 @@ Migration `20260710180000_atomic_intake_v1_setup_apply.sql` defines
 `apply_intake_v1_setup_revision`. Execute is restricted to `service_role`. The
 function locks by user with `pg_advisory_xact_lock`, validates the claimed
 canonical intake row and ownership metadata, and applies every Setup projection
-inside one transaction. Recommendation generation remains a separate
-best-effort post-commit step.
+inside one transaction. It performs no generic Recommendation generation.
 
 Migration `20260711120000_phase_3_executable_action_schema.sql` completes the
 Phase 3 storage contract. It adds bounded task estimates and terminal
@@ -662,8 +650,8 @@ Access:
 
 ### `user_state_snapshots`
 
-Purpose: store compact user state that recommendation, coach, planning, and
-memory flows can use without reading full history or building huge prompts.
+Purpose: store compact user state that Coach, planning, and memory flows can use
+without reading full history or building huge prompts.
 
 Implemented columns:
 
@@ -698,19 +686,19 @@ Implemented identity and bounds:
 
 - unique `(user_id, period_key)`;
 - exact Monday `week_start` and Sunday `week_end` consistent with `IYYY-Www`;
-- bounded timezone, narrative, facts, a compatibility array of at most two
-  historical proposals, no more than 40 evidence references, provenance, and
-  SHA-256 source fingerprint; every new or refreshed V2 row stores `[]`;
+- bounded timezone, narrative, facts, an exactly empty proposal array, no more
+  than 40 evidence references, provenance, and SHA-256 source fingerprint;
+  every V3 row stores `[]`;
 - `insufficient|partial|sufficient` data quality separate from freshness;
 - authenticated owner/admin SELECT only, service-role writes, forced RLS.
 
 The review GET computes missing/current/stale truth without writing. Deliberate
 generation upserts only the derived facts row. Weekly Review has no proposal,
-confirmation, or mutation path; historical proposal JSON is transport-only.
+confirmation, mutation, or historical proposal transport path after P7.
 
 ### Later Tables
 
-`daily_briefings`, `decision_feedback`, `weekly_reviews`, the bounded Phase 9
+`daily_briefings`, `weekly_reviews`, the bounded Phase 9
 calendar tables, the Phase 10 Coach request/usage/selection tables, and the
 Deadline Planner plan/revision/block/request tables are
 implemented after their owning contracts proved the persistence boundary. Do
@@ -764,7 +752,7 @@ same operation rather than edit or create another revision.
    applied replay is side-effect free except that the newest applied revision
    may repair a missing profile projection.
 9. Return the applied revision and compact onboarding snapshot summary without
-   generating Recommendations.
+   generating derived advice.
 
 Flutter keeps all 4xx failures editable; 409 additionally recommends reloading
 the newest server state. Network/transport errors, 5xx responses, and invalid
@@ -773,26 +761,14 @@ unchanged retry or explicit reload.
 
 No LLM is required for v1 intake. Free-form context is not accepted or stored.
 
-## Recommendation Flow
+## Generic Recommendation Retirement
 
-Current recommendation v1 exists and is triggered only by explicit or scheduled
-runtime refresh:
-
-1. Recommendation service loads the snapshot plus recent user-owned rows.
-2. Deterministic rules produce candidates from runtime data.
-3. Verifier rejects weak, duplicate, stale, invalid, or cross-user candidates.
-4. Accepted recommendations are persisted.
-5. Flutter reads them through `GET /v1/recommendations`.
-
-Setup completion never enters this flow. The existing explicit generate UX
-calls:
-
-```text
-POST /v1/recommendations/generate
-```
-
-Keep this as a deliberate action or controlled workflow. Do not call it on
-every dashboard load.
+The former generic Recommendation flow is retired. There is no current
+Recommendation service, persistence table, Flutter feed, refresh command, or
+scheduled generation stage. The independent Insights
+`GET /v1/insights/sleep-recommendation` contract, ordinary Coach advice,
+`ai_insights.recommendation`, memory type `recommendation`, and skillset are not
+part of that retired flow.
 
 ## Coach Flow
 
@@ -823,8 +799,9 @@ Current behavior:
    Account Export sources. Include detail text and a catalog/count/period/
    relationship layer; exclude auth, credentials, provider internals,
    anti-replay/usage/selection ledgers, operational state, and other owners.
-   The current pair is `free-coach-agent-prompt-v3` with
-   `personal-snapshot-v2`; exact V1/V2 prompt replay remains valid.
+   The current pair is `free-coach-agent-prompt-v4` with
+   `personal-snapshot-v3`; pre-P7 free-agent content is erased while required
+   content-free request/usage identities remain.
    Fail rather than truncate beyond 10,000 rows per table, 50,000 total, or
    8 MiB.
 4. Start the explicitly configured agent only after deliberate send and
@@ -864,7 +841,7 @@ reported/configured mismatch is an honest failed capability.
 Use these rules before adding any model provider:
 
 - No LLM calls on dashboard load.
-- No LLM calls for simple CRUD, check-ins, or deterministic recommendations.
+- No LLM calls for simple CRUD, check-ins, or deterministic projections.
 - Do not serialize full history into the prompt. Put relevant retained data in
   the ephemeral owner-only snapshot and let the agent query only what it needs.
 - Keep deterministic `user_state_snapshots` for non-Coach product workflows;
@@ -906,15 +883,14 @@ writer, or LLM feature.
 
 Private batch rows are derived orchestration metadata. Existing Deadline
 revisions and blocks remain the user-content projection, so this slice leaves
-`account-export-v4` and `personal-snapshot-v2` byte-shape/version authority
-unchanged. A future decision to expose orchestration history must introduce new
-export/snapshot contracts instead of silently widening those versions.
+`account-export-v5` and `personal-snapshot-v3` exclude that orchestration
+history as well as the retired Recommendation and Decision Feedback tables.
 
 The current repository builds on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
 Phase 4's persisted deterministic briefing contract, the retired historical
-Phase 5 briefing consumer now superseded by Today Overview, Phase 6's bounded
-feedback/Insight loop, the minimal Phase 7
+Phase 5 briefing consumer now superseded by Today Overview, the P7 retirement
+of the former Phase 6 generic Recommendation/Feedback loop, the minimal Phase 7
 scheduled preparation backend, and Phase 8's bounded observational Weekly
 Review, Phase 9's bounded `.ics` import, and
 Phase 10 Controlled Coach, Notification Delivery V1's local foreground path,
@@ -949,14 +925,10 @@ production provider or autonomous agent platform by default.
 - Implemented: mapper, guest-store, widget, and browser smoke assertions use
   distinctive values instead of checking row existence or defaults only.
 
-### Completed Slice 0B: Source And Surface Truth
+### Historical Slice 0B: Source And Surface Truth
 
-- Implemented: recommendation reads and refreshes use a typed feed with explicit
-  demo/authenticated provenance, generation state, period, timestamp, and
-  current/missing/stale semantics. Real configuration, auth, network, and format
-  failures propagate and never consult mock recommendations.
-- Implemented: refresh failure keeps the existing feed visible; successful
-  deliberate refresh still uses deterministic generation with LLM wording off.
+- Retired by P7: the former typed generic Recommendation feed and deliberate
+  refresh behavior described in this historical slice no longer exist.
 - Implemented: dashboard snapshots carry explicit origin and direct nullable
   stored values. Proxy wellness/recovery scores, fake steps/sleep/screen-time/
   hydration metrics, activity charts, and recommendation-derived task copy are
@@ -965,7 +937,7 @@ production provider or autonomous agent platform by default.
   optimistic status changes when a write fails. Schedule UI renders only real
   commitments.
 - Implemented: local guest sessions are persistently labeled `Local demo`, stay
-  off snapshot/recommendation APIs, read their local canonical check-in, and do
+  off authenticated snapshot APIs, read their local canonical check-in, and do
   not expose Supabase-only Habit controls.
 - Implemented: Coach and the former placeholder Deep Work preview were removed
   from productive routes, Settings was reduced to durable behavior, and
@@ -1057,8 +1029,8 @@ production provider or autonomous agent platform by default.
   active Task; no friction or Day Shape risk/reason/evidence is emitted.
   Very low current sleep quality may select recovery despite sufficient
   duration; moderately low quality prevents push.
-- Preserved `snapshot-aggregator-v1`, same-period atomic upsert, recommendation
-  ranking, guest/mock locality, best-effort Flutter refresh, and the Phase 0C
+- Preserved `snapshot-aggregator-v1`, same-period atomic upsert, guest/mock
+  locality, best-effort Flutter refresh, and the Phase 0C
   Setup contract. Metadata records the Daily State contract and lookback;
   top-level `summary.risk_flags` aliases current Daily State risks,
   `summary.window_risk_flags` retains window-aggregate flags, and
@@ -1092,15 +1064,15 @@ production provider or autonomous agent platform by default.
   deletion, deterministic local/legacy start-day snapshot attribution, and no
   implicit target completion.
 - Added deterministic habit-outcome and focus-session snapshot summaries while
-  preserving the exact Phase 2 Daily State result and normal recommendation
-  read/generate boundaries. See
+  preserving the exact Phase 2 Daily State result. See
   `docs/phase-3-executable-actions-contract.md` for the complete matrix.
 
 ### Completed Slice 4: Deterministic Briefing Service
 
-- Implemented a FastAPI-owned deterministic service that ranks one executable primary
-  action plus at most two support actions from Phase 2 state, Phase 3 action
-  contracts, existing recommendations, and current owned records.
+- Implemented a FastAPI-owned deterministic service that ranks one executable
+  primary action plus at most two support actions from Phase 2 state, Phase 3
+  action contracts, and current owned records. P7 advances this persistence to
+  `daily-briefing-v2` without Recommendation or Feedback inputs.
 - `GET /v1/briefings/today` reads only and distinguishes current, stale,
   missing, and error states. Normal Dashboard load must not generate a briefing.
 - `POST /v1/briefings/generate` is deliberate, authenticated, idempotent for
@@ -1114,16 +1086,16 @@ production provider or autonomous agent platform by default.
 
 ### Completed Slice 5: Decision-First Today Dashboard
 
-Historical note: the backend briefing/parser/action contracts below remain
-implemented, but the visible briefing-first presentation was superseded on
+Historical note: the visible briefing-first presentation was superseded on
 2026-07-21 by `today-overview-v1` and then additively extended by
 `today-overview-v2`. The app consumes the read-only
 streak/progress/agenda/task/habit overview with Planner blocks documented in
-`docs/today-overview-v1-contract.md`; briefings remain internal inputs for
-reminders, Coach context, and feedback history.
+`docs/today-overview-v1-contract.md`. P7 later retired the generic
+Recommendation/Feedback consumer and erased its historical content.
 
-- Added strict Flutter `daily-briefing-v1` parsing, authenticated repository and
-  provider boundaries, with no privileged API calls in guest/mock mode.
+- Historical implementation used a strict Flutter briefing parser and
+  authenticated repository/provider boundary; current Flutter no longer owns a
+  briefing or Recommendation surface.
 - Normal Dashboard load calls read-only GET only and preserves loading,
   missing, current, stale, error, and local-demo truth.
 - Places Daily Mode, data quality, capacity note, reason, primary action, and at
@@ -1164,8 +1136,7 @@ reminders, Coach context, and feedback history.
   from its stored IANA timezone. Invalid timezones fail only that profile; an
   explicit target date remains a deterministic operator/test override.
 - Selects missing daily snapshots, missing briefings, and snapshot-provenance-
-  stale briefings. Current pairs are normally skipped; optional deterministic
-  recommendation retry can select them while leaving the briefing unchanged.
+  stale briefings. Current pairs are skipped.
 - Reuses existing snapshots, generates a missing snapshot once, upserts one
   stable daily briefing identity, and performs one bounded convergence retry if
   the source snapshot changes during persistence.
@@ -1179,15 +1150,14 @@ reminders, Coach context, and feedback history.
 
 ### Completed Slice 8: Bounded Observational Weekly Review
 
-- Added one strict `weekly-review-v2` contract over an explicit completed
+- Added one strict `weekly-review-v3` contract over an explicit completed
   profile-local ISO week. Latest/period GET is read-only; deliberate generation
   upserts one stable `(user_id, period_key)` derived review.
-- Added exact bounded task, habit, focus, recovery-day, and feedback facts with
+- Added exact bounded task, habit, focus, and recovery-day facts with
   explicit unknown/limitation states. A canonical SHA-256 source fingerprint
   makes changed evidence or targets stale without a hidden write.
-- New and refreshed reviews always store `proposals=[]`. Historical proposal
-  arrays remain strict transport-compatible data but are hidden from Flutter
-  and Coach and cannot authorize an adaptation.
+- Current V3 reviews accept only `proposals=[]`; P7 erases pre-cutover review
+  rows instead of carrying historical proposal arrays forward.
 - Added the real synced `/weekly-review` surface and `review_plan` navigation.
   It renders facts, freshness, data quality, and deliberate refresh only; it
   has no confirmation or mutation surface.
@@ -1320,17 +1290,11 @@ The exact behavior, schema, routes, copy, and verification boundary live in
 The detailed implementation order and acceptance criteria live in
 `docs/phase-10-controlled-coach-plan.md`.
 
-### Completed Slice: Controlled Recommendation Refresh
+### Retired Slice: Controlled Recommendation Refresh
 
-- Retired: authenticated Intake V1 completion creates the compact onboarding
-  snapshot but no longer triggers Recommendation generation.
-- Implemented: the recommendation context loader reads latest
-  `user_state_snapshots` with explicit `user_id` scoping.
-- Implemented: normal dashboard reads still do not auto-generate
-  recommendations.
-- Implemented: the dashboard exposes a deliberate refresh action that refreshes
-  the daily snapshot best-effort, then calls `POST /v1/recommendations/generate`
-  with `allow_llm_wording=false`, and reloads persisted recommendations.
+This historical slice was removed by P7 together with the generic feed,
+Recommendation persistence, scheduler fields, and Decision Feedback. No current
+route or Flutter surface implements it.
 
 ### Completed Slice: Snapshot Aggregator
 
@@ -1371,10 +1335,9 @@ The detailed implementation order and acceptance criteria live in
 - Implemented: the smoke covers revisioned Setup completion/replay/edit,
   concurrent same-request convergence, candidate cadence, exact ownership
   metadata and stable ids, preservation of manual rows, onboarding snapshots,
-  absence of post-intake Recommendations, backend-refreshed daily snapshots
-  after check-ins, exact Daily State V2 partial/current/recovery state and
-  stale-risk
-  removal after edit, deliberate dashboard recommendation refresh, and core
+  absence of post-intake generic Recommendations, backend-refreshed daily
+  snapshots after check-ins, exact Daily State V3 partial/current/recovery state
+  and stale-risk removal after edit, and core
   direct app writes.
 - Implemented: the guest/mock widget smoke stays fast and separate.
 - Implemented: exact database assertions cover task
@@ -1404,24 +1367,23 @@ The detailed implementation order and acceptance criteria live in
   refresh best-effort for persisted `metadata.entry_date`, with `started_at`
   UTC-date fallback for legacy/invalid rows.
 - Implemented: `POST /v1/scheduled/daily-refresh` prepares deterministic daily
-  snapshots and persisted briefings for each selected profile-local date and can
-  optionally retry deterministic recommendations without LLM wording.
-- Current snapshot/briefing pairs stay write-free unless optional recommendation
-  retry explicitly selects them; missing/stale pairs converge on the existing
-  daily identities with no Dashboard-load generation.
+  snapshots and persisted briefings for each selected profile-local date.
+- Current snapshot/briefing pairs stay write-free; missing/stale pairs converge
+  on the existing daily identities with no Dashboard-load generation. Retired
+  Recommendation fields are rejected.
 - Preserve guest/mock mode and keep failures best-effort for the user write.
 - Do not introduce a production worker, LLM provider, or dashboard-load
   generation for this slice.
 
 ## Out Of Scope For The Next Slice
 
-- Hidden or opaque feedback adaptation, mutation of original briefing reasons,
+- Hidden or opaque adaptation, mutation of original briefing reasons,
   or an unbounded personalization score.
 - Changing the Phase 2 mode, freshness, evidence, or recovery-first rules as a
   side effect of briefing work.
 - Changing Phase 3 task, habit, focus, action-target, or snapshot-refresh
   semantics as a side effect of ranking them.
-- Generating a briefing or recommendations during normal Dashboard reads or
+- Generating a briefing or generic Recommendations during normal Dashboard reads or
   ordinary task, habit, focus, or capture writes.
 - Expanding `review_plan` beyond bounded review navigation into autonomous or
   compound plan mutation.

@@ -24,7 +24,6 @@ from app.repositories.coach_repository import SupabaseCoachRepository
 from app.repositories.daily_capture_repository import SupabaseDailyCaptureRepository
 from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
 from app.repositories.multi_exam_plan_repository import SupabaseMultiExamPlanRepository
-from app.repositories.feedback_repository import SupabaseFeedbackRepository
 from app.repositories.focus_repository import SupabaseFocusRepository
 from app.repositories.intake_repository import SupabaseIntakeRepository
 from app.repositories.learning_repository import SupabaseLearningRepository
@@ -33,9 +32,6 @@ from app.repositories.personal_patterns_repository import (
     SupabasePersonalPatternsRepository,
 )
 from app.repositories.planner_repository import SupabasePlannerRepository
-from app.repositories.recommendation_repository import (
-    SupabaseRecommendationRepository,
-)
 from app.repositories.scheduled_refresh_repository import (
     SupabaseScheduledRefreshRepository,
 )
@@ -49,7 +45,6 @@ from app.repositories.today_week_agenda_repository import (
 from app.repositories.today_planner_read_repository import (
     SupabaseTodayPlannerReadRepository,
 )
-from app.repositories.user_context_repository import SupabaseUserContextRepository
 from app.repositories.weekly_review_repository import (
     SupabaseWeeklyReviewRepository,
 )
@@ -65,7 +60,6 @@ from app.services.coach_snapshot import CoachSnapshotService
 from app.services.daily_capture_service import DailyCaptureService
 from app.services.deadline_plan_service import DeadlinePlanService
 from app.services.multi_exam_plan_service import MultiExamPlanService
-from app.services.feedback_service import FeedbackService
 from app.services.focus_service import FocusService
 from app.services.intake_service import IntakeService
 from app.services.learned_timing import LearnedTimingResolver
@@ -77,7 +71,6 @@ from app.services.notification_service import (
 from app.services.personal_patterns_service import PersonalPatternsService
 from app.services.sleep_recommendation_service import SleepRecommendationService
 from app.services.planner_service import PlannerService
-from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
 from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.today_overview_service import TodayOverviewService
@@ -105,7 +98,6 @@ class ApplicationComposition:
     daily_capture_service: DailyCaptureService
     deadline_plan_service: DeadlinePlanService
     multi_exam_plan_service: MultiExamPlanService
-    feedback_service: FeedbackService
     focus_service: FocusService
     intake_service: IntakeService
     learning_service: LearningService
@@ -113,7 +105,6 @@ class ApplicationComposition:
     personal_patterns_service: PersonalPatternsService
     sleep_recommendation_service: SleepRecommendationService
     planner_service: PlannerService
-    recommendation_engine: RecommendationEngine
     scheduled_refresh_service: ScheduledRefreshService
     snapshot_aggregator: SnapshotAggregator
     today_overview_service: TodayOverviewService
@@ -190,12 +181,6 @@ class ApplicationComposition:
             learned_timing=learned_timing,
             read_context_factory=today_planner_read_contexts,
         )
-        recommendation_engine = RecommendationEngine(
-            user_context_repository=SupabaseUserContextRepository(supabase_client),
-            recommendation_repository=SupabaseRecommendationRepository(
-                supabase_client,
-            ),
-        )
         notification_repository = SupabaseNotificationRepository(supabase_client)
         notification_service = NotificationService(
             repository=notification_repository,
@@ -252,7 +237,6 @@ class ApplicationComposition:
         scheduled_refresh_service = ScheduledRefreshService(
             repository=SupabaseScheduledRefreshRepository(supabase_client),
             briefing_service=briefing_service,
-            recommendation_engine=recommendation_engine,
             notification_generation_service=notification_generation_service,
         )
 
@@ -270,9 +254,6 @@ class ApplicationComposition:
             ),
             deadline_plan_service=deadline_plan_service,
             multi_exam_plan_service=multi_exam_plan_service,
-            feedback_service=FeedbackService(
-                repository=SupabaseFeedbackRepository(supabase_client),
-            ),
             focus_service=FocusService(
                 repository=SupabaseFocusRepository(supabase_client),
             ),
@@ -284,7 +265,6 @@ class ApplicationComposition:
             personal_patterns_service=personal_patterns_service,
             sleep_recommendation_service=sleep_recommendation_service,
             planner_service=planner_service,
-            recommendation_engine=recommendation_engine,
             scheduled_refresh_service=scheduled_refresh_service,
             snapshot_aggregator=snapshot_aggregator,
             today_overview_service=TodayOverviewService(

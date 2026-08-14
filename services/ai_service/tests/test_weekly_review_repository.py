@@ -89,9 +89,7 @@ def test_profile_and_context_reads_are_owner_scoped_bounded_and_paginated() -> N
     assert profile.onboarded is True
     assert len(context.habit_logs) == 1001
     habit_log_calls = [
-        dict(params)
-        for table, params in client.select_calls
-        if table == "habit_logs"
+        dict(params) for table, params in client.select_calls if table == "habit_logs"
     ]
     assert all("offset" not in call for call in habit_log_calls)
     assert "or" not in habit_log_calls[0]
@@ -99,11 +97,7 @@ def test_profile_and_context_reads_are_owner_scoped_bounded_and_paginated() -> N
     assert all(call["user_id"] == "eq.user-1" for call in habit_log_calls)
     assert all(call["entry_date"] == "lte.2026-07-12" for call in habit_log_calls)
 
-    task_calls = [
-        params
-        for table, params in client.select_calls
-        if table == "tasks"
-    ]
+    task_calls = [params for table, params in client.select_calls if table == "tasks"]
     assert len(task_calls) == 3
     task_filters = [dict(call) for call in task_calls]
     assert {call["status"] for call in task_filters} == {
@@ -135,14 +129,7 @@ def test_persisted_review_parser_normalizes_json_dates_and_timestamps() -> None:
         7,
         tzinfo=UTC,
     )
-    assert review.proposals[0].expected_updated_at == datetime(
-        2026,
-        7,
-        1,
-        8,
-        tzinfo=UTC,
-    )
-    assert review.proposals[0].change.before.cadence.scheduled_weekdays == []
+    assert review.proposals == []
 
 
 def test_persisted_review_parser_rejects_cross_boundary_metadata() -> None:
@@ -176,7 +163,7 @@ def test_persist_uses_stable_user_period_identity() -> None:
     assert client.upsert_calls == []
     assert client.rpc_calls == [
         (
-            "persist_weekly_review_v2",
+            "persist_weekly_review_v3",
             {
                 "p_user_id": "user-1",
                 "p_period_key": "2026-W28",
@@ -224,56 +211,12 @@ def valid_review_row() -> dict[str, Any]:
                 "actual_minutes": 0,
             },
             "recovery": {"observed_days": 7, "recovery_days": 0},
-            "feedback": {
-                "total": 1,
-                "done": 0,
-                "later": 0,
-                "not_helpful": 0,
-                "too_much": 1,
-                "does_not_fit": 0,
-            },
         },
-        "proposals": [
-            {
-                "id": "weekly-review:2026-W28:habit:habit-1:shrink",
-                "operation": "shrink",
-                "target_kind": "habit",
-                "target_id": "habit-1",
-                "target_title": "Walk",
-                "ownership": "manual",
-                "application_mode": "direct_habit",
-                "expected_updated_at": "2026-07-01T08:00:00+00:00",
-                "reason_code": "habit_weekly_target_too_large",
-                "reason": "The explicit feedback supports a smaller target.",
-                "evidence_refs": [
-                    {"table": "habits", "id": "habit-1", "field": "updated_at"},
-                ],
-                "change": {
-                    "before": {
-                        "lifecycle": "active",
-                        "cadence": {
-                            "kind": "weekly_target",
-                            "weekly_target": 4,
-                            "scheduled_weekdays": [],
-                        },
-                    },
-                    "after": {
-                        "lifecycle": "active",
-                        "cadence": {
-                            "kind": "weekly_target",
-                            "weekly_target": 3,
-                            "scheduled_weekdays": [],
-                        },
-                    },
-                },
-            },
-        ],
-        "evidence_refs": [
-            {"table": "habits", "id": "habit-1", "field": "updated_at"},
-        ],
+        "proposals": [],
+        "evidence_refs": [],
         "provenance": {
             "engine": "deterministic",
-            "contract_version": "weekly-review-v2",
+            "contract_version": "weekly-review-v3",
             "source_snapshot_id": "snapshot-1",
             "source_snapshot_generated_at": "2026-07-13T07:00:00+00:00",
             "evidence_window": {

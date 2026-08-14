@@ -54,7 +54,6 @@ class FakeIntakeService:
             "completed_at": datetime(2026, 7, 10, tzinfo=UTC),
             "responses": request.responses,
             "summary": summary(),
-            "recommendations": [],
         }
 
 

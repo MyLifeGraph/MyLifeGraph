@@ -4,9 +4,9 @@ import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
 
 void main() {
-  test('explicit mock configuration selects recommendation demo data', () {
+  test('explicit mock configuration selects optimization demo data', () {
     expect(
-      usesRecommendationDemoData(
+      usesOptimizationDemoData(
         config: _config(useMockData: true),
         session: AppSession.authenticated(_profile()),
       ),
@@ -14,9 +14,9 @@ void main() {
     );
   });
 
-  test('guest session selects recommendation demo data', () {
+  test('guest session selects optimization demo data', () {
     expect(
-      usesRecommendationDemoData(
+      usesOptimizationDemoData(
         config: _config(useMockData: false),
         session: AppSession.guest(
           _profile(
@@ -30,9 +30,9 @@ void main() {
     );
   });
 
-  test('authenticated real session never selects recommendation demo data', () {
+  test('authenticated real session never selects optimization demo data', () {
     expect(
-      usesRecommendationDemoData(
+      usesOptimizationDemoData(
         config: _config(useMockData: false),
         session: AppSession.authenticated(_profile()),
       ),
@@ -40,9 +40,9 @@ void main() {
     );
   });
 
-  test('guest profile role cannot enter the real recommendation path', () {
+  test('guest profile role cannot enter the real optimization path', () {
     expect(
-      usesRecommendationDemoData(
+      usesOptimizationDemoData(
         config: _config(useMockData: false),
         session: AppSession.authenticated(_profile(role: AppRole.guest)),
       ),
@@ -52,7 +52,7 @@ void main() {
 
   test('missing session is not silently treated as demo', () {
     expect(
-      usesRecommendationDemoData(
+      usesOptimizationDemoData(
         config: _config(useMockData: false),
         session: null,
       ),

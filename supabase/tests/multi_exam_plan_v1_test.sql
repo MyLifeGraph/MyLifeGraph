@@ -1,11 +1,146 @@
 begin;
 create temporary table multi_exam_test_environment (
-  dblink_was_installed boolean not null
+  dblink_host text,
+  dblink_user text,
+  dblink_password text
 ) on commit preserve rows;
-insert into multi_exam_test_environment (dblink_was_installed)
-select exists(select 1 from pg_extension where extname = 'dblink');
-create extension if not exists dblink with schema extensions;
-select plan(103);
+insert into multi_exam_test_environment default values;
+
+create or replace function pg_temp.multi_exam_drop_owned_dblink_v1()
+returns boolean
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  marker_relation regclass :=
+    to_regclass('private.multi_exam_dblink_extension_test_marker');
+  marker_owner name;
+  marker_rows bigint;
+  marker_extension_oid oid;
+  marker_extension_owner name;
+  marker_extension_schema name;
+  marker_extension_version text;
+  current_extension_oid oid;
+  current_extension_owner name;
+  current_extension_schema name;
+  current_extension_version text;
+begin
+  if marker_relation is null then
+    return false;
+  end if;
+
+  select pg_get_userbyid(relowner)
+  into marker_owner
+  from pg_class
+  where oid = marker_relation and relkind = 'r';
+  if marker_owner is distinct from current_user then
+    raise exception 'Multi-Exam dblink test marker ownership is invalid.';
+  end if;
+
+  execute 'select count(*) '
+    'from private.multi_exam_dblink_extension_test_marker'
+    into strict marker_rows;
+  if marker_rows <> 1 then
+    raise exception 'Multi-Exam dblink test marker cardinality is invalid.';
+  end if;
+
+  execute
+    'select extension_oid, extension_owner, extension_schema, '
+    'extension_version '
+    'from private.multi_exam_dblink_extension_test_marker '
+    'where marker = ''multi-exam-plan-v1-pgtap-dblink-v1'''
+    into strict marker_extension_oid, marker_extension_owner,
+      marker_extension_schema, marker_extension_version;
+
+  select extension.oid, pg_get_userbyid(extension.extowner),
+    namespace.nspname, extension.extversion
+  into current_extension_oid, current_extension_owner,
+    current_extension_schema, current_extension_version
+  from pg_extension as extension
+  join pg_namespace as namespace on namespace.oid = extension.extnamespace
+  where extension.extname = 'dblink';
+
+  if current_extension_oid is distinct from marker_extension_oid
+     or current_extension_owner is distinct from marker_extension_owner
+     or current_extension_schema is distinct from marker_extension_schema
+     or current_extension_version is distinct from marker_extension_version then
+    raise exception 'Multi-Exam dblink test marker does not own this extension.';
+  end if;
+
+  execute 'drop extension dblink';
+  execute 'drop table private.multi_exam_dblink_extension_test_marker';
+  return true;
+end;
+$$;
+
+do $$
+begin
+  perform pg_temp.multi_exam_drop_owned_dblink_v1();
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_extension where extname = 'dblink'
+  ) then
+    execute 'create extension dblink with schema extensions';
+    execute $marker$
+      create table private.multi_exam_dblink_extension_test_marker (
+        marker text primary key
+          check (marker = 'multi-exam-plan-v1-pgtap-dblink-v1'),
+        extension_oid oid not null,
+        extension_owner name not null,
+        extension_schema name not null,
+        extension_version text not null
+      )
+    $marker$;
+    insert into private.multi_exam_dblink_extension_test_marker (
+      marker, extension_oid, extension_owner, extension_schema,
+      extension_version
+    )
+    select 'multi-exam-plan-v1-pgtap-dblink-v1', extension.oid,
+      pg_get_userbyid(extension.extowner), namespace.nspname,
+      extension.extversion
+    from pg_extension as extension
+    join pg_namespace as namespace on namespace.oid = extension.extnamespace
+    where extension.extname = 'dblink';
+  end if;
+end;
+$$;
+
+-- A failed concurrency phase commits its fixture before opening the second
+-- session. Remove only that fixed test identity and its test-owned helpers so
+-- the same file repairs an interrupted prior run before rebuilding the fixture.
+drop function if exists private.multi_exam_test_confirm_and_hold_v1();
+drop function if exists private.multi_exam_test_propose_and_hold_v1();
+drop function if exists private.multi_exam_test_wait_for_advisory_lock_v1(int);
+drop table if exists private.multi_exam_concurrency_fixture_test;
+delete from auth.users
+where id = 'e5000000-0000-4000-8000-000000000001';
+do $$
+begin
+  if exists (
+    select 1 from pg_roles
+    where rolname = 'multi_exam_concurrency_test_login'
+  ) then
+    execute 'revoke execute on function '
+      'public.propose_multi_exam_plan_v1('
+      'uuid,text,uuid,uuid,text,uuid,integer,timestamptz,text,text,boolean,'
+      'jsonb,timestamptz) from multi_exam_concurrency_test_login';
+    execute 'revoke execute on function '
+      'public.confirm_multi_exam_plan_v1('
+      'uuid,uuid,uuid,text,integer,boolean,timestamptz) '
+      'from multi_exam_concurrency_test_login';
+    execute 'revoke usage on schema private '
+      'from multi_exam_concurrency_test_login';
+    execute 'drop role multi_exam_concurrency_test_login';
+  end if;
+end;
+$$;
+commit;
+begin;
+select plan(104);
 
 select ok(to_regclass('private.multi_exam_plan_batches') is not null,
   'multi_exam_plan_batches exists privately');
@@ -766,6 +901,88 @@ revoke all on function private.multi_exam_test_wait_for_advisory_lock_v1(int),
   private.multi_exam_test_confirm_and_hold_v1()
 from public, anon, authenticated, service_role;
 
+do $$
+declare
+  test_host text := case
+    when (select rolsuper from pg_roles where rolname = current_user)
+      then '127.0.0.1'
+    else host(inet_server_addr())
+  end;
+  test_password text := encode(extensions.gen_random_bytes(32), 'hex');
+begin
+  if test_host is null then
+    raise exception 'Multi-Exam concurrency tests require a TCP database session.';
+  end if;
+
+  perform set_config('password_encryption', 'scram-sha-256', true);
+  execute format(
+    'create role multi_exam_concurrency_test_login login inherit '
+    'connection limit 2 valid until %L password %L',
+    clock_timestamp() + interval '1 hour',
+    test_password
+  );
+  execute 'grant execute on function '
+    'public.propose_multi_exam_plan_v1('
+    'uuid,text,uuid,uuid,text,uuid,integer,timestamptz,text,text,boolean,'
+    'jsonb,timestamptz) to multi_exam_concurrency_test_login';
+  execute 'grant execute on function '
+    'public.confirm_multi_exam_plan_v1('
+    'uuid,uuid,uuid,text,integer,boolean,timestamptz) '
+    'to multi_exam_concurrency_test_login';
+  execute 'grant usage on schema private '
+    'to multi_exam_concurrency_test_login';
+  execute 'grant select on private.multi_exam_concurrency_fixture_test '
+    'to multi_exam_concurrency_test_login';
+  execute 'grant execute on function '
+    'private.multi_exam_test_propose_and_hold_v1(), '
+    'private.multi_exam_test_confirm_and_hold_v1() '
+    'to multi_exam_concurrency_test_login';
+
+  update multi_exam_test_environment
+  set dblink_host = test_host,
+      dblink_user = 'multi_exam_concurrency_test_login',
+      dblink_password = test_password;
+end;
+$$;
+
+select ok(
+  not pg_has_role(
+    'multi_exam_concurrency_test_login', 'service_role', 'MEMBER'
+  )
+  and (
+    select count(*) = 0
+    from pg_auth_members
+    where member = (
+      select oid from pg_roles
+      where rolname = 'multi_exam_concurrency_test_login'
+    )
+  )
+  and has_function_privilege(
+    'multi_exam_concurrency_test_login',
+    'public.propose_multi_exam_plan_v1(uuid,text,uuid,uuid,text,uuid,integer,timestamptz,text,text,boolean,jsonb,timestamptz)',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'multi_exam_concurrency_test_login',
+    'public.confirm_multi_exam_plan_v1(uuid,uuid,uuid,text,integer,boolean,timestamptz)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'multi_exam_concurrency_test_login',
+    'public.cancel_multi_exam_plan_v1(uuid,uuid,uuid,text,integer,timestamptz)',
+    'EXECUTE'
+  )
+  and has_table_privilege(
+    'multi_exam_concurrency_test_login',
+    'private.multi_exam_concurrency_fixture_test', 'SELECT'
+  )
+  and not has_table_privilege(
+    'multi_exam_concurrency_test_login',
+    'private.multi_exam_plan_batches', 'SELECT'
+  ),
+  'the concurrency login has only its exact RPC and fixture authority'
+);
+
 commit;
 begin;
 
@@ -775,10 +992,20 @@ create temporary table multi_exam_concurrency_sessions (
 ) on commit preserve rows;
 
 do $$
+declare
+  test_conninfo text;
 begin
+  select format(
+    'hostaddr=%L port=%L dbname=%L user=%L password=%L '
+    'connect_timeout=5 sslmode=disable',
+    dblink_host, current_setting('port'), current_database(), dblink_user,
+    dblink_password
+  ) into strict test_conninfo
+  from multi_exam_test_environment;
+
   if extensions.dblink_connect(
     'proposal_owner_lock',
-    format('dbname=%s user=postgres', current_database())
+    test_conninfo
   ) <> 'OK' then
     raise exception 'Proposal concurrency connection failed.';
   end if;
@@ -1156,10 +1383,20 @@ commit;
 begin;
 
 do $$
+declare
+  test_conninfo text;
 begin
+  select format(
+    'hostaddr=%L port=%L dbname=%L user=%L password=%L '
+    'connect_timeout=5 sslmode=disable',
+    dblink_host, current_setting('port'), current_database(), dblink_user,
+    dblink_password
+  ) into strict test_conninfo
+  from multi_exam_test_environment;
+
   if extensions.dblink_connect(
     'confirm_owner_lock',
-    format('dbname=%s user=postgres', current_database())
+    test_conninfo
   ) <> 'OK' then
     raise exception 'Confirmation concurrency connection failed.';
   end if;
@@ -1221,6 +1458,9 @@ begin
   end if;
 end;
 $$;
+
+update multi_exam_test_environment
+set dblink_password = null;
 
 select is((
   select updated_at
@@ -1293,6 +1533,27 @@ drop function private.multi_exam_test_confirm_and_hold_v1();
 drop function private.multi_exam_test_propose_and_hold_v1();
 drop function private.multi_exam_test_wait_for_advisory_lock_v1(int);
 drop table private.multi_exam_concurrency_fixture_test;
+do $$
+begin
+  execute 'revoke execute on function '
+    'public.propose_multi_exam_plan_v1('
+    'uuid,text,uuid,uuid,text,uuid,integer,timestamptz,text,text,boolean,'
+    'jsonb,timestamptz) from multi_exam_concurrency_test_login';
+  execute 'revoke execute on function '
+    'public.confirm_multi_exam_plan_v1('
+    'uuid,uuid,uuid,text,integer,boolean,timestamptz) '
+    'from multi_exam_concurrency_test_login';
+  execute 'revoke usage on schema private '
+    'from multi_exam_concurrency_test_login';
+  execute 'drop role multi_exam_concurrency_test_login';
+end;
+$$;
+
+do $$
+begin
+  perform pg_temp.multi_exam_drop_owned_dblink_v1();
+end;
+$$;
 
 select is((
   select count(*)::int from auth.users
@@ -1322,20 +1583,17 @@ select ok(
   ) is null
   and to_regprocedure(
     'private.multi_exam_test_confirm_and_hold_v1()'
+  ) is null
+  and not exists (
+    select 1 from pg_roles
+    where rolname = 'multi_exam_concurrency_test_login'
+  )
+  and to_regclass(
+    'private.multi_exam_dblink_extension_test_marker'
   ) is null,
-  'the committed concurrency fixture removes every test-only helper'
+  'the committed fixture removes every test-only helper, login, and marker'
 );
 
 select * from finish();
-
-do $$
-begin
-  if not (
-    select dblink_was_installed from multi_exam_test_environment
-  ) then
-    execute 'drop extension dblink';
-  end if;
-end;
-$$;
 
 commit;

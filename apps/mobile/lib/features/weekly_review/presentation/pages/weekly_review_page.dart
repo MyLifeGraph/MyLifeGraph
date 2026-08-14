@@ -400,8 +400,7 @@ class _WeeklyFactsCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             '${facts.focus.completedSessions} completed focus sessions · '
-            '${facts.focus.actualMinutes} actual minutes · '
-            '${facts.feedback.total} recommendation feedback events',
+            '${facts.focus.actualMinutes} actual minutes',
           ),
           if (generationError != null) ...[
             const SizedBox(height: AppSpacing.md),

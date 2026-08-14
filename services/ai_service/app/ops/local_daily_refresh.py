@@ -290,7 +290,6 @@ def build_payload(profile_ids: Sequence[str] = ()) -> dict[str, object]:
     payload: dict[str, object] = {
         "window_days": 7,
         "limit": 100,
-        "include_recommendations": False,
         "include_notifications": True,
     }
     if profile_ids:

@@ -14,7 +14,6 @@ CoachEvidenceSourceName = Literal[
     "daily_capture",
     "focus_reflections",
     "habit_outcomes",
-    "decision_feedback",
     "weekly_reviews",
     "task_lifecycle",
 ]
@@ -117,7 +116,7 @@ class CoachEvidenceDigest(BaseModel):
     window: CoachEvidenceWindow
     sources: list[CoachEvidenceSourceSummary] = Field(
         min_length=1,
-        max_length=6,
+        max_length=5,
     )
     buckets: list[CoachEvidenceBucket] = Field(max_length=24)
     summary_metrics: dict[str, CoachEvidenceMetric] = Field(max_length=50)

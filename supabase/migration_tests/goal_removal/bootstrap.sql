@@ -16,9 +16,16 @@ begin
 end
 $$;
 
+-- Match the role attributes of a normal local Supabase database. The
+-- service_role bypass is required for final-state tests that deliberately
+-- inspect rows after invoking a SECURITY DEFINER writer; anon/authenticated
+-- retain the default no-bypass behavior.
+alter role service_role bypassrls;
+
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists pgtap;
+grant usage on schema extensions to anon, authenticated, service_role;
 
 create schema if not exists auth;
 

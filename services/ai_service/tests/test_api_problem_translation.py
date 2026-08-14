@@ -17,7 +17,6 @@ from app.api.problems.coach import (
 )
 from app.api.problems.daily_capture import daily_capture_problem
 from app.api.problems.deadline_plans import deadline_plan_problem
-from app.api.problems.feedback import feedback_problem
 from app.api.problems.focus import focus_problem
 from app.api.problems.insights import personal_patterns_problem
 from app.api.problems.intake import intake_problem
@@ -57,7 +56,6 @@ from app.services.daily_capture_service import (
     DailyCaptureUnavailableError,
     InvalidDailyCaptureError,
 )
-from app.services.feedback_service import FeedbackConflictError, FeedbackNotFoundError
 from app.services.focus_service import FocusConflictError, FocusNotFoundError
 from app.services.intake_service import IntakeRevisionConflict
 from app.services.learning_service import (
@@ -193,8 +191,6 @@ _DETAIL = "service detail"
         (deadline_plan_problem, DeadlinePlanNotFoundError(_DETAIL), 404, _DETAIL),
         (deadline_plan_problem, DeadlinePlanConflictError(_DETAIL), 409, _DETAIL),
         (deadline_plan_problem, DeadlinePlanValidationError(_DETAIL), 422, _DETAIL),
-        (feedback_problem, FeedbackConflictError(_DETAIL), 409, _DETAIL),
-        (feedback_problem, FeedbackNotFoundError(_DETAIL), 404, _DETAIL),
         (focus_problem, FocusNotFoundError(_DETAIL), 404, _DETAIL),
         (focus_problem, FocusConflictError(_DETAIL), 409, _DETAIL),
         (

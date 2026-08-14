@@ -13,7 +13,6 @@ from app.services.calendar_integration_service import CalendarIntegrationService
 from app.services.daily_capture_service import DailyCaptureService
 from app.services.deadline_plan_service import DeadlinePlanService
 from app.services.multi_exam_plan_service import MultiExamPlanService
-from app.services.feedback_service import FeedbackService
 from app.services.focus_service import FocusService
 from app.services.intake_service import IntakeService
 from app.services.learning_service import LearningService
@@ -21,7 +20,6 @@ from app.services.notification_service import NotificationService
 from app.services.personal_patterns_service import PersonalPatternsService
 from app.services.sleep_recommendation_service import SleepRecommendationService
 from app.services.planner_service import PlannerService
-from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
 from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.today_overview_service import TodayOverviewService
@@ -107,14 +105,6 @@ async def get_multi_exam_plan_service(request: Request) -> MultiExamPlanService:
     )
 
 
-async def get_feedback_service(request: Request) -> FeedbackService:
-    return _service(
-        request,
-        select=lambda composition: composition.feedback_service,
-        unavailable_detail="Feedback persistence is not configured.",
-    )
-
-
 async def get_focus_service(request: Request) -> FocusService:
     return _service(
         request,
@@ -172,14 +162,6 @@ async def get_planner_service(request: Request) -> PlannerService:
         request,
         select=lambda composition: composition.planner_service,
         unavailable_detail="Planner persistence is not configured.",
-    )
-
-
-async def get_recommendation_engine(request: Request) -> RecommendationEngine:
-    return _service(
-        request,
-        select=lambda composition: composition.recommendation_engine,
-        unavailable_detail="Recommendation persistence is not configured.",
     )
 
 

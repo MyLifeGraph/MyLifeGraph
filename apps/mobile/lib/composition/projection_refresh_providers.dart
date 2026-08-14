@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:my_life_graph/composition/dashboard_providers.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
-import 'package:my_life_graph/composition/optimization_providers.dart';
 import '../features/planner/presentation/providers/planner_providers.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../features/snapshots/presentation/providers/snapshot_providers.dart';
@@ -26,8 +25,6 @@ final projectionRefreshCoordinatorProvider =
           ref.invalidate(dashboardLatestCheckInProvider);
         case ProductProjection.todayFullWeek:
           ref.invalidate(dashboardFullWeekProvider);
-        case ProductProjection.recommendations:
-          ref.invalidate(recommendationFeedProvider);
         case ProductProjection.planner:
           ref.invalidate(plannerControllerProvider);
         case ProductProjection.preparationWorkload:

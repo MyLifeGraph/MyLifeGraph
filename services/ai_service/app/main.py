@@ -11,7 +11,6 @@ from app.api.routes import (
     coach,
     daily_capture,
     deadline_plans,
-    feedback,
     focus,
     health,
     intake,
@@ -19,7 +18,6 @@ from app.api.routes import (
     learning,
     notifications,
     planner,
-    recommendations,
     scheduled,
     snapshots,
     today,
@@ -80,11 +78,9 @@ def create_app() -> FastAPI:
     app.include_router(learning.router, prefix=settings.api_prefix)
     app.include_router(insights.router, prefix=settings.api_prefix)
     app.include_router(notifications.router, prefix=settings.api_prefix)
-    app.include_router(recommendations.router, prefix=settings.api_prefix)
     app.include_router(snapshots.router, prefix=settings.api_prefix)
     app.include_router(today.router, prefix=settings.api_prefix)
     app.include_router(briefings.router, prefix=settings.api_prefix)
-    app.include_router(feedback.router, prefix=settings.api_prefix)
     app.include_router(focus.router, prefix=settings.api_prefix)
     app.include_router(scheduled.router, prefix=settings.api_prefix)
     app.include_router(weekly_reviews.router, prefix=settings.api_prefix)

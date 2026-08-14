@@ -1,15 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/config/app_config.dart';
-import '../core/network/api_client.dart';
 import '../core/supabase/supabase_providers.dart';
 import '../features/auth/domain/app_session.dart';
 import '../features/optimization/application/optimization_service.dart';
 import '../features/optimization/data/datasources/optimization_mock_data_source.dart';
-import '../features/optimization/data/datasources/recommendations_api_data_source.dart';
 import '../features/optimization/data/datasources/skillset_profile_supabase_data_source.dart';
 import '../features/optimization/data/repositories/optimization_repository_impl.dart';
-import '../features/optimization/domain/entities/recommendation_feed.dart';
 import '../features/optimization/domain/entities/skillset_profile.dart';
 import '../features/optimization/domain/repositories/optimization_repository.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
@@ -18,22 +15,6 @@ final optimizationMockDataSourceProvider = Provider<OptimizationMockDataSource>(
   (_) => const OptimizationMockDataSource(),
 );
 
-final recommendationsApiDataSourceProvider =
-    Provider<RecommendationsApiDataSource>(
-  (ref) => RecommendationsApiDataSource(ref.watch(apiClientProvider)),
-);
-
-final recommendationAccessTokenProvider = Provider<AccessTokenProvider>((ref) {
-  return () {
-    final config = ref.read(appConfigProvider);
-    final session = ref.read(authControllerProvider).valueOrNull;
-    if (usesRecommendationDemoData(config: config, session: session)) {
-      return null;
-    }
-    return ref.read(supabaseClientProvider)?.auth.currentSession?.accessToken;
-  };
-});
-
 final optimizationRepositoryProvider = Provider<OptimizationRepository>((ref) {
   final config = ref.watch(appConfigProvider);
   final session = ref.watch(authControllerProvider).valueOrNull;
@@ -41,13 +22,10 @@ final optimizationRepositoryProvider = Provider<OptimizationRepository>((ref) {
   return OptimizationRepositoryImpl(
     config: config,
     mockDataSource: ref.watch(optimizationMockDataSourceProvider),
-    recommendationsApiDataSource:
-        ref.watch(recommendationsApiDataSourceProvider),
-    accessTokenProvider: ref.watch(recommendationAccessTokenProvider),
     skillsetProfileLoader: client == null
         ? null
         : SkillsetProfileSupabaseDataSource(client).getLatestProfile,
-    allowDemoData: usesRecommendationDemoData(
+    allowDemoData: usesOptimizationDemoData(
       config: config,
       session: session,
     ),
@@ -62,11 +40,7 @@ final skillsetProfileProvider = FutureProvider<SkillsetProfile>((ref) {
   return ref.watch(optimizationServiceProvider).loadSkillsetProfile();
 });
 
-final recommendationFeedProvider = FutureProvider<RecommendationFeed>((ref) {
-  return ref.watch(optimizationServiceProvider).loadActionableRecommendations();
-});
-
-bool usesRecommendationDemoData({
+bool usesOptimizationDemoData({
   required AppConfig config,
   required AppSession? session,
 }) {

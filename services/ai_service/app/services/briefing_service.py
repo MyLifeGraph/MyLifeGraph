@@ -12,7 +12,6 @@ from app.models.briefings import (
     BriefingGenerateRequest,
     BriefingProvenance,
     BriefingReadResponse,
-    FeedbackRankingProvenance,
 )
 from app.models.executable_actions import ExecutableActionTarget
 from app.models.snapshots import SnapshotGenerateRequest
@@ -26,9 +25,6 @@ class _Candidate:
     action: BriefingAction
     score: int
     category: str
-    feedback_contribution: int = 0
-    feedback_reasons: tuple[str, ...] = ()
-    feedback_applied_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -283,7 +279,6 @@ def _build_briefing_row(
         data_quality=data_quality,
     )
     primary = candidates[0].action
-    primary_candidate = candidates[0]
     support = _support_actions(candidates[1:], primary=primary)
     evidence = _dedupe_evidence(
         [
@@ -296,21 +291,13 @@ def _build_briefing_row(
     snapshot_generated_at = _parse_datetime(snapshot.get("generated_at"))
     provenance = BriefingProvenance(
         engine="deterministic",
-        contract_version="daily-briefing-v1",
+        contract_version="daily-briefing-v2",
         daily_state_contract_version=DAILY_STATE_CONTRACT_VERSION,
         executable_action_contract_version="executable-action-v1",
         source_snapshot_id=str(snapshot["id"]),
         source_snapshot_generated_at=snapshot_generated_at,
         baseline="none",
         llm_used=False,
-        feedback_ranking=FeedbackRankingProvenance(
-            contract_version="feedback-ranking-v1",
-            lookback_days=28,
-            event_count=min(len(context.feedback), 200),
-            applied_count=primary_candidate.feedback_applied_count,
-            primary_contribution=primary_candidate.feedback_contribution,
-            reasons=list(primary_candidate.feedback_reasons[:4]),
-        ),
     )
     capacity_note = _capacity_note(mode)
     return {
@@ -323,18 +310,13 @@ def _build_briefing_row(
         "support_actions": [
             action.model_dump(mode="json", exclude_none=True) for action in support
         ],
-        "recommendation_ids": [
-            action.recommendation_id
-            for action in [primary, *support]
-            if action.recommendation_id is not None
-        ],
         "evidence_refs": [ref.model_dump(mode="json") for ref in evidence],
         "provenance": provenance.model_dump(mode="json"),
         "data_quality": data_quality,
         "metadata": {
             "contract_version": DAILY_BRIEFING_CONTRACT_VERSION,
             "capacity_note": capacity_note,
-            "ranking_version": "deterministic-briefing-ranker-v2",
+            "ranking_version": "deterministic-briefing-ranker-v3",
             "candidate_count": len(candidates),
         },
         "generated_at": generated_at.isoformat(),
@@ -382,23 +364,27 @@ def _daily_state(
         source_contract=source_contract,
     )
     reasons = state.get("reasons")
-    sanitized["reasons"] = [
-        {
-            **reason,
-            "evidence_refs": [
-                ref
-                for ref in reason.get("evidence_refs", [])
-                if isinstance(ref, dict)
-                and "friction" not in str(ref.get("field") or "")
-            ],
-        }
-        for reason in reasons
-        if isinstance(reason, dict)
-        and not _retired_daily_code(
-            str(reason.get("code") or ""),
-            source_contract=source_contract,
-        )
-    ] if isinstance(reasons, list) else []
+    sanitized["reasons"] = (
+        [
+            {
+                **reason,
+                "evidence_refs": [
+                    ref
+                    for ref in reason.get("evidence_refs", [])
+                    if isinstance(ref, dict)
+                    and "friction" not in str(ref.get("field") or "")
+                ],
+            }
+            for reason in reasons
+            if isinstance(reason, dict)
+            and not _retired_daily_code(
+                str(reason.get("code") or ""),
+                source_contract=source_contract,
+            )
+        ]
+        if isinstance(reasons, list)
+        else []
+    )
     return sanitized
 
 
@@ -450,17 +436,11 @@ def _rank_candidates(
             ),
         )
 
-    recommendation_by_category = _recommendation_by_category(
-        context.recommendations,
-    )
     for task in context.tasks:
         candidate = _task_candidate(
             task=task,
             briefing_date=briefing_date,
             mode=mode,
-            recommendation=recommendation_by_category.get(
-                "planning" if mode == "plan" else "focus",
-            ),
         )
         if candidate is not None:
             candidates.append(candidate)
@@ -487,97 +467,10 @@ def _rank_candidates(
                 ),
             ),
         )
-    adjusted = _apply_feedback(
-        candidates=candidates,
-        feedback=context.feedback,
-        mode=mode,
-        briefing_date=briefing_date,
-        protect_capture=data_quality in {"missing", "stale"},
-    )
     return sorted(
-        adjusted,
+        candidates,
         key=lambda item: (-item.score, item.category, item.action.target.id),
     )
-
-
-def _apply_feedback(
-    *,
-    candidates: list[_Candidate],
-    feedback: list[dict[str, Any]],
-    mode: str,
-    briefing_date: date,
-    protect_capture: bool,
-) -> list[_Candidate]:
-    adjusted: list[_Candidate] = []
-    for candidate in candidates:
-        target = candidate.action.target
-        if protect_capture and target.kind == "capture":
-            adjusted.append(candidate)
-            continue
-        contribution = 0
-        applied_count = 0
-        reason_types: set[str] = set()
-        for event in feedback[:200]:
-            event_date = _parse_optional_date(event.get("created_at"))
-            if event_date is None:
-                continue
-            age_days = (briefing_date - event_date).days
-            if age_days < 0 or age_days > 28:
-                continue
-            match_weight = _feedback_match_weight(
-                event=event,
-                action_id=target.id,
-                action_kind=target.kind,
-                rule_key=target.command,
-                mode=mode,
-            )
-            if match_weight == 0:
-                continue
-            feedback_type = event.get("feedback_type")
-            base = {
-                "done": 30,
-                "later": -25,
-                "not_helpful": -90,
-                "too_much": -75,
-                "does_not_fit": -85,
-            }.get(feedback_type)
-            if base is None:
-                continue
-            decay = 1.0 if age_days <= 6 else 0.75 if age_days <= 13 else 0.5 if age_days <= 20 else 0.25
-            contribution += round(base * match_weight * decay)
-            applied_count += 1
-            reason_types.add(str(feedback_type))
-        bounded = max(-240, min(120, contribution))
-        reasons = tuple(
-            f"recent_{kind}_feedback"
-            for kind in sorted(reason_types)
-        )
-        adjusted.append(
-            _Candidate(
-                action=candidate.action,
-                score=candidate.score + bounded,
-                category=candidate.category,
-                feedback_contribution=bounded,
-                feedback_reasons=reasons,
-                feedback_applied_count=applied_count,
-            ),
-        )
-    return adjusted
-
-
-def _feedback_match_weight(
-    *,
-    event: dict[str, Any],
-    action_id: str,
-    action_kind: str,
-    rule_key: str,
-    mode: str,
-) -> float:
-    if event.get("action_id") == action_id:
-        return 1.0
-    if event.get("context_mode") != mode or event.get("action_kind") != action_kind:
-        return 0.0
-    return 0.5 if event.get("rule_key") == rule_key else 0.35
 
 
 def _task_candidate(
@@ -585,15 +478,10 @@ def _task_candidate(
     task: dict[str, Any],
     briefing_date: date,
     mode: str,
-    recommendation: dict[str, Any] | None,
 ) -> _Candidate | None:
     task_id = _uuid_string(task.get("id"))
     title = _string(task.get("title"))
-    if (
-        task_id is None
-        or title is None
-        or len(title) > 200
-    ):
+    if task_id is None or title is None or len(title) > 200:
         return None
     if task.get("status") not in {"todo", "in_progress"}:
         return None
@@ -620,8 +508,6 @@ def _task_candidate(
         score += 100
     if mode == "recover" and priority not in {"critical", "high"}:
         score -= 80
-    if recommendation is not None:
-        score += 20
     score += _recency_score(task.get("updated_at"), briefing_date=briefing_date)
 
     evidence = [BriefingEvidenceRef(table="tasks", id=task_id, field="status")]
@@ -644,13 +530,10 @@ def _task_candidate(
             command="open_task",
             target_id=task_id,
             estimated_minutes=estimate,
-            metadata={"source": "daily-briefing-v1"},
+            metadata={"source": "daily-briefing-v2"},
         ),
         title=title,
         reason=reason,
-        recommendation_id=(
-            str(recommendation["id"]) if recommendation is not None else None
-        ),
         evidence_refs=evidence,
     )
     return _Candidate(action=action, score=score, category="task")
@@ -718,7 +601,7 @@ def _habit_candidate(
             metadata={
                 "entry_date": briefing_date.isoformat(),
                 "habit_outcome": "completed",
-                "source": "daily-briefing-v1",
+                "source": "daily-briefing-v2",
             },
         ),
         title=title,
@@ -747,7 +630,7 @@ def _capture_candidate(
             metadata={
                 "entry_date": briefing_date.isoformat(),
                 "route": "/morning-calibration",
-                "source": "daily-briefing-v1",
+                "source": "daily-briefing-v2",
             },
         ),
         title="Calibrate today's capacity",
@@ -798,24 +681,13 @@ def _response(
     briefing: Any,
 ) -> BriefingReadResponse:
     return BriefingReadResponse(
-        contract_version="daily-briefing-v1",
+        contract_version="daily-briefing-v2",
         briefing_date=briefing_date,
         freshness=freshness,
         needs_generation=freshness != "current",
         stale_reasons=stale_reasons,
         briefing=briefing,
     )
-
-
-def _recommendation_by_category(
-    rows: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    result: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        category = row.get("category")
-        if isinstance(category, str) and category not in result and row.get("id"):
-            result[category] = row
-    return result
 
 
 def _habit_outcomes(

@@ -202,41 +202,45 @@ class AgentProvider:
         if self.block is not None:
             await self.block.wait()
         if self.with_trace or self.trace_rows is not None:
-            trace_rows = self.trace_rows if self.trace_rows is not None else [
-                {
-                    "sequence": 1,
-                    "tool": "inspect_data",
-                    "status": "completed",
-                    "summary": "Inspected data.",
-                    "row_count": None,
-                    "duration_ms": 2,
-                    "tables": [],
-                },
-                {
-                    "sequence": 2,
-                    "tool": "query_data",
-                    "status": "completed",
-                    "summary": "Queried logs.",
-                    "row_count": 5,
-                    "duration_ms": 4,
-                    "tables": ["daily_logs"],
-                    "sql": (
-                        "SELECT entry_date, stress_level "
-                        "FROM daily_logs ORDER BY entry_date"
-                    ),
-                },
-                {
-                    "sequence": 3,
-                    "tool": "run_python",
-                    "status": "completed",
-                    "summary": "Tested association.",
-                    "row_count": None,
-                    "duration_ms": 7,
-                    "tables": [],
-                    "full_snapshot_access": True,
-                    "python_codepoints": 321,
-                },
-            ]
+            trace_rows = (
+                self.trace_rows
+                if self.trace_rows is not None
+                else [
+                    {
+                        "sequence": 1,
+                        "tool": "inspect_data",
+                        "status": "completed",
+                        "summary": "Inspected data.",
+                        "row_count": None,
+                        "duration_ms": 2,
+                        "tables": [],
+                    },
+                    {
+                        "sequence": 2,
+                        "tool": "query_data",
+                        "status": "completed",
+                        "summary": "Queried logs.",
+                        "row_count": 5,
+                        "duration_ms": 4,
+                        "tables": ["daily_logs"],
+                        "sql": (
+                            "SELECT entry_date, stress_level "
+                            "FROM daily_logs ORDER BY entry_date"
+                        ),
+                    },
+                    {
+                        "sequence": 3,
+                        "tool": "run_python",
+                        "status": "completed",
+                        "summary": "Tested association.",
+                        "row_count": None,
+                        "duration_ms": 7,
+                        "tables": [],
+                        "full_snapshot_access": True,
+                        "python_codepoints": 321,
+                    },
+                ]
+            )
             trace_path.write_text(
                 (
                     "\n".join(json.dumps(item) for item in trace_rows) + "\n"
@@ -419,7 +423,9 @@ def test_ready_capabilities_and_evidence_reject_inconsistent_truth() -> None:
         )
 
 
-def test_free_turn_builds_snapshot_and_derives_trace_evidence_from_actual_tools() -> None:
+def test_free_turn_builds_snapshot_and_derives_trace_evidence_from_actual_tools() -> (
+    None
+):
     repository = AgentRepository()
     snapshot = SnapshotService()
     provider = AgentProvider(with_trace=True)
@@ -805,8 +811,8 @@ def test_v3_normal_german_question_still_returns_english_provider_output() -> No
 
     assert result.reply == provider.output.reply
     assert result.uncertainty.reason == provider.output.uncertainty.reason
-    assert result.provenance.prompt_version == "free-coach-agent-prompt-v3"
-    assert result.provenance.context_version == "personal-snapshot-v2"
+    assert result.provenance.prompt_version == "free-coach-agent-prompt-v4"
+    assert result.provenance.context_version == "personal-snapshot-v3"
     assert repository.completion_calls
     assert repository.failure_calls == []
 

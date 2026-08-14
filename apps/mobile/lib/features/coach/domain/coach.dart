@@ -5,13 +5,9 @@ const coachResponseContractVersion = 'coach-response-v2';
 const _legacyCoachResponseContractVersion = 'coach-response-v1';
 const coachCapabilitiesContractVersion = 'coach-capabilities-v2';
 const coachHistoryContractVersion = 'coach-history-v2';
-const coachAgentPromptVersion = 'free-coach-agent-prompt-v3';
-const _acceptedCoachAgentPromptVersions = {
-  'free-coach-agent-prompt-v1',
-  'free-coach-agent-prompt-v2',
-  coachAgentPromptVersion,
-};
-const coachAgentContextVersion = 'personal-snapshot-v2';
+const coachAgentPromptVersion = 'free-coach-agent-prompt-v4';
+const _acceptedCoachAgentPromptVersions = {coachAgentPromptVersion};
+const coachAgentContextVersion = 'personal-snapshot-v3';
 const coachMessageCodepoints = 2000;
 const coachReplyCodepoints = 4000;
 
@@ -939,13 +935,8 @@ class CoachContractException implements Exception {
 }
 
 bool _validAgentContractPair(String promptVersion, String contextVersion) =>
-    promptVersion == coachAgentPromptVersion
-        ? contextVersion == coachAgentContextVersion
-        : const {
-              'free-coach-agent-prompt-v1',
-              'free-coach-agent-prompt-v2',
-            }.contains(promptVersion) &&
-            contextVersion == 'personal-snapshot-v1';
+    promptVersion == coachAgentPromptVersion &&
+    contextVersion == coachAgentContextVersion;
 
 Map<String, dynamic> _map(Object? value, String name) {
   return requireStrictMap(

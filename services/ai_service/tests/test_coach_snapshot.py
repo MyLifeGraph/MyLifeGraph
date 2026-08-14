@@ -69,11 +69,7 @@ class SnapshotRepository:
             key=lambda row: str(row[table.cursor_column]),
         )
         if after_cursor is not None:
-            rows = [
-                row
-                for row in rows
-                if str(row[table.cursor_column]) > after_cursor
-            ]
+            rows = [row for row in rows if str(row[table.cursor_column]) > after_cursor]
         return rows[:limit]
 
 
@@ -119,9 +115,7 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
                     "notes": injection,
                     "sleep_hours": Decimal("7.5"),
                     "oauthCredentials": "nested-oauth-credential",
-                    "clientsecret_ciphertext": (
-                        "nested-client-secret-ciphertext"
-                    ),
+                    "clientsecret_ciphertext": ("nested-client-secret-ciphertext"),
                     "nested": [
                         {
                             "refresh-token": "nested-refresh-token",
@@ -225,8 +219,7 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
                 "apikey_hash",
             }.isdisjoint(daily)
             assert all(
-                sensitive not in daily["row_json"]
-                for sensitive in sensitive_values
+                sensitive not in daily["row_json"] for sensitive in sensitive_values
             )
             weekly = dict(
                 connection.execute("SELECT * FROM weekly_reviews").fetchone(),
@@ -240,9 +233,12 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
                     "FROM _coach_catalog WHERE table_name = 'daily_logs'",
                 ).fetchone(),
             ) == (1, "2026-02-03", "2026-02-03")
-            assert connection.execute(
-                "SELECT COUNT(*) FROM v_coach_conversation",
-            ).fetchone()[0] == 1
+            assert (
+                connection.execute(
+                    "SELECT COUNT(*) FROM v_coach_conversation",
+                ).fetchone()[0]
+                == 1
+            )
         finally:
             connection.close()
 
@@ -261,7 +257,7 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
 def test_snapshot_uses_an_explicit_positive_source_policy() -> None:
     names = tuple(table.name for table in COACH_SNAPSHOT_TABLES)
 
-    assert len(names) == len(set(names)) == 39
+    assert len(names) == len(set(names)) == 37
     assert "goals" not in names
     assert names[0:3] == (
         "profiles",

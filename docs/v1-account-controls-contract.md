@@ -19,7 +19,7 @@ and never call these endpoints.
 - Network, configuration, persistence, invalid-response, and cancellation
   outcomes stay distinct from success. Guest/mock never receives fabricated
   synced-account results.
-- `notifications`, `ai_insights`, `recommendations`, and `skillset_profiles`
+- `notifications`, `ai_insights`, and `skillset_profiles`
   are authenticated read-only Data API projections. Notification Lifecycle V1
   later added explicit FastAPI/service-role read/unread/dismiss commands without
   restoring direct authenticated DML.
@@ -64,7 +64,8 @@ neither cache operation resends the committed account-setting mutation.
 The current budget is an authoritative daily cap for
 `exam-plan-health-v1`. A successful budget mutation invalidates the local
 Health projection; a timezone mutation also invalidates it because deadlines,
-Calendar coverage, latest-safe dates, and recommendations are profile-local.
+Calendar coverage, latest-safe dates, and recommended planning dates are
+profile-local.
 Neither account command persists Health output or triggers automatic
 rescheduling.
 
@@ -110,17 +111,18 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v4` JSON envelope. It removes Goals from the former bounded
+`account-export-v5` JSON envelope. It removes Goals, generic Recommendations,
+and Decision Feedback from the former bounded
 owner product set and includes: `profiles`, `notification_preferences`,
 `learning_preferences`, `daily_logs`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
 `notifications`, `coach_messages`, `memory_entries`, `ai_insights`,
-`recommendations`, `skillset_profiles`, `habits`, `habit_logs`,
+`skillset_profiles`, `habits`, `habit_logs`,
 `focus_sessions`, `focus_session_schedule_sources`,
 `focus_session_reflections`, `intake_responses`,
 `study_setup_profiles`,
-`user_state_snapshots`, `daily_briefings`, `decision_feedback`,
-`weekly_reviews`, `calendar_connections`,
+`user_state_snapshots`, `daily_briefings`, `weekly_reviews`,
+`calendar_connections`,
 `calendar_imports`, `calendar_events`, `coach_requests`, `coach_usage_events`,
 `coach_memory_selections`, `deadline_plans`, `deadline_plan_revisions`, and
 `deadline_plan_blocks`, `assignment_series`,
@@ -144,9 +146,9 @@ plan, revision, block, and Assignment Series content rows remain bounded owner
 product data; their opaque request fingerprints are not part of the export.
 Private `multi-exam-plan-v1` batch/revision/item/link/request rows are derived
 orchestration metadata rather than public owner-content tables and are omitted
-from `account-export-v4`. The actual affected Exam content is already present
+from `account-export-v5`. The actual affected Exam content is already present
 as Deadline plan/revision/block rows. Adding balance history would require a new
-export contract version; V4 is not widened with a second shape.
+export contract version; V5 is not widened with a second shape.
 Study Setup exports the
 current owner projection only; transient preparation-checklist decisions and
 local recovery countdown state do not exist in the export. Personal Learning
@@ -158,7 +160,8 @@ decision, omission decision, and separate Coach Snapshot participation are
 derived from the typed FastAPI owner-data catalog. Every repo-owned public
 table, including an operational ledger that participates in neither output,
 must have exactly one catalog entry. The export response contract uses the
-exact 43-table V4 shape above; the new disclosure is limited to the three
+exact 41-table V5 shape above; Recommendation and Feedback are absent while the
+Assignment Series disclosure remains limited to the three
 owner-content Assignment Series projections and does not include its request
 ledger. Flutter's strict export allowlist uses the same catalog
 order, including `focus_session_schedule_sources`, before it accepts the record
@@ -169,7 +172,7 @@ verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant
 on `lifestyle_entries`; Flutter and anonymous callers gain no new table
 authority.
 
-The V4 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
+The V5 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
 JSON.
 Exceeding a bound is an explicit `413`, never a silently truncated export.
 Supabase pages are stream-bounded before JSON materialization, and cumulative

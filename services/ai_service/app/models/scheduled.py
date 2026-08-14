@@ -13,7 +13,6 @@ ScheduledSelectionReason = Literal[
     "missing_briefing",
     "stale_briefing",
     "invalid_timezone",
-    "recommendation_refresh",
     "notification_delivery",
 ]
 ScheduledSnapshotStatus = Literal["generated", "reused"]
@@ -22,7 +21,6 @@ ScheduledFailureStage = Literal[
     "profile_date",
     "snapshot",
     "briefing",
-    "recommendations",
     "notifications",
 ]
 
@@ -34,8 +32,6 @@ class ScheduledRefreshRequest(BaseModel):
     window_days: int = Field(default=7, ge=1, le=90)
     limit: int = Field(default=100, ge=1, le=500)
     profile_ids: list[UUID] = Field(default_factory=list, max_length=20)
-    include_recommendations: bool = False
-    recommendation_window_days: int = Field(default=28, ge=1, le=365)
     include_notifications: bool = False
 
     @model_validator(mode="after")
@@ -59,7 +55,6 @@ class ScheduledUserRefreshResult(BaseModel):
     snapshot_status: ScheduledSnapshotStatus | None = None
     briefing_id: str | None = None
     briefing_status: ScheduledBriefingStatus | None = None
-    recommendation_count: int | None = None
     notification_status: NotificationGenerationStatus | None = None
     notification_created_count: int | None = Field(default=None, ge=0, le=3)
     notification_duplicate_count: int | None = Field(default=None, ge=0, le=3)

@@ -203,14 +203,12 @@ def context(
     tasks: list[dict] | None = None,
     habits: list[dict] | None = None,
     habit_logs: list[dict] | None = None,
-    recommendations: list[dict] | None = None,
 ) -> BriefingContext:
     return BriefingContext(
         snapshot=snapshot_row or snapshot(),
         tasks=tasks or [],
         habits=habits or [],
         habit_logs=habit_logs or [],
-        recommendations=recommendations or [],
     )
 
 
@@ -349,8 +347,7 @@ def test_prepare_for_date_reuses_snapshot_when_briefing_is_stale() -> None:
     assert prepared.response.freshness == "current"
     assert prepared.response.briefing is not None
     assert (
-        prepared.response.briefing.provenance.source_snapshot_id
-        == "snapshot-refreshed"
+        prepared.response.briefing.provenance.source_snapshot_id == "snapshot-refreshed"
     )
     assert aggregator.calls == []
     assert len(repository.persist_calls) == 1
@@ -495,11 +492,11 @@ def test_generate_refreshes_snapshot_and_persists_one_strict_action() -> None:
     assert response.briefing.capacity_minutes is None
     assert len(response.briefing.support_actions) <= 2
     assert len(repository.persist_calls) == 1
-    serialized = response.model_dump(mode="json")
+    serialized = response.model_dump(mode="json", exclude_none=True)
     serialized_action = serialized["briefing"]["primary_action"]
     assert "recommendation_id" not in serialized_action
     assert None not in serialized_action["target"]["metadata"].values()
-    assert serialized["briefing"]["capacity_minutes"] is None
+    assert "capacity_minutes" not in serialized["briefing"]
 
     repeated = run(
         service.generate_today(
@@ -580,7 +577,7 @@ def test_briefing_models_reject_unknown_request_and_response_fields() -> None:
     with pytest.raises(ValidationError):
         BriefingReadResponse.model_validate(
             {
-                "contract_version": "daily-briefing-v1",
+                "contract_version": "daily-briefing-v2",
                 "briefing_date": TODAY,
                 "freshness": "missing",
                 "needs_generation": True,
@@ -801,67 +798,3 @@ def test_generate_today_resolves_the_briefing_date_once() -> None:
     assert len(aggregator.calls) == 1
     assert aggregator.calls[0][1].target_date == TODAY
     assert repository.persist_calls[0]["briefing_date"] == TODAY.isoformat()
-
-
-def test_repeated_recent_feedback_changes_ranking_with_bounded_provenance() -> None:
-    first_id = "77777777-7777-4777-8777-777777777777"
-    second_id = "88888888-8888-4888-8888-888888888888"
-    feedback_rows = [
-        {
-            "action_id": f"open_task:{first_id}",
-            "action_kind": "task",
-            "feedback_type": "not_helpful",
-            "context_mode": "steady",
-            "rule_key": "open_task",
-            "created_at": NOW.isoformat(),
-        }
-        for _ in range(3)
-    ]
-    service, _, _ = service_for(
-        BriefingContext(
-            snapshot=snapshot(),
-            tasks=[
-                {
-                    "id": first_id,
-                    "title": "First task",
-                    "status": "todo",
-                    "priority": "high",
-                    "deadline": None,
-                    "estimated_minutes": 30,
-                    "metadata": {},
-                },
-                {
-                    "id": second_id,
-                    "title": "Second task",
-                    "status": "todo",
-                    "priority": "medium",
-                    "deadline": None,
-                    "estimated_minutes": 30,
-                    "metadata": {},
-                },
-            ],
-            habits=[],
-            habit_logs=[],
-            recommendations=[],
-            feedback=feedback_rows,
-        ),
-    )
-
-    response = run(
-        service.generate_today(
-            user_id="user-123",
-            request=BriefingGenerateRequest(),
-        ),
-    )
-
-    assert response.briefing is not None
-    assert response.briefing.primary_action.target.target_id == second_id
-    ranking = response.briefing.provenance.feedback_ranking
-    assert ranking.contract_version == "feedback-ranking-v1"
-    assert ranking.event_count == 3
-    assert ranking.applied_count == 3
-    assert ranking.primary_contribution == -135
-    assert ranking.reasons == ["recent_not_helpful_feedback"]
-    assert response.briefing.primary_action.reason == (
-        "This open task is the strongest remaining executable option."
-    )

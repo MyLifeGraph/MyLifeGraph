@@ -3,7 +3,6 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from app.models.recommendations import RecommendationGenerateRequest
 from app.models.scheduled import (
     ScheduledRefreshRequest,
     ScheduledRefreshResponse,
@@ -15,7 +14,6 @@ from app.repositories.scheduled_refresh_repository import (
 )
 from app.services.briefing_service import BriefingPreparationError, BriefingService
 from app.services.notification_service import NotificationGenerationService
-from app.services.recommendation_engine import RecommendationEngine
 
 _MAX_CONCURRENT_USERS = 5
 logger = logging.getLogger(__name__)
@@ -29,13 +27,11 @@ class ScheduledRefreshService:
         *,
         repository: ScheduledRefreshRepository,
         briefing_service: BriefingService,
-        recommendation_engine: RecommendationEngine | None = None,
         notification_generation_service: NotificationGenerationService | None = None,
         now_provider: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._briefing_service = briefing_service
-        self._recommendation_engine = recommendation_engine
         self._notification_generation_service = notification_generation_service
         self._now_provider = now_provider or _utc_now
 
@@ -52,15 +48,8 @@ class ScheduledRefreshService:
             run_at=run_at,
             target_date=request.target_date,
             profile_ids=[str(profile_id) for profile_id in request.profile_ids],
-            include_current=(
-                request.include_recommendations or request.include_notifications
-            ),
-            current_selection_reason=(
-                "notification_delivery"
-                if request.include_notifications
-                and not request.include_recommendations
-                else "recommendation_refresh"
-            ),
+            include_current=request.include_notifications,
+            current_selection_reason="notification_delivery",
         )
         semaphore = asyncio.Semaphore(_MAX_CONCURRENT_USERS)
 
@@ -128,23 +117,6 @@ class ScheduledRefreshService:
             if briefing is None:
                 raise RuntimeError("Briefing preparation returned no briefing.")
 
-            recommendation_count = None
-            if request.include_recommendations:
-                failed_stage = "recommendations"
-                if self._recommendation_engine is None:
-                    raise RuntimeError("Recommendation engine is not configured.")
-                recommendations = (
-                    await self._recommendation_engine.generate_recommendations(
-                        user_id=target.user_id,
-                        request=RecommendationGenerateRequest(
-                            window_days=request.recommendation_window_days,
-                            force=False,
-                            allow_llm_wording=False,
-                        ),
-                    )
-                )
-                recommendation_count = len(recommendations.items)
-
             notification_result = None
             if request.include_notifications:
                 failed_stage = "notifications"
@@ -170,7 +142,6 @@ class ScheduledRefreshService:
                 snapshot_status=prepared.snapshot_status,
                 briefing_id=briefing.id,
                 briefing_status=prepared.briefing_status,
-                recommendation_count=recommendation_count,
                 notification_status=(
                     notification_result.status
                     if notification_result is not None
@@ -227,9 +198,7 @@ class ScheduledRefreshService:
                     else None
                 ),
                 period_key=(
-                    target.briefing_date.isoformat()
-                    if prepared is not None
-                    else None
+                    target.briefing_date.isoformat() if prepared is not None else None
                 ),
                 snapshot_status=(
                     prepared.snapshot_status if prepared is not None else None

@@ -261,7 +261,7 @@ class AccountService:
             ) from exc
         except OwnerDataTotalRowsExceededError as exc:
             raise AccountExportTooLargeError(
-                "Account export exceeds the V4 total row bound.",
+                "Account export exceeds the V5 total row bound.",
             ) from exc
         except OwnerDataSerializedBytesExceededError as exc:
             raise AccountExportTooLargeError(

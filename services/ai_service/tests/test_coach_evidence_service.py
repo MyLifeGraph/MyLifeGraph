@@ -177,9 +177,7 @@ def test_pattern_horizons_bind_the_exact_retained_evidence_window(
 
     call = repository.evidence_calls[0]
     expected_start = (
-        NOW - timedelta(days=window_days)
-        if window_days is not None
-        else None
+        NOW - timedelta(days=window_days) if window_days is not None else None
     )
     assert call["starts_at"] == expected_start
     assert call["local_starts_on"] == (
@@ -221,10 +219,10 @@ def test_all_available_adapts_more_than_twenty_four_years_without_truncation() -
     assert len(result.buckets) <= 24
     assert result.buckets[0].starts_on.year == 1976
     assert result.buckets[-1].ends_on.year >= 2026
-    assert sum(
-        int(bucket.metrics["daily_capture_days"])
-        for bucket in result.buckets
-    ) == 51
+    assert (
+        sum(int(bucket.metrics["daily_capture_days"]) for bucket in result.buckets)
+        == 51
+    )
 
 
 def test_focus_is_restricted_to_last_ten_and_selected_counts_in_manifest() -> None:
@@ -237,9 +235,7 @@ def test_focus_is_restricted_to_last_ten_and_selected_counts_in_manifest() -> No
         ),
     )
     focus_source = next(
-        source
-        for source in result.sources
-        if source.source == "focus_reflections"
+        source for source in result.sources if source.source == "focus_reflections"
     )
     assert focus_source.available_count == 1
     assert focus_source.included_count == 1
@@ -314,7 +310,6 @@ def _empty_rows() -> CoachEvidenceRows:
         focus_sessions=_empty(),
         reflections=_empty(),
         habit_outcomes=_empty(),
-        decision_feedback=_empty(),
         weekly_reviews=_empty(),
         task_lifecycle=_empty(),
     )
@@ -331,7 +326,6 @@ def _rows(*, daily: list[dict]) -> CoachEvidenceRows:
         focus_sessions=empty,
         reflections=empty,
         habit_outcomes=empty,
-        decision_feedback=empty,
         weekly_reviews=empty,
         task_lifecycle=empty,
     )

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
-import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
 import 'package:my_life_graph/features/dashboard/application/today_command_controller.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_full_week.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
@@ -17,7 +15,6 @@ import 'package:my_life_graph/features/dashboard/presentation/widgets/dashboard_
 import 'package:my_life_graph/features/dashboard/presentation/widgets/dashboard_supporting_sections.dart';
 import 'package:my_life_graph/features/dashboard/presentation/widgets/today_action_sections.dart';
 import 'package:my_life_graph/features/dashboard/presentation/widgets/today_overview_sections.dart';
-import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
 
 import 'support/dashboard_full_week_fixture.dart';
 
@@ -84,6 +81,7 @@ void main() {
     expect(tester.getSize(target), const Size.square(44));
     expect(tester.getSize(frame), const Size.square(24));
     expect(tester.getSize(iconFrame), const Size.square(20));
+    expect(tester.getRect(frame).center, tester.getRect(target).center);
     expect(tester.getRect(iconFrame).center, tester.getRect(frame).center);
     expect(
       find.byTooltip('Show information about Test section'),
@@ -224,8 +222,8 @@ void main() {
     await _pump(
       tester,
       DashboardInlineExpansionCard(
-        title: 'Decision feedback history',
-        subtitle: 'Inspect or delete previously saved feedback.',
+        title: 'Long supporting section details',
+        subtitle: 'Independent supporting information remains readable.',
         expanded: false,
         onToggle: () => accordionToggles += 1,
         child: const Text('Lazy content'),
@@ -237,13 +235,13 @@ void main() {
 
     await tester.tap(
       find.byKey(
-        const ValueKey('today-info-control-Decision feedback history'),
+        const ValueKey('today-info-control-Long supporting section details'),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Inspect or delete previously saved feedback.'),
+      find.text('Independent supporting information remains readable.'),
       findsOneWidget,
     );
     expect(find.text('Lazy content'), findsNothing);
@@ -252,7 +250,7 @@ void main() {
     await tester.tap(
       find.byKey(
         const ValueKey(
-          'dashboard-expansion-control-Decision feedback history',
+          'dashboard-expansion-control-Long supporting section details',
         ),
       ),
     );
@@ -600,23 +598,12 @@ void main() {
       (tester) async {
     var weeklyReviewCalls = 0;
     final state = DashboardSupportingState(
-      accountData: true,
       canUseWeeklyReview: true,
-      recommendations: AsyncData(RecommendationFeed.demo(const [])),
-      feedback: null,
       fullWeek: null,
-      isRefreshingRecommendations: false,
-      recommendationRefreshError: null,
     );
     final actions = DashboardSupportingActions(
-      onToggleRecommendations: () {},
-      onToggleFeedback: () {},
       onToggleFullWeek: () {},
       onOpenWeeklyReview: () => weeklyReviewCalls += 1,
-      onRetryRecommendations: () {},
-      onRefreshRecommendations: () {},
-      onRetryFeedback: () {},
-      onDeleteFeedback: (_) async {},
       onRetryFullWeek: () {},
       onFullWeekAction: (_) {},
     );
@@ -624,8 +611,6 @@ void main() {
     await _pump(
       tester,
       DashboardSupportingSections(
-        recommendationsExpanded: false,
-        feedbackExpanded: false,
         fullWeekExpanded: false,
         state: state,
         actions: actions,
@@ -649,30 +634,10 @@ void main() {
     await _pump(
       tester,
       DashboardSupportingSections(
-        recommendationsExpanded: true,
-        feedbackExpanded: false,
-        fullWeekExpanded: false,
-        state: state,
-        actions: actions,
-      ),
-    );
-    expect(find.text('Example suggestions'), findsOneWidget);
-    expect(find.text('Review your week'), findsOneWidget);
-
-    await _pump(
-      tester,
-      DashboardSupportingSections(
-        recommendationsExpanded: false,
-        feedbackExpanded: false,
         fullWeekExpanded: false,
         state: DashboardSupportingState(
-          accountData: true,
           canUseWeeklyReview: false,
-          recommendations: null,
-          feedback: null,
           fullWeek: null,
-          isRefreshingRecommendations: false,
-          recommendationRefreshError: null,
         ),
         actions: actions,
       ),
@@ -682,119 +647,6 @@ void main() {
       findsNothing,
     );
     expect(find.text('Review your week'), findsNothing);
-  });
-
-  testWidgets('feedback accordion renders its list and delete state',
-      (tester) async {
-    String? deletedId;
-    final deletion = Completer<void>();
-    final item = DecisionFeedback(
-      id: 'feedback-1',
-      requestId: 'request-1',
-      briefingId: 'briefing-1',
-      recommendationId: null,
-      actionId: 'action-1',
-      actionKind: 'task',
-      feedbackType: DecisionFeedbackType.later,
-      contextMode: 'balanced',
-      estimatedMinutes: 20,
-      ruleKey: 'rule-1',
-      createdAt: DateTime(2026, 7, 30, 8),
-    );
-    await _pump(
-      tester,
-      DashboardSupportingSections(
-        recommendationsExpanded: false,
-        feedbackExpanded: true,
-        fullWeekExpanded: false,
-        state: DashboardSupportingState(
-          accountData: true,
-          canUseWeeklyReview: false,
-          recommendations: null,
-          feedback: AsyncData([item]),
-          fullWeek: null,
-          isRefreshingRecommendations: false,
-          recommendationRefreshError: null,
-        ),
-        actions: DashboardSupportingActions(
-          onToggleRecommendations: () {},
-          onToggleFeedback: () {},
-          onToggleFullWeek: () {},
-          onOpenWeeklyReview: () {},
-          onRetryRecommendations: () {},
-          onRefreshRecommendations: () {},
-          onRetryFeedback: () {},
-          onDeleteFeedback: (value) {
-            deletedId = value.id;
-            return deletion.future;
-          },
-          onRetryFullWeek: () {},
-          onFullWeekAction: (_) {},
-        ),
-      ),
-    );
-
-    expect(find.text('Later'), findsOneWidget);
-    await tester.tap(find.byTooltip('Delete feedback'));
-    await tester.pump();
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    deletion.complete();
-    await tester.pumpAndSettle();
-    expect(deletedId, 'feedback-1');
-  });
-
-  testWidgets('feedback accordion isolates loading and retryable error states',
-      (tester) async {
-    var retries = 0;
-
-    Widget surface(AsyncValue<List<DecisionFeedback>> feedback) {
-      return DashboardSupportingSections(
-        recommendationsExpanded: false,
-        feedbackExpanded: true,
-        fullWeekExpanded: false,
-        state: DashboardSupportingState(
-          accountData: true,
-          canUseWeeklyReview: false,
-          recommendations: null,
-          feedback: feedback,
-          fullWeek: null,
-          isRefreshingRecommendations: false,
-          recommendationRefreshError: null,
-        ),
-        actions: DashboardSupportingActions(
-          onToggleRecommendations: () {},
-          onToggleFeedback: () {},
-          onToggleFullWeek: () {},
-          onOpenWeeklyReview: () {},
-          onRetryRecommendations: () {},
-          onRefreshRecommendations: () {},
-          onRetryFeedback: () => retries += 1,
-          onDeleteFeedback: (_) async {},
-          onRetryFullWeek: () {},
-          onFullWeekAction: (_) {},
-        ),
-      );
-    }
-
-    await _pump(
-      tester,
-      surface(const AsyncLoading<List<DecisionFeedback>>()),
-      settle: false,
-    );
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-    await _pump(
-      tester,
-      surface(
-        AsyncError<List<DecisionFeedback>>(
-          StateError('offline'),
-          StackTrace.current,
-        ),
-      ),
-    );
-    expect(find.text('Feedback history unavailable'), findsOneWidget);
-    await tester.tap(find.text('Retry'));
-    expect(retries, 1);
   });
 
   testWidgets('Full week Preparation row exposes its typed action',
@@ -818,27 +670,14 @@ void main() {
     await _pump(
       tester,
       DashboardSupportingSections(
-        recommendationsExpanded: false,
-        feedbackExpanded: false,
         fullWeekExpanded: true,
         state: DashboardSupportingState(
-          accountData: true,
           canUseWeeklyReview: false,
-          recommendations: null,
-          feedback: null,
           fullWeek: AsyncData(fullWeek),
-          isRefreshingRecommendations: false,
-          recommendationRefreshError: null,
         ),
         actions: DashboardSupportingActions(
-          onToggleRecommendations: () {},
-          onToggleFeedback: () {},
           onToggleFullWeek: () {},
           onOpenWeeklyReview: () {},
-          onRetryRecommendations: () {},
-          onRefreshRecommendations: () {},
-          onRetryFeedback: () {},
-          onDeleteFeedback: (_) async {},
           onRetryFullWeek: () {},
           onFullWeekAction: (value) => selectedAction = value,
         ),
@@ -876,27 +715,14 @@ void main() {
     await _pump(
       tester,
       DashboardSupportingSections(
-        recommendationsExpanded: false,
-        feedbackExpanded: false,
         fullWeekExpanded: true,
         state: DashboardSupportingState(
-          accountData: true,
           canUseWeeklyReview: false,
-          recommendations: null,
-          feedback: null,
           fullWeek: AsyncData(fullWeek),
-          isRefreshingRecommendations: false,
-          recommendationRefreshError: null,
         ),
         actions: DashboardSupportingActions(
-          onToggleRecommendations: () {},
-          onToggleFeedback: () {},
           onToggleFullWeek: () {},
           onOpenWeeklyReview: () {},
-          onRetryRecommendations: () {},
-          onRefreshRecommendations: () {},
-          onRetryFeedback: () {},
-          onDeleteFeedback: (_) async {},
           onRetryFullWeek: () {},
           onFullWeekAction: (_) {},
         ),

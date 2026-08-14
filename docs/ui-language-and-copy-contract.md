@@ -94,8 +94,11 @@ The primary Today surface uses these exact concepts:
 - `Today's tasks`, `Show all tasks`, and `Today's habits` for execution;
 - `Beat yesterday` for the compact latest-saved-check-in inset; and
 - `Review your week` for the direct Weekly Review navigation entry; and
-- `Recommendations`, `Decision feedback history`, and `Full week` for three
-  independent supporting accordions.
+- `Full week` for the independently lazy supporting accordion.
+
+The former generic `Recommendations` and `Decision feedback history` labels are
+retired from Today. This does not rename the independent `Sleep Recommendation`
+surface in Insights or ordinary Coach advice.
 
 `Beat yesterday` names the existing compact inset but does not claim a delta or
 improvement. It labels only available Mood, Energy, Sleep duration, Sleep
@@ -117,7 +120,7 @@ alter Today at a glance.
 
 The Today source/update line and ordinary explanations for streak, progress,
 agenda, Task/Habit sections, `Show all tasks` plus its `Tasks` subsection, and
-the three supporting accordions start hidden. Their adjacent circled
+the Full-week accordion start hidden. Their adjacent circled
 information controls use the exact semantics and tooltip labels
 `Show information about <heading>` and `Hide information about <heading>`.
 Opening information reveals the existing English copy; it does not replace or

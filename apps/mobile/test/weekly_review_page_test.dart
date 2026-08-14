@@ -11,10 +11,10 @@ import 'support/weekly_review_fixtures.dart';
 
 void main() {
   testWidgets(
-    'current review shows facts but never renders historical proposals',
+    'current review shows facts with the required empty proposal list',
     (tester) async {
       final repository = _FakeWeeklyReviewRepository(_feed());
-      expect(repository.feed.review?.proposals, hasLength(1));
+      expect(repository.feed.review?.proposals, isEmpty);
 
       await _pumpPage(tester, repository: repository);
 

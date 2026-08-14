@@ -108,14 +108,12 @@ The app table constants live in
 | `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
 | `habit_logs` | One explicit `completed` or `skipped` outcome per habit/local date, with checked 1/0 compatibility value; open and missed opportunities are derived and progress/streaks are cadence-aware. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
-| `recommendations` | Generated recommendations and user statuses from explicit/scheduled runtime refresh; Intake V1 completion does not generate them. A deliberate refresh atomically retires the prior current `new` set while preserving historical rows. |
 | `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured routine/commitment/Study lifecycle items. Supported retired personalization keys are stripped; `responses.goals` is rejected. |
 | `study_setup_profiles` | Optional `study-setup-v1` projection from the current applied Intake revision: focus/recovery rhythm, ordered preparation-item definitions, current/next semester, and Setup revision. Forced owner-read RLS; only the backend writes. |
 | `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state with `source_observed_at`; a V2 persistence RPC lets only a later-observed run replace the period projection. |
-| `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
-| `decision_feedback` | Retry-safe append-only feedback for an exact owned briefing action; authenticated owners can read/delete history and FastAPI owns validated writes. |
-| `weekly_reviews` | One backend-owned bounded `weekly-review-v2` output per user/completed ISO week with source fingerprint, `source_observed_at`, an empty proposal array for every new or refreshed row, owner/admin reads, and owner-locked V2 persistence. Historical proposals remain transport-readable. |
+| `daily_briefings` | One backend-owned deterministic `daily-briefing-v2` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection; no Recommendation ids or Feedback ranking. |
+| `weekly_reviews` | One backend-owned bounded `weekly-review-v3` output per user/completed ISO week with source fingerprint, `source_observed_at`, exact Task/Habit/Focus/Recovery facts, an empty proposal array, owner/admin reads, and owner-locked V3 persistence. |
 | `calendar_connections` | One optional consented `ical_file` source per owner with stable connect/disconnect/delete identity and no provider credential. |
 | `calendar_imports` | Immutable retry-safe `.ics` import identity, bounded window/counts, profile timezone revision, and `not_imported|current|profile_timezone_changed|disconnected|deleted` planning status. |
 | `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
@@ -400,10 +398,9 @@ profiles; it does not change ownership or expose the scheduler to Flutter.
 
 Missing prerequisites are created, a briefing whose snapshot provenance changed
 is upserted on the same daily identity, and a current snapshot/briefing pair is
-left write-free. Invalid profile timezones and snapshot, briefing, or optional
-recommendation failures remain isolated per profile with sanitized stage
-results. Recommendation generation is disabled by default and, when explicitly
-requested, remains deterministic with LLM wording disabled.
+left write-free. Invalid profile timezones and snapshot or briefing failures
+remain isolated per profile with sanitized stage results. The retired
+Recommendation stage and its request fields are rejected rather than ignored.
 
 The optional `profile_ids` request filter is bounded to 20 UUIDs and remains an
 intersection with the same onboarded non-guest query; it does not grant access
@@ -420,8 +417,8 @@ email, browser, Android, snooze, or production scheduling claim.
 
 ## Phase 8 Bounded Observational Weekly Review
 
-Phase 8 adds `weekly_reviews` rather than overloading generic weekly snapshots,
-recommendations, or daily briefings. Each row owns one `(user_id, period_key)`
+Phase 8 adds `weekly_reviews` rather than overloading generic weekly snapshots
+or daily briefings. Each row owns one `(user_id, period_key)`
 identity with exact profile-local Monday/Sunday dates, timezone, bounded
 narrative and JSON facts/proposals/evidence/provenance, and the canonical
 lowercase SHA-256 source fingerprint used for stale detection.
@@ -430,8 +427,8 @@ Authenticated users may select only their own rows; authenticated insert,
 update, and delete are not granted. FastAPI uses service-role writes after
 bearer-token verification and explicit owner-scoped source queries. RLS is
 enabled and forced. Deliberate generation persists derived review output only.
-Every new or refreshed V2 row has `proposals=[]`; retained historical proposal
-arrays grant no mutation authority and never reach Flutter or Coach.
+Every V3 row has `proposals=[]`; Recommendation/Feedback retirement deletes
+pre-cutover review content before the V3 writer becomes authoritative.
 
 The existing weekly snapshot is supporting evidence, not a complete historical
 ledger. Current task rows cannot recreate undone transitions, and current habit
@@ -537,7 +534,7 @@ atomically through the ungranted inner Deadline confirmation chain. Public
 single-plan proposal/replan, confirm, complete, and cancel wrappers return
 `PT409` for a linked batch child. Cancel supersedes only the staged child
 revisions and blocks. Batch metadata stays private and is not a second
-shape for `account-export-v4` or `personal-snapshot-v2`; the existing Deadline
+shape for `account-export-v5` or `personal-snapshot-v3`; the existing Deadline
 revision/block rows remain those contracts' user-plan content.
 
 This additive migration is verified only by
@@ -814,7 +811,7 @@ response validator accepts paired V3 provenance by normalizing it through the
 existing strict V1-only envelope validator, while paired V1 and V2 history
 remain valid. The used-context manifest stays bounded to ten entries and adds
 the per-source names `daily_capture`, `focus_reflections`, `habit_outcomes`,
-`decision_feedback`, `weekly_reviews`, and `task_lifecycle`. Existing
+`weekly_reviews`, and `task_lifecycle`. Existing
 completion, failure, and deletion RPCs continue to handle both request
 versions. Partial `(user_id, completed_at, id)` and
 `(user_id, cancelled_at, id)` Task indexes accelerate owner-scoped terminal
@@ -826,16 +823,20 @@ nullable `evidence`, `agent_trace`, `tool_call_count`, and `service_tier`
 columns to `coach_requests`; V1/V2 rows keep those fields null.
 
 `coach-request-v3` has no user-selected scope or parameter object. Its
-service-role-only `claim_coach_request_v5` reuses the established owner-before-
+service-role-only `claim_coach_request_v6` reuses the established owner-before-
 request locks, one-pending-owner rule, lease, terminal replay, and profile-local
 daily budget. Replay binds derived owner, request UUID, and exact message
 fingerprint only. A new claim stores
-`free-coach-agent-prompt-v3`/`personal-snapshot-v2`. The legacy physical scope
+`free-coach-agent-prompt-v4`/`personal-snapshot-v3`. The legacy physical scope
 columns stay neutral `today`/`{}` for schema compatibility and are not a
 current product mode.
 
-The service-role-only `complete_coach_request_v2` requires one exact
-`coach-response-v2` and validates:
+The service-role-only `complete_coach_request_v2` is the current free-agent
+completion path. It accepts only a `coach-request-v3` row with exact
+`free-coach-agent-prompt-v4`/`personal-snapshot-v3` provenance and one exact
+`coach-response-v2`; it does not accept historical free-agent prompt pairs.
+The separately preserved controlled V1/V2 flow continues through its V1
+completion RPC. Free-agent V2 validates:
 
 - response request identity and bounded reply/uncertainty/safety;
 - backend-derived evidence source/count/period rows;
@@ -844,22 +845,23 @@ The service-role-only `complete_coach_request_v2` requires one exact
   limitations;
 - exact equality between response and separately supplied evidence/trace/tool
   count;
-- paired historical `free-coach-agent-prompt-v1|v2` with
-  `personal-snapshot-v1`, or current `free-coach-agent-prompt-v3` with
-  `personal-snapshot-v2`, provenance;
+- exact current `free-coach-agent-prompt-v4` with
+  `personal-snapshot-v3` provenance; pre-P7 free-agent pairs survive only on
+  content-free deleted request identities;
 - snapshot rows no greater than 50,000 and bytes no greater than 8 MiB; and
 - `local_codex_oauth` truth fixed to `gpt-5.5`, explicit Fast configured, and
   no non-Codex Fast claim.
 
-The response validator continues to admit strict `coach-response-v1`; existing
-completion/failure rows, usage events, and histories remain readable. The
-history-delete wrapper calls the prior owner-locked transaction and then clears
+The response validator continues to admit strict `coach-response-v1` for new
+controlled turns. P7 erases pre-cutover completion/failure content while
+retaining usage/request tombstones. The history-delete wrapper calls the prior owner-locked transaction and then clears
 V3 evidence, trace, tool count, and service tier from tombstones. It does not
 delete usage/request identities and conflicts with an active turn.
 
-All new validator and mutation functions are revoked from `public`, `anon`, and
-`authenticated`. Only `service_role` may execute the V3 claim, V2 completion,
-or history-delete RPC. No new application-role table write is introduced.
+All current validator and mutation functions are revoked from `public`, `anon`,
+and `authenticated`. Only `service_role` may execute controlled V1/V2 claims,
+the free-agent V6 claim, V1/V2 completion, failure, or history-delete RPCs. No
+new application-role table write is introduced.
 
 ## V1 Account Deletion
 
@@ -885,9 +887,10 @@ Normal task/habit lifecycle and deletion constraints are unchanged.
 The same migration gives new canonical and legacy Auth profile projections a
 UTC default without rewriting existing users, removes authenticated direct
 timezone updates, freezes all 14 known CamelCase tables against application-role
-insert/update/delete/truncate, and makes `notifications`, `ai_insights`,
-`recommendations`, and `skillset_profiles` authenticated-read/service-write
-projections. These grants prevent an old JWT from repopulating legacy owner rows
+insert/update/delete/truncate, and at that migration point made `notifications`,
+`ai_insights`, `recommendations`, and `skillset_profiles`
+authenticated-read/service-write projections. P7 later drops the generic
+Recommendation table. These grants prevent an old JWT from repopulating legacy owner rows
 after deletion and avoid exposing writes that the Flutter product does not own.
 
 ## Application Table Privilege Guard
@@ -897,9 +900,10 @@ table-level authority across all 30 repo-owned canonical product and ledger
 tables. `public` and `anon` lose every table privilege. `authenticated` loses
 `TRUNCATE`, `REFERENCES`, and `TRIGGER`, which RLS does not safely substitute
 for, while each table's intended `SELECT`/`INSERT`/`UPDATE`/`DELETE` grants stay
-intact. The four backend-owned projections `notifications`, `ai_insights`,
-`recommendations`, and `skillset_profiles` are reaffirmed as authenticated
-read-only. Any retained subset of the 14 CamelCase legacy tables remains
+intact. At that migration point the four backend-owned projections
+`notifications`, `ai_insights`, `recommendations`, and `skillset_profiles` were
+reaffirmed as authenticated read-only; the later retirement migration removes
+`recommendations`. Any retained subset of the 14 CamelCase legacy tables remains
 application-role mutation-frozen.
 
 The migration also changes default privileges for future public tables created
@@ -1237,7 +1241,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260813081814_multi_exam_plan_v1.sql
+20260813200057_retire_recommendations_and_decision_feedback.sql
 ```
 
 Then configure `.env` with:
@@ -1339,13 +1343,13 @@ Supabase-backed path:
 - Open Dashboard and confirm its execution links remain unranked. Call the
   read-only briefing GET, deliberately generate once, and confirm exactly one
   `daily_briefings` row whose actions point to current executable targets.
-- Record briefing feedback, confirm its exact `decision_feedback` context,
-  deliberately adjust Today, then delete the history row and confirm the next
-  adjustment reports zero feedback influence.
+- Confirm the former generic Recommendation and Decision Feedback routes are
+  absent and no current table can store those retired records. Verify the
+  independent Sleep Recommendation still reads its own evidence.
 - Open Weekly Review, confirm latest GET is read-only, deliberately generate one
   completed ISO week, and inspect one exact `weekly_reviews` identity with
-  `proposals=[]`. Confirm facts and refresh remain usable, historical proposals
-  are invisible, and a source change makes the old review stale until refresh.
+  `proposals=[]`. Confirm facts and refresh remain usable and a source change
+  makes the old review stale until refresh.
 - Open Calendar integration, create the consented file source, deliberately
   import a bounded `.ics` file, page through events, disconnect while retaining
   the visibly imported/read-only copy, then delete that local copy and confirm
@@ -1364,9 +1368,9 @@ snake_case table mappings work together. The repository provides
 `scripts/e2e_web.sh` for browser automation of this Supabase-backed flow. The
 browser smoke starts the AI service with backend local Supabase settings and
 asserts revisioned Intake V1 rows, ownership-scoped Setup reconciliation,
-onboarding and daily `user_state_snapshots`, absence of post-intake
-Recommendations, explicit runtime Recommendation refresh, exact Daily State V2
-recomputation, and direct app writes. Phase 3
+onboarding and daily `user_state_snapshots`, absence of retired generic
+Recommendation/Feedback routes and records, exact Daily State V3 recomputation,
+and direct app writes. Phase 3
 browser completion additionally requires exact task transition/undo rows,
 manual and Setup habit completion/skip/undo without duplicates, and focus
 start/finish/abandon with owned linkage and no implicit target mutation. The
@@ -1433,7 +1437,30 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest migration is `20260813081814_multi_exam_plan_v1.sql`. It adds the
+The latest migration is
+`20260813200057_retire_recommendations_and_decision_feedback.sql`. It takes a
+fixed alphabetic lock graph with a five-second timeout, erases Daily Briefing,
+Weekly Review, and Coach content, removes exactly typed deterministic
+`daily_briefing` notifications/actions, and preserves content-free append-only
+Coach usage/request identities. It installs Daily Briefing V2 and Weekly Review
+V3 constraints plus the service-role-only V3 writer, removes the Feedback table
+before the Recommendation table and then removes
+`daily_briefings.recommendation_ids`, explicitly without `CASCADE`. Current
+Free Coach claims use V6 with prompt V4/snapshot V3; controlled Coach V1/V2
+claims and response-v1 completion remain service-role-only and functional.
+Structured sanitization removes only retired relation identifiers and preserves
+Sleep Recommendation, `ai_insights.recommendation`, recommendation Memories,
+Skillset, ordinary Coach advice, and unrelated prose. The current notification
+writer accepts only `daily_state|weekly_review` sources and rejects null or
+unknown category/type/priority/action/source allowlist fields before owner
+reads. RLS, forced RLS, and
+explicit grants remain in force. Its lock-timeout rollback, two-owner erase,
+preservation, and full final-state pgTAP chain run only in the labelled RAM-only
+Recommendation-retirement harness; the normal local migration history is
+checked read-only through a SHA-256 over complete ordered `version`, `name`, and
+`statements` facts and is not advanced by that proof.
+
+The preceding migration is `20260813081814_multi_exam_plan_v1.sql`. It adds the
 private, forced-RLS Exam-balance orchestration metadata and service-role-only
 snapshot/list/detail/propose/confirm/cancel RPC boundary described in the
 Deadline Planner section. It also wraps the current Deadline confirmation

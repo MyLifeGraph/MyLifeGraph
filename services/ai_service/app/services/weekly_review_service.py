@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from app.models.snapshots import SnapshotGenerateRequest
 from app.models.weekly_reviews import (
     WEEKLY_REVIEW_CONTRACT_VERSION,
-    WeeklyFeedbackFacts,
     WeeklyFocusFacts,
     WeeklyHabitFacts,
     WeeklyRecoveryFacts,
@@ -174,12 +173,11 @@ class WeeklyReviewService:
                 "facts": built.facts.model_dump(mode="json"),
                 "proposals": [],
                 "evidence_refs": [
-                    evidence.model_dump(mode="json")
-                    for evidence in built.evidence_refs
+                    evidence.model_dump(mode="json") for evidence in built.evidence_refs
                 ],
                 "provenance": WeeklyReviewProvenance(
                     engine="deterministic",
-                    contract_version="weekly-review-v2",
+                    contract_version="weekly-review-v3",
                     source_snapshot_id=snapshot.snapshot_id,
                     source_snapshot_generated_at=snapshot.generated_at,
                     evidence_window=WeeklyReviewEvidenceWindow(
@@ -351,13 +349,8 @@ def _context_observed_before(
         tasks=[row for row in context.tasks if visible(row)],
         habits=[row for row in context.habits if visible(row)],
         habit_logs=[row for row in context.habit_logs if visible(row)],
-        focus_sessions=[
-            row for row in context.focus_sessions if visible(row)
-        ],
-        daily_snapshots=[
-            row for row in context.daily_snapshots if visible(row)
-        ],
-        feedback=[row for row in context.feedback if visible(row)],
+        focus_sessions=[row for row in context.focus_sessions if visible(row)],
+        daily_snapshots=[row for row in context.daily_snapshots if visible(row)],
     )
 
 
@@ -377,7 +370,9 @@ def _build_review(
     period: _ReviewPeriod,
     context: WeeklyReviewContext,
 ) -> _ReviewBuild:
-    daily_modes, daily_evidence = _daily_modes(period=period, rows=context.daily_snapshots)
+    daily_modes, daily_evidence = _daily_modes(
+        period=period, rows=context.daily_snapshots
+    )
     task_facts, task_evidence = _task_facts(period=period, context=context)
     habit_facts, habit_reviews, habit_evidence = _habit_facts(
         period=period,
@@ -389,7 +384,6 @@ def _build_review(
         period=period,
         rows=context.focus_sessions,
     )
-    feedback_facts, feedback_evidence = _feedback_facts(context.feedback)
     recovery_days = sum(mode == "recover" for mode in daily_modes.values())
     recovery_facts = WeeklyRecoveryFacts(
         observed_days=len(daily_modes),
@@ -400,7 +394,6 @@ def _build_review(
         habits=habit_facts,
         focus=focus_facts,
         recovery=recovery_facts,
-        feedback=feedback_facts,
     )
     evidence = _dedupe_evidence(
         [
@@ -408,7 +401,6 @@ def _build_review(
             *habit_evidence,
             *focus_evidence,
             *daily_evidence,
-            *feedback_evidence,
         ],
         limit=40,
     )
@@ -632,33 +624,6 @@ def _focus_facts(
     )
 
 
-def _feedback_facts(
-    rows: list[dict[str, Any]],
-) -> tuple[WeeklyFeedbackFacts, list[WeeklyReviewEvidenceRef]]:
-    allowed = {"done", "later", "not_helpful", "too_much", "does_not_fit"}
-    counts = Counter(
-        str(row["feedback_type"])
-        for row in rows
-        if row.get("feedback_type") in allowed
-    )
-    evidence = [
-        _evidence("decision_feedback", _row_id(row), "feedback_type")
-        for row in rows
-        if row.get("feedback_type") in allowed
-    ]
-    return (
-        WeeklyFeedbackFacts(
-            total=sum(counts.values()),
-            done=counts["done"],
-            later=counts["later"],
-            not_helpful=counts["not_helpful"],
-            too_much=counts["too_much"],
-            does_not_fit=counts["does_not_fit"],
-        ),
-        evidence,
-    )
-
-
 def _daily_modes(
     *,
     period: _ReviewPeriod,
@@ -701,9 +666,7 @@ def _habit_opportunities(
 ) -> list[date]:
     metadata = row.get("metadata")
     started_on = (
-        _strict_date(metadata.get("started_on"))
-        if isinstance(metadata, dict)
-        else None
+        _strict_date(metadata.get("started_on")) if isinstance(metadata, dict) else None
     )
     current = max(period.starts_on, started_on or period.starts_on)
     opportunities: list[date] = []
@@ -723,7 +686,11 @@ def _habit_state(row: dict[str, Any]) -> WeeklyReviewHabitState | None:
     lifecycle_value = metadata.get("lifecycle")
     if setup_state == "archived" or lifecycle_value == "archived":
         lifecycle = "archived"
-    elif setup_state == "paused" or lifecycle_value == "paused" or row.get("active") is False:
+    elif (
+        setup_state == "paused"
+        or lifecycle_value == "paused"
+        or row.get("active") is False
+    ):
         lifecycle = "paused"
     elif row.get("active") is True:
         lifecycle = "active"
@@ -790,7 +757,6 @@ def _source_fingerprint(
         "daily_snapshots": [
             _fingerprint_daily_snapshot(row) for row in context.daily_snapshots
         ],
-        "feedback": [_fingerprint_feedback(row) for row in context.feedback],
     }
     canonical = json.dumps(
         _canonical_source(payload),
@@ -875,16 +841,6 @@ def _fingerprint_daily_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "id": row.get("id"),
         "period_key": row.get("period_key"),
         "daily_state": normalized_state,
-    }
-
-
-def _fingerprint_feedback(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": row.get("id"),
-        "action_id": row.get("action_id"),
-        "action_kind": row.get("action_kind"),
-        "feedback_type": row.get("feedback_type"),
-        "created_at": row.get("created_at"),
     }
 
 
@@ -978,7 +934,6 @@ def _has_review_evidence(context: WeeklyReviewContext) -> bool:
             context.habit_logs,
             context.focus_sessions,
             context.daily_snapshots,
-            context.feedback,
         ),
     )
 

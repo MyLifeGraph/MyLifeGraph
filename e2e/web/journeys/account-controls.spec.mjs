@@ -37,7 +37,10 @@ test('@account-controls exports and permanently deletes through Settings', async
   );
   const exportBytes = await exportResponse.body();
   const exported = JSON.parse(exportBytes.toString('utf8'));
-  expect(exported.contract_version).toBe('account-export-v4');
+  expect(exported.contract_version).toBe('account-export-v5');
+  expect(Object.keys(exported.data ?? {})).toHaveLength(41);
+  expect(exported.data).not.toHaveProperty('recommendations');
+  expect(exported.data).not.toHaveProperty('decision_feedback');
   expect(exported.data?.profiles?.[0]?.id).toBe(
     e2e.identity.user.id,
   );
@@ -70,6 +73,6 @@ test('@account-controls exports and permanently deletes through Settings', async
   });
   expect((await deleteResponse.body()).length).toBe(0);
   await page.waitForURL('**/#/auth**', { timeout: 45000 });
-  await expectFlutterText(page, 'Account and canonical synced data deleted.');
+  await expectFlutterText(page, 'Account and saved synced data deleted.');
   expect((await e2e.admin.getUser(e2e.identity.user.id)).status).toBe(404);
 });

@@ -76,8 +76,9 @@ sanitization. V3 has no friction or Day Shape context, risk, reason, or evidence
 Stress, sleep, energy, workload, and active Tasks continue to drive
 classification. `push` requires at least one active Task.
 
-Current free questions use `free-coach-agent-prompt-v3` with a per-turn
-`personal-snapshot-v2`; paired V1/V2 prompt history and exact replay stay valid.
+Current free questions use `free-coach-agent-prompt-v4` with a per-turn
+`personal-snapshot-v3`. P7 erases pre-cutover free-agent content while
+preserving required content-free usage/request identities.
 The snapshot may include retained sanitized Intake, Memory, and Daily Capture
 rows as untrusted data, but it cannot include Goals or resurrect removed
 onboarding preference, coaching-style, or friction JSON. Weekly Review proposal
@@ -86,10 +87,11 @@ arrays are also removed before Coach use. Compatible V2 fixed-mode requests reta
 `controlled-coach-prompt-v2`/`coach-context-v2`. Persisted V1/V2 responses and
 history remain readable and replay-compatible.
 
-Briefings and Weekly Reviews have no Goal source. `weekly-review-v2` removes the
-former Task Goal counter and always generates an empty proposal array.
-Recommendations use runtime Tasks, check-ins, and other current signals rather
-than onboarding personalization.
+Briefings and Weekly Reviews have no Goal source. `weekly-review-v3` removes the
+former Task Goal counter, contains no Feedback facts, and always generates an
+empty proposal array. The generic Today Recommendation/Decision Feedback stack
+is retired; the independent Sleep Recommendation and ordinary Coach advice
+remain.
 
 ## Stored-data cleanup
 

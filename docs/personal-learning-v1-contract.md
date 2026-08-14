@@ -348,33 +348,14 @@ Exam provenance marker is different: a change there always requires a fresh
 batch preview. If pattern loading fails during proposal, planning continues
 with Setup ordering and a visible fallback warning.
 
-## Recommendation cleanup follow-up
+## Recommendation retirement boundary
 
-This is a separate deterministic segment and does not grant Personal Patterns
-or Decision Feedback new authority.
-
-Recommendation generation resolves its rolling dates in the profile timezone,
-excludes `daily_logs.entry_date` after that profile-local date, and reads current
-structured facts. The Focus rule uses real terminal sessions:
-an intentionally short completed session is not a failure, and a warning
-requires at least three terminal sessions in 14 days with at least two
-abandonments. The sleep rule uses a valid V4 sleep-quality estimate or explicit
-target deviation instead of a fixed 6.5-hour cutoff alone. Recovery and movement
-still count a matching date once. When both fields trigger on that date, its
-evidence reference deterministically names the stronger normalized trigger:
-sleep quality or sleep shortfall, and Steps or Activity. Movement candidates
-exist only for actually measured activity or steps and name fixed thresholds,
-never a personal baseline.
-
-A deliberate refresh verifies the complete new candidate set and invokes one
-service-role-only transaction. Prior `new` rows are retained as dismissed
-history, accepted decisions remain untouched, and only the new set becomes the
-current feed. An empty set therefore removes obsolete current cards without
-deleting history.
-
-Existing Decision Feedback API, rows, export, and deletion remain compatible.
-The Dashboard history entry is rendered only when rows exist. No new feedback
-buttons are exposed until a later redesign can show their ranking effect.
+The former generic Recommendation generator/feed and Decision Feedback stack
+are retired. Personal Patterns and learned Planner timing gain no replacement
+write or ranking authority from that removal. The independent
+`sleep-recommendation-v1` observation, `ai_insights.recommendation`, Memory type
+`recommendation`, Skillset, and ordinary Coach advice remain unchanged. None of
+those preserved concepts may recreate the retired Today feed or feedback API.
 
 ## Export, deletion, logging, and rollout
 

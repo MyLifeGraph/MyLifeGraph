@@ -99,7 +99,7 @@ commands. It converts one captured instant using `profiles.timezone`, keeps
 timestamp clocks separate, and does not silently substitute the device
 timezone for invalid account data. Daily Capture identities, standalone Habit
 targets and refreshes, Focus start metadata, Weekly Review application refresh,
-recommendation refresh, Deadline planning start, and post-plan refresh use this
+Deadline planning start, and post-plan refresh use this
 boundary. Today inline Task/Habit commands continue to use the exact date in
 the loaded Today projection. Guest/no-account flows remain device-local by
 design.
@@ -147,8 +147,8 @@ a broadcast event bus.
 | Focus reflection | no Full-week invalidation; the agenda has no reflection/rating projection |
 | Deadline Plan | Today, Today Full week, Daily Briefing, Planner, Preparation Workload, Exam Outlook |
 | Planner | Today, Today Full week, Daily Briefing, Preparation Workload, Exam Outlook |
-| Setup | Today, Today Full week, Daily Briefing, Recommendations, Planner, Preparation Workload, Exam Outlook |
-| Timezone | every date-bound Capture, Today including latest check-in and Full week, Briefing, Recommendation, Planner, Workload, and Outlook read |
+| Setup | Today, Today Full week, Daily Briefing, Planner, Preparation Workload, Exam Outlook |
+| Timezone | every date-bound Capture, Today including latest check-in and Full week, Briefing, Planner, Workload, and Outlook read |
 | Preparation budget | Preparation Workload |
 | Calendar planning import | Today, Today Full week, Planner, Preparation Workload, and Exam Outlook |
 
@@ -168,9 +168,10 @@ Focus-reflection sheet and invokes the Focus-reflection impact inside successful
 save/delete callbacks, so dismissal affects only Snackbar presentation and not
 Full-week invalidation.
 
-`account-export-v4` preserves the established owner-data set, minus the removed
-Goals table, and adds the three owner-content finite Assignment Series
-projections. It retains the 10,000
+`account-export-v5` preserves the established owner-data set minus Goals,
+generic Recommendations, and Decision Feedback, while retaining the three
+owner-content finite Assignment Series projections. Its exact catalog contains
+41 tables and retains the 10,000
 rows-per-table, 50,000 total-row, and 8 MiB bounds. It explicitly omits
 `daily_capture_request_identities` and
 `account_setting_request_identities`, `assignment_series_request_identities`,

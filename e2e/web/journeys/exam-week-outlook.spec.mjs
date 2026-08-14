@@ -158,7 +158,7 @@ test('@exam-week-outlook renders a read-only Planner outlook and replan entry', 
   await expectFlutterText(page, 'Sleep plan 23:00');
   await expectFlutterText(
     page,
-    'Read-only outlook. Opening this card neither creates a preview nor changes an active revision.',
+    'Read-only outlook. Opening this card neither creates a preview nor changes your current saved plan.',
   );
   await scrollFlutterTextIntoView(page, 'Replan remaining time', {
     maxSteps: 12,

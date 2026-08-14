@@ -21,8 +21,10 @@ void main() {
   );
 
   test('export contract includes Focus provenance and Planner content', () {
-    expect(accountExportTableNames, hasLength(43));
+    expect(accountExportTableNames, hasLength(41));
     expect(accountExportTableNames, isNot(contains('goals')));
+    expect(accountExportTableNames, isNot(contains('recommendations')));
+    expect(accountExportTableNames, isNot(contains('decision_feedback')));
     expect(
       accountExportTableNames,
       containsAllInOrder(const [
@@ -92,7 +94,7 @@ void main() {
 
     expect(write.timezone, 'Europe/London');
     expect(write.revision, 5);
-    expect(export.contractVersion, 'account-export-v4');
+    expect(export.contractVersion, 'account-export-v5');
     expect(export.recordCounts['profiles'], 1);
     expect(client.patchCalls, ['/v1/account/profile']);
     expect(client.getCalls, ['/v1/account/export']);
@@ -647,7 +649,7 @@ Map<String, dynamic> _validExportJson({
   };
   data['profiles'] = profileRows;
   return {
-    'contract_version': 'account-export-v4',
+    'contract_version': 'account-export-v5',
     'exported_at': '2026-07-13T12:00:00Z',
     'data': data,
     'record_counts': <String, int>{

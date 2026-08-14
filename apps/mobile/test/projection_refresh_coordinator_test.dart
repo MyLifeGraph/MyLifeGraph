@@ -134,25 +134,12 @@ void main() {
     expect(snapshotDates, isEmpty);
     expect(invalidated, [
       ProductProjection.today,
-      ProductProjection.recommendations,
       ProductProjection.planner,
       ProductProjection.todayFullWeek,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
       ProductProjection.examPlanHealth,
     ]);
-  });
-
-  test('recommendation refresh keeps snapshot input and feed impacts separate',
-      () async {
-    await coordinator.recommendationInputsChanged(targetDate: '2026-07-31');
-
-    expect(snapshotDates, ['2026-07-31']);
-    expect(invalidated, isEmpty);
-
-    await coordinator.recommendationsChanged();
-    expect(snapshotDates, ['2026-07-31']);
-    expect(invalidated, [ProductProjection.recommendations]);
   });
 
   test('settings-only impact invalidates no unrelated projection', () async {
@@ -200,7 +187,6 @@ void main() {
       ProductProjection.today,
       ProductProjection.todayLatestCheckIn,
       ProductProjection.todayFullWeek,
-      ProductProjection.recommendations,
       ProductProjection.planner,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,

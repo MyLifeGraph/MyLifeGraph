@@ -5,17 +5,12 @@ import 'package:my_life_graph/composition/today_command_providers.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
-import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
-import 'package:my_life_graph/composition/briefing_providers.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_full_week.dart';
 import 'package:my_life_graph/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/composition/dashboard_providers.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
-import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
-import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
-import 'package:my_life_graph/composition/optimization_providers.dart';
 import 'package:my_life_graph/features/quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 
@@ -69,8 +64,8 @@ void main() {
     expect(find.text("Today's habits"), findsOneWidget);
     expect(find.text('More'), findsNothing);
     expect(find.text('Review your week'), findsOneWidget);
-    expect(find.text('Recommendations'), findsOneWidget);
-    expect(find.text('Decision feedback history'), findsOneWidget);
+    expect(find.text('Recommendations'), findsNothing);
+    expect(find.text('Decision feedback history'), findsNothing);
     await _ensureExpansionVisible(
       tester,
       const ValueKey('dashboard-full-week'),
@@ -85,15 +80,13 @@ void main() {
     final tasksY = tester.getTopLeft(find.text("Today's tasks")).dy;
     final habitsY = tester.getTopLeft(find.text("Today's habits")).dy;
     final weeklyReviewY = tester.getTopLeft(find.text('Review your week')).dy;
-    final recommendationsY = tester.getTopLeft(find.text('Recommendations')).dy;
     final fullWeekY = tester.getTopLeft(find.text('Full week')).dy;
     expect(streakY, lessThan(progressY));
     expect(progressY, lessThan(agendaY));
     expect(agendaY, lessThan(tasksY));
     expect(tasksY, lessThan(habitsY));
     expect(habitsY, lessThan(weeklyReviewY));
-    expect(weeklyReviewY, lessThan(recommendationsY));
-    expect(recommendationsY, lessThan(fullWeekY));
+    expect(weeklyReviewY, lessThan(fullWeekY));
   });
 
   testWidgets(
@@ -120,9 +113,6 @@ void main() {
       'Today\'s tasks': 'Due, overdue, in-progress, and completed-today tasks.',
       'Show all tasks': 'Future, undated, completed, and cancelled tasks',
       'Today\'s habits': 'Scheduled habits and still-open weekly targets.',
-      'Recommendations': 'Rule-based suggestions from your available signals.',
-      'Decision feedback history':
-          'Inspect or delete previously saved feedback.',
       'Full week':
           'Your profile-local Monday–Sunday agenda across Setup, Preparation, Calendar, Focus, Planner Tasks, Habits, and Fixed commitments.',
     };
@@ -170,8 +160,6 @@ void main() {
   testWidgets(
       'supporting info clicks neither open accordions nor start lazy reads',
       (tester) async {
-    var recommendationLoads = 0;
-    var feedbackLoads = 0;
     var fullWeekLoads = 0;
     await _pumpDashboard(
       tester,
@@ -182,35 +170,20 @@ void main() {
         canUseSyncedExecution: true,
         canUseWeeklyReview: true,
       ),
-      onRecommendationsLoad: () => recommendationLoads += 1,
-      onFeedbackLoad: () => feedbackLoads += 1,
       onFullWeekLoad: () => fullWeekLoads += 1,
     );
 
-    for (final topic in const [
-      'Recommendations',
-      'Decision feedback history',
-      'Full week',
-    ]) {
-      await _tapInfo(tester, topic);
-    }
+    await _ensureExpansionVisible(
+      tester,
+      const ValueKey('dashboard-full-week'),
+    );
+    await _tapInfo(tester, 'Full week');
 
     expect(find.text('Review your week'), findsOneWidget);
-    expect(find.text('Example suggestions'), findsNothing);
-    expect(find.text('No recent feedback.'), findsNothing);
-    expect(recommendationLoads, 0);
-    expect(feedbackLoads, 0);
     expect(fullWeekLoads, 0);
 
-    await _tapExpansion(tester, const ValueKey('dashboard-recommendations'));
-    await _tapExpansion(
-      tester,
-      const ValueKey('dashboard-feedback-history'),
-    );
     await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
 
-    expect(recommendationLoads, 1);
-    expect(feedbackLoads, 1);
     expect(fullWeekLoads, 1);
   });
 
@@ -331,7 +304,7 @@ void main() {
     );
   });
 
-  testWidgets('supporting sections are independently lazy and stay open',
+  testWidgets('Full week remains lazy and independent from weekly review',
       (tester) async {
     await _pumpDashboard(
       tester,
@@ -359,18 +332,6 @@ void main() {
           ),
         ],
       ),
-      recommendations: Future.value(
-        RecommendationFeed.demo(const [
-          Recommendation(
-            id: 'demo-rec',
-            title: 'Rule-based example',
-            reason: 'Available signal.',
-            actionLabel: 'Review it',
-            category: RecommendationCategory.planning,
-            confidence: .7,
-          ),
-        ]),
-      ),
       capabilities: const AppSurfaceCapabilities(
         isLocalDemo: false,
         canUseSyncedHabits: true,
@@ -378,61 +339,21 @@ void main() {
         canUseDeadlinePlanner: true,
         canUseWeeklyReview: true,
       ),
-      feedback: [
-        DecisionFeedback(
-          id: 'feedback-1',
-          requestId: 'request-1',
-          briefingId: 'briefing-1',
-          recommendationId: null,
-          actionId: 'action-1',
-          actionKind: 'task',
-          feedbackType: DecisionFeedbackType.later,
-          contextMode: 'balanced',
-          estimatedMinutes: 20,
-          ruleKey: 'rule-1',
-          createdAt: DateTime(2026, 7, 20, 8),
-        ),
-      ],
     );
 
-    expect(find.text('Rule-based example'), findsNothing);
     expect(find.text('Review your week'), findsOneWidget);
     expect(find.text('Full-week lecture'), findsNothing);
-    expect(find.text('No recent feedback.'), findsNothing);
     expect(find.text('Beat yesterday'), findsOneWidget);
     expect(find.textContaining('Sleep duration'), findsOneWidget);
     expect(find.text('7-day preparation load'), findsNothing);
 
-    await _tapExpansion(tester, const ValueKey('dashboard-recommendations'));
-    await _tapExpansion(tester, const ValueKey('dashboard-feedback-history'));
     await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
 
     expect(find.text('Review your week'), findsOneWidget);
-    expect(find.text('Recommendations'), findsOneWidget);
-    expect(find.text('Rule-based example'), findsOneWidget);
-    expect(find.text('Decision feedback history'), findsOneWidget);
+    expect(find.text('Recommendations'), findsNothing);
+    expect(find.text('Decision feedback history'), findsNothing);
     expect(find.text('Full week'), findsOneWidget);
     expect(find.text('Full-week lecture'), findsOneWidget);
-  });
-
-  testWidgets('feedback accordion owns its empty state', (tester) async {
-    await _pumpDashboard(
-      tester,
-      snapshot: _todaySnapshot(),
-      capabilities: const AppSurfaceCapabilities(
-        isLocalDemo: false,
-        canUseSyncedHabits: true,
-        canUseSyncedExecution: true,
-      ),
-    );
-
-    await _tapExpansion(
-      tester,
-      const ValueKey('dashboard-feedback-history'),
-    );
-
-    expect(find.text('Decision feedback history'), findsOneWidget);
-    expect(find.text('No recent feedback.'), findsOneWidget);
   });
 
   testWidgets('Show all tasks reveals future and planner-managed tasks',
@@ -635,8 +556,6 @@ Future<void> _ensureExpansionVisible(
 
 String _expansionTitle(ValueKey<String> key) {
   final title = switch (key.value) {
-    'dashboard-recommendations' => 'Recommendations',
-    'dashboard-feedback-history' => 'Decision feedback history',
     'dashboard-full-week' => 'Full week',
     'today-all-tasks' => 'Show all tasks',
     _ => throw StateError('Unknown expansion key ${key.value}.'),
@@ -659,16 +578,12 @@ Future<void> _pumpDashboard(
   DashboardCheckIn? latestCheckIn,
   DashboardFullWeekProjection? fullWeek,
   Future<DashboardFullWeekProjection> Function()? fullWeekLoader,
-  Future<RecommendationFeed>? recommendations,
   Size size = const Size(900, 1500),
   TextScaler textScaler = TextScaler.noScaling,
-  List<DecisionFeedback> feedback = const [],
   TodayTaskCommandPort? taskCommands,
   TodayHabitCommandPort? habitCommands,
   _RecordingProjectionRefresh? projectionRefresh,
   DashboardRepository? dashboardRepository,
-  VoidCallback? onRecommendationsLoad,
-  VoidCallback? onFeedbackLoad,
   VoidCallback? onFullWeekLoad,
   VoidCallback? onHealthLoad,
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
@@ -711,19 +626,6 @@ Future<void> _pumpDashboard(
                 Future.value(
                   fullWeek ?? DashboardFullWeekProjection.empty(displayedDate),
                 );
-          },
-        ),
-        recommendationFeedProvider.overrideWith(
-          (ref) {
-            onRecommendationsLoad?.call();
-            return recommendations ??
-                Future.value(RecommendationFeed.demo(const []));
-          },
-        ),
-        decisionFeedbackProvider.overrideWith(
-          (ref) {
-            onFeedbackLoad?.call();
-            return Future.value(feedback);
           },
         ),
         todayCommandControllerProvider.overrideWith(

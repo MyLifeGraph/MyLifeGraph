@@ -2,6 +2,7 @@ import asyncio
 import re
 from pathlib import Path
 
+import httpx
 from fastapi import Request
 
 from app.api.deps.auth import SupabaseTokenVerifier, UnconfiguredTokenVerifier
@@ -143,6 +144,42 @@ def test_api_boundary_does_not_import_repository_exceptions() -> None:
     ] == []
 
 
+def test_retired_recommendation_and_feedback_routes_are_absent() -> None:
+    app = create_app()
+    paths = app.openapi()["paths"]
+    retired_paths = {
+        "/v1/recommendations",
+        "/v1/recommendations/generate",
+        "/v1/feedback",
+        "/v1/feedback/{feedback_id}",
+    }
+
+    assert retired_paths.isdisjoint(paths)
+    assert "/v1/insights/sleep-recommendation" in paths
+
+    async def exercise() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            requests = (
+                ("GET", "/v1/recommendations"),
+                ("POST", "/v1/recommendations/generate"),
+                ("GET", "/v1/feedback"),
+                ("POST", "/v1/feedback"),
+                (
+                    "DELETE",
+                    "/v1/feedback/11111111-1111-4111-8111-111111111111",
+                ),
+            )
+            responses = [
+                await client.request(method, path) for method, path in requests
+            ]
+        assert [response.status_code for response in responses] == [404] * 5
+
+    asyncio.run(exercise())
+
+
 def test_api_tests_override_typed_dependencies_instead_of_named_state() -> None:
     named_service_state = re.compile(
         r"\.state\.(?:token_verifier|[a-z_]+(?:service|engine|aggregator))",
@@ -196,9 +233,6 @@ def test_application_composition_reuses_the_common_service_graph() -> None:
     )
     assert composition.briefing_service is (
         composition.scheduled_refresh_service._briefing_service
-    )
-    assert composition.recommendation_engine is (
-        composition.scheduled_refresh_service._recommendation_engine
     )
     assert composition.coach_services.current._lifecycle is (
         composition.coach_services.legacy._lifecycle

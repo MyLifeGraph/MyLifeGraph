@@ -4,7 +4,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-WEEKLY_REVIEW_CONTRACT_VERSION = "weekly-review-v2"
+WEEKLY_REVIEW_CONTRACT_VERSION = "weekly-review-v3"
 
 WeeklyReviewFreshness = Literal["not_ready", "missing", "current", "stale"]
 WeeklyReviewDataQuality = Literal["insufficient", "partial", "sufficient"]
@@ -62,7 +62,7 @@ class WeeklyReviewProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     engine: Literal["deterministic"]
-    contract_version: Literal["weekly-review-v2"]
+    contract_version: Literal["weekly-review-v3"]
     source_snapshot_id: str = Field(min_length=1, max_length=200)
     source_snapshot_generated_at: datetime
     evidence_window: WeeklyReviewEvidenceWindow
@@ -125,30 +125,6 @@ class WeeklyRecoveryFacts(BaseModel):
         return self
 
 
-class WeeklyFeedbackFacts(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-
-    total: int = Field(ge=0)
-    done: int = Field(ge=0)
-    later: int = Field(ge=0)
-    not_helpful: int = Field(ge=0)
-    too_much: int = Field(ge=0)
-    does_not_fit: int = Field(ge=0)
-
-    @model_validator(mode="after")
-    def validate_total(self) -> Self:
-        expected = (
-            self.done
-            + self.later
-            + self.not_helpful
-            + self.too_much
-            + self.does_not_fit
-        )
-        if self.total != expected:
-            raise ValueError("feedback total must equal the typed outcome counts")
-        return self
-
-
 class WeeklyReviewFacts(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -156,7 +132,6 @@ class WeeklyReviewFacts(BaseModel):
     habits: WeeklyHabitFacts
     focus: WeeklyFocusFacts
     recovery: WeeklyRecoveryFacts
-    feedback: WeeklyFeedbackFacts
 
 
 class WeeklyReviewHabitCadence(BaseModel):
@@ -241,10 +216,8 @@ class WeeklyReviewProposal(BaseModel):
                 or before.cadence.weekly_target < 2
                 or after.lifecycle != "active"
                 or after.cadence.kind != "weekly_target"
-                or after.cadence.weekly_target
-                != before.cadence.weekly_target - 1
-                or after.cadence.scheduled_weekdays
-                != before.cadence.scheduled_weekdays
+                or after.cadence.weekly_target != before.cadence.weekly_target - 1
+                or after.cadence.scheduled_weekdays != before.cadence.scheduled_weekdays
             ):
                 raise ValueError("shrink must reduce one active weekly target by one")
         elif self.operation == "pause":
@@ -253,14 +226,18 @@ class WeeklyReviewProposal(BaseModel):
                 or after.lifecycle != "paused"
                 or after.cadence != before.cadence
             ):
-                raise ValueError("pause must preserve cadence and pause an active habit")
+                raise ValueError(
+                    "pause must preserve cadence and pause an active habit"
+                )
         elif self.operation == "archive":
             if (
                 before.lifecycle != "paused"
                 or after.lifecycle != "archived"
                 or after.cadence != before.cadence
             ):
-                raise ValueError("archive must preserve cadence and archive a paused habit")
+                raise ValueError(
+                    "archive must preserve cadence and archive a paused habit"
+                )
         if self.application_mode == "direct_habit":
             if self.ownership != "manual" or self.operation not in {
                 "shrink",
@@ -283,7 +260,7 @@ class WeeklyReview(BaseModel):
     data_quality: WeeklyReviewDataQuality
     narrative: str = Field(min_length=1, max_length=500)
     facts: WeeklyReviewFacts
-    proposals: list[WeeklyReviewProposal] = Field(default_factory=list, max_length=2)
+    proposals: list[WeeklyReviewProposal] = Field(default_factory=list, max_length=0)
     evidence_refs: list[WeeklyReviewEvidenceRef] = Field(
         default_factory=list,
         max_length=40,
@@ -296,6 +273,8 @@ class WeeklyReview(BaseModel):
     def validate_review(self) -> Self:
         if self.generated_at.tzinfo is None or self.updated_at.tzinfo is None:
             raise ValueError("weekly review timestamps must be timezone-aware")
+        if self.proposals:
+            raise ValueError("weekly-review-v3 requires an empty proposals list")
         proposal_ids = [proposal.id for proposal in self.proposals]
         target_ids = [proposal.target_id for proposal in self.proposals]
         if len(proposal_ids) != len(set(proposal_ids)):
@@ -308,7 +287,7 @@ class WeeklyReview(BaseModel):
 class WeeklyReviewReadResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    contract_version: Literal["weekly-review-v2"]
+    contract_version: Literal["weekly-review-v3"]
     period_key: str = Field(pattern=r"^\d{4}-W\d{2}$")
     starts_on: date
     ends_on: date

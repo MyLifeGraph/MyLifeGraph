@@ -923,7 +923,7 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
         table: <Map<String, dynamic>>[],
     };
     return AccountExportEnvelope.fromJson({
-      'contract_version': 'account-export-v4',
+      'contract_version': 'account-export-v5',
       'exported_at': '2026-07-13T12:00:00Z',
       'data': data,
       'record_counts': <String, int>{
@@ -962,7 +962,7 @@ class _FakeExportSaver implements AccountExportSaver {
   }) async {
     calls += 1;
     expect(suggestedName, startsWith('mylifegraph-export-'));
-    expect(export.contractVersion, 'account-export-v4');
+    expect(export.contractVersion, 'account-export-v5');
     return AccountExportSaveResult.saved;
   }
 }

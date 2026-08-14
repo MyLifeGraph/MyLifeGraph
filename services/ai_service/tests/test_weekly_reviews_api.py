@@ -42,7 +42,7 @@ class FakeWeeklyReviewService:
 
 def not_ready_response() -> dict:
     return {
-        "contract_version": "weekly-review-v2",
+        "contract_version": "weekly-review-v3",
         "period_key": "2026-W28",
         "starts_on": date(2026, 7, 6),
         "ends_on": date(2026, 7, 12),

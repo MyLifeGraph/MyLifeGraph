@@ -59,12 +59,12 @@ Snapshot → Daily State → Modus, Qualität, Risiken, Begründungen
            ┌─────────────┴─────────────┐
            ▼                           ▼
 Today Overview                  interne Rangfolge
-Streak + Progress +             Recommendations → Daily Briefing
-Agenda + Tasks + Habits         → Reminder/Coach-Kontext/Feedback
+Streak + Progress +             Daily Briefing V2
+Agenda + Tasks + Habits         → Scheduler/Coach-Kontext
            │                           │
            ▼                           ▼
-explizite Ausführung            spätere Rangfolge
-Task/Habit/Focus                bleibt begrenzt beeinflussbar
+explizite Ausführung            deterministisches Artefakt
+Task/Habit/Focus                ohne Feedback-Ranking
            └─────────────┬─────────────┘
                          ▼
 Review: Insights + Weekly Review
@@ -164,15 +164,15 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
 5. **Today's habits**
    - tägliche, am Wochentag geplante und noch offene Weekly-Target Habits;
    - explizit `Complete`, `Skip` oder `Undo outcome` über Habit V1.
-6. **Weekly Review direkt, drei Akkordeons zunächst geschlossen**
+6. **Weekly Review direkt, Full week zunächst geschlossen**
    - `Review your week` öffnet mit seiner bestehenden Berechtigungsgrenze
      direkt den Weekly Review;
-   - `Recommendations` und `Decision feedback history` laden erst beim Öffnen;
    - `Full week` zeigt Montag bis Sonntag der aktuellen profil-lokalen
      Kalenderwoche mit Setup, Preparation, Calendar, tatsächlichem Focus,
      Planner Tasks, Habit Slots und festen Commitments, einschließlich leerer
      Tage und je Quelle ehrlichem Teilfehler;
-   - die drei Akkordeons können gleichzeitig geöffnet bleiben.
+   - der generische Recommendation-Feed und Decision Feedback sind vollständig
+     aus der Produktoberfläche entfernt.
 
 `7-day preparation load` ist weiterhin im Planner verfügbar, wird auf Today
 aber nicht mehr zusätzlich angezeigt. `Full week` liest den eigenen
@@ -191,11 +191,10 @@ Null noch als erfundener Score dargestellt. Es gibt derzeit bewusst keinen
 allgemeinen Readiness-, Wellness- oder Life-Score für echte Accounts.
 
 Ein normaler Aufruf von `Today` ist read-only:
-`GET /v1/today/overview-v2` erzeugt
-weder Briefing noch Recommendation und verändert keinen Plan. Das persistierte
-Daily Briefing bleibt für Scheduler, Reminder, Coach-Kontext und historische
-Feedback-Auswertung erhalten, ist aber keine sichtbare angeblich von der App
-getroffene Tagesentscheidung mehr. Die exakten Regeln stehen in
+`GET /v1/today/overview-v2` erzeugt kein Briefing und verändert keinen Plan. Das
+persistierte `daily-briefing-v2` bleibt für bewusste Scheduler-Erzeugung,
+Account Export und Coach-Kontext erhalten, ist aber keine sichtbare angeblich
+von der App getroffene Tagesentscheidung mehr. Die exakten Regeln stehen in
 `docs/today-overview-v1-contract.md`.
 
 ### 2. Insights: Muster- und Korrelationsdashboard
@@ -305,14 +304,12 @@ Budget-, Calendar-, Plan- oder Belegungsdaten muss neu geprüft werden.
 | **Morning check-in** | zwei lokale Schritte: zuerst korrigierbarer geschätzter Schlafbeginn, Aufwachzeit, automatisch berechnete „Estimated sleep duration“ und das verwendete Schlafziel, danach separat geschätzte Schlafqualität (1–10) und aktuelle Energie; `Back` erhält alle Angaben, gespeichert wird nur am Ende; drei Erklärungen starten eingeklappt | explizite Selbstauskunft; Qualität wird nicht aus der Dauer abgeleitet, Rohzeiten gelten nicht als objektive Messung | `daily-capture-v5` im lokalen Tag; Rohzeiten bleiben nur in `daily_logs`, Dauer/Qualität werden kompatibel projiziert, kein fünftes Event und kein LLM; historische V2–V4-Werte bleiben lesbar, Day Shape wird nicht mehr gezeigt oder genutzt |
 | **Evening check-in** | drei kurze Schritte für Mood, Energie, Stress, geplante Schlafzeit mit Dauerziel sowie optionale Reflection und Specific Blocker; keine Possible Priority oder Friction-Auswahl; die zwei Sleep-Plan-Erklärungen starten eingeklappt | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle mit separater Info-Hilfe und Kontrollierbarkeit; zuerst sichtbar sind acht Stunden, persönlich wird der Wert erst beim Speichern | `daily-capture-v5` im selben `daily_logs`-Tag plus abgeleitete `behavioral_events`; während des Rollouts bleiben vollständige V4-Schreibvorgänge zulässig, ein V5-Container wird nie herabgestuft; V2–V4 bleiben lesbar; freie Texte/Rohzeiten gelangen nicht in Daily State, können aber im ausdrücklich ausgelösten persönlichen Coach-Snapshot als nicht vertrauenswürdige Daten enthalten sein |
 | **Daily State / Snapshot** | `explainable-daily-state-v3` betrachtet einen festen Sieben-Tage-Kontext und klassifiziert Zustand, Risiken und Gründe ohne Friction oder Day Shape; sehr schlechte Schlafqualität kann trotz ausreichender Dauer Recovery auslösen, mäßig schlechte Qualität verhindert Push, und Push benötigt einen aktiven Task | validierte Stress-, Schlaf- und Energie-Signale plus Workload/Tasks; Habits, Outcomes, Focus, Schedule und Memories ergänzen die übrige Snapshot-Zusammenfassung; keine Goals | `user_state_snapshots`; kein LLM und kein gelernter persönlicher Basiswert; V1/V2 bleiben lesbar, aber `constrained_capacity` und der Day-Shape-Push-Gate sind entfernt |
-| **Recommendations** | einzelne regelbasierte Kandidaten werden explizit oder geplant erzeugt/aktualisiert; Setup erzeugt keine Recommendation | Snapshot, echte Check-ins, offene Tasks, Habits und verfügbare Feedback-Signale; keine Goals oder retired Onboarding-Personalisierung | `recommendations`; LLM-Wording ist im aktuellen Produktpfad deaktiviert |
-| **Daily Briefing** | wählt aus zulässigen Kandidaten eine primäre und bis zu zwei unterstützende Aktionen | aktueller Snapshot, Recommendations, Actions, Dringlichkeit, Recovery-Schutz und passendes Feedback | `daily_briefings`; regelbasiert, nicht AI-geschrieben |
+| **Daily Briefing** | wählt deterministisch eine primäre und bis zu zwei unterstützende Aktionen; Today zeigt diese Rangfolge nicht als Nutzerentscheidung | aktueller Snapshot, ausführbare Actions, Dringlichkeit und Recovery-Schutz; keine Recommendation- oder Feedback-Quelle | `daily-briefing-v2` in `daily_briefings`; regelbasiert, nicht AI-geschrieben |
 | **Tasks** | endliche Aktionen mit Status und optionaler Deadline/Schätzung | direkte Nutzereingabe oder ein vom bestätigten Preparation Plan verwalteter Task | `tasks`; kein LLM |
 | **Habits** | wiederkehrende Routinen mit daily-, weekday- oder weekly-target-Cadence | Definition plus explizites completed/skipped/undo pro lokalem Datum | `habits`, `habit_logs`; kein LLM |
 | **Focus** | echter Timer, optional mit genau einem Task oder Habit verknüpft; gespeicherte Ritualpunkte werden vor Start lokal bestätigt/übersprungen, nach Abschluss kann ein lokaler Recovery-Countdown laufen | geplante Blockdauer oder Study Default, einmalig änderbare Dauer und gemessene verstrichene Zeit; Ritual-Häkchen werden nicht gespeichert | `focus_sessions` inklusive verwendeter Recovery-Minuten; kein eigener Pausendatensatz und kein LLM |
 | **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; `planner-overview-v2` trennt aktive Habits, persistierte offene Tasks ohne positive Reservierung und noch unbestätigte Create-Previews und liefert zusätzlich aktuelle Task-Snapshots für explizit geprüfte Replans; normale Tasks können explizit den Study Rhythm verwenden, Habits nicht; freie Zeit berücksichtigt bestätigte Belegung einschließlich Recovery; eine aktive Klausur aktiviert zusätzlich den read-only 14-/7-Tage-Outlook mit hypothetisch geschütztem Schlaf | Task/Habit-Eingaben, primär Setup/manual commitments, Study-Revision, Planner/Preparation reservations, optional consented aktueller Import sowie neueste gültige Evening-/Morning-V4/V5-Schlaffakten | `planner-v1` für Mutationen; Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; Outlook speichert nichts und erzeugt weder Today-Eintrag noch Notification; kein LLM, Calendar-Write oder Auto-Replan |
-| **Decision feedback** | Reaktion auf eine konkrete Briefing-Aktion | Aktion, Kontext und Feedback-Typ | append-only `decision_feedback`; beeinflusst begrenzt spätere Rankings, führt die Aktion aber nicht aus |
-| **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus, Daily State und Feedback | `weekly-review-v2` in `weekly_reviews`; kein LLM, keine Vorschlagserzeugung und keine Produktänderung |
+| **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus und Daily State | `weekly-review-v3` in `weekly_reviews`; kein Feedback-Fakt, kein LLM, keine Vorschlagserzeugung und keine Produktänderung |
 | **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie in `schedule_items` kopiert; im Coach nur als nicht vertrauenswürdige Snapshot-Daten, niemals als Anweisung |
 | **Preparation plans** | Nutzer schätzt den Gesamtaufwand; Exam ist ein einzelner Plan, Assignment standardmäßig eine endliche Serie aus 12 wöchentlichen Vorkommen (neu 2–20); direkte Einstiege behalten die bereits gewählte Art, während `Plan preparation` einmal beide Arten anbietet und danach in denselben passenden Editor verzweigt; beide Editoren zeigen keine Vorleistungsfelder; jedes Vorkommen hat einen eigenen Plan, kann einzeln geändert werden, während „alle zukünftigen“ künftige Abweichungen überschreibt und Vergangenes/Abgeschlossenes behält | nächste Deadline, Anzahl, eigene Schätzung, Study-Revision beziehungsweise sonst bevorzugte Blockgröße, Tageslimit, Puffer, Setup-Commitments und optional aktuelle importierte Busy Times | `assignment-series-v1`, `deadline_plans`, Revisionen, Focus-/Recovery-Blocks und nach atomarer Bestätigung je Vorkommen ein verwalteter `task`; fokussiertes Replanning bleibt bis zur Bestätigung staged; Recovery ist Belegung, aber keine Lern-/Budgetminute; kein LLM |
 | **Insights** | `personal-patterns-v1` liefert die persönliche Musterkarte und Korrelationen; `sleep-recommendation-v1` liefert unabhängig Fortschritt, Unstable-Grund oder drei robuste Ready-Fenster; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung und ruft die Schlafroute nicht auf | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; für Schlafempfehlung mindestens 30 geeignete Tage; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage, kein Apply und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Focus-Previews |
@@ -494,39 +491,23 @@ auf vorhandene Fakten. Der tägliche Snapshot enthält den **Daily State**:
 Die Regeln verwenden einen festen Sieben-Tage-Zustandskontext. Sie behaupten
 keinen persönlich gelernten Basiswert und stellen keine medizinische Diagnose.
 
-### Recommendation und Daily Briefing
-
-Eine **Recommendation** ist ein einzelner Vorschlagskandidat mit Grund,
-Kategorie, Priorität, Confidence und optionaler ausführbarer Zielbeschreibung.
-Mehrere Recommendations können gleichzeitig existieren.
+### Daily Briefing und stillgelegte Feedback-Schleife
 
 Ein **Daily Briefing** ist ein persistiertes internes Rangfolge-Artefakt über
-diese und weitere zulässige Actions:
+zulässige Actions:
 
 - genau eine primäre Aktion;
 - höchstens zwei unterstützende Aktionen;
 - Daily Mode, Kapazität, Freshness und Evidenz;
 - striktes ausführbares Ziel, falls die Aktion wirklich ausgeführt werden kann.
 
-Die Recommendation sagt also „das könnte relevant sein“, das Briefing speichert
-„dies wurde unter den damaligen Regeln am höchsten gerankt“. Today selbst
-behauptet daraus keine Entscheidung für den Nutzer; Recommendations sind dort
-nur unterstützend im eigenen, zunächst geschlossenen Akkordeon sichtbar.
-
-### Decision Feedback
-
-**Decision Feedback** ist eine historische Reaktion auf eine konkrete
-Briefing-Aktion. Es führt die Aktion nicht aus und ändert weder Task noch Habit.
-
-- `done`: laut Nutzer erledigt;
-- `later`: später passend;
-- `not_helpful`: nicht hilfreich;
-- `too_much`: zu viel für den Kontext;
-- `does_not_fit`: passt grundsätzlich nicht.
-
-Passendes Feedback der letzten 28 Tage wird zeitlich abgewertet, gedeckelt und
-additiv in die spätere Rangfolge ähnlicher Kontexte einbezogen. Recovery- und
-Dringlichkeitsschutz können nicht dadurch ausgehebelt werden.
+`daily-briefing-v2` speichert diese Auswahl ohne Recommendation-IDs,
+Recommendation-Bonus oder Decision-Feedback-Ranking. Today behauptet daraus
+keine Entscheidung für den Nutzer. Der frühere generische Recommendation-Feed,
+seine Refresh-Route und Decision Feedback sind im aktuellen Produkt und Schema
+retired. Unabhängig erhalten bleiben die beobachtende `Sleep Recommendation` in
+Insights, das Feld `ai_insights.recommendation`, der Memory-Typ
+`recommendation`, Skillset und normale Coach-Ratschläge.
 
 ### Memory
 
@@ -642,7 +623,7 @@ Der Screen heißt `Coach` und beginnt mit `Ask anything`.
 ### Was er lesen darf
 
 Für jede bewusst gesendete V3-Frage baut FastAPI eine neue, private
-`personal-snapshot-v2`-SQLite-Datei ausschließlich aus Daten des angemeldeten
+`personal-snapshot-v3`-SQLite-Datei ausschließlich aus Daten des angemeldeten
 Owners. Sie darf den gesamten verfügbaren Zeitraum der relevanten Quellen
 enthalten:
 
@@ -651,8 +632,8 @@ enthalten:
 - Tasks, Habits/Outcomes, Focus Sessions und Reflections;
 - Planner, Preparation Plans, Commitments und Reservierungen;
 - Calendar Connection/Import/Event-Inhalte;
-- Snapshots, Briefings, Feedback und Weekly Reviews;
-- Insights, Recommendations, Skillsets und Memories; sowie
+- Snapshots, Briefings und Weekly Reviews;
+- Insights, Skillsets und Memories; sowie
 - frühere Coach-Nachrichten.
 
 Ein verständlicher Katalog beschreibt Tabellen, Spalten, Beziehungen,
@@ -739,7 +720,7 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 | Ausführung | `tasks`, `habit_logs`, `focus_sessions` | Today, Focus/Habits, Snapshot, Weekly Review, Insights |
 | Persönliches Lernen | `focus_session_reflections`, `learning_preferences`; gelernte Planner-Provenienz additiv in Planner-/Deadline-Revisionen | Focus, Evening, Insights und nach separater Freigabe nur neue Planner-Previews |
 | Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2`, `today-week-agenda-v1` und Today; V1 bleibt kompatibel |
-| Interne Tagesrangfolge | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Reminder, Historie, regelbasierte Rangfolge und bei expliziter Frage der temporäre Coach-Snapshot |
+| Interne Tagesrangfolge | `user_state_snapshots`, `daily_briefings` | Scheduler, Export, regelbasierte Rangfolge und bei expliziter Frage der temporäre Coach-Snapshot |
 | Wochenreview | `weekly_reviews` | Weekly Review, Reminder und bei expliziter Frage Coach-Snapshot |
 | Kalenderimport | `calendar_connections`, `calendar_imports`, `calendar_events`, technische Request-Identitäten | Calendar, optional Preparation Planner und read-only Coach-Snapshot; nie als Instruktion |
 | Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans, Planner workload, Today Full week, Focus-Fortschritt |
@@ -762,8 +743,8 @@ absichtlich weiterhin sichtbar:
 
 1. **`Today` bündelt weiterhin viele Rollen.** Der primäre Bereich ist als
    Streak mit kompaktem Check-in, Fortschritt, Agenda, Tasks und Habits
-   geordnet; Weekly Review ist ein direkter Eintrag, während Recommendations,
-   Feedback-Historie und Full week getrennte Akkordeons bleiben.
+   geordnet; Weekly Review ist ein direkter Eintrag, während Full week ein
+   getrenntes Akkordeon bleibt.
    Preparation-Auslastung bleibt im Planner.
 2. **Definition und Zeitplanung sind nicht immer dieselbe Autorität.** Planner
    verwaltet manuelle Tasks, Habits, Preparation und Commitments. Setup-owned
@@ -773,10 +754,10 @@ absichtlich weiterhin sichtbar:
    importierte `Calendar Events` und datierte `Preparation Blocks` heißen im
    Alltag alle schnell „Kalender“, haben aber völlig andere Rechte und
    Bedeutungen.
-4. **Mehrere Ratschlagsquellen existieren weiter.** Recommendations liegen
-   bewusst im eigenen Today-Akkordeon, das Daily Briefing ist ein interner regelbasierter
-   Backend-Fakt für Reminder/Coach/Feedback, und Vorschläge im Coach-Text
-   bleiben unverbindliche, nicht ausführbare sprachliche Reflexionen.
+4. **Ratschlag und Rangfolge bleiben getrennt.** Das Daily Briefing ist ein
+   interner regelbasierter Backend-Fakt; die beobachtende Sleep Recommendation
+   und Vorschläge im Coach-Text bleiben unabhängige, nicht automatisch
+   ausführbare Hinweise.
 5. **Setup ist gleichzeitig Onboarding und spätere Verwaltung.** Nutzer erwarten
    dort meist nur den ersten Start; tatsächlich werden dort dauerhaft
    Setup-Habits, Commitments und Study Setup gepflegt.
@@ -823,7 +804,7 @@ Passwort: DemoPass123!
 Er läuft mit `USE_MOCK_DATA=false` gegen die lokale Supabase- und FastAPI-
 Umgebung. Der Seed deckt unter anderem 43 profilzeitbasierte Daily-Capture-V5-
 Tage, drei Habit-Cadences, mehrere Task-Status, 36 bewertete Focus-Tage, eine
-fortsetzbare aktive Focus Session, Briefing-Historie, Decision Feedback, Weekly
+fortsetzbare aktive Focus Session, Briefing-Historie, Weekly
 Review, Calendar Import, drei Preparation Plans, In-app consent, Inbox-Zustände,
 Memories und Coach-History ab. Schlaf bleibt bei ungefähr
 `7:15–8:30 h`, Schlafqualität bei `6–9`, Energie bei `5–8` und Stress bei
@@ -852,9 +833,8 @@ dabei lediglich lesbar.
    Habits prüfen. Danach den bewusst offenen heutigen Evening-Check-in
    ausfüllen und kontrollieren, dass Morning erhalten bleibt.
 2. In der Streak-Karte `Beat yesterday` mit Datum und ausschließlich vorhandenen
-   fünf Kernwerten prüfen. Danach `Review your week` direkt öffnen sowie
-   Recommendations, Decision feedback history und Full week unabhängig und
-   gleichzeitig aufklappen; in Full week alle sieben Tage, sieben Kategorien,
+   fünf Kernwerten prüfen. Danach `Review your week` direkt öffnen und Full week
+   aufklappen; dort alle sieben Tage, sieben Kategorien,
    Teilquellenstatus, Day-Snap und datumssichere Aktionen prüfen.
 3. Unter `Quick actions` die aktive Focus Session fortsetzen oder beenden und
    Habit outcomes ausführen; bei konfiguriertem Study Setup auch Checkliste und

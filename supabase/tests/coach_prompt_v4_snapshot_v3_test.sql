@@ -18,11 +18,11 @@ insert into auth.users (
   '00000000-0000-0000-0000-000000000000',
   'authenticated',
   'authenticated',
-  'coach-prompt-v3@example.test',
+  'coach-prompt-v4@example.test',
   crypt('test-password', gen_salt('bf')),
   '2026-08-04T08:00:00Z',
   '{"provider":"email","providers":["email"]}'::jsonb,
-  '{"display_name":"Coach Prompt V3"}'::jsonb,
+  '{"display_name":"Coach Prompt V4"}'::jsonb,
   '2026-08-04T08:00:00Z',
   '2026-08-04T08:00:00Z'
 );
@@ -30,26 +30,26 @@ insert into auth.users (
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
-    'public.claim_coach_request_v5('
+    'public.claim_coach_request_v6('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   ),
-  'only service_role can call the current V5 Coach claim'
+  'only service_role can call the current V6 Coach claim'
 );
 
 select ok(
@@ -71,12 +71,12 @@ select ok(
 );
 
 set local role service_role;
-create temporary table coach_prompt_v3_claim on commit drop as
-select public.claim_coach_request_v5(
+create temporary table coach_prompt_v4_claim on commit drop as
+select public.claim_coach_request_v6(
   'c4000000-0000-4000-8000-000000000001',
   'c4000000-0000-4000-8000-000000000101',
   encode(
-    extensions.digest(convert_to('V3 Goal-free claim', 'UTF8'), 'sha256'),
+    extensions.digest(convert_to('V4 Goal-free claim', 'UTF8'), 'sha256'),
     'hex'
   ),
   '2026-08-04',
@@ -91,23 +91,23 @@ select public.claim_coach_request_v5(
 reset role;
 
 select ok(
-  (select value ->> 'state' from coach_prompt_v3_claim) = 'pending'
+  (select value ->> 'state' from coach_prompt_v4_claim) = 'pending'
   and (
-    select prompt_version = 'free-coach-agent-prompt-v3'
-      and context_version = 'personal-snapshot-v2'
+    select prompt_version = 'free-coach-agent-prompt-v4'
+      and context_version = 'personal-snapshot-v3'
     from public.coach_requests
     where request_id = 'c4000000-0000-4000-8000-000000000101'
   ),
-  'a new V5 claim atomically stores the Goal-free prompt and snapshot pair'
+  'a new V6 claim atomically stores the current prompt and snapshot pair'
 );
 
 set local role service_role;
-create temporary table coach_prompt_v3_replay on commit drop as
-select public.claim_coach_request_v5(
+create temporary table coach_prompt_v4_replay on commit drop as
+select public.claim_coach_request_v6(
   'c4000000-0000-4000-8000-000000000001',
   'c4000000-0000-4000-8000-000000000101',
   encode(
-    extensions.digest(convert_to('V3 Goal-free claim', 'UTF8'), 'sha256'),
+    extensions.digest(convert_to('V4 Goal-free claim', 'UTF8'), 'sha256'),
     'hex'
   ),
   '2026-08-04',
@@ -122,10 +122,10 @@ select public.claim_coach_request_v5(
 reset role;
 
 select ok(
-  (select value ->> 'state' from coach_prompt_v3_replay) = 'in_progress'
+  (select value ->> 'state' from coach_prompt_v4_replay) = 'in_progress'
   and (
-    select prompt_version = 'free-coach-agent-prompt-v3'
-      and context_version = 'personal-snapshot-v2'
+    select prompt_version = 'free-coach-agent-prompt-v4'
+      and context_version = 'personal-snapshot-v3'
     from public.coach_requests
     where request_id = 'c4000000-0000-4000-8000-000000000101'
   ),

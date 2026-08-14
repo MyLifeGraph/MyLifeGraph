@@ -17,6 +17,7 @@ from app.repositories.intake_repository import (
     IntakeRepository,
     SetupMaterialization,
 )
+
 _ONBOARDING_PERIOD_KEY = "setup:intake-v1"
 
 
@@ -140,9 +141,8 @@ class IntakeService:
         latest_applied = await self._repository.load_latest_applied_intake(
             user_id=user_id,
         )
-        if (
-            latest_applied is None
-            or str(latest_applied.get("id")) != str(row.get("id"))
+        if latest_applied is None or str(latest_applied.get("id")) != str(
+            row.get("id")
         ):
             return
         responses = _responses_from_row(user_id=user_id, row=row)
@@ -286,7 +286,6 @@ class IntakeService:
             completed_at=setup.completed_at,
             responses=setup.responses,
             summary=setup.summary,
-            recommendations=[],
         )
 
 
@@ -408,8 +407,7 @@ def _build_summary(responses: IntakeResponses) -> SnapshotSummary:
     return SnapshotSummary(
         best_energy_window=responses.best_energy_window,
         fixed_commitment_count=sum(
-            commitment.status == "active"
-            for commitment in responses.fixed_commitments
+            commitment.status == "active" for commitment in responses.fixed_commitments
         ),
         existing_habit_count=len(confirmed_routines),
         routine_candidate_count=sum(

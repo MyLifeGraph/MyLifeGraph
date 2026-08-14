@@ -14,7 +14,7 @@ Phase 9 begins with one optional, explicit, read-only calendar source:
 - FastAPI parses a bounded event window and persists only whitelisted event
   basics in dedicated backend-owned tables;
 - imported events remain visibly `Imported · read-only` and the import itself
-  never creates `schedule_items`, tasks, goals, habits, recommendations,
+  never creates `schedule_items`, tasks, goals, habits,
   briefings, or preparation plans;
 - disconnect stops further imports into that source but retains the imported
   copy;
@@ -248,7 +248,7 @@ The parser supports unfolded `VCALENDAR`/`VEVENT` content and persists only:
 
 Descriptions, attendees, organizer addresses, conferencing links, alarms,
 attachments, and unknown provider payload are not persisted or copied into
-snapshots, recommendations, prompts, logs, or provenance.
+snapshots, prompts, logs, or provenance.
 
 ### Timed Events
 

@@ -4,9 +4,18 @@ Status: historical phase plan with a current product-disposition summary,
 updated through Planner V1, Today Overview V2, Study Setup V1, and the Setup
 personalization retirement, Daily Capture V4, and Exam-Week Outlook V1 on
 2026-07-26, the shared Flutter profile-local date boundary on 2026-07-31, and
-Daily Capture V5/Daily State V3 on 2026-08-04.
+Daily Capture V5/Daily State V3 on 2026-08-04 and the generic Recommendation /
+Decision Feedback retirement on 2026-08-14.
 Detailed phase sections preserve their original implementation reasoning;
 current surface authority lives in the linked contracts.
+
+Current disposition overrides the historical phase text below: the generic
+Today Recommendation feed, Recommendation refresh, and Decision Feedback are
+retired end to end. `daily-briefing-v2` ranks without those sources,
+`weekly-review-v3` has no Feedback facts, Account Export is V5, and new free
+Coach turns use `free-coach-agent-prompt-v4` with `personal-snapshot-v3`.
+Sleep Recommendation, `ai_insights.recommendation`, recommendation Memories,
+Skillset, and ordinary Coach advice remain distinct supported concepts.
 
 `docs/setup-personalization-retirement-contract.md` is authoritative wherever
 historical sections below mention Goals as an active product object, Setup
@@ -92,14 +101,14 @@ The repository already contains most of the foundation needed for this slice:
 
 - Structured onboarding through Intake V1.
 - Canonical Supabase tables for logs, events, tasks, habits, schedule items,
-  recommendations, and user state snapshots. Goals are absent from the current
+  daily briefings, and user state snapshots. Goals, generic Recommendations,
+  and Decision Feedback are absent from the current
   schema and export.
 - Deterministic `daily` and `weekly` snapshot generation in FastAPI.
-- Deterministic recommendation generation and persistence.
 - Best-effort snapshot refresh after key Supabase-backed writes.
 - A backend-only scheduled daily refresh endpoint for cron-style execution.
 - Flutter dashboard, canonical lightweight daily check-in, habit management,
-  recommendation refresh, insights, and mock/guest paths.
+  insights and mock/guest paths.
 - Phase 3 owner-scoped task commands, typed Habit V1 execution, a real focus
   lifecycle, and strict `executable-action-v1` targets. The complete command and
   recovery matrix lives in `docs/phase-3-executable-actions-contract.md`.
@@ -1454,25 +1463,25 @@ Evaluation:
 - Does action execution reuse durable command contracts without a parallel path?
 - Does mobile and desktop layout preserve readable, non-overlapping actions?
 
-Current presentation update (2026-07-21): the persisted Phase 4 briefing and
-Phase 6 feedback/ranking contracts remain implemented backend inputs, but the
+Current presentation update (2026-08-14): the persisted Phase 4 briefing
+remains an internal backend input, but the generic Phase 6
+Recommendation/Feedback loop is retired and the
 visible briefing-first card described in this historical phase is superseded by
 Today Overview. Today no longer labels a ranked recommendation as a decision
 made for the user. Flutter therefore has no direct briefing repository/provider
 or `/v1/briefings/*` call path; backend persistence, scheduled preparation,
-notification generation, Coach context, and historical feedback remain
-implemented. `GET /v1/today/overview` retains the compatible V1 read; Planner
+Account Export, and Coach context remain implemented. `GET /v1/today/overview`
+retains the compatible V1 read; Planner
 adds `GET /v1/today/overview-v2` with Setup, Planner, Preparation, Calendar,
 Focus, Task, Habit, and fixed-commitment facts. The visible streak card adds a
 narrow latest-check-in read. Weekly Review is a direct capability-gated
-navigation entry. Recommendations, feedback history, and the current calendar
-week are independent supporting accordions that load only when their own
-accordion is opened. Preparation workload remains in Planner and is no longer
+navigation entry. The current calendar week is the only supporting accordion
+and loads only when opened. Preparation workload remains in Planner and is no longer
 duplicated on Today.
 Read `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md`, and
 `docs/study-setup-v1-contract.md` before changing this surface.
 
-### Phase 6: Feedback And Useful Insights (Implemented)
+### Phase 6: Feedback And Useful Insights (Historical; Feedback Retired)
 
 Goal:
 
@@ -1550,18 +1559,17 @@ Goal:
 
 Implemented:
 
-- One strict `weekly-review-v2` review is pinned to an explicit completed
+- One strict `weekly-review-v3` review is pinned to an explicit completed
   profile-local ISO week. Latest/period GET remains read-only; deliberate POST
   upserts one backend-owned derived identity.
 - Exact facts distinguish current durable completed and carried tasks,
   completed/skipped/missed/unknown habit opportunities, focus, valid persisted
-  recovery days, and feedback. Known task-history and changed-cadence gaps remain
+  recovery days. Known task-history and changed-cadence gaps remain
   limitations instead of reconstructed events.
 - A canonical source fingerprint exposes stale evidence. Generation persists
   only the facts-only review with `proposals=[]`; it never changes a user-owned
   record or calls an LLM.
-- Historical proposal arrays remain parseable for transport compatibility, but
-  Flutter and Coach hide them and no Weekly Review command can apply them.
+- Proposal arrays are empty and no Weekly Review command can apply one.
 - `review_plan` opens the real authenticated weekly-review surface without
   generating or applying by itself. Guest/mock remains local and review-free.
 
@@ -1674,9 +1682,9 @@ Implemented:
   starters, memory selection, and structured suggestions with one free field.
 - Builds a fresh immutable owner-only SQLite snapshot for each non-safety turn
   from retained relevant Setup, Capture, action, planning, calendar, review,
-  insight, recommendation, memory, and Coach data. It includes catalog,
+  insight, memory, and Coach data. It includes catalog,
   relationship, count, period, and helper-view metadata under
-  `free-coach-agent-prompt-v3`/`personal-snapshot-v2`, while excluding auth,
+  `free-coach-agent-prompt-v4`/`personal-snapshot-v3`, while excluding auth,
   secrets, cross-user, anti-replay, provider, and operational rows.
 - Reuses Account Export's 10,000-per-table, 50,000-total, and 8 MiB limits and
   reports overflow instead of truncating.
@@ -1788,10 +1796,10 @@ Tasks, Habit V1, focus sessions, and strict executable action targets now have
 durable and recoverable contracts, including exact ambiguous-write readback,
 locked eligibility, immutable focus history, parser parity, and DST-safe local
 dates. Explicit habit/focus facts enrich snapshot summaries without changing
-the Phase 2 classifier. Ordinary writes do not rank actions, generate
-recommendations, persist a briefing, or call an LLM.
+the Phase 2 classifier. Ordinary writes do not rank actions, persist a
+briefing, or call an LLM.
 
-Phase 4 is implemented behind the strict `daily-briefing-v1` contract. It
+Phase 4 is implemented behind the strict `daily-briefing-v2` contract. It
 persists one stable row per user/local date, keeps GET read-only, refreshes or
 validates Daily State only on deliberate generation, ranks strict executable
 targets recovery-first, and carries freshness, provenance, bounded evidence,
@@ -1803,11 +1811,11 @@ dispatcher were retired after Today Overview became the current read-only
 presentation. Current execution uses the owning Task, Habit, Focus, capture,
 and Weekly Review flows directly.
 
-Phase 6 is implemented with retry-safe append-only feedback, owner-scoped
-history deletion, a decayed and capped 28-day context match, additive ranking
-provenance, and unchanged original reasons/evidence. Insights now defaults to
-one cautious observation with evidence window, confidence/data-quality state,
-and optional bounded experiment; analytics remain advanced exploration.
+The former Phase 6 generic Recommendation and Decision Feedback stack is
+retired. Its tables, routes, Flutter surfaces, ranking inputs, scheduler stage,
+and stored Briefing/Weekly/Coach content are removed. Insights still defaults
+to one cautious observation with evidence window, confidence/data-quality
+state, and optional bounded experiment; analytics remain advanced exploration.
 
 The minimal Phase 7 backend is implemented. The protected scheduled boundary
 pins one run instant, selects eligible profiles by local date and

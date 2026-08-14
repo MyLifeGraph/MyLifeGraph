@@ -91,14 +91,15 @@ void main() {
       expect(categories.allows('unknown'), isFalse);
     });
 
-    test('strictly maps legacy deterministic provenance and pending state', () {
+    test('strictly maps current deterministic provenance and pending state',
+        () {
       const mapper = NotificationsSupabaseRowMapper();
       final notification = mapper.fromRow(_generatedRow());
 
       expect(notification.isDeterministicallyGenerated, isTrue);
-      expect(notification.generationCategory, 'focus_prompt');
+      expect(notification.generationCategory, 'recovery_prompt');
       expect(notification.deliveryDate, '2026-07-14');
-      expect(notification.generationProvenance?.sourceKind, 'daily_briefing');
+      expect(notification.generationProvenance?.sourceKind, 'daily_state');
       expect(notification.generationProvenance?.timezone, 'Europe/Berlin');
       expect(
         mapper
@@ -117,6 +118,17 @@ void main() {
             ..['metadata'] = {
               ...(_generatedRow()['metadata']! as Map<String, dynamic>),
               'llm_used': true,
+            },
+        ),
+        throwsA(isA<NotificationLifecycleContractException>()),
+      );
+
+      expect(
+        () => mapper.fromRow(
+          _generatedRow()
+            ..['metadata'] = {
+              ...(_generatedRow()['metadata']! as Map<String, dynamic>),
+              'source_kind': 'daily_briefing',
             },
         ),
         throwsA(isA<NotificationLifecycleContractException>()),
@@ -599,8 +611,8 @@ Map<String, dynamic> _settingsJson({
 
 Map<String, dynamic> _generatedRow() => {
       'id': _notificationId,
-      'title': "Today's overview is ready",
-      'message': 'Open Today to review your schedule and actions.',
+      'title': 'A gentler overview is ready',
+      'message': 'Open Today to review a manageable schedule and actions.',
       'type': 'reminder',
       'priority': 'medium',
       'action_url': '/dashboard',
@@ -613,18 +625,18 @@ Map<String, dynamic> _generatedRow() => {
       'metadata': {
         'contract_version': 'notification-generation-v1',
         'origin': 'deterministic_backend',
-        'category': 'focus_prompt',
-        'reason_code': 'current_daily_briefing',
+        'category': 'recovery_prompt',
+        'reason_code': 'current_recovery_mode',
         'delivery_date': '2026-07-14',
         'timezone': 'Europe/Berlin',
-        'source_kind': 'daily_briefing',
-        'source_id': 'briefing-1',
+        'source_kind': 'daily_state',
+        'source_id': 'snapshot-1',
         'source_generated_at': '2026-07-14T08:20:00Z',
         'sensitive_copy_excluded': true,
         'llm_used': false,
       },
-      'generation_key': 'notification-generation-v1:focus_prompt:2026-07-14',
-      'generation_category': 'focus_prompt',
+      'generation_key': 'notification-generation-v1:recovery_prompt:2026-07-14',
+      'generation_category': 'recovery_prompt',
       'delivery_date': '2026-07-14',
       'in_app_delivered_at': null,
     };

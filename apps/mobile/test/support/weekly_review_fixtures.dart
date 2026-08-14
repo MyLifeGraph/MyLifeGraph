@@ -1,18 +1,9 @@
 Map<String, dynamic> weeklyReviewResponseJson({
   String freshness = 'current',
   bool includeReview = true,
-  String operation = 'shrink',
-  String ownership = 'manual',
-  String applicationMode = 'direct_habit',
-  Map<String, dynamic>? before,
-  Object? after = _defaultAfter,
 }) {
-  final beforeState = before ?? weeklyHabitState(weeklyTarget: 3);
-  final afterState = identical(after, _defaultAfter)
-      ? weeklyHabitState(weeklyTarget: 2)
-      : after;
   return {
-    'contract_version': 'weekly-review-v2',
+    'contract_version': 'weekly-review-v3',
     'period_key': '2026-W28',
     'starts_on': '2026-07-06',
     'ends_on': '2026-07-12',
@@ -57,37 +48,8 @@ Map<String, dynamic> weeklyReviewResponseJson({
                 'observed_days': 7,
                 'recovery_days': 2,
               },
-              'feedback': {
-                'total': 5,
-                'done': 1,
-                'later': 1,
-                'not_helpful': 1,
-                'too_much': 1,
-                'does_not_fit': 1,
-              },
             },
-            'proposals': [
-              {
-                'id': 'proposal:habit:one',
-                'operation': operation,
-                'target_kind': 'habit',
-                'target_id': '22222222-2222-4222-8222-222222222222',
-                'target_title': 'Walk after lunch',
-                'ownership': ownership,
-                'application_mode': applicationMode,
-                'expected_updated_at': '2026-07-12T17:30:00Z',
-                'reason_code': 'weekly_target_too_high',
-                'reason': 'A smaller target may fit the observed week better.',
-                'evidence_refs': [
-                  {
-                    'table': 'habit_logs',
-                    'id': '22222222-2222-4222-8222-222222222222',
-                    'field': 'status',
-                  },
-                ],
-                'change': {'before': beforeState, 'after': afterState},
-              },
-            ],
+            'proposals': <Map<String, dynamic>>[],
             'evidence_refs': [
               {
                 'table': 'user_state_snapshots',
@@ -97,7 +59,7 @@ Map<String, dynamic> weeklyReviewResponseJson({
             ],
             'provenance': {
               'engine': 'deterministic',
-              'contract_version': 'weekly-review-v2',
+              'contract_version': 'weekly-review-v3',
               'source_snapshot_id': '33333333-3333-4333-8333-333333333333',
               'source_snapshot_generated_at': '2026-07-12T17:00:00Z',
               'evidence_window': {
@@ -117,20 +79,3 @@ Map<String, dynamic> weeklyReviewResponseJson({
         : null,
   };
 }
-
-Map<String, dynamic> weeklyHabitState({
-  String lifecycle = 'active',
-  String kind = 'weekly_target',
-  int? weeklyTarget = 3,
-  List<int> scheduledWeekdays = const [],
-}) =>
-    {
-      'lifecycle': lifecycle,
-      'cadence': {
-        'kind': kind,
-        'weekly_target': weeklyTarget,
-        'scheduled_weekdays': scheduledWeekdays,
-      },
-    };
-
-const Object _defaultAfter = Object();

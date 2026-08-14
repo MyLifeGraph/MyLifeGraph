@@ -89,7 +89,7 @@ Supabase is only initialized when both `SUPABASE_URL` and
 
 `USE_MOCK_DATA=true` forces product data surfaces to local/demo sources even
 when an authenticated Supabase session exists. Use `false` for real Setup,
-Evening/Morning capture, Today, Planner, Recommendations, Insights, Inbox,
+Evening/Morning capture, Today, Planner, Insights, Inbox,
 synced tasks/habits/focus sessions, Controlled Coach, and snapshot refresh
 behavior. Mock/demo
 auth boot skips remote profile access and overlays the locally applied Setup
@@ -111,10 +111,11 @@ Task/Habit/fixed-commitment agenda, Tasks, and Habits. The V1 route remains
 available for older clients.
 The latest saved check-in is loaded separately into the compact
 `Beat yesterday` streak inset. `Review your week` is a direct
-capability-gated navigation entry. Recommendations, decision-feedback history,
-and the current profile-local Monday-through-Sunday week are independent,
-initially closed supporting accordions and load only while their own accordion
-is open. `Full week` uses the strict bearer-authenticated
+capability-gated navigation entry. The current profile-local
+Monday-through-Sunday week is an independent, initially closed supporting
+accordion and loads only while that accordion is open. The retired generic
+Recommendation and Decision Feedback surfaces have no compatibility UI.
+`Full week` uses the strict bearer-authenticated
 `today-week-agenda-v1` FastAPI projection. Its exact seven days and wall-clock
 labels come from the profile timezone on the server, and its Setup,
 Preparation, Calendar, actual Focus, Planner Task, Habit-slot, and
@@ -127,13 +128,13 @@ zero product calls. Preparation workload remains in Planner and is no longer
 repeated on Today. The persisted
 deterministic briefing still exists for backend consumers,
 but it is no longer presented as a decision made for the user. Capture itself
-does not generate recommendations or create/change a plan. Morning Calibration
+does not create or change a plan. Morning Calibration
 therefore describes only what that save does.
 
 Today keeps its source/update line and ordinary heading explanations initially
 hidden behind independent circled information buttons. The shared core
-disclosure is used for streak, progress, agenda, Today/all Tasks, Habits, and each of the
-three supporting accordions. The direct `Review your week` entry instead keeps
+disclosure is used for streak, progress, agenda, Today/all Tasks, Habits, and
+the Full-week accordion. The direct `Review your week` entry instead keeps
 its summary visible and has no information toggle. Opening information never
 opens the surrounding accordion or starts its lazy provider; errors,
 loading/results, actions, counts, and empty states remain immediately visible.
@@ -352,8 +353,8 @@ and refreshes that same date. Focus refresh uses the persisted local start
 never the later finish/abandon clock. The database locks and revalidates habit
 lifecycle/cadence and focus targets, rejects every update to terminal focus
 rows, and restricts deletion of linked targets. Refresh failure does not roll
-back the durable write. Normal Dashboard reads do not generate recommendations,
-and Phase 3 does not rank a briefing or call an LLM. See
+back the durable write. Normal Dashboard reads do not rank a briefing or call
+an LLM. See
 `../../docs/phase-3-executable-actions-contract.md`.
 
 Scheduled Focus reloads use the newest backend context for target, recovery,
@@ -504,9 +505,10 @@ it does not prove Supabase or FastAPI reachability. Synced writes are not queued
 Guest/demo local persistence continues on the current device while offline.
 
 The synced-account JSON export is bounded and is not a backup, restore format,
-or transaction-wide snapshot. Its strict `account-export-v4` client allowlist
-matches the complete 43-table backend contract, including scheduled Focus and
-finite Assignment Series provenance. Web downloads
+or transaction-wide snapshot. Its strict `account-export-v5` client allowlist
+matches the complete 41-table backend contract after Recommendation and
+Decision Feedback retirement, including scheduled Focus and finite Assignment
+Series provenance. Web downloads
 and desktop saves use a chosen destination. Android uses the platform share
 sheet; the app removes its own
 dedicated temporary source best-effort, while the plugin or operating system
@@ -584,7 +586,7 @@ FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 
 The widget test suite covers the auth gate; required-only guest Setup; typed
 prefill, edit, retry, and review behavior; exact same-day Evening/Morning
-merge, persistence, retry, and readback; source-aware dashboard/recommendation
+merge, persistence, retry, and readback; source-aware Dashboard and Full Week
 states; route capability gates; durable Settings Setup entry; and strict
 notification action routing. Focused domain tests now cover strict action-target
 parsing, task validation/undo, all Habit V1 cadence/outcome calculations, and

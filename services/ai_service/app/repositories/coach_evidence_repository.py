@@ -35,7 +35,6 @@ class CoachEvidenceRows:
     focus_sessions: EvidenceRows
     reflections: EvidenceRows
     habit_outcomes: EvidenceRows
-    decision_feedback: EvidenceRows
     weekly_reviews: EvidenceRows
     task_lifecycle: EvidenceRows
 
@@ -80,7 +79,6 @@ class SupabaseCoachEvidenceRepository:
         "focus_sessions": 20_000,
         "reflections": 20_000,
         "habit_outcomes": 30_000,
-        "decision_feedback": 10_000,
         "weekly_reviews": 2_000,
         "task_lifecycle_each": 10_000,
     }
@@ -102,11 +100,6 @@ class SupabaseCoachEvidenceRepository:
             if starts_at is not None
             else []
         )
-        created_start = (
-            [("created_at", f"gte.{starts_at.isoformat()}")]
-            if starts_at is not None
-            else []
-        )
         local_start = (
             [("entry_date", f"gte.{local_starts_on.isoformat()}")]
             if local_starts_on is not None
@@ -122,7 +115,6 @@ class SupabaseCoachEvidenceRepository:
                 daily,
                 focus,
                 habits,
-                feedback,
                 reviews,
                 completed_tasks,
                 cancelled_tasks,
@@ -169,20 +161,6 @@ class SupabaseCoachEvidenceRepository:
                         ("order", "entry_date.asc,id.asc"),
                     ],
                     cap=self._CAPS["habit_outcomes"],
-                ),
-                self._select_bounded(
-                    "decision_feedback",
-                    params=[
-                        (
-                            "select",
-                            "id,action_kind,feedback_type,context_mode,created_at",
-                        ),
-                        ("user_id", f"eq.{user_id}"),
-                        *created_start,
-                        ("created_at", f"lt.{ends_at.isoformat()}"),
-                        ("order", "created_at.asc,id.asc"),
-                    ],
-                    cap=self._CAPS["decision_feedback"],
                 ),
                 self._select_bounded(
                     "weekly_reviews",
@@ -240,7 +218,6 @@ class SupabaseCoachEvidenceRepository:
             focus_sessions=focus,
             reflections=reflections,
             habit_outcomes=habits,
-            decision_feedback=feedback,
             weekly_reviews=reviews,
             task_lifecycle=EvidenceRows(
                 rows=task_rows,

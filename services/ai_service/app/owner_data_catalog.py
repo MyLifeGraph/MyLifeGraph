@@ -187,11 +187,6 @@ OWNER_DATA_CATALOG = (
         "Persisted insight cards and their evidence metadata.",
     ),
     _shared(
-        "recommendations",
-        "Current and historical deterministic recommendations.",
-        watermark_column="generated_at",
-    ),
-    _shared(
         "skillset_profiles",
         "Stored skillset projections.",
         watermark_column="generated_at",
@@ -235,10 +230,6 @@ OWNER_DATA_CATALOG = (
     _shared(
         "daily_briefings",
         "Persisted deterministic daily briefings.",
-    ),
-    _shared(
-        "decision_feedback",
-        "Owner feedback on earlier recommendations.",
     ),
     _shared(
         "weekly_reviews",

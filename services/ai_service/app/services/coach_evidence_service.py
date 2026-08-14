@@ -103,6 +103,7 @@ class CoachEvidenceService:
         timezone: str,
     ) -> CoachContextOptionsResponse:
         zone = _zone(timezone)
+
         async def load():
             async with self._semaphore:
                 return await asyncio.gather(
@@ -117,16 +118,9 @@ class CoachEvidenceService:
             )
         except TimeoutError as exc:
             raise CoachEvidenceTimeout("Coach context options timed out.") from exc
-        options = [
-            _focus_option(row, zone=zone)
-            for row in result.sessions
-        ]
+        options = [_focus_option(row, zone=zone) for row in result.sessions]
         default = next(
-            (
-                option.focus_session_id
-                for option in options
-                if option.has_reflection
-            ),
+            (option.focus_session_id for option in options if option.has_reflection),
             options[0].focus_session_id if options else None,
         )
         return CoachContextOptionsResponse(
@@ -358,9 +352,8 @@ def _digest(
         selected_focus_in_baseline=selected_focus_in_baseline,
     )
     partial = any(source.partial for source in sources)
-    nonempty = (
-        selected_focus is not None
-        or any(source.included_count for source in sources)
+    nonempty = selected_focus is not None or any(
+        source.included_count for source in sources
     )
     limitations = [
         "These are observational records and do not establish cause.",
@@ -438,7 +431,6 @@ def _source_summaries(
             ),
         ),
         ("habit_outcomes", rows.habit_outcomes),
-        ("decision_feedback", rows.decision_feedback),
         ("weekly_reviews", rows.weekly_reviews),
         ("task_lifecycle", rows.task_lifecycle),
     ]
@@ -504,9 +496,7 @@ def _summary_metrics(
         "rated_focus_coverage": (
             0.0 if not terminal else round(len(rated) / len(terminal), 4)
         ),
-        "average_focus_quality": _average(
-            row.get("focus_quality") for row in rated
-        ),
+        "average_focus_quality": _average(row.get("focus_quality") for row in rated),
         "average_useful_progress": _average(
             row.get("useful_progress") for row in rated
         ),
@@ -517,7 +507,6 @@ def _summary_metrics(
         "habit_skips": sum(
             row.get("status") == "skipped" for row in rows.habit_outcomes.rows
         ),
-        "decision_feedback_events": len(rows.decision_feedback.rows),
         "persisted_weekly_reviews": len(rows.weekly_reviews.rows),
         "retained_completed_tasks": sum(
             row.get("status") == "done" for row in rows.task_lifecycle.rows
@@ -604,13 +593,6 @@ def _buckets(
         if target is not None and row.get("status") in {"completed", "skipped"}:
             target.count(f"habit_{row['status']}")
 
-    for row in rows.decision_feedback.rows:
-        local_date = _local_datetime_date(row.get("created_at"), zone=zone)
-        target = bucket(local_date) if local_date is not None else None
-        value = row.get("feedback_type")
-        if target is not None and value in _FEEDBACK_TYPES:
-            target.count(f"feedback_{value}")
-
     for row in rows.weekly_reviews.rows:
         local_date = _date(row.get("week_start"))
         target = bucket(local_date) if local_date is not None else None
@@ -655,7 +637,6 @@ def _add_review_facts(target: _BucketAccumulator, facts: dict[str, Any]) -> None
         ("habits", "completed", "review_habit_completed"),
         ("habits", "skipped", "review_habit_skipped"),
         ("focus", "actual_minutes", "review_focus_minutes"),
-        ("feedback", "total", "review_feedback_total"),
     )
     for group, field_name, metric in mappings:
         group_value = facts.get(group)
@@ -677,11 +658,6 @@ def _evidence_dates(rows: CoachEvidenceRows, *, zone: ZoneInfo) -> list[date]:
             values.append(value)
     for row in rows.habit_outcomes.rows:
         if (value := _date(row.get("entry_date"))) is not None:
-            values.append(value)
-    for row in rows.decision_feedback.rows:
-        if (
-            value := _local_datetime_date(row.get("created_at"), zone=zone)
-        ) is not None:
             values.append(value)
     for row in rows.weekly_reviews.rows:
         if (value := _date(row.get("week_start"))) is not None:
@@ -740,11 +716,7 @@ def _bucket_identity(
     first_year = anchor_year + group_index * year_span
     last_year = first_year + year_span - 1
     start = date(first_year, 1, 1)
-    key = (
-        str(first_year)
-        if first_year == last_year
-        else f"{first_year}-{last_year}"
-    )
+    key = str(first_year) if first_year == last_year else f"{first_year}-{last_year}"
     return key, start, date(last_year, 12, 31)
 
 
@@ -830,7 +802,6 @@ def _fingerprint(
             "focus_sessions": rows.focus_sessions.rows,
             "reflections": rows.reflections.rows,
             "habit_outcomes": rows.habit_outcomes.rows,
-            "decision_feedback": rows.decision_feedback.rows,
             "weekly_reviews": rows.weekly_reviews.rows,
             "task_lifecycle": rows.task_lifecycle.rows,
         },
@@ -942,7 +913,4 @@ _OBSTACLES = frozenset(
         "environment",
         "other",
     },
-)
-_FEEDBACK_TYPES = frozenset(
-    {"done", "later", "not_helpful", "too_much", "does_not_fit"},
 )

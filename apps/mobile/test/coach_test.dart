@@ -64,7 +64,7 @@ void main() {
     expect(response.provenance.snapshotRowCount, 120);
   });
 
-  test('rolling history accepts historical and current Coach pairs', () {
+  test('current free Coach rejects retired prompt and snapshot pairs', () {
     final current = CoachResponse.fromJson(coachResponseJson());
     final priorV1 = coachResponseJson();
     final priorV1Provenance = priorV1['provenance'] as Map<String, dynamic>;
@@ -77,12 +77,12 @@ void main() {
 
     expect(current.provenance.promptVersion, coachAgentPromptVersion);
     expect(
-      CoachResponse.fromJson(priorV1).provenance.promptVersion,
-      'free-coach-agent-prompt-v1',
+      () => CoachResponse.fromJson(priorV1),
+      throwsA(isA<CoachContractException>()),
     );
     expect(
-      CoachResponse.fromJson(priorV2).provenance.promptVersion,
-      'free-coach-agent-prompt-v2',
+      () => CoachResponse.fromJson(priorV2),
+      throwsA(isA<CoachContractException>()),
     );
   });
 

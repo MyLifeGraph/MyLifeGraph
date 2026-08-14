@@ -6,7 +6,6 @@ enum ProductProjection {
   today,
   todayLatestCheckIn,
   todayFullWeek,
-  recommendations,
   planner,
   preparationWorkload,
   examWeekOutlook,
@@ -122,7 +121,6 @@ class ProjectionRefreshCoordinator {
   Future<void> setupChanged() => _refresh(
         projections: const [
           ProductProjection.today,
-          ProductProjection.recommendations,
           ProductProjection.planner,
           ProductProjection.todayFullWeek,
           ProductProjection.preparationWorkload,
@@ -137,7 +135,6 @@ class ProjectionRefreshCoordinator {
           ProductProjection.today,
           ProductProjection.todayLatestCheckIn,
           ProductProjection.todayFullWeek,
-          ProductProjection.recommendations,
           ProductProjection.planner,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
@@ -163,18 +160,7 @@ class ProjectionRefreshCoordinator {
         ],
       );
 
-  Future<void> recommendationInputsChanged({
-    required String targetDate,
-  }) =>
-      _refresh(targetDate: targetDate);
-
   Future<void> focusReflectionChanged() => _refresh();
-
-  Future<void> recommendationsChanged() => _refresh(
-        projections: const [
-          ProductProjection.recommendations,
-        ],
-      );
 
   Future<void> _refresh({
     String? targetDate,

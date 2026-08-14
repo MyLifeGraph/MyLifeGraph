@@ -19,11 +19,12 @@ deterministic fake provider and need no Codex login, network call, or OpenAI API
 key. A current-machine live smoke remains separately opt-in and must not be
 claimed unless it was actually run.
 
-The earlier bounded `coach-request-v1|v2`, `coach-response-v1`,
-`coach-history-v1`, context-options, and memory-selection records remain
-readable for compatibility. Their newest provenance pair remains
-`controlled-coach-prompt-v3`/`coach-context-v3`. The current app does not
-expose or create those fixed-mode selections.
+The bounded controlled `coach-request-v1|v2` / `coach-response-v1` service
+remains backend-supported for ordinary Coach advice. Its newest provenance pair
+is `controlled-coach-prompt-v3`/`coach-context-v3`. The current Flutter surface
+does not expose fixed-mode selections, but P7 does not revoke those backend
+writers. Pre-cutover Coach content is erased and its request/usage identities
+remain as content-free tombstones.
 
 ## Product Contract
 
@@ -61,7 +62,7 @@ remain authoritative.
 Flutter Coach
   -> authenticated FastAPI coach-request-v3
   -> owner-locked retry claim and local-day budget
-  -> fresh owner-only personal-snapshot-v2 SQLite file
+  -> fresh owner-only personal-snapshot-v3 SQLite file
   -> local Codex CLI: gpt-5.5, service_tier="fast", fast_mode=true
   -> required per-turn coach_data stdio MCP server
        -> inspect_data
@@ -200,8 +201,8 @@ Successful current turns return:
     "model_requested": "gpt-5.5",
     "model_reported": "gpt-5.5",
     "model_source": "explicit",
-    "prompt_version": "free-coach-agent-prompt-v3",
-    "context_version": "personal-snapshot-v2",
+    "prompt_version": "free-coach-agent-prompt-v4",
+    "context_version": "personal-snapshot-v3",
     "generated_at": "2026-07-28T12:00:00Z",
     "provider_called": true,
     "service_tier": "fast",
@@ -226,8 +227,8 @@ separate `row_count` is the number of returned rows. Because arbitrary Python
 table attribution is not trusted, a successful Python step records
 `personal_snapshot` coverage for the entire read-only snapshot.
 
-`GET /v1/coach/history` returns `coach-history-v2`. Each turn has the original
-message and either a readable legacy `coach-response-v1` or current
+`GET /v1/coach/history` returns `coach-history-v2`. Post-cutover turns have the
+original message and either a controlled `coach-response-v1` or free-agent
 `coach-response-v2`. The current UI renders both but exposes no historical mode
 controls.
 
@@ -241,7 +242,7 @@ compatibility. The current Flutter client does not call them.
 
 ## Personal Snapshot Contract
 
-FastAPI builds a new `personal-snapshot-v2` SQLite file for each non-safety
+FastAPI builds a new `personal-snapshot-v3` SQLite file for each non-safety
 turn. It takes bounded export watermarks first, paginates every source with an
 explicit owner filter, verifies cursor order and ownership again, and only then
 writes the file. Account Export and Coach Snapshot use the same neutral
@@ -265,13 +266,12 @@ through the account-export boundary:
 - Deadline/Preparation plans, revisions, and blocks;
 - calendar connection/import summaries and imported event content, without
   credentials;
-- Daily State snapshots, briefings, decision feedback, and Weekly Reviews;
-- Insights, Recommendations, skillset projections, and memories; and
+- Daily State snapshots, briefings, and Weekly Reviews;
+- Insights, skillset projections, and memories; and
 - earlier Coach user/assistant messages.
 
-Goals are absent from the source catalog. Weekly Review rows may remain
-transport-readable with historical proposal arrays, but snapshot construction
-removes those arrays before SQLite creation.
+Goals, generic Recommendations, and Decision Feedback are absent from the source
+catalog. Current Weekly Review V3 rows carry no Feedback facts or proposals.
 
 Current normalized Daily State context accepts historical V1/V2 and current
 `explainable-daily-state-v3`, but exposes the V3 shape: no Day Shape field,
@@ -291,11 +291,11 @@ users.
 Snapshot participation is a separate field in the shared typed owner-data
 catalog; it is not inferred from Account Export inclusion. This keeps the three
 Coach operational tables exportable under their existing contract while
-excluding them from the 39-table personal snapshot. The snapshot includes the
+excluding them from the 37-table personal snapshot. The snapshot includes the
 finite Assignment Series identity/revision/membership projections so the Coach
 can describe confirmed coursework cadence without gaining mutation authority.
 Private `multi-exam-plan-v1` batch metadata is derived retry/orchestration state
-and is absent from `personal-snapshot-v2`; confirmed child content remains
+and is absent from `personal-snapshot-v3`; confirmed child content remains
 visible through the existing Deadline plan/revision/block projection. Exposing
 balance history would require a new snapshot contract version rather than a V2
 shape change.
@@ -426,6 +426,16 @@ expiry-failure result. Request validation, owner/request/row lock order,
 interrupted state, usage-ledger truth, replay output, signature, and grants are
 unchanged.
 
+Migration
+`20260813200057_retire_recommendations_and_decision_feedback.sql` erases stored
+Coach messages/selections and content-tombstones every existing request while
+retaining append-only usage identity. New free-agent claims use the
+service-role-only `claim_coach_request_v6` and exact V4/V3 prompt/snapshot pair;
+V5 and older free-agent claim wrappers are no longer executable. Controlled
+Coach V1/V2 claims, response-v1 completion, failure, and history deletion stay
+service-role-only and functional. Current evidence and used-context validators
+reject structured Recommendation or Decision Feedback sources.
+
 Application roles receive no new Coach write authority. Authenticated owners
 retain only the intended bounded reads. The FastAPI service role remains the
 only normal claim/complete/fail/delete mutation path.
@@ -447,7 +457,7 @@ returned.
 
 - Setup text, notes, memories, imported calendar content, earlier chat, SQL
   values, and Python output are data, never instructions.
-- `free-coach-agent-prompt-v3` requires English in every visible response field
+- `free-coach-agent-prompt-v4` requires English in every visible response field
   regardless of the question or stored-data language. Clearly German reply or
   uncertainty output fails as retryable `invalid_output` and is not stored as
   an assistant message.

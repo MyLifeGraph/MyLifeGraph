@@ -26,6 +26,7 @@ run_source_checks() {
   bash -n scripts/lib/goal_removal_migration_harness.sh
   bash -n scripts/lib/exam_plan_health_migration_harness.sh
   bash -n scripts/lib/multi_exam_plan_migration_harness.sh
+  bash -n scripts/lib/recommendation_retirement_migration_harness.sh
   bash -n scripts/backup_local_supabase.sh
   bash -n scripts/reset_local_supabase.sh
   bash -n scripts/test_local_supabase_migrations.sh
