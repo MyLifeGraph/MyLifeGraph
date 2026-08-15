@@ -3,6 +3,7 @@ services:
     name: mylifegraph-ai-staging
     runtime: python
     plan: free
+    region: frankfurt
     branch: new_backend_gh
     rootDir: services/ai_service
     buildCommand: pip install --require-hashes -r requirements.txt
@@ -11,6 +12,8 @@ services:
     envVars:
       - key: APP_ENV
         value: staging
+      - key: PYTHON_VERSION
+        value: 3.12.3
       - key: USE_MOCK_DATA
         value: "false"
       - key: COACH_PROVIDER

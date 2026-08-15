@@ -9,6 +9,10 @@ non-secret topology; hosted Supabase and service-role values remain platform
 secrets. The staging debug APK workflow reads GitHub Environment `staging`
 secrets into a mode-0600 temporary define file.
 
+The staging Render Blueprint pins the tested Python 3.12.3 runtime and the
+immutable Frankfurt service region; do not create the service from an older
+Blueprint that would fall back to Render's current defaults.
+
 Hosted Flutter builds use `scripts/write_hosted_flutter_defines.mjs` and fail
 before compiling unless `APP_ENV` is exactly `staging` or `production`,
 `USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, both Supabase client values
