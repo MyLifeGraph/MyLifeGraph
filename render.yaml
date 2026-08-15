@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: mylifegraph-ai-staging
+    runtime: python
+    plan: free
+    branch: new_backend_gh
+    rootDir: services/ai_service
+    buildCommand: pip install --require-hashes -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/health
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: USE_MOCK_DATA
+        value: "false"
+      - key: COACH_PROVIDER
+        value: disabled
+      - key: COACH_BYOK_PROVIDERS
+        value: openai,gemini
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
