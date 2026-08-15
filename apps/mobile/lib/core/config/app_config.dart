@@ -78,11 +78,11 @@ bool resolveCoachSurfaceEnabled({
   required bool releaseMode,
   String explicitValue = '',
 }) {
-  if (environment.trim().toLowerCase() == 'production' || releaseMode) {
-    return false;
-  }
-  if (explicitValue.isNotEmpty) {
+  final normalized = environment.trim().toLowerCase();
+  if (normalized == 'staging' || normalized == 'production') {
     return explicitValue == 'true';
   }
-  return true;
+  if (normalized != 'development') return false;
+  if (explicitValue.isNotEmpty) return explicitValue == 'true';
+  return !releaseMode;
 }

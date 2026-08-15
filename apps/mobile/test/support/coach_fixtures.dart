@@ -13,7 +13,7 @@ Map<String, dynamic> coachCapabilitiesJson({
   int remainingRequests = 19,
 }) =>
     {
-      'contract_version': 'coach-capabilities-v2',
+      'contract_version': 'coach-capabilities-v3',
       'state': state,
       'provider': provider,
       'provider_mode': providerMode,
@@ -22,6 +22,7 @@ Map<String, dynamic> coachCapabilitiesJson({
       'service_tier': serviceTier,
       'fast_mode': fastMode,
       'reason_code': reasonCode,
+      'tools': const ['inspect_data', 'query_data', 'run_python'],
       'limits': {
         'message_codepoints': 2000,
         'reply_codepoints': 4000,
@@ -65,7 +66,7 @@ Map<String, dynamic> coachResponseJson({
         },
       ];
   return {
-    'contract_version': 'coach-response-v2',
+    'contract_version': 'coach-response-v3',
     'request_id': requestId,
     'reply': reply,
     'uncertainty': {
@@ -96,7 +97,7 @@ Map<String, dynamic> coachResponseJson({
       'model_requested': null,
       'model_reported': null,
       'model_source': 'not_applicable',
-      'prompt_version': 'free-coach-agent-prompt-v4',
+      'prompt_version': 'free-coach-agent-prompt-v5',
       'context_version': 'personal-snapshot-v3',
       'generated_at': '2026-07-28T10:15:00Z',
       'provider_called': true,
@@ -113,7 +114,7 @@ Map<String, dynamic> coachHistoryJson({
   List<Map<String, dynamic>>? turns,
 }) =>
     {
-      'contract_version': 'coach-history-v2',
+      'contract_version': 'coach-history-v3',
       'turns': turns ??
           [
             {

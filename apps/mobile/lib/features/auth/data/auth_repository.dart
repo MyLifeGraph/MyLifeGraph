@@ -274,7 +274,8 @@ class AuthRepository {
 
 const nativeAuthCallbackUrl = 'com.mylifegraph.app://login-callback/';
 
-String authRedirectUrl() => kIsWeb ? Uri.base.origin : nativeAuthCallbackUrl;
+String authRedirectUrl() =>
+    kIsWeb ? '${Uri.base.origin}/' : nativeAuthCallbackUrl;
 
 bool usesLocalDemoAuthData({
   required bool useMockData,

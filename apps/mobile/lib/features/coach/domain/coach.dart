@@ -1,12 +1,16 @@
 import '../../../core/contracts/strict_contract.dart';
 
 const coachRequestContractVersion = 'coach-request-v3';
-const coachResponseContractVersion = 'coach-response-v2';
+const coachResponseContractVersion = 'coach-response-v3';
+const _previousCoachResponseContractVersion = 'coach-response-v2';
 const _legacyCoachResponseContractVersion = 'coach-response-v1';
-const coachCapabilitiesContractVersion = 'coach-capabilities-v2';
-const coachHistoryContractVersion = 'coach-history-v2';
-const coachAgentPromptVersion = 'free-coach-agent-prompt-v4';
-const _acceptedCoachAgentPromptVersions = {coachAgentPromptVersion};
+const coachCapabilitiesContractVersion = 'coach-capabilities-v3';
+const coachHistoryContractVersion = 'coach-history-v3';
+const coachAgentPromptVersion = 'free-coach-agent-prompt-v5';
+const _acceptedCoachAgentPromptVersions = {
+  'free-coach-agent-prompt-v4',
+  coachAgentPromptVersion,
+};
 const coachAgentContextVersion = 'personal-snapshot-v3';
 const coachMessageCodepoints = 2000;
 const coachReplyCodepoints = 4000;
@@ -30,7 +34,9 @@ enum CoachCapabilityState {
 enum CoachProviderName {
   disabled('disabled'),
   localCodexOauth('local_codex_oauth'),
-  fake('fake');
+  fake('fake'),
+  openai('openai'),
+  gemini('gemini');
 
   const CoachProviderName(this.code);
   final String code;
@@ -39,6 +45,8 @@ enum CoachProviderName {
         'disabled' => disabled,
         'local_codex_oauth' => localCodexOauth,
         'fake' => fake,
+        'openai' => openai,
+        'gemini' => gemini,
         _ => null,
       };
 }
@@ -124,6 +132,7 @@ class CoachCapabilities {
     required this.serviceTier,
     required this.fastMode,
     required this.reasonCode,
+    required this.tools,
     required this.limits,
   });
 
@@ -136,6 +145,7 @@ class CoachCapabilities {
         serviceTier: 'not_applicable',
         fastMode: false,
         reasonCode: 'local_demo',
+        tools: ['inspect_data', 'query_data', 'run_python'],
         limits: CoachAgentLimits(
           messageCodepoints: 2000,
           replyCodepoints: 4000,
@@ -163,6 +173,7 @@ class CoachCapabilities {
         'service_tier',
         'fast_mode',
         'reason_code',
+        'tools',
         'limits',
       },
       'Coach capabilities',
@@ -187,6 +198,7 @@ class CoachCapabilities {
       serviceTier: _text(json['service_tier'], 32),
       fastMode: fastMode,
       reasonCode: _text(json['reason_code'], 64),
+      tools: _stringList(json['tools'], 'tools'),
       limits: CoachAgentLimits.fromJson(_map(json['limits'], 'limits')),
     );
     switch (provider) {
@@ -209,6 +221,21 @@ class CoachCapabilities {
             result.fastMode) {
           throw const CoachContractException(
             'Fake Coach capabilities are invalid.',
+          );
+        }
+      case CoachProviderName.openai:
+      case CoachProviderName.gemini:
+        final expectedModel = provider == CoachProviderName.openai
+            ? 'gpt-5.6-terra'
+            : 'gemini-3.6-flash';
+        if (result.providerMode != 'user_supplied_key' ||
+            result.modelRequested != expectedModel ||
+            result.modelSource != 'explicit' ||
+            result.serviceTier != 'not_applicable' ||
+            result.fastMode ||
+            !_sameStrings(result.tools, const ['inspect_data', 'query_data'])) {
+          throw const CoachContractException(
+            'Cloud Coach capabilities are invalid.',
           );
         }
       case CoachProviderName.disabled:
@@ -241,6 +268,7 @@ class CoachCapabilities {
   final String serviceTier;
   final bool fastMode;
   final String reasonCode;
+  final List<String> tools;
   final CoachAgentLimits limits;
 
   bool get canRespond =>
@@ -549,6 +577,23 @@ class CoachProvenance {
             'Fake Coach provenance is invalid.',
           );
         }
+      case CoachProviderName.openai:
+      case CoachProviderName.gemini:
+        final expectedModel = provider == CoachProviderName.openai
+            ? 'gpt-5.6-terra'
+            : 'gemini-3.6-flash';
+        if (result.providerMode != 'user_supplied_key' ||
+            result.modelRequested != expectedModel ||
+            result.modelReported != null &&
+                result.modelReported != expectedModel ||
+            result.modelSource != 'explicit' ||
+            result.serviceTier != 'not_applicable' ||
+            result.serviceTierStatus != 'not_applicable' ||
+            result.fastMode) {
+          throw const CoachContractException(
+            'Cloud Coach provenance is invalid.',
+          );
+        }
       case CoachProviderName.disabled:
         if (result.providerMode != 'disabled' ||
             result.modelRequested != null ||
@@ -656,7 +701,10 @@ class CoachResponse {
       },
       'Coach response',
     );
-    if (json['contract_version'] != coachResponseContractVersion ||
+    if (!const {
+          coachResponseContractVersion,
+          _previousCoachResponseContractVersion,
+        }.contains(json['contract_version']) ||
         json['evidence'] is! List ||
         (json['evidence'] as List).length > 100) {
       throw const CoachContractException(
@@ -664,7 +712,7 @@ class CoachResponse {
       );
     }
     final result = CoachResponse(
-      contractVersion: coachResponseContractVersion,
+      contractVersion: json['contract_version'] as String,
       requestId: _uuidText(json['request_id']),
       reply: _text(json['reply'], coachReplyCodepoints),
       uncertainty: CoachUncertainty.fromJson(
@@ -935,8 +983,20 @@ class CoachContractException implements Exception {
 }
 
 bool _validAgentContractPair(String promptVersion, String contextVersion) =>
-    promptVersion == coachAgentPromptVersion &&
+    _acceptedCoachAgentPromptVersions.contains(promptVersion) &&
     contextVersion == coachAgentContextVersion;
+
+List<String> _stringList(Object? value, String name) {
+  if (value is! List || value.any((item) => item is! String)) {
+    throw CoachContractException('Coach $name is invalid.');
+  }
+  return List<String>.unmodifiable(value.cast<String>());
+}
+
+bool _sameStrings(List<String> left, List<String> right) =>
+    left.length == right.length &&
+    List.generate(left.length, (index) => left[index] == right[index])
+        .every((value) => value);
 
 Map<String, dynamic> _map(Object? value, String name) {
   return requireStrictMap(

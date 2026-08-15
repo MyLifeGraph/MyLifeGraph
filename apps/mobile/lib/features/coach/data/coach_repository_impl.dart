@@ -9,6 +9,7 @@ import '../domain/coach_repository.dart';
 import 'coach_api_data_source.dart';
 
 typedef CoachAccessTokenProvider = FutureOr<String?> Function();
+typedef CoachCredentialsProvider = CoachProviderCredentials? Function();
 
 class CoachRepositoryImpl implements CoachRepository {
   CoachRepositoryImpl({
@@ -17,24 +18,32 @@ class CoachRepositoryImpl implements CoachRepository {
     required CoachAccessTokenProvider accessTokenProvider,
     required bool isLocalDemo,
     required bool canAccessCoachBackend,
+    CoachCredentialsProvider? credentialsProvider,
   })  : _config = config,
         _api = apiDataSource,
         _accessTokenProvider = accessTokenProvider,
         _isLocalDemo = isLocalDemo,
-        _canAccessCoachBackend = canAccessCoachBackend;
+        _canAccessCoachBackend = canAccessCoachBackend,
+        _credentialsProvider = credentialsProvider ?? (() => null);
 
   final AppConfig _config;
   final CoachApiDataSource _api;
   final CoachAccessTokenProvider _accessTokenProvider;
   final bool _isLocalDemo;
   final bool _canAccessCoachBackend;
+  final CoachCredentialsProvider _credentialsProvider;
   CancelToken? _activeResponseCancellation;
 
   @override
   Future<CoachCapabilities> getCapabilities() async {
     if (_isLocalDemo) return CoachCapabilities.localDemo();
     _requireRemote();
-    return _api.getCapabilities(accessToken: await _requireToken());
+    final credentials = _credentials();
+    return _api.getCapabilities(
+      accessToken: await _requireToken(),
+      provider: credentials?.provider,
+      apiKey: credentials?.apiKey,
+    );
   }
 
   @override
@@ -54,6 +63,14 @@ class CoachRepositoryImpl implements CoachRepository {
       throw const CoachInputException('Coach request id is invalid.');
     }
     final request = CoachRequest(requestId: requestId, message: message);
+    final credentials = _credentials();
+    final environment = _config.environment.trim().toLowerCase();
+    if (credentials == null &&
+        const {'staging', 'production'}.contains(environment)) {
+      throw const CoachAccessException(
+        'Choose a Coach provider and test its API key in Settings first.',
+      );
+    }
     if (_activeResponseCancellation != null) {
       throw const CoachAccessException(
         'Another Coach response is already in progress.',
@@ -66,6 +83,8 @@ class CoachRepositoryImpl implements CoachRepository {
         accessToken: await _requireToken(),
         request: request,
         cancelToken: cancellation,
+        provider: credentials?.provider,
+        apiKey: credentials?.apiKey,
       )) {
         if (event is CoachStartedEvent && event.requestId != requestId) {
           throw const CoachContractException(
@@ -123,6 +142,21 @@ class CoachRepositoryImpl implements CoachRepository {
         'Coach requires an authenticated synced account.',
       );
     }
+  }
+
+  CoachProviderCredentials? _credentials() {
+    final credentials = _credentialsProvider();
+    if (credentials == null) return null;
+    final environment = _config.environment.trim().toLowerCase();
+    if (const {'staging', 'production'}.contains(environment)) {
+      final uri = Uri.tryParse(_config.aiServiceBaseUrl);
+      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+        throw const CoachAccessException(
+          'Coach keys require a configured HTTPS service address.',
+        );
+      }
+    }
+    return credentials;
   }
 
   Future<String> _requireToken() async {

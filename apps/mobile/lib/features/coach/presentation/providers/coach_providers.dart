@@ -5,6 +5,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
+import 'package:my_life_graph/composition/coach_credentials_providers.dart';
 import '../../application/coach_controller.dart';
 import '../../application/coach_turn_notice.dart';
 import '../../data/coach_api_data_source.dart';
@@ -35,6 +36,17 @@ final coachRepositoryProvider = Provider<CoachRepository>((ref) {
     accessTokenProvider: ref.watch(coachAccessTokenProvider),
     isLocalDemo: isLocalDemo,
     canAccessCoachBackend: canAccessCoachBackend,
+    credentialsProvider: () {
+      final credentials = ref.read(coachCredentialsProvider);
+      final key = credentials.activeKey;
+      if (credentials.profileId == null || key == null || key.isEmpty) {
+        return null;
+      }
+      return CoachProviderCredentials(
+        provider: credentials.provider,
+        apiKey: key,
+      );
+    },
   );
 });
 

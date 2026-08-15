@@ -16,11 +16,13 @@ class CoachApiDataSource {
 
   Future<CoachCapabilities> getCapabilities({
     required String accessToken,
+    CoachProviderName? provider,
+    String? apiKey,
   }) async {
     final json = await _guardRemote(
       () => _client.getJson(
         '/v1/coach/capabilities',
-        headers: _headers(accessToken),
+        headers: _headers(accessToken, provider: provider, apiKey: apiKey),
       ),
     );
     return CoachCapabilities.fromJson(json);
@@ -40,12 +42,14 @@ class CoachApiDataSource {
     required String accessToken,
     required CoachRequest request,
     required CancelToken cancelToken,
+    CoachProviderName? provider,
+    String? apiKey,
   }) async* {
     final body = await _guardStream(
       () => _client.postStream(
         '/v1/coach/respond/stream',
         headers: {
-          ..._headers(accessToken),
+          ..._headers(accessToken, provider: provider, apiKey: apiKey),
           'Accept': 'text/event-stream',
         },
         body: request.toJson(),
@@ -68,9 +72,22 @@ class CoachApiDataSource {
     return CoachHistoryDeleteResult.fromJson(json);
   }
 
-  Map<String, String> _headers(String accessToken) => {
-        'Authorization': 'Bearer $accessToken',
-      };
+  Map<String, String> _headers(
+    String accessToken, {
+    CoachProviderName? provider,
+    String? apiKey,
+  }) {
+    if ((provider == null) != (apiKey == null)) {
+      throw const CoachInputException(
+        'Coach provider and API key must be supplied together.',
+      );
+    }
+    return {
+      'Authorization': 'Bearer $accessToken',
+      if (provider != null) 'X-MyLifeGraph-Coach-Provider': provider.code,
+      if (apiKey != null) 'X-MyLifeGraph-Coach-Api-Key': apiKey,
+    };
+  }
 }
 
 const _maxCoachStreamBytes = 512 * 1024;

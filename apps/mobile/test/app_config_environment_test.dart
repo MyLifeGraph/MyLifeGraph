@@ -26,7 +26,7 @@ void main() {
     );
   });
 
-  test('development may opt in but production and release cannot', () {
+  test('staging and production require an exact explicit opt in', () {
     expect(
       resolveCoachSurfaceEnabled(
         environment: 'development',
@@ -35,14 +35,14 @@ void main() {
       ),
       isTrue,
     );
-    for (final environment in ['production', ' PRODUCTION ']) {
+    for (final environment in ['production', ' PRODUCTION ', 'staging']) {
       expect(
         resolveCoachSurfaceEnabled(
           environment: environment,
           releaseMode: false,
           explicitValue: 'true',
         ),
-        isFalse,
+        isTrue,
       );
     }
     expect(
@@ -51,7 +51,7 @@ void main() {
         releaseMode: true,
         explicitValue: 'true',
       ),
-      isFalse,
+      isTrue,
     );
     for (final value in ['false', 'TRUE', '1', 'invalid']) {
       expect(

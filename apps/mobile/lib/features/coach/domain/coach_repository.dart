@@ -1,5 +1,15 @@
 import 'coach.dart';
 
+class CoachProviderCredentials {
+  const CoachProviderCredentials({
+    required this.provider,
+    required this.apiKey,
+  });
+
+  final CoachProviderName provider;
+  final String apiKey;
+}
+
 abstract interface class CoachRepository {
   Future<CoachCapabilities> getCapabilities();
 

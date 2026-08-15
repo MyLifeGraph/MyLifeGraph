@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/coach_credentials_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -16,6 +17,8 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../../core/widgets/app_surface.dart';
 import '../../../focus_protection/application/focus_protection_gateway.dart';
+import '../../../coach/application/coach_credentials_controller.dart';
+import '../../../coach/domain/coach.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../domain/account_settings.dart';
@@ -183,8 +186,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         const AppSectionHeader(
           title: 'Tools and connections',
-          description:
-              'Inbox, reminders, calendar import, and optional tools.',
+          description: 'Inbox, reminders, calendar import, and optional tools.',
         ),
         AppCard(
           padding: EdgeInsets.zero,
@@ -215,19 +217,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 : null,
           ),
         ),
-        if (capabilities.canShowCoachSurface)
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: ListTile(
-              leading: const Icon(AppIcons.forumOutlined),
-              title: const Text('Coach'),
-              subtitle: const Text(
-                'Development preview only. Cannot change your data.',
-              ),
-              trailing: const Icon(AppIcons.chevronRight),
-              onTap: () => context.push(AppRoutes.coach),
-            ),
-          ),
+        if (capabilities.canShowCoachSurface) const _CoachByokSettingsCard(),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
@@ -583,6 +573,163 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         setState(() => _isSigningOut = false);
       }
     }
+  }
+}
+
+class _CoachByokSettingsCard extends ConsumerStatefulWidget {
+  const _CoachByokSettingsCard();
+
+  @override
+  ConsumerState<_CoachByokSettingsCard> createState() =>
+      _CoachByokSettingsCardState();
+}
+
+class _CoachByokSettingsCardState
+    extends ConsumerState<_CoachByokSettingsCard> {
+  final _openAiController = TextEditingController();
+  final _geminiController = TextEditingController();
+
+  @override
+  void dispose() {
+    _openAiController.dispose();
+    _geminiController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    late final CoachCredentials credentials;
+    try {
+      credentials = ref.watch(coachCredentialsProvider);
+    } on StateError {
+      return AppCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: const Icon(AppIcons.forumOutlined),
+          title: const Text('Coach'),
+          subtitle: const Text('Read-only Coach and provider keys.'),
+          trailing: const Icon(AppIcons.chevronRight),
+          onTap: () => context.push(AppRoutes.coach),
+        ),
+      );
+    }
+    final selected = credentials.provider;
+    final input = selected == CoachProviderName.openai
+        ? _openAiController
+        : _geminiController;
+    final hasKey = credentials.hasKey(selected);
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: ExpansionTile(
+        key: const ValueKey('settings-coach-provider'),
+        leading: const Icon(AppIcons.forumOutlined),
+        title: const Text('Coach'),
+        subtitle: const Text('Read-only Coach and provider keys.'),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
+        children: [
+          DropdownButtonFormField<CoachProviderName>(
+            key: const ValueKey('coach-provider-selection'),
+            initialValue: selected,
+            decoration: const InputDecoration(labelText: 'Provider'),
+            items: const [
+              DropdownMenuItem(
+                value: CoachProviderName.openai,
+                child: Text('OpenAI'),
+              ),
+              DropdownMenuItem(
+                value: CoachProviderName.gemini,
+                child: Text('Gemini'),
+              ),
+            ],
+            onChanged: credentials.busy
+                ? null
+                : (value) {
+                    if (value != null) {
+                      ref.read(coachCredentialsProvider.notifier).select(value);
+                    }
+                  },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            key: ValueKey('coach-key-${selected.code}'),
+            controller: input,
+            obscureText: true,
+            enableSuggestions: false,
+            autocorrect: false,
+            decoration: InputDecoration(
+              labelText: hasKey ? 'Replacement API key' : 'API key',
+              helperText: hasKey
+                  ? 'A tested key is saved on this device.'
+                  : 'No key is saved for this provider.',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              FilledButton(
+                key: const ValueKey('coach-key-test-save'),
+                onPressed: credentials.busy
+                    ? null
+                    : () async {
+                        final saved = await ref
+                            .read(coachCredentialsProvider.notifier)
+                            .testAndSave(selected, input.text);
+                        if (saved && context.mounted) {
+                          input.clear();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Provider key tested and saved.'),
+                            ),
+                          );
+                        }
+                      },
+                child: Text(hasKey ? 'Test and replace' : 'Test and save'),
+              ),
+              if (hasKey)
+                OutlinedButton(
+                  key: const ValueKey('coach-key-delete'),
+                  onPressed: credentials.busy
+                      ? null
+                      : () => ref
+                          .read(coachCredentialsProvider.notifier)
+                          .delete(selected),
+                  child: const Text('Delete key'),
+                ),
+            ],
+          ),
+          if (credentials.error case final error?) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              error,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => context.push(AppRoutes.coach),
+              child: const Text('Open Coach'),
+            ),
+          ),
+          Text(
+            'Provider requests may cost money. Relevant results from your '
+            'read-only Coach query are sent to the selected provider. On web, '
+            'keys exist only in this tab and are cleared by reload.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
   }
 }
 
