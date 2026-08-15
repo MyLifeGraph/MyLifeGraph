@@ -2,6 +2,14 @@
 
 Flutter client for the AI Personal Coach / MyLifeGraph product.
 
+Coach BYOK V3 is the current public surface. `coach-capabilities-v3`,
+`coach-response-v3`, and `coach-history-v3` use
+`free-coach-agent-prompt-v5`; stored V1/V2 responses remain readable. OpenAI
+and Gemini keys are profile-scoped: Android uses encrypted device storage,
+while web keeps keys only in tab memory. Capabilities tests a replacement
+before it becomes active. Staging and production expose Coach only with exact
+`COACH_SURFACE_ENABLED=true` and send keys only to a configured HTTPS AI URL.
+
 Feature code keeps its data and presentation internals private. Riverpod
 factories or widgets that deliberately wire multiple features live under
 `lib/composition`; feature application/domain contracts remain directly

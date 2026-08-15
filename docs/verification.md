@@ -1,5 +1,14 @@
 # Verification And Agent Automation
 
+Coach BYOK changes require mocked provider contract tests (including
+`store:false`, tool replay, invalid credentials/output, rate limits, timeout,
+no fallback, and parallel key isolation), Flutter credential lifecycle tests,
+the local Supabase migration/pgTAP gate, and the normal affected selector. A
+provider live turn, remote migration, OAuth dashboard change, hosted staging
+smoke, and installed-device smoke are separate evidence and must not be
+inferred from repository tests.
+The checked current prompt is `free-coach-agent-prompt-v5`.
+
 This is the current runbook for choosing and running repository verification,
 recording checkout evidence, understanding CI, and tracking present automation
 gaps. Dated superseded results are preserved in
@@ -11,35 +20,31 @@ contract. Test source or a historical pass is not current evidence.
 
 ## Current Verified Baseline
 
-The P7 generic Recommendation and Decision Feedback retirement working tree was
-verified locally on 2026-08-14 against task base
-`70828e1530a499a3663ea48dac622ea97aac8bd4`. Documentation consistency passed
-for 52 Markdown files and 78 FastAPI routes; the Visual contract, Flutter
-analysis, all 1,051 Flutter tests, the Flutter web build, Ruff, Python
-compilation, and `1543 passed, 2 skipped` FastAPI tests passed. The physically
-isolated Recommendation-retirement harness proved one real `55P03` rollback,
-53 transition assertions, and 368 final-state assertions across 15 pgTAP files
-while preserving a SHA-256 over every ordered normal-history `version`, `name`,
-and `statements` fact. The reviewed P4, P5, and P7 migrations were subsequently
-applied to the exact normal local database through the separate explicit apply
-gate. A following default `npm run verify:db`, without apply authority,
-confirmed matching history, every isolated harness, and all 368 normal pgTAP
-assertions. All eight independent browser journeys then passed against that
-same local checkout and removed their temporary Auth identities. No reset, remote mutation,
-deployment, push, real model call, or installed-device check occurred.
+The Coach BYOK working tree was verified locally on 2026-08-15 against task
+base `95e65aa4547c28ec0dd01162d6c9ec2ecf0bfd16`. The affected selector chose the
+Full lane. Documentation consistency passed for 92 Markdown files and 78
+FastAPI routes; the Visual contract, Flutter analysis, all 1,055 Flutter tests,
+the Flutter web build, Ruff, Python compilation, and `1555 passed, 2 skipped`
+FastAPI tests passed. The isolated migration chains and both the isolated and
+normal final states passed 375 assertions across 16 pgTAP files. All eight
+independent browser journeys passed on alternate owned loopback ports and
+removed their temporary Auth identities. Android JVM tests, lint, and a local
+debug APK build passed. The separately enabled local Codex smoke passed once.
+No reset, remote mutation, hosted deployment, OpenAI/Gemini live turn, or
+installed-device check occurred.
 
 The latest recorded lane evidence for this checkout is:
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Docs, visual, Flutter, FastAPI, and web | On 2026-08-14, the P7 working tree passed Docs, Visual, Flutter analysis, all 1,051 Flutter tests, the web build, Ruff/compile, and `1543 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
+| Docs, visual, Flutter, FastAPI, and web | On 2026-08-15, the BYOK working tree passed Docs, Visual, Flutter analysis, all 1,055 Flutter tests, the web build, Ruff/compile, and `1555 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
 | Representative browser smoke | On 2026-08-11, all four profile-mode Setup, Auth/Capture/Today, Planner-confirmation, and fake-Coach journeys passed and removed their temporary Auth identities. | Deterministic local browser integration only. |
-| Database transition/final state | On 2026-08-14, the isolated Goal, Exam Health, Multi-Exam, and P7 chains passed `27`, `6`, `104` twice, and `53 + 368` assertions. After the separately authorized normal apply, default `npm run verify:db` confirmed matching history and all 368 normal pgTAP assertions. | Physically isolated RAM-only transition targets plus the exact normal local database; no reset or remote state. |
-| Full browser | On 2026-08-14, the full eight-journey profile-mode suite passed and removed every temporary Auth identity. | Deterministic local browser integration against the P7 working tree only. |
-| Android source/build | On 2026-08-02, Android JVM/lint and debug APK gates passed. | No current installed-device or OEM behavior claim. |
+| Database transition/final state | On 2026-08-15, the isolated Goal, Exam Health, Multi-Exam, and Recommendation-retirement chains passed, followed by all 375 final-state assertions in isolated and normal local databases. | Physically isolated RAM-only transition targets plus the exact normal local database; no reset or remote state. |
+| Full browser | On 2026-08-15, the full eight-journey profile-mode suite passed and removed every temporary Auth identity. | Deterministic local browser integration against the BYOK working tree only. |
+| Android source/build | On 2026-08-15, Android JVM/lint and a debug APK build passed. | Debug signing only; no current installed-device or OEM behavior claim. |
 | Local database safety | On 2026-08-05, a full archive restore-verification and the reset preview passed; destructive reset execution was not run. | The ignored local archive and exact local database only. |
 | Demo seed | On 2026-08-04, the four local demo identities were recreated and the enriched Student fixture passed its focused verification. | Not a remote seed or full-product gate. |
-| Real local Coach provider | On 2026-08-10, a disposable local account completed a rendered turn through the explicitly enabled `local_codex_oauth` path. | Exact machine, CLI, image, login, account, and date only; not a production provider. |
+| Real local Coach provider | On 2026-08-15, the explicit local `local_codex_oauth` multi-tool smoke passed once. | Exact machine, CLI, image, login, account, and date only; not a production provider. |
 
 Product lanes above remain lane-specific evidence; they are not permission to
 claim remote migration state, deployment, installed-device behavior,

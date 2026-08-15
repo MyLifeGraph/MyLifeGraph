@@ -3,6 +3,15 @@
 FastAPI service boundary for deterministic planning, learning, and Coach
 workflows.
 
+The current BYOK extension publishes `coach-capabilities-v3`,
+`coach-response-v3`, and `coach-history-v3` with
+`free-coach-agent-prompt-v5`. `X-MyLifeGraph-Coach-Provider` and
+`X-MyLifeGraph-Coach-Api-Key` are accepted only by capabilities and response
+routes. OpenAI (`gpt-5.6-terra`) and Gemini (`gemini-3.6-flash`) are enabled
+only through `COACH_BYOK_PROVIDERS`; keys are request-local and are never
+persisted, logged, traced, or returned. History and deletion never accept or
+need provider keys. Response V1/V2 rows remain readable.
+
 ## Current Status
 
 - The service is optional for the default mock-data Flutter preview.

@@ -1,5 +1,9 @@
 # Frontend Visual System V2
 
+The Coach provider/key controls use the existing Settings card, field,
+dropdown, button, spacing, and error-text primitives; they introduce no new
+visual token or icon family.
+
 Status: implemented repository visual contract for Flutter Web and Android as
 of 2026-08-01.
 

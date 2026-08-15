@@ -1,5 +1,9 @@
 # Account Controls Contract
 
+Coach provider keys are device-local account material, not exportable product
+data. Logout, account deletion, or a profile change clears in-memory state
+immediately and deletes both provider keys for the previous profile.
+
 This document defines the first complete account-management boundary for a
 real authenticated MyLifeGraph account. It covers profile timezone changes, an
 optional account-wide daily preparation budget, portable JSON export, password

@@ -1,5 +1,22 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+## BYOK V3 extension (current)
+
+The public contracts are now `coach-capabilities-v3`, `coach-response-v3`,
+and `coach-history-v3`, paired with `coach-request-v3`,
+`personal-snapshot-v3`, and `free-coach-agent-prompt-v5`. Persisted
+`coach-response-v1|v2` rows remain readable. OpenAI uses the Responses API and
+exact `gpt-5.6-terra`; Gemini uses the Interactions API and exact
+`gemini-3.6-flash`. Both loops set `store:false`, replay only the bounded
+current tool exchange, and expose `inspect_data` and `query_data`. Only private
+development Codex additionally exposes isolated `run_python`.
+
+The client supplies provider and API key in request headers only for
+capabilities and response. FastAPI constructs a provider per request, has no
+operator-key or fallback path, and does not persist or emit keys. The new
+service-role-only `claim_coach_request_v7` preserves the established advisory
+locks, retry identity, daily limit, append-only usage, RLS, and grants.
+
 ## Status
 
 The development-only Coach is implemented as a free-question, read-only

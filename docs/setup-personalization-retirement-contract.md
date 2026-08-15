@@ -1,5 +1,9 @@
 # Setup Personalization Retirement Contract
 
+Coach BYOK V3 preserves this retirement: provider prompts and read-only tools
+do not recreate retired Setup Goals, recommendations, or feedback fields.
+This remains true for `free-coach-agent-prompt-v5`.
+
 Status: current; the original retirement landed on 2026-07-25 and Goals were
 fully removed on 2026-08-04.
 

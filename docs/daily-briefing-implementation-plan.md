@@ -1,5 +1,11 @@
 # Daily Briefing Implementation Plan
 
+Coach BYOK V3 does not change Daily Briefing authority: cloud tools may read
+the authenticated owner's bounded projection, but neither provider may create
+or mutate briefings, recommendations, feedback, or any other product record.
+The current Coach projection boundary is `coach-response-v3` with
+`free-coach-agent-prompt-v5`.
+
 Status: historical phase plan with a current product-disposition summary,
 updated through Planner V1, Today Overview V2, Study Setup V1, and the Setup
 personalization retirement, Daily Capture V4, and Exam-Week Outlook V1 on

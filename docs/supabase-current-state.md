@@ -1,5 +1,14 @@
 # Supabase Current State
 
+The BYOK migrations are `20260815075711_coach_byok_provider_v1.sql` and the
+latest `20260815082606_coach_byok_completion_dispatch_v1.sql`. They add OpenAI/Gemini
+`user_supplied_key` provenance, the service-role-only
+`claim_coach_request_v7`, and strict response-V3 validation while retaining
+V1/V2 response compatibility. It adds no key column: provider API keys never
+enter Postgres. V6 execution is revoked; RLS, explicit grants, advisory-lock
+order, retry identity, and append-only usage boundaries remain unchanged.
+Current rows use `coach-response-v3` with `free-coach-agent-prompt-v5`.
+
 This document captures the repository state, not the live remote Supabase
 project state. The repo does not contain credentials, so a live remote database
 must be inspected through the Supabase dashboard or CLI by someone with access.
@@ -1241,7 +1250,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260813200057_retire_recommendations_and_decision_feedback.sql
+20260815082606_coach_byok_completion_dispatch_v1.sql
 ```
 
 Then configure `.env` with:

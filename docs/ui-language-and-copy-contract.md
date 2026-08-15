@@ -1,5 +1,10 @@
 # UI Language And Copy Contract
 
+Coach provider settings must state that provider requests may cost money and
+that relevant read-only Coach query results are sent to the selected provider.
+Web copy must say keys live only in the current tab and disappear on reload.
+Failed replacement testing must explicitly say the previous key is unchanged.
+
 Status: implemented V1 product-copy contract, including the current
 Coach-enabled shell, Exam-Week Outlook, and Personal Learning terminology, as
 of 2026-07-26.

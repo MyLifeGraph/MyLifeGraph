@@ -1,5 +1,16 @@
 # Architecture
 
+Coach BYOK V3 keeps provider secrets at the client/device and in one FastAPI
+request only. FastAPI exports the authenticated owner's bounded SQLite
+snapshot, executes `inspect_data`/`query_data` locally, and sends only bounded
+tool results to OpenAI or Gemini. Cloud providers never receive the SQLite
+file and never receive `run_python`; the private development Codex provider
+retains the isolated Python tool. Supabase stores request provenance and
+usage, never API keys. The V3 response/history/capabilities contracts retain
+read compatibility for persisted V1/V2 responses.
+The named versions are `coach-capabilities-v3`, `coach-history-v3`,
+`coach-response-v3`, and `free-coach-agent-prompt-v5`.
+
 Android Focus Protection V1 adds a device-local adapter below the existing
 Flutter Focus presentation. Supabase remains the session authority; Flutter
 reconciles confirmed session identity and timing through an injectable channel,

@@ -102,7 +102,7 @@
     {
       "coverage": "shared_named",
       "key": "coachCapabilities",
-      "version": "coach-capabilities-v2",
+      "version": "coach-capabilities-v3",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -110,7 +110,7 @@
         },
         {
           "path": "services/ai_service/app/models/coach.py",
-          "symbol": "COACH_CAPABILITIES_V2_CONTRACT_VERSION"
+          "symbol": "COACH_CAPABILITIES_V3_CONTRACT_VERSION"
         }
       ],
       "owners": [
@@ -152,7 +152,7 @@
     {
       "coverage": "shared_named",
       "key": "coachHistory",
-      "version": "coach-history-v2",
+      "version": "coach-history-v3",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -160,7 +160,7 @@
         },
         {
           "path": "services/ai_service/app/models/coach.py",
-          "symbol": "COACH_HISTORY_V2_CONTRACT_VERSION"
+          "symbol": "COACH_HISTORY_V3_CONTRACT_VERSION"
         }
       ],
       "owners": [
@@ -173,7 +173,7 @@
     {
       "coverage": "shared_named",
       "key": "coachPrompt",
-      "version": "free-coach-agent-prompt-v4",
+      "version": "free-coach-agent-prompt-v5",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -223,7 +223,7 @@
     {
       "coverage": "shared_named",
       "key": "coachResponse",
-      "version": "coach-response-v2",
+      "version": "coach-response-v3",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -231,7 +231,7 @@
         },
         {
           "path": "services/ai_service/app/models/coach.py",
-          "symbol": "COACH_RESPONSE_V2_CONTRACT_VERSION"
+          "symbol": "COACH_RESPONSE_V3_CONTRACT_VERSION"
         }
       ],
       "owners": [

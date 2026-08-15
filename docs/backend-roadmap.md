@@ -1,5 +1,13 @@
 # Backend Roadmap
 
+Current Coach delivery adds production-ready per-request BYOK plumbing for
+OpenAI and Gemini behind an empty-by-default `COACH_BYOK_PROVIDERS` allowlist.
+There is no operator-key or automatic-fallback path. The local Codex OAuth
+provider remains development/self-hosted only.
+The synchronized public versions are `coach-capabilities-v3`,
+`coach-history-v3`, `coach-response-v3`, and
+`free-coach-agent-prompt-v5`.
+
 This document is the source of truth for the intended backend flow and the next
 implementation sequence. It describes the target product architecture, the
 background service roles, the data model direction, and how to keep LLM usage

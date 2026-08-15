@@ -1,5 +1,14 @@
 # Local Development
 
+For a local BYOK-compatible backend, set `COACH_BYOK_PROVIDERS=openai,gemini`;
+do not place OpenAI or Gemini keys in `.env`. Keys arrive per capabilities or
+response request and are not used by history/deletion. Staging/production
+Flutter builds require `COACH_SURFACE_ENABLED=true` and an HTTPS
+`AI_SERVICE_BASE_URL`. `render.yaml` and the Vercel build script contain only
+non-secret topology; hosted Supabase and service-role values remain platform
+secrets. The staging debug APK workflow reads GitHub Environment `staging`
+secrets into a mode-0600 temporary define file.
+
 ## Android SDK 36 And Wireless Device Setup
 
 Android Focus Protection uses compile/target SDK 36 and minSdk 24. Keep the
