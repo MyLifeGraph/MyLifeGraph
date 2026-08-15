@@ -9,6 +9,45 @@ non-secret topology; hosted Supabase and service-role values remain platform
 secrets. The staging debug APK workflow reads GitHub Environment `staging`
 secrets into a mode-0600 temporary define file.
 
+Hosted Flutter builds use `scripts/write_hosted_flutter_defines.mjs` and fail
+before compiling unless `APP_ENV` is exactly `staging` or `production`,
+`USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, both Supabase client values
+are present, and Supabase/FastAPI URLs are credential-free HTTPS endpoints.
+Neither the helper nor CI prints the resulting values.
+
+## Remote Staging Verification
+
+`npm run verify:staging:remote` is the only supported remote two-user harness.
+It is deliberately separate from local E2E and has no reset, migration, sweep,
+or arbitrary cleanup authority. Preview binds approval to the exact project
+ref, Supabase host, FastAPI host, and expected migration:
+
+```bash
+STAGING_PROJECT_REF=<exact-project-ref> \
+STAGING_SUPABASE_URL=https://<exact-project-ref>.supabase.co \
+STAGING_AI_SERVICE_BASE_URL=https://<render-service-host> \
+npm run verify:staging:remote
+```
+
+Only the confirmed run additionally receives
+`STAGING_SUPABASE_PUBLISHABLE_KEY` and
+`STAGING_SUPABASE_SERVICE_ROLE_KEY` from the caller environment. Never place
+those values in command arguments, chat, fixtures, or documentation. Pass the
+fresh preview fingerprint back exactly:
+
+```bash
+npm run verify:staging:remote -- --confirm staging-target-<fingerprint>
+```
+
+The run creates two unique confirmed Auth users, completes minimal Setup,
+persists an owned task, habit, timetable item, Focus session and Daily Capture,
+generates a snapshot and briefing, checks owner/foreign Data API reads plus
+foreign insert/update/delete rejection, checks a foreign FastAPI Focus update,
+checks Today/Planner/Briefing/Coach reads through FastAPI, deletes Coach history
+without a provider key, and finally deletes only its two recorded Auth UUIDs.
+Cleanup is verified through the Auth Admin API. A cleanup failure fails the
+run. No OpenAI or Gemini turn is made.
+
 ## Android SDK 36 And Wireless Device Setup
 
 Android Focus Protection uses compile/target SDK 36 and minSdk 24. Keep the

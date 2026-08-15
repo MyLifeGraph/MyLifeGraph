@@ -36,12 +36,15 @@ jobs:
 
       - name: Prepare protected staging defines
         env:
+          APP_ENV: staging
+          USE_MOCK_DATA: "false"
+          COACH_SURFACE_ENABLED: "true"
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           AI_SERVICE_BASE_URL: ${{ secrets.AI_SERVICE_BASE_URL }}
         run: |
           export MLG_DEFINES_FILE="$RUNNER_TEMP/mylifegraph-staging-defines.json"
-          node -e 'const fs=require("fs"); fs.writeFileSync(process.env.MLG_DEFINES_FILE, JSON.stringify({APP_ENV:"staging",USE_MOCK_DATA:"false",COACH_SURFACE_ENABLED:"true",SUPABASE_URL:process.env.SUPABASE_URL||"",SUPABASE_ANON_KEY:process.env.SUPABASE_ANON_KEY||"",AI_SERVICE_BASE_URL:process.env.AI_SERVICE_BASE_URL||""}), {mode:0o600})'
+          node scripts/write_hosted_flutter_defines.mjs "$MLG_DEFINES_FILE"
 
       - name: Build debug APK
         working-directory: apps/mobile

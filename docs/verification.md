@@ -20,24 +20,27 @@ contract. Test source or a historical pass is not current evidence.
 
 ## Current Verified Baseline
 
-The Coach BYOK working tree was verified locally on 2026-08-15 against task
-base `95e65aa4547c28ec0dd01162d6c9ec2ecf0bfd16`. The affected selector chose the
-Full lane. Documentation consistency passed for 92 Markdown files and 78
-FastAPI routes; the Visual contract, Flutter analysis, all 1,055 Flutter tests,
-the Flutter web build, Ruff, Python compilation, and `1555 passed, 2 skipped`
-FastAPI tests passed. The isolated migration chains and both the isolated and
-normal final states passed 375 assertions across 16 pgTAP files. All eight
-independent browser journeys passed on alternate owned loopback ports and
-removed their temporary Auth identities. Android JVM tests, lint, and a local
-debug APK build passed. The separately enabled local Codex smoke passed once.
-No reset, remote mutation, hosted deployment, OpenAI/Gemini live turn, or
-installed-device check occurred.
+The staging-hardening working tree was verified locally on 2026-08-15 against
+task base `ed00d8024bce75bc94d8d7d9bb80a5a3ff2d7313`. The affected selector
+chose the Full lane. Documentation consistency passed for 92 Markdown files and
+78 FastAPI routes; the Visual contract, Flutter analysis, all 1,055 Flutter
+tests, the Flutter web build, Ruff, Python compilation, and `1555 passed, 2
+skipped` FastAPI tests passed. The isolated migration chains and both the
+isolated and normal final states passed 375 assertions across 16 pgTAP files.
+The selector's first browser start refused an occupied port as designed; all
+eight independent journeys then passed on alternate owned loopback ports and
+removed their temporary Auth identities. A local debug APK also built through
+the new hosted-define helper with non-secret test values. Android JVM/lint and
+the local Codex smoke remain the preceding BYOK baseline because their source
+did not change in this follow-up. No reset, hosted deployment, OpenAI/Gemini
+live turn, or installed-device check occurred during this local gate. A
+separate dated staging migration audit is recorded below.
 
 The latest recorded lane evidence for this checkout is:
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Docs, visual, Flutter, FastAPI, and web | On 2026-08-15, the BYOK working tree passed Docs, Visual, Flutter analysis, all 1,055 Flutter tests, the web build, Ruff/compile, and `1555 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
+| Docs, visual, Flutter, FastAPI, and web | On 2026-08-15, the staging-hardening working tree passed Docs, Visual, Flutter analysis, all 1,055 Flutter tests, the web build, Ruff/compile, and `1555 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
 | Representative browser smoke | On 2026-08-11, all four profile-mode Setup, Auth/Capture/Today, Planner-confirmation, and fake-Coach journeys passed and removed their temporary Auth identities. | Deterministic local browser integration only. |
 | Database transition/final state | On 2026-08-15, the isolated Goal, Exam Health, Multi-Exam, and Recommendation-retirement chains passed, followed by all 375 final-state assertions in isolated and normal local databases. | Physically isolated RAM-only transition targets plus the exact normal local database; no reset or remote state. |
 | Full browser | On 2026-08-15, the full eight-journey profile-mode suite passed and removed every temporary Auth identity. | Deterministic local browser integration against the BYOK working tree only. |
@@ -45,6 +48,7 @@ The latest recorded lane evidence for this checkout is:
 | Local database safety | On 2026-08-05, a full archive restore-verification and the reset preview passed; destructive reset execution was not run. | The ignored local archive and exact local database only. |
 | Demo seed | On 2026-08-04, the four local demo identities were recreated and the enriched Student fixture passed its focused verification. | Not a remote seed or full-product gate. |
 | Real local Coach provider | On 2026-08-15, the explicit local `local_codex_oauth` multi-tool smoke passed once. | Exact machine, CLI, image, login, account, and date only; not a production provider. |
+| Remote Supabase staging | On 2026-08-15, the approved project `oscrunlndfrecjilojja` was backed up locally, its whitespace-identical remote-only migration timestamp was repaired, all 59 canonical migrations were applied, and MCP verified the `20260815082606` boundary, 63/63 forced-RLS public tables, 100 policies, BYOK constraints, and service-role-only V7 claim RPC. | Database migration/audit only; the backup was structurally checked but not restore-rehearsed, and hosted two-user, OAuth, Render/Vercel, provider-live, and production checks remain open. |
 
 Product lanes above remain lane-specific evidence; they are not permission to
 claim remote migration state, deployment, installed-device behavior,
@@ -582,9 +586,10 @@ gate until that hosted job succeeds.
 - Calendar coverage uses selected local `.ics` bytes, not provider OAuth,
   refresh/revocation, URL fetch, live sync, provider writes, or native picker
   behavior.
-- The Coach's real provider remains local-development-only; another Linux user,
-  production isolation/provider, and autonomous answer-quality evaluation are
-  not established by deterministic tests.
+- OpenAI/Gemini BYOK adapters are covered by deterministic HTTP mocks but have
+  no live-key turn. The local Codex provider remains development-only; hosted
+  backend isolation and autonomous answer-quality evaluation are not yet
+  established.
 - The manual student usability study and longitudinal product-outcome evidence
   remain unrun.
 

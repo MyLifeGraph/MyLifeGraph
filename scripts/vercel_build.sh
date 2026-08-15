@@ -27,7 +27,6 @@ cd apps/mobile
 "${FLUTTER_BIN}" pub get
 MLG_DEFINES_FILE="$(mktemp)"
 trap 'rm -f "${MLG_DEFINES_FILE}"' EXIT
-export MLG_DEFINES_FILE
-node -e 'const fs=require("fs"); fs.writeFileSync(process.env.MLG_DEFINES_FILE, JSON.stringify({APP_ENV:process.env.APP_ENV||"production",USE_MOCK_DATA:process.env.USE_MOCK_DATA||"false",SUPABASE_URL:process.env.SUPABASE_URL||"",SUPABASE_ANON_KEY:process.env.SUPABASE_ANON_KEY||"",AI_SERVICE_BASE_URL:process.env.AI_SERVICE_BASE_URL||"",COACH_SURFACE_ENABLED:process.env.COACH_SURFACE_ENABLED||""}))'
+node ../../scripts/write_hosted_flutter_defines.mjs "${MLG_DEFINES_FILE}"
 "${FLUTTER_BIN}" build web --release --no-wasm-dry-run --base-href=/ \
   --dart-define-from-file="${MLG_DEFINES_FILE}"

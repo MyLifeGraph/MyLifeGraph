@@ -174,6 +174,7 @@ export const DOCS_IMPACT_RULES = [
       /^scripts\/check_docs_consistency(?:\.test)?\.mjs$/,
       /^scripts\/e2e_web\.sh$/,
       /^scripts\/verify\.sh$/,
+      /^scripts\/verify_staging_remote(?:\.test)?\.mjs$/,
       /^scripts\/verify_supabase_local\.sh$/,
     ],
     requiredAll: ['docs/verification.md'],

@@ -9,9 +9,44 @@ enter Postgres. V6 execution is revoked; RLS, explicit grants, advisory-lock
 order, retry identity, and append-only usage boundaries remain unchanged.
 Current rows use `coach-response-v3` with `free-coach-agent-prompt-v5`.
 
-This document captures the repository state, not the live remote Supabase
-project state. The repo does not contain credentials, so a live remote database
-must be inspected through the Supabase dashboard or CLI by someone with access.
+This document primarily captures repository state; a live remote database must
+never be inferred from migration source alone. One explicitly inspected staging
+target is recorded below as dated evidence. Production remains uninspected, and
+the repository contains no credentials.
+
+## Confirmed Staging State (2026-08-15)
+
+The existing `MyLifeGraph` project at ref `oscrunlndfrecjilojja` was explicitly
+approved as the staging target and inspected through the project-scoped
+Supabase MCP plus the linked CLI. Before migration it had one remote-only
+`20260613173401_restrict_security_definer_functions` entry, 14 CamelCase legacy
+tables, one Auth user, two legacy user rows, and 93 aggregate legacy rows. The
+remote migration statement was whitespace-normalized identical to repository
+`20260613190000_restrict_security_definer_functions.sql`; the obsolete history
+entry was marked reverted without undoing SQL. A local ignored roles/schema/data
+dump was created before the change.
+
+The reviewed `db push --include-all --dry-run` named exactly the 59 repository
+migrations, and the confirmed push applied them successfully through
+`20260815082606`. Independent MCP verification then found:
+
+- 59 canonical migration records and no extra remote-only version;
+- 63 public application tables, all with enabled and forced RLS, and 100
+  policies;
+- one Auth user, one canonical profile, no orphan profile, two canonical Daily
+  Logs, and three canonical Schedule Items after legacy conversion;
+- zero Coach requests/usage rows at the migration boundary;
+- `claim_coach_request_v7` executable by `service_role` only; and
+- OpenAI/Gemini plus `user_supplied_key` constraints and V1/V2/V3 Coach response
+  compatibility present.
+
+The Security Advisor reports leaked-password protection disabled and reports
+`learning_request_identities` as RLS-without-policy. The latter is intentional:
+the table has no `anon` or `authenticated` grants and is service-role-only. The
+Performance Advisor reports informational unindexed-FK and unused-index items;
+no index was added or removed during this migration. The dated audit does not
+prove OAuth configuration, a deployed FastAPI service, two-user hosted
+isolation, provider model access, or production state.
 
 This file is the sole current owner of the latest repository migration filename
 and reset boundary. The scoped synchronization catalog for named
@@ -1420,8 +1455,8 @@ See `docs/verification.md` for the current automation boundary.
 ## Important Caveat
 
 The canonical Flutter code now targets snake_case tables. Legacy CamelCase
-tables may still exist in the remote Production project, but new product code
-should not add dependencies on them.
+tables remain present in the inspected staging project for compatibility, but
+new product code must not add dependencies on them.
 
 Before relying on `USE_MOCK_DATA=false`, confirm that the target Supabase
 project has applied the canonical schema migration and has the expected RLS

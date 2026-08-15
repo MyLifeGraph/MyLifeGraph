@@ -659,7 +659,8 @@ stream failure behavior are unchanged; no global exception handler is added.
 
 ## Explicitly Later
 
-- a production Responses API provider and deployable credential strategy;
+- operator-funded provider credentials or billing; user-supplied OpenAI and
+  Gemini keys are the only deployable cloud-provider strategy;
 - scalable remote snapshot and sandbox workers;
 - deployed multi-user concurrency, queues, and cancellation control plane;
 - push/background Coach turns;

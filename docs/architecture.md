@@ -1514,16 +1514,17 @@ independent Sleep Recommendation.
   when the user enables it for that plan, current imported busy intervals as
   deterministic capacity input. It performs no event-title inference or source
   write and adds no notification delivery.
-- The remote Production project may still contain legacy CamelCase tables until
-  the canonical schema migration has been applied and verified.
+- The inspected staging project has the complete canonical migration chain but
+  retains legacy CamelCase tables for compatibility. Production remains
+  uninspected and no production migration state is inferred from staging.
 - The repository does not contain real Supabase credentials.
-- The only real-model adapter is `local_codex_oauth`, and it is disabled by
-  default, development-only, and same-Linux-user. Its one required per-turn MCP
-  is limited to personal snapshot inspection, immutable SQL, and isolated
-  Python; it has no general shell/web/app/plugin/sub-agent or mutation tools.
-  This is not evidence of a production provider, subscription entitlement,
-  universal model/Fast availability, or server deployment. No API-key, model,
-  tier, or provider fallback exists.
+- OpenAI and Gemini have deployable request-local BYOK adapters behind the
+  empty-by-default `COACH_BYOK_PROVIDERS` allowlist. They receive only bounded
+  owner-scoped read-tool results, never SQLite or Python execution, and there is
+  no operator key or automatic fallback. `local_codex_oauth` remains disabled
+  by default, development-only, and same-Linux-user. Repository/provider mocks
+  do not establish subscription entitlement, live model access, or a hosted
+  server deployment.
 - Daily and weekly snapshot aggregation exists behind an authenticated backend
   endpoint, and daily capture plus task/habit/focus writes trigger daily refresh
   best-effort. The protected scheduled endpoint can prepare profile-local daily

@@ -39,6 +39,7 @@ run_source_checks() {
   bash -n scripts/verify_supabase_local.sh
   bash -n scripts/verify_web.sh
   bash -n scripts/verify_affected.sh
+  bash -n scripts/vercel_build.sh
   bash -n scripts/update_python_requirements.sh
   bash -n scripts/cleanup_local_e2e_users.sh
   bash -n scripts/seed_demo_data.sh
@@ -67,6 +68,10 @@ run_source_checks() {
   node --check e2e/web/support/local-auth-users.mjs
   node --check scripts/cleanup_local_e2e_users.mjs
   node --check scripts/verify_affected.mjs
+  node --check scripts/write_hosted_flutter_defines.mjs
+  node --check scripts/write_hosted_flutter_defines.test.mjs
+  node --check scripts/verify_staging_remote.mjs
+  node --check scripts/verify_staging_remote.test.mjs
   node --test scripts/check_docs_consistency.test.mjs
   node --test scripts/check_frontend_visual_contract.test.mjs
   node --test scripts/check_e2e_split_contract.test.mjs
@@ -74,6 +79,8 @@ run_source_checks() {
   node --test e2e/web/support/local-auth-users.test.mjs
   node --test scripts/cleanup_local_e2e_users.test.mjs
   node --test scripts/verify_affected.test.mjs
+  node --test scripts/write_hosted_flutter_defines.test.mjs
+  node --test scripts/verify_staging_remote.test.mjs
   node scripts/check_docs_consistency.mjs
   node scripts/check_frontend_visual_contract.mjs
   node scripts/check_e2e_split_contract.mjs

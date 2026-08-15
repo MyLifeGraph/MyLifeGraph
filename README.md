@@ -5,7 +5,9 @@ daily check-ins, tasks, habits, focus sessions, and planning facts into an
 honest day view and cautious deterministic guidance. The primary client is a
 Flutter web/mobile app backed by Supabase Auth/Postgres and an authenticated
 FastAPI service. Most product behavior is rule-based; the optional real-model
-Coach is a development-only, read-only path.
+Coach is read-only and supports per-request user-supplied OpenAI or Gemini keys
+when both client and backend explicitly enable BYOK. The local Codex OAuth
+adapter remains development-only.
 
 The easiest way to explore the product is the local guest/demo flow. Real
 accounts use Supabase-backed data and never fall back to personalized-looking
