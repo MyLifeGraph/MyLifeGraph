@@ -19,7 +19,7 @@ class Client:
 
     async def rpc(self, function, *, params):
         self.rpc_calls.append((function, params))
-        if function == "claim_coach_request_v6":
+        if function == "claim_coach_request_v7":
             return {
                 "state": "pending",
                 "remaining_requests": 19,
@@ -127,7 +127,7 @@ def test_v6_claim_binds_only_request_identity_message_and_backend_provenance() -
 
     assert result.state == "pending"
     function, params = client.rpc_calls[0]
-    assert function == "claim_coach_request_v6"
+    assert function == "claim_coach_request_v7"
     assert set(params) == {
         "p_user_id",
         "p_request_id",

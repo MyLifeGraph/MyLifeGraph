@@ -106,7 +106,7 @@ select is_empty(
       'public.delete_account_v1(uuid,text)'::regprocedure,
       'public.apply_notification_action_v1('
         'uuid,uuid,uuid,text,timestamp with time zone)'::regprocedure,
-      'public.claim_coach_request_v6('
+      'public.claim_coach_request_v7('
         'uuid,uuid,text,date,text,text,text,text,timestamp with time zone,'
         'timestamp with time zone,integer)'::regprocedure,
       'public.persist_weekly_review_v3('

@@ -307,7 +307,7 @@ def test_capabilities_publish_fixed_agent_limits_and_fast_configuration() -> Non
 
     result = asyncio.run(service.capabilities(user_id="owner-1"))
 
-    assert result.contract_version == "coach-capabilities-v2"
+    assert result.contract_version == "coach-capabilities-v3"
     assert result.state == "ready"
     assert result.model_requested == "gpt-5.5"
     assert result.service_tier == "fast"
@@ -403,7 +403,7 @@ def test_ready_capabilities_and_evidence_reject_inconsistent_truth() -> None:
     )
     with pytest.raises(ValueError, match="ready local Coach"):
         CoachAgentCapabilitiesResponse(
-            contract_version="coach-capabilities-v2",
+            contract_version="coach-capabilities-v3",
             state="ready",
             provider="local_codex_oauth",
             provider_mode="local_development_only",
@@ -413,6 +413,7 @@ def test_ready_capabilities_and_evidence_reject_inconsistent_truth() -> None:
             fast_mode=True,
             reason_code="ready",
             limits=limits,
+            tools=["inspect_data", "query_data", "run_python"],
         )
     with pytest.raises(ValueError, match="periods"):
         CoachAgentEvidence(
@@ -449,7 +450,7 @@ def test_free_turn_builds_snapshot_and_derives_trace_evidence_from_actual_tools(
 
     result = asyncio.run(run())
 
-    assert result.contract_version == "coach-response-v2"
+    assert result.contract_version == "coach-response-v3"
     assert result.request_id == request.request_id
     assert result.agent_trace.tool_call_count == 3
     assert [step.tool for step in result.agent_trace.steps] == [
@@ -811,7 +812,7 @@ def test_v3_normal_german_question_still_returns_english_provider_output() -> No
 
     assert result.reply == provider.output.reply
     assert result.uncertainty.reason == provider.output.uncertainty.reason
-    assert result.provenance.prompt_version == "free-coach-agent-prompt-v4"
+    assert result.provenance.prompt_version == "free-coach-agent-prompt-v5"
     assert result.provenance.context_version == "personal-snapshot-v3"
     assert repository.completion_calls
     assert repository.failure_calls == []
@@ -1188,7 +1189,7 @@ def test_history_accepts_stored_v2_turns_and_delete_keeps_usage_boundary() -> No
     history = asyncio.run(service.history(user_id="owner-1"))
     deleted = asyncio.run(service.delete_history(user_id="owner-1"))
 
-    assert history.contract_version == "coach-history-v2"
+    assert history.contract_version == "coach-history-v3"
     assert history.turns[0].response == response
     assert deleted.deleted is True
     assert repository.delete_calls == 1

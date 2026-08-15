@@ -284,6 +284,25 @@ run_recommendation_retirement_migration_harness() (
     <"$harness_root/assertions.log"
   assert_recommendation_normal_history_unchanged 'transition assertions'
 
+  # The transition proof stops at its historical target. Add every later
+  # immutable migration before the shared final-state pgTAP corpus so new
+  # contracts are tested without weakening the transition fixture.
+  for migration_file in "$root_dir"/supabase/migrations/*.sql; do
+    migration_name="$(basename "$migration_file")"
+    if [[ "$migration_name" > "${target_version}_" ]]; then
+      cp "$migration_file" "$stage_root/supabase/migrations/$migration_name"
+    fi
+  done
+  if ! supabase_cli migration up \
+    --db-url "$test_url" \
+    --workdir "$stage_root" \
+    >"$harness_root/post-target.log" 2>&1; then
+    recommendation_retirement_harness_sanitize_output \
+      <"$harness_root/post-target.log" >&2
+    return 1
+  fi
+  assert_recommendation_normal_history_unchanged 'post-target migrations'
+
   # The normal Supabase Postgres session exposes extensions after public
   # (`show search_path` => "$user", public, extensions). Mirror that database
   # default only inside this disposable container before running the shared

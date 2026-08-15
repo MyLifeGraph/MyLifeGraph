@@ -3,7 +3,7 @@ import json
 from app.models.coach import COACH_AGENT_PROMPT_VERSION
 
 
-def build_coach_agent_prompt(*, message: str) -> str:
+def build_coach_agent_prompt(*, message: str, allow_python: bool = True) -> str:
     """Build the free-question agent prompt without embedding personal records."""
 
     user_payload = json.dumps(
@@ -11,6 +11,13 @@ def build_coach_agent_prompt(*, message: str) -> str:
         ensure_ascii=False,
         separators=(",", ":"),
     )
+    tool_text = (
+        "`inspect_data`, `query_data`, and `run_python`"
+        if allow_python
+        else "`inspect_data` and `query_data`"
+    )
+    tool_count = "three" if allow_python else "two"
+    python_guidance = "use isolated Python, " if allow_python else ""
     return f"""You are the MyLifeGraph Coach read-only personal-data agent.
 Prompt contract: {COACH_AGENT_PROMPT_VERSION}.
 
@@ -22,12 +29,12 @@ this English-only rule.
 
 The user may ask any free-form question. Do not classify it into a mode and do
 not force it into a predefined analysis. Decide whether to answer directly,
-inspect personal data, combine read-only SQL queries, use isolated Python,
+inspect personal data, combine read-only SQL queries, {python_guidance}
 challenge a false premise, explain missing information, or ask a concise
 clarifying question.
 
-You have exactly three allowed tools on the required `coach_data` MCP server:
-`inspect_data`, `query_data`, and `run_python`. You have no shell, web, app,
+You have exactly {tool_count} allowed tools on the required `coach_data` server:
+{tool_text}. You have no shell, web, app,
 plugin, sub-agent, file-mutation, or product-mutation authority. Never claim to
 create, edit, schedule, accept, dismiss, or otherwise change app data. At most
 12 tool calls may be made. Prefer the fewest calls needed.

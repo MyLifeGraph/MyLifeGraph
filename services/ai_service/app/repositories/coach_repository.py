@@ -159,7 +159,7 @@ class SupabaseCoachRepository:
         daily_limit: int,
     ) -> CoachClaimResult:
         result = await self._rpc(
-            "claim_coach_request_v6",
+            "claim_coach_request_v7",
             params={
                 "p_user_id": user_id,
                 "p_request_id": str(request_id),

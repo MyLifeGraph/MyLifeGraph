@@ -3,7 +3,7 @@ import json
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
@@ -52,9 +52,14 @@ _ACTIVITY_MESSAGES = {
 async def get_coach_capabilities(
     principal: Principal = Depends(get_current_principal),
     services: CoachServices = Depends(get_coach_services),
+    provider_name: str | None = Header(
+        default=None, alias="X-MyLifeGraph-Coach-Provider"
+    ),
+    api_key: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Api-Key"),
 ) -> CoachAgentCapabilitiesResponse | CoachCapabilitiesResponse:
     try:
-        return await services.current.capabilities(user_id=principal.user_id)
+        service = _request_service(services.current, provider_name, api_key)
+        return await service.capabilities(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise coach_service_problem(exc) from exc
     except Exception as exc:
@@ -69,12 +74,17 @@ async def respond_to_coach(
     http_request: Request,
     principal: Principal = Depends(get_current_principal),
     services: CoachServices = Depends(get_coach_services),
+    provider_name: str | None = Header(
+        default=None, alias="X-MyLifeGraph-Coach-Provider"
+    ),
+    api_key: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Api-Key"),
 ) -> CoachAgentResponse | CoachResponse:
     raw = await _read_json_object(http_request)
     try:
         if raw.get("contract_version") == "coach-request-v3":
             request = CoachAgentRequest.model_validate(raw)
-            return await services.current.respond(
+            service = _request_service(services.current, provider_name, api_key)
+            return await service.respond(
                 user_id=principal.user_id,
                 request=request,
             )
@@ -96,15 +106,22 @@ async def stream_coach_response(
     http_request: Request,
     principal: Principal = Depends(get_current_principal),
     services: CoachServices = Depends(get_coach_services),
+    provider_name: str | None = Header(
+        default=None, alias="X-MyLifeGraph-Coach-Provider"
+    ),
+    api_key: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Api-Key"),
 ) -> StreamingResponse:
     raw = await _read_json_object(http_request)
     try:
         request = CoachAgentRequest.model_validate(raw)
+        service = _request_service(services.current, provider_name, api_key)
     except ValidationError as exc:
         raise invalid_coach_request_problem() from exc
+    except CoachServiceError as exc:
+        raise coach_service_problem(exc) from exc
     return StreamingResponse(
         _stream_turn(
-            service=services.current,
+            service=service,
             user_id=principal.user_id,
             request=request,
         ),
@@ -302,6 +319,16 @@ async def _stream_turn(
 def _sse(event: str, data: dict[str, object]) -> bytes:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+
+
+def _request_service(
+    service: CoachAgentService,
+    provider_name: str | None,
+    api_key: str | None,
+) -> CoachAgentService:
+    if provider_name is None and api_key is None:
+        return service
+    return service.for_byok_request(provider_name=provider_name, api_key=api_key)
 
 
 async def _read_json_object(http_request: Request) -> dict[str, object]:

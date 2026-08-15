@@ -19,9 +19,9 @@ from app.models.coach import (
     COACH_AGENT_PROMPT_VERSION,
     COACH_AGENT_REQUESTS_PER_LOCAL_DAY,
     COACH_AGENT_TIMEOUT_SECONDS,
-    COACH_CAPABILITIES_V2_CONTRACT_VERSION,
-    COACH_HISTORY_V2_CONTRACT_VERSION,
-    COACH_RESPONSE_V2_CONTRACT_VERSION,
+    COACH_CAPABILITIES_V3_CONTRACT_VERSION,
+    COACH_HISTORY_V3_CONTRACT_VERSION,
+    COACH_RESPONSE_V3_CONTRACT_VERSION,
     CoachAgentCapabilitiesResponse,
     CoachAgentEvidence,
     CoachAgentHistoryResponse,
@@ -37,6 +37,7 @@ from app.models.coach import (
     CoachModelOutput,
 )
 from app.providers.base import CoachActivityCallback, CoachProvider, CoachProviderError
+from app.providers.cloud_byok import CloudByokCoachProvider
 from app.repositories.coach_context_repository import CoachContextRepository
 from app.repositories.coach_repository import CoachRepository
 from app.services.coach_agent_prompt import build_coach_agent_prompt
@@ -66,6 +67,7 @@ class CoachAgentService:
         global_semaphore: asyncio.Semaphore,
         now_provider: Callable[[], datetime] | None = None,
         lifecycle: CoachTurnLifecycle | None = None,
+        identity_override: tuple[str, str, str | None, str] | None = None,
     ) -> None:
         self._settings = settings
         self._repository = repository
@@ -77,6 +79,61 @@ class CoachAgentService:
             repository=repository,
             profile_reader=context_repository,
             now_provider=now_provider or utc_now,
+        )
+        self._identity_override = identity_override
+
+    def with_request_provider(
+        self,
+        *,
+        provider: CoachProvider,
+        identity: tuple[str, str, str | None, str],
+    ) -> "CoachAgentService":
+        return CoachAgentService(
+            settings=self._settings,
+            repository=self._repository,
+            context_repository=self._context_repository,
+            snapshot_service=self._snapshot_service,
+            provider=provider,
+            global_semaphore=self._global_semaphore,
+            lifecycle=self._lifecycle,
+            identity_override=identity,
+        )
+
+    def for_byok_request(
+        self,
+        *,
+        provider_name: str | None,
+        api_key: str | None,
+    ) -> "CoachAgentService":
+        if provider_name is None and api_key is None:
+            return self
+        if (
+            provider_name not in {"openai", "gemini"}
+            or not api_key
+            or not api_key.strip()
+        ):
+            raise CoachServiceError(
+                "invalid_provider_credentials",
+                "A supported Coach provider and API key are required together.",
+                retryable=False,
+                status_code=422,
+            )
+        if provider_name not in self._settings.coach_byok_providers:
+            raise CoachServiceError(
+                "provider_disabled",
+                "The selected Coach provider is not enabled.",
+                retryable=False,
+                status_code=503,
+            )
+        model = "gpt-5.6-terra" if provider_name == "openai" else "gemini-3.6-flash"
+        provider = CloudByokCoachProvider(
+            provider=provider_name,
+            api_key=api_key,
+            settings=self._settings,
+        )
+        return self.with_request_provider(
+            provider=provider,
+            identity=(provider_name, "user_supplied_key", model, "explicit"),
         )
 
     async def capabilities(
@@ -267,7 +324,10 @@ class CoachAgentService:
                     # SQLite creation, and model execution. Queued turns cannot
                     # fan out 50k-row exports while provider capacity is full.
                     failure_stage = "context"
-                    prompt = build_coach_agent_prompt(message=request.message)
+                    prompt = build_coach_agent_prompt(
+                        message=request.message,
+                        allow_python=identity[0] not in {"openai", "gemini"},
+                    )
                     if activity_callback is not None:
                         await activity_callback("Preparing a private data snapshot …")
                     snapshot = await self._snapshot_service.create(user_id=user_id)
@@ -406,7 +466,7 @@ class CoachAgentService:
             ),
         )
         return CoachAgentHistoryResponse(
-            contract_version=COACH_HISTORY_V2_CONTRACT_VERSION,
+            contract_version=COACH_HISTORY_V3_CONTRACT_VERSION,
             turns=[CoachAgentHistoryTurn.model_validate(row) for row in rows],
         )
 
@@ -499,7 +559,7 @@ class CoachAgentService:
     ) -> CoachAgentResponse:
         local_codex = identity[0] == "local_codex_oauth"
         return CoachAgentResponse(
-            contract_version=COACH_RESPONSE_V2_CONTRACT_VERSION,
+            contract_version=COACH_RESPONSE_V3_CONTRACT_VERSION,
             request_id=request_id,
             reply=output.reply,
             uncertainty=output.uncertainty,
@@ -537,7 +597,7 @@ class CoachAgentService:
         identity = self._identity()
         local_codex = identity[0] == "local_codex_oauth"
         return CoachAgentCapabilitiesResponse(
-            contract_version=COACH_CAPABILITIES_V2_CONTRACT_VERSION,
+            contract_version=COACH_CAPABILITIES_V3_CONTRACT_VERSION,
             state=state,
             provider=identity[0],
             provider_mode=identity[1],
@@ -546,6 +606,11 @@ class CoachAgentService:
             service_tier="fast" if local_codex else "not_applicable",
             fast_mode=local_codex,
             reason_code=reason_code,
+            tools=(
+                ["inspect_data", "query_data"]
+                if identity[0] in {"openai", "gemini"}
+                else ["inspect_data", "query_data", "run_python"]
+            ),
             limits=CoachAgentLimits(
                 message_codepoints=2_000,
                 reply_codepoints=4_000,
@@ -561,6 +626,8 @@ class CoachAgentService:
         )
 
     def _identity(self) -> tuple[str, str, str | None, str]:
+        if self._identity_override is not None:
+            return self._identity_override
         if self._settings.coach_provider == "local_codex_oauth":
             return (
                 "local_codex_oauth",

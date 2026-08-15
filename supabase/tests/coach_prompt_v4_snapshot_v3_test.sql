@@ -30,21 +30,21 @@ insert into auth.users (
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v6('
+    'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v6('
+    'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
-    'public.claim_coach_request_v6('
+    'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
@@ -72,7 +72,7 @@ select ok(
 
 set local role service_role;
 create temporary table coach_prompt_v4_claim on commit drop as
-select public.claim_coach_request_v6(
+select public.claim_coach_request_v7(
   'c4000000-0000-4000-8000-000000000001',
   'c4000000-0000-4000-8000-000000000101',
   encode(
@@ -93,7 +93,7 @@ reset role;
 select ok(
   (select value ->> 'state' from coach_prompt_v4_claim) = 'pending'
   and (
-    select prompt_version = 'free-coach-agent-prompt-v4'
+    select prompt_version = 'free-coach-agent-prompt-v5'
       and context_version = 'personal-snapshot-v3'
     from public.coach_requests
     where request_id = 'c4000000-0000-4000-8000-000000000101'
@@ -103,7 +103,7 @@ select ok(
 
 set local role service_role;
 create temporary table coach_prompt_v4_replay on commit drop as
-select public.claim_coach_request_v6(
+select public.claim_coach_request_v7(
   'c4000000-0000-4000-8000-000000000001',
   'c4000000-0000-4000-8000-000000000101',
   encode(
@@ -124,7 +124,7 @@ reset role;
 select ok(
   (select value ->> 'state' from coach_prompt_v4_replay) = 'in_progress'
   and (
-    select prompt_version = 'free-coach-agent-prompt-v4'
+    select prompt_version = 'free-coach-agent-prompt-v5'
       and context_version = 'personal-snapshot-v3'
     from public.coach_requests
     where request_id = 'c4000000-0000-4000-8000-000000000101'

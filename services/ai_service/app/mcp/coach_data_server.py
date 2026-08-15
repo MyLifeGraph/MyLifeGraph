@@ -142,8 +142,7 @@ class CoachDataMcpServer:
         if self._container_state.exists():
             if (
                 not self._container_state.is_file()
-                or self._container_state.stat().st_size
-                > _MAX_CONTAINER_STATE_BYTES
+                or self._container_state.stat().st_size > _MAX_CONTAINER_STATE_BYTES
                 or self._container_state.read_bytes()
             ):
                 raise RuntimeError("Coach MCP container state is not empty.")
@@ -154,6 +153,50 @@ class CoachDataMcpServer:
             "mylifegraph-coach-analysis:1",
         )
         self._tool_calls = 0
+
+    @classmethod
+    def for_snapshot(
+        cls,
+        *,
+        snapshot_path: Path,
+        trace_path: Path,
+        docker_bin: str,
+        image: str,
+    ) -> "CoachDataMcpServer":
+        """Build the same bounded executor without exposing stdio or environment."""
+
+        instance = cls.__new__(cls)
+        instance._snapshot = snapshot_path.resolve(strict=True)
+        instance._trace = trace_path.resolve()
+        instance._container_state = trace_path.with_suffix(".container")
+        instance._docker_bin = docker_bin
+        instance._image = image
+        instance._tool_calls = 0
+        return instance
+
+    def call_readonly_tool(self, *, name: str, arguments: dict[str, Any]) -> str:
+        if name not in {"inspect_data", "query_data"}:
+            raise ToolFailure(
+                "Cloud Coach providers may use read-only data tools only."
+            )
+        response = self._dispatch(
+            {
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+        )
+        if not isinstance(response, dict) or "result" not in response:
+            raise ToolFailure("The Coach data tool failed.")
+        result = response["result"]
+        content = result.get("content") if isinstance(result, dict) else None
+        if not isinstance(content, list) or not content:
+            raise ToolFailure("The Coach data tool returned no result.")
+        first = content[0]
+        if not isinstance(first, dict) or not isinstance(first.get("text"), str):
+            raise ToolFailure("The Coach data tool returned an invalid result.")
+        return first["text"]
 
     def serve(self) -> None:
         for line in sys.stdin:
@@ -369,7 +412,9 @@ class CoachDataMcpServer:
             except sqlite3.Error as exc:
                 message = str(exc)
                 if "interrupted" in message.lower():
-                    raise ToolFailure("The SQL query exceeded its 5-second limit.") from exc
+                    raise ToolFailure(
+                        "The SQL query exceeded its 5-second limit."
+                    ) from exc
                 raise ToolFailure(f"Read-only SQL failed: {message[:240]}") from exc
         value = json.dumps(
             {
@@ -474,8 +519,7 @@ class CoachDataMcpServer:
                 not isinstance(queries, list)
                 or len(queries) > 50
                 or any(
-                    not isinstance(query, str)
-                    or len(query) > 2_000
+                    not isinstance(query, str) or len(query) > 2_000
                     for query in queries
                 )
             ):
@@ -493,10 +537,7 @@ class CoachDataMcpServer:
             ):
                 raise ToolFailure("Python analysis returned invalid table metadata.")
             raw_images = payload["images"]
-            if (
-                not isinstance(raw_images, list)
-                or len(raw_images) > _MAX_PNG_IMAGES
-            ):
+            if not isinstance(raw_images, list) or len(raw_images) > _MAX_PNG_IMAGES:
                 raise ToolFailure("Python analysis returned invalid image metadata.")
             images: list[dict[str, str]] = []
             for item in raw_images:
@@ -519,8 +560,7 @@ class CoachDataMcpServer:
                 ),
                 {
                     "summary": (
-                        "Ran isolated Python analysis with snapshot-wide "
-                        "read scope."
+                        "Ran isolated Python analysis with snapshot-wide read scope."
                     ),
                     "row_count": None,
                     # Arbitrary Python can replace in-process SQLite callbacks

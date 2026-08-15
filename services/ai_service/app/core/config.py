@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default="disabled",
         alias="COACH_PROVIDER",
     )
+    coach_byok_providers_raw: str = Field(
+        default="",
+        alias="COACH_BYOK_PROVIDERS",
+    )
     coach_fake_provider_enabled: bool = Field(
         default=False,
         alias="COACH_FAKE_PROVIDER_ENABLED",
@@ -100,6 +104,15 @@ class Settings(BaseSettings):
             for origin in self.allowed_origins_raw.split(",")
             if origin.strip()
         ]
+
+    @property
+    def coach_byok_providers(self) -> frozenset[str]:
+        values = {
+            value.strip()
+            for value in self.coach_byok_providers_raw.split(",")
+            if value.strip()
+        }
+        return frozenset(values & {"openai", "gemini"})
 
 
 @lru_cache

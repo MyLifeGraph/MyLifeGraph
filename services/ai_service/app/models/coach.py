@@ -20,7 +20,10 @@ COACH_REQUEST_V3_CONTRACT_VERSION = "coach-request-v3"
 COACH_RESPONSE_V2_CONTRACT_VERSION = "coach-response-v2"
 COACH_CAPABILITIES_V2_CONTRACT_VERSION = "coach-capabilities-v2"
 COACH_HISTORY_V2_CONTRACT_VERSION = "coach-history-v2"
-COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v4"
+COACH_RESPONSE_V3_CONTRACT_VERSION = "coach-response-v3"
+COACH_CAPABILITIES_V3_CONTRACT_VERSION = "coach-capabilities-v3"
+COACH_HISTORY_V3_CONTRACT_VERSION = "coach-history-v3"
+COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v5"
 COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v3"
 
 COACH_MESSAGE_CODEPOINTS = 2_000
@@ -34,11 +37,12 @@ COACH_AGENT_REQUESTS_PER_LOCAL_DAY = 20
 COACH_SNAPSHOT_MAX_ROWS = 50_000
 COACH_SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024
 
-CoachProviderName = Literal["disabled", "local_codex_oauth", "fake"]
+CoachProviderName = Literal["disabled", "local_codex_oauth", "fake", "openai", "gemini"]
 CoachProviderMode = Literal[
     "disabled",
     "local_development_only",
     "deterministic_test_only",
+    "user_supplied_key",
 ]
 CoachModelSource = Literal["explicit", "cli_default", "not_applicable"]
 CoachCapabilityState = Literal["disabled", "unavailable", "ready"]
@@ -481,7 +485,7 @@ class CoachAgentLimits(BaseModel):
 class CoachAgentCapabilitiesResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["coach-capabilities-v2"]
+    contract_version: Literal["coach-capabilities-v3"]
     state: CoachCapabilityState
     provider: CoachProviderName
     provider_mode: CoachProviderMode
@@ -490,6 +494,7 @@ class CoachAgentCapabilitiesResponse(BaseModel):
     service_tier: Literal["fast", "not_applicable"]
     fast_mode: bool
     reason_code: str = Field(min_length=1, max_length=64)
+    tools: list[Literal["inspect_data", "query_data", "run_python"]]
     limits: CoachAgentLimits
 
     @model_validator(mode="after")
@@ -504,6 +509,19 @@ class CoachAgentCapabilitiesResponse(BaseModel):
                 raise ValueError("local Coach capabilities require Fast mode")
             if self.state == "ready" and self.model_requested != "gpt-5.5":
                 raise ValueError("a ready local Coach requires GPT-5.5")
+        elif self.provider in {"openai", "gemini"}:
+            expected_model = (
+                "gpt-5.6-terra" if self.provider == "openai" else "gemini-3.6-flash"
+            )
+            if (
+                self.provider_mode != "user_supplied_key"
+                or self.model_requested != expected_model
+                or self.model_source != "explicit"
+                or self.service_tier != "not_applicable"
+                or self.fast_mode
+                or self.tools != ["inspect_data", "query_data"]
+            ):
+                raise ValueError("cloud BYOK Coach capability identity is invalid")
         elif self.provider == "fake":
             if (
                 self.provider_mode != "deterministic_test_only"
@@ -583,7 +601,7 @@ class CoachAgentProvenance(BaseModel):
     model_requested: str | None = Field(default=None, max_length=100)
     model_reported: str | None = Field(default=None, max_length=100)
     model_source: CoachModelSource
-    prompt_version: Literal["free-coach-agent-prompt-v4"]
+    prompt_version: Literal["free-coach-agent-prompt-v4", "free-coach-agent-prompt-v5"]
     context_version: Literal["personal-snapshot-v3"]
     generated_at: datetime = Field(strict=False)
     provider_called: bool
@@ -598,7 +616,8 @@ class CoachAgentProvenance(BaseModel):
         if self.generated_at.tzinfo is None:
             raise ValueError("generated_at must be timezone-aware")
         if (
-            self.prompt_version != COACH_AGENT_PROMPT_VERSION
+            self.prompt_version
+            not in {"free-coach-agent-prompt-v4", COACH_AGENT_PROMPT_VERSION}
             or self.context_version != COACH_AGENT_CONTEXT_VERSION
         ):
             raise ValueError("Coach prompt and snapshot versions must match")
@@ -617,6 +636,20 @@ class CoachAgentProvenance(BaseModel):
                 or self.model_source != "explicit"
             ):
                 raise ValueError("local Codex agent must use configured Fast GPT-5.5")
+        elif self.provider in {"openai", "gemini"}:
+            expected_model = (
+                "gpt-5.6-terra" if self.provider == "openai" else "gemini-3.6-flash"
+            )
+            if (
+                self.provider_mode != "user_supplied_key"
+                or self.model_requested != expected_model
+                or self.model_reported not in {None, expected_model}
+                or self.model_source != "explicit"
+                or self.service_tier != "not_applicable"
+                or self.service_tier_status != "not_applicable"
+                or self.fast_mode
+            ):
+                raise ValueError("cloud BYOK Coach provenance is invalid")
         elif self.provider == "fake":
             if (
                 self.provider_mode != "deterministic_test_only"
@@ -659,7 +692,7 @@ class CoachAgentModelOutput(BaseModel):
 class CoachAgentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["coach-response-v2"]
+    contract_version: Literal["coach-response-v2", "coach-response-v3"]
     request_id: UUID = Field(strict=False)
     reply: str = Field(min_length=1, max_length=COACH_REPLY_CODEPOINTS)
     uncertainty: CoachUncertainty
@@ -704,7 +737,7 @@ class CoachAgentHistoryTurn(BaseModel):
 class CoachAgentHistoryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["coach-history-v2"]
+    contract_version: Literal["coach-history-v3"]
     turns: list[CoachAgentHistoryTurn]
 
 

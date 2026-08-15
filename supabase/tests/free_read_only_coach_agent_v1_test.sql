@@ -30,21 +30,21 @@ insert into auth.users (
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v6('
+    'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v6('
+    'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
-    'public.claim_coach_request_v6('
+    'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
@@ -149,7 +149,7 @@ select ok(
 );
 
 create temporary table coach_v3_claim on commit drop as
-select public.claim_coach_request_v6(
+select public.claim_coach_request_v7(
   'b3000000-0000-4000-8000-000000000001',
   'b3000000-0000-4000-8000-000000000201',
   encode(
@@ -200,13 +200,13 @@ select is(
     from public.coach_requests
     where request_id = 'b3000000-0000-4000-8000-000000000201'
   ),
-  'coach-request-v3|today|{}|2026-07-29|fake|deterministic_test_only|null|not_applicable|free-coach-agent-prompt-v4|personal-snapshot-v3|pending',
+  'coach-request-v3|today|{}|2026-07-29|fake|deterministic_test_only|null|not_applicable|free-coach-agent-prompt-v5|personal-snapshot-v3|pending',
   'the claim persists the exact V3 contract and fixed context projection'
 );
 
 select is(
   (
-    select public.claim_coach_request_v6(
+    select public.claim_coach_request_v7(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000201',
       encode(
@@ -242,7 +242,7 @@ select is(
 
 select throws_ok(
   $$
-    select public.claim_coach_request_v6(
+    select public.claim_coach_request_v7(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000201',
       repeat('f', 64),
@@ -278,7 +278,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    select public.claim_coach_request_v6(
+    select public.claim_coach_request_v7(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000299',
       repeat('a', 64),
@@ -424,6 +424,17 @@ select jsonb_build_object(
     )
 ) as value;
 
+create temporary table coach_v3_current_response on commit drop as
+select jsonb_set(
+  jsonb_set(
+    (select value from coach_v3_response),
+    '{contract_version}',
+    '"coach-response-v3"'::jsonb
+  ),
+  '{provenance,prompt_version}',
+  '"free-coach-agent-prompt-v5"'::jsonb
+) as value;
+
 select ok(
   private.coach_response_is_valid_v2(
     (select value from coach_v3_response),
@@ -527,7 +538,7 @@ select public.complete_coach_request_v2(
   'b3000000-0000-4000-8000-000000000001',
   'b3000000-0000-4000-8000-000000000201',
   'How did focus change?',
-  (select value from coach_v3_response),
+  (select value from coach_v3_current_response),
   (select value from coach_v3_evidence),
   (select value from coach_v3_trace),
   2,
@@ -546,7 +557,7 @@ select ok(
   (
     select state = 'completed'
       and response is not distinct from
-        (select value from coach_v3_response)
+        (select value from coach_v3_current_response)
       and used_context is not distinct from
         (select value from coach_v3_evidence)
       and evidence is not distinct from
@@ -595,7 +606,7 @@ select is(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000201',
       'How did focus change?',
-      (select value from coach_v3_response),
+      (select value from coach_v3_current_response),
       (select value from coach_v3_evidence),
       (select value from coach_v3_trace),
       2,
@@ -635,7 +646,7 @@ select throws_ok(
       'b3000000-0000-4000-8000-000000000201',
       'How did focus change?',
       jsonb_set(
-        (select value from coach_v3_response),
+        (select value from coach_v3_current_response),
         '{evidence,0,record_count}',
         '6'::jsonb
       ),
@@ -662,7 +673,7 @@ select throws_ok(
       'b3000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000201',
       'How did focus change again?',
-      (select value from coach_v3_response),
+      (select value from coach_v3_current_response),
       (select value from coach_v3_evidence),
       (select value from coach_v3_trace),
       2,
@@ -736,7 +747,7 @@ select is(
       result ->> 'remaining_requests'
     )
     from (
-      select public.claim_coach_request_v6(
+      select public.claim_coach_request_v7(
         'b3000000-0000-4000-8000-000000000001',
         'b3000000-0000-4000-8000-000000000201',
         repeat('0', 64),
@@ -817,7 +828,7 @@ select lives_ok(
         from coach_v3_failure_cases
         order by claimed_at
       loop
-        select public.claim_coach_request_v6(
+        select public.claim_coach_request_v7(
           'b3000000-0000-4000-8000-000000000001',
           failure_case.request_id,
           encode(

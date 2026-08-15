@@ -25,7 +25,7 @@ test('@coach persists a fake-provider turn and renders its history', async ({
     'independent Coach response',
   );
   expect(response.json).toMatchObject({
-    contract_version: 'coach-response-v2',
+    contract_version: 'coach-response-v3',
     request_id: requestId,
     provenance: {
       source: 'model',
