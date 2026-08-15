@@ -45,6 +45,14 @@ and troubleshooting, follow the
 [complete local-development runbook](docs/local-dev.md#complete-local-stack).
 Never commit real credentials from `.env`.
 
+## Vercel Deployment
+
+The repository-root `vercel.json` builds Flutter Web through
+`scripts/vercel_build.sh` and serves `apps/mobile/build/web`. Vercel previews
+must provide the synchronized account configuration described in
+`docs/local-dev.md`; secrets belong in Vercel environment variables and never
+in the repository.
+
 ## Verification
 
 Capture the task base before editing, then use it for affected-path selection:
