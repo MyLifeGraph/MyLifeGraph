@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# No frontend dependency, tool bootstrap, define helper, or compiler process may
+# inherit backend-only credentials from a misconfigured build environment.
+unset SUPABASE_SECRET_KEY SUPABASE_SERVICE_ROLE_KEY SCHEDULED_REFRESH_TOKEN
+
 FLUTTER_VERSION="${FLUTTER_VERSION:-3.44.0}"
 MLG_FLUTTER_CACHE_ROOT="${VERCEL_CACHE_DIR:-/tmp/mylifegraph-vercel-cache}/flutter"
 MLG_FLUTTER_HOME="${MLG_FLUTTER_CACHE_ROOT}/${FLUTTER_VERSION}"

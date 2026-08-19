@@ -40,6 +40,15 @@ tests use deterministic fakes and need no Codex login, network call, or live
 provider key. Live checks remain separately opt-in and must not be claimed
 unless they were actually run.
 
+FastAPI now resolves its Supabase persistence credential from the current
+`SUPABASE_SECRET_KEY` name with a legacy service-role fallback; the current key
+wins during rotation. Hosted `staging` and `pilot` startup also bind the
+Supabase URL to the expected project ref, and `pilot` requires the current
+secret format. This configuration does not make the private Codex adapter a
+hosted provider: it still requires exact `APP_ENV=development`. The Codex child
+environment explicitly excludes both current and legacy Supabase backend-key
+names, so neither persistence credential crosses the provider boundary.
+
 The bounded controlled `coach-request-v1|v2` / `coach-response-v1` service
 remains backend-supported for ordinary Coach advice. Its newest provenance pair
 is `controlled-coach-prompt-v3`/`coach-context-v3`. The current Flutter surface
@@ -519,7 +528,7 @@ Settings last. Settings is pushed so Back returns to the originating main page;
 on Settings its filled control remains visible, selected, and does not push
 again. Loading, empty, and error states retain the same actions. Sub-pages,
 Auth, Setup, and Capture flows remain outside this header contract. In
-`staging` and `production`, including release builds, Coach is visible only
+`staging`, `pilot`, and `production`, including release builds, Coach is visible only
 when `COACH_SURFACE_ENABLED=true`; route visibility does not make a provider
 ready. Development retains its documented explicit/debug defaults and unknown
 environment labels fail closed.

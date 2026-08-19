@@ -141,9 +141,11 @@ The following gaps make the current checkout a no-go for the target topology:
 12. The inspected Supabase target is staging. A distinct real-data pilot
     project, its current keys, Auth configuration, limits, and redirects have
     not been created, assigned, or inspected.
-13. Current repository configuration still names legacy Supabase anon and
-    service-role credentials. The hosted publishable/secret-key compatibility
-    change and rotation evidence do not exist yet.
+13. Repository configuration now supports current Supabase publishable/secret
+    keys, exact staging/pilot project-ref binding, pilot current-key
+    enforcement, and crossover denial with bounded legacy compatibility.
+    Remote pilot-project assignment, current-key configuration/rotation, and
+    release evidence still do not exist.
 14. There is no staging-only scenario generator with an exact project-ref
     guard, and no versioned 18-or-older participation acceptance exists.
 

@@ -3,39 +3,14 @@
 import { chmodSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const REQUIRED_ENVIRONMENT = new Set(['staging', 'production']);
-
-function requireHttpsUrl(name, value, { supabase = false } = {}) {
-  if (!value) {
-    throw new Error(`${name} is required for a hosted Flutter build.`);
-  }
-
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(`${name} must be a valid HTTPS URL.`);
-  }
-  if (
-    parsed.protocol !== 'https:' ||
-    parsed.username ||
-    parsed.password ||
-    parsed.search ||
-    parsed.hash
-  ) {
-    throw new Error(`${name} must be a credential-free HTTPS URL.`);
-  }
-  if (supabase && !parsed.hostname.endsWith('.supabase.co')) {
-    throw new Error(`${name} must target a hosted Supabase project.`);
-  }
-  return value.replace(/\/$/, '');
-}
+import {
+  hostedSupabaseTarget,
+  requireHttpsBaseUrl,
+  resolveCompatibleKey,
+} from './lib/supabase_deployment.mjs';
 
 export function hostedFlutterDefines(environment = process.env) {
-  const appEnvironment = environment.APP_ENV;
-  if (!REQUIRED_ENVIRONMENT.has(appEnvironment)) {
-    throw new Error('APP_ENV must be exactly staging or production.');
-  }
+  const target = hostedSupabaseTarget(environment);
   if (environment.USE_MOCK_DATA !== 'false') {
     throw new Error('USE_MOCK_DATA must be exactly false for hosted builds.');
   }
@@ -44,19 +19,27 @@ export function hostedFlutterDefines(environment = process.env) {
       'COACH_SURFACE_ENABLED must be exactly true for hosted Coach builds.',
     );
   }
-  if (!environment.SUPABASE_ANON_KEY) {
-    throw new Error('SUPABASE_ANON_KEY is required for a hosted Flutter build.');
-  }
+  const publishableKey = resolveCompatibleKey({
+    environment,
+    currentName: 'SUPABASE_PUBLISHABLE_KEY',
+    legacyName: 'SUPABASE_ANON_KEY',
+    currentPrefix: 'sb_publishable_',
+    requireCurrent: target.appEnvironment === 'pilot',
+    context: `${target.appEnvironment} Flutter build`,
+  });
 
   return {
-    APP_ENV: appEnvironment,
+    APP_ENV: target.appEnvironment,
     USE_MOCK_DATA: 'false',
     COACH_SURFACE_ENABLED: 'true',
-    SUPABASE_URL: requireHttpsUrl('SUPABASE_URL', environment.SUPABASE_URL, {
-      supabase: true,
-    }),
-    SUPABASE_ANON_KEY: environment.SUPABASE_ANON_KEY,
-    AI_SERVICE_BASE_URL: requireHttpsUrl(
+    STAGING_SUPABASE_PROJECT_REF: target.stagingProjectRef,
+    PILOT_SUPABASE_PROJECT_REF: target.pilotProjectRef,
+    SUPABASE_URL: target.supabaseUrl,
+    SUPABASE_PUBLISHABLE_KEY:
+      publishableKey.source === 'current' ? publishableKey.value : '',
+    SUPABASE_ANON_KEY:
+      publishableKey.source === 'legacy' ? publishableKey.value : '',
+    AI_SERVICE_BASE_URL: requireHttpsBaseUrl(
       'AI_SERVICE_BASE_URL',
       environment.AI_SERVICE_BASE_URL,
     ),

@@ -22,7 +22,9 @@ services:
         value: openai,gemini
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: STAGING_SUPABASE_PROJECT_REF
+        value: oscrunlndfrecjilojja
+      - key: SUPABASE_SECRET_KEY
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false

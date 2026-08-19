@@ -3,53 +3,49 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+import {
+  requireHttpsBaseUrl,
+  requireProjectRef,
+  resolveCompatibleKey,
+} from './lib/supabase_deployment.mjs';
+
 export const STAGING_HARNESS_VERSION = 'staging-remote-v1';
 export const EXPECTED_MIGRATION = '20260815082606';
 
-function requireHttpsUrl(name, value, { supabase = false } = {}) {
-  if (!value) throw new Error(`${name} is required.`);
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(`${name} must be a valid HTTPS URL.`);
-  }
-  if (
-    parsed.protocol !== 'https:' ||
-    parsed.username ||
-    parsed.password ||
-    parsed.search ||
-    parsed.hash
-  ) {
-    throw new Error(`${name} must be a credential-free HTTPS URL.`);
-  }
-  if (supabase && !parsed.hostname.endsWith('.supabase.co')) {
-    throw new Error(`${name} must target a hosted Supabase project.`);
-  }
-  return { parsed, value: value.replace(/\/$/, '') };
-}
-
 export function stagingTarget(environment = process.env) {
-  const projectRef = environment.STAGING_PROJECT_REF;
-  if (!projectRef || !/^[a-z]{20}$/.test(projectRef)) {
-    throw new Error('STAGING_PROJECT_REF must be an exact 20-letter project ref.');
+  const currentRef = environment.STAGING_SUPABASE_PROJECT_REF ?? '';
+  const legacyRef = environment.STAGING_PROJECT_REF ?? '';
+  if (currentRef && legacyRef && currentRef !== legacyRef) {
+    throw new Error(
+      'STAGING_SUPABASE_PROJECT_REF and STAGING_PROJECT_REF conflict.',
+    );
   }
-  const supabase = requireHttpsUrl(
+  const projectRef = requireProjectRef(
+    'STAGING_SUPABASE_PROJECT_REF',
+    currentRef || legacyRef,
+  );
+  const pilotProjectRef = requireProjectRef(
+    'PILOT_SUPABASE_PROJECT_REF',
+    environment.PILOT_SUPABASE_PROJECT_REF,
+    { optional: true },
+  );
+  if (pilotProjectRef && pilotProjectRef === projectRef) {
+    throw new Error('The staging harness refuses the pilot Supabase project.');
+  }
+  const supabaseUrl = requireHttpsBaseUrl(
     'STAGING_SUPABASE_URL',
     environment.STAGING_SUPABASE_URL,
-    { supabase: true },
+    { supabaseProjectRef: projectRef },
   );
-  if (supabase.parsed.hostname !== `${projectRef}.supabase.co`) {
-    throw new Error('STAGING_PROJECT_REF does not match STAGING_SUPABASE_URL.');
-  }
-  const ai = requireHttpsUrl(
+  const aiServiceBaseUrl = requireHttpsBaseUrl(
     'STAGING_AI_SERVICE_BASE_URL',
     environment.STAGING_AI_SERVICE_BASE_URL,
   );
   return {
     projectRef,
-    supabaseUrl: supabase.value,
-    aiServiceBaseUrl: ai.value,
+    pilotProjectRef,
+    supabaseUrl,
+    aiServiceBaseUrl,
     expectedMigration: EXPECTED_MIGRATION,
   };
 }
@@ -60,6 +56,7 @@ export function stagingTargetFingerprint(target) {
       [
         STAGING_HARNESS_VERSION,
         target.projectRef,
+        target.pilotProjectRef,
         target.supabaseUrl,
         target.aiServiceBaseUrl,
         target.expectedMigration,
@@ -316,13 +313,16 @@ export async function runConfirmedStagingHarness({
     environment,
     'STAGING_SUPABASE_PUBLISHABLE_KEY',
   );
-  const serviceRoleKey = requiredSecret(
+  const backendKey = resolveCompatibleKey({
     environment,
-    'STAGING_SUPABASE_SERVICE_ROLE_KEY',
-  );
+    currentName: 'STAGING_SUPABASE_SECRET_KEY',
+    legacyName: 'STAGING_SUPABASE_SERVICE_ROLE_KEY',
+    currentPrefix: 'sb_secret_',
+    context: 'confirmed staging harness',
+  }).value;
   const authUsers = new ExactRemoteAuthUsers({
     supabaseUrl: target.supabaseUrl,
-    serviceRoleKey,
+    serviceRoleKey: backendKey,
     fetchImpl,
   });
   const runId = `${Date.now()}-${randomBytes(4).toString('hex')}`;
@@ -652,6 +652,9 @@ async function main() {
   const target = stagingTarget(process.env);
   const fingerprint = stagingTargetFingerprint(target);
   console.log(`Staging project ref: ${target.projectRef}`);
+  console.log(
+    `Pilot crossover guard: ${target.pilotProjectRef ? 'configured' : 'not configured'}`,
+  );
   console.log(`Staging Supabase host: ${new URL(target.supabaseUrl).hostname}`);
   console.log(`Staging FastAPI host: ${new URL(target.aiServiceBaseUrl).hostname}`);
   console.log(`Expected migration: ${target.expectedMigration}`);

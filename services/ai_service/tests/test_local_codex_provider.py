@@ -142,6 +142,7 @@ def test_hardened_argv_environment_stdin_and_cleanup() -> None:
             "HOME": "/home/test",
             "CODEX_HOME": "/home/test/.codex",
             "PATH": "/usr/bin",
+            "SUPABASE_SECRET_KEY": "must-not-leak",
             "SUPABASE_SERVICE_ROLE_KEY": "must-not-leak",
             "SCHEDULED_REFRESH_TOKEN": "must-not-leak",
         },

@@ -33,6 +33,8 @@ async def _lifespan(app: FastAPI):
     try:
         supabase_client = SupabaseRestClient.pooled_from_settings(settings)
     except SupabaseConfigurationError:
+        if settings.is_hosted_environment:
+            raise
         app.state.composition = None
         app.state.token_verifier = UnconfiguredTokenVerifier()
         yield
@@ -57,7 +59,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="MyLifeGraph AI Service",
         version="0.1.0",
-        docs_url="/docs" if settings.app_env != "production" else None,
+        docs_url=(
+            "/docs" if settings.normalized_app_env == "development" else None
+        ),
         redoc_url=None,
         lifespan=_lifespan,
     )

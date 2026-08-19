@@ -8,13 +8,16 @@ class AppBootstrap {
 
   static Future<void> initialize(AppConfig config) async {
     initializeProfileTimeZones();
+    config.validateSupabaseConfiguration();
     if (!config.isSupabaseConfigured) {
       return;
     }
 
     await Supabase.initialize(
       url: config.supabaseUrl,
-      anonKey: config.supabaseAnonKey,
+      // supabase_flutter 2.x keeps the historical parameter name while
+      // accepting both current publishable keys and legacy anon JWTs.
+      anonKey: config.supabaseClientKey,
     );
   }
 }

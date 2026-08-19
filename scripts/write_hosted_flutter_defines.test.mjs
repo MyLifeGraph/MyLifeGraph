@@ -13,8 +13,9 @@ const validEnvironment = {
   APP_ENV: 'staging',
   USE_MOCK_DATA: 'false',
   COACH_SURFACE_ENABLED: 'true',
-  SUPABASE_URL: 'https://project-ref.supabase.co/',
-  SUPABASE_ANON_KEY: 'publishable-test-value',
+  STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
+  SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co/',
+  SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
   AI_SERVICE_BASE_URL: 'https://coach-staging.example.test/',
 };
 
@@ -23,15 +24,19 @@ test('hosted defines require complete fail-closed staging configuration', () => 
     APP_ENV: 'staging',
     USE_MOCK_DATA: 'false',
     COACH_SURFACE_ENABLED: 'true',
-    SUPABASE_URL: 'https://project-ref.supabase.co',
-    SUPABASE_ANON_KEY: 'publishable-test-value',
+    STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
+    PILOT_SUPABASE_PROJECT_REF: '',
+    SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co',
+    SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
+    SUPABASE_ANON_KEY: '',
     AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
   });
 
   for (const name of [
     'APP_ENV',
+    'STAGING_SUPABASE_PROJECT_REF',
     'SUPABASE_URL',
-    'SUPABASE_ANON_KEY',
+    'SUPABASE_PUBLISHABLE_KEY',
     'AI_SERVICE_BASE_URL',
   ]) {
     assert.throws(
@@ -54,10 +59,68 @@ test('hosted defines require complete fail-closed staging configuration', () => 
   );
 });
 
+test('hosted defines keep a bounded staging legacy-key transition', () => {
+  const definitions = hostedFlutterDefines({
+    ...validEnvironment,
+    SUPABASE_PUBLISHABLE_KEY: '',
+    SUPABASE_ANON_KEY: 'legacy-anon-test-value',
+  });
+  assert.equal(definitions.SUPABASE_PUBLISHABLE_KEY, '');
+  assert.equal(definitions.SUPABASE_ANON_KEY, 'legacy-anon-test-value');
+
+  const duringRotation = hostedFlutterDefines({
+    ...validEnvironment,
+    SUPABASE_ANON_KEY: 'different-legacy-value',
+  });
+  assert.equal(
+    duringRotation.SUPABASE_PUBLISHABLE_KEY,
+    validEnvironment.SUPABASE_PUBLISHABLE_KEY,
+  );
+  assert.equal(duringRotation.SUPABASE_ANON_KEY, '');
+});
+
+test('pilot builds require current keys and reject staging crossover', () => {
+  const pilotEnvironment = {
+    ...validEnvironment,
+    APP_ENV: 'pilot',
+    PILOT_SUPABASE_PROJECT_REF: 'bcdefghijklmnopqrstu',
+    SUPABASE_URL: 'https://bcdefghijklmnopqrstu.supabase.co',
+  };
+  assert.equal(hostedFlutterDefines(pilotEnvironment).APP_ENV, 'pilot');
+  assert.throws(
+    () =>
+      hostedFlutterDefines({
+        ...pilotEnvironment,
+        SUPABASE_PUBLISHABLE_KEY: '',
+        SUPABASE_ANON_KEY: 'legacy-anon-test-value',
+      }),
+    /SUPABASE_PUBLISHABLE_KEY/,
+  );
+  assert.throws(
+    () =>
+      hostedFlutterDefines({
+        ...pilotEnvironment,
+        SUPABASE_URL: validEnvironment.SUPABASE_URL,
+      }),
+    /does not match/,
+  );
+  assert.throws(
+    () =>
+      hostedFlutterDefines({
+        ...pilotEnvironment,
+        PILOT_SUPABASE_PROJECT_REF:
+          pilotEnvironment.STAGING_SUPABASE_PROJECT_REF,
+      }),
+    /must be distinct/,
+  );
+});
+
 test('hosted defines reject insecure and credential-bearing endpoints', () => {
   for (const [name, value] of [
-    ['SUPABASE_URL', 'http://project-ref.supabase.co'],
+    ['SUPABASE_URL', 'http://abcdefghijklmnopqrst.supabase.co'],
+    ['SUPABASE_URL', 'https://abcdefghijklmnopqrst.supabase.co:443'],
     ['SUPABASE_URL', 'https://example.test'],
+    ['SUPABASE_URL', 'https://abcdefghijklmnopqrst.supabase.co/rest/v1'],
     ['AI_SERVICE_BASE_URL', 'http://coach.example.test'],
     ['AI_SERVICE_BASE_URL', 'https://user:secret@coach.example.test'],
     ['AI_SERVICE_BASE_URL', 'https://coach.example.test?token=secret'],
@@ -79,8 +142,11 @@ test('hosted defines are written with owner-only permissions', () => {
       APP_ENV: 'staging',
       USE_MOCK_DATA: 'false',
       COACH_SURFACE_ENABLED: 'true',
-      SUPABASE_URL: 'https://project-ref.supabase.co',
-      SUPABASE_ANON_KEY: 'publishable-test-value',
+      STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
+      PILOT_SUPABASE_PROJECT_REF: '',
+      SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
+      SUPABASE_ANON_KEY: '',
       AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
     });
   } finally {

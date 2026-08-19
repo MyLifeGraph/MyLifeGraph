@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/local_supabase_migrations.sh"
 
+# Local E2E owns exact derived credentials. Refuse inherited backend keys from
+# selecting a different project or leaking into unrelated child processes.
+unset SUPABASE_SECRET_KEY SUPABASE_SERVICE_ROLE_KEY
+
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
 FLUTTER_WEB_MODE="${FLUTTER_WEB_MODE:-profile}"
 STATIC_SERVER_PYTHON="${STATIC_SERVER_PYTHON:-python3}"

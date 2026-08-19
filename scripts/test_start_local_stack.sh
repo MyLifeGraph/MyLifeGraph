@@ -162,8 +162,9 @@ elif [[ "${1:-}" == "-m" && "${2:-}" == "app.ops.local_daily_refresh" ]]; then
   kind=runner
 fi
 
-printf '%s service=%s token=%s anon=%s provider=%s local=%s fake=%s image=%s\n' \
+printf '%s secret=%s service=%s token=%s anon=%s provider=%s local=%s fake=%s image=%s\n' \
   "$kind" \
+  "${SUPABASE_SECRET_KEY:+set}" \
   "${SUPABASE_SERVICE_ROLE_KEY:+set}" \
   "${SCHEDULED_REFRESH_TOKEN:+set}" \
   "${SUPABASE_ANON_KEY:+set}" \
@@ -188,7 +189,8 @@ if [[ "${1:-}" == "pub" && "${2:-}" == "get" ]]; then
   exit 0
 fi
 
-printf 'frontend service=%s token=%s anon=%s mock=%s coach=%s\n' \
+printf 'frontend secret=%s service=%s token=%s anon=%s mock=%s coach=%s\n' \
+  "${SUPABASE_SECRET_KEY:+set}" \
   "${SUPABASE_SERVICE_ROLE_KEY:+set}" \
   "${SCHEDULED_REFRESH_TOKEN:+set}" \
   "${SUPABASE_ANON_KEY:+set}" \
@@ -243,6 +245,7 @@ wait_for_event() {
 export TEST_EVENT_FILE="$EVENTS"
 export TEST_DOCKER_STATE_FILE="$TEST_ROOT/docker-image-revision"
 PATH="$FAKE_BIN:$PATH" \
+SUPABASE_SECRET_KEY=must-not-leak \
 AI_SERVICE_PYTHON="$FAKE_BIN/python" \
 FLUTTER_BIN="$FAKE_BIN/flutter" \
 LOCAL_CODEX_BIN="$FAKE_BIN/codex" \
@@ -251,9 +254,9 @@ LOCAL_STACK_READY_ATTEMPTS=2 \
 "$REPO/scripts/start_local_stack.sh" >"$OUTPUT" 2>&1 &
 SUPERVISOR_PID=$!
 
-wait_for_event 'backend service=set token=set anon= provider=local_codex_oauth local=true fake=false'
-wait_for_event 'runner service= token=set anon= provider=unset local=unset fake=unset'
-wait_for_event 'frontend service= token= anon=set mock=false coach=true'
+wait_for_event 'backend secret= service=set token=set anon= provider=local_codex_oauth local=true fake=false'
+wait_for_event 'runner secret= service= token=set anon= provider=unset local=unset fake=unset'
+wait_for_event 'frontend secret= service= token= anon=set mock=false coach=true'
 
 kill -TERM "$SUPERVISOR_PID"
 set +e

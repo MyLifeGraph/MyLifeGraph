@@ -9,7 +9,7 @@ import {
 } from './verify_staging_remote.mjs';
 
 const environment = {
-  STAGING_PROJECT_REF: 'abcdefghijklmnopqrst',
+  STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
   STAGING_SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co/',
   STAGING_AI_SERVICE_BASE_URL: 'https://coach-staging.example.test/',
 };
@@ -18,6 +18,7 @@ test('staging target is exact, HTTPS-only, and fingerprint-bound', () => {
   const target = stagingTarget(environment);
   assert.deepEqual(target, {
     projectRef: 'abcdefghijklmnopqrst',
+    pilotProjectRef: '',
     supabaseUrl: 'https://abcdefghijklmnopqrst.supabase.co',
     aiServiceBaseUrl: 'https://coach-staging.example.test',
     expectedMigration: EXPECTED_MIGRATION,
@@ -40,7 +41,7 @@ test('staging target rejects host mismatch and insecure endpoints', () => {
     () =>
       stagingTarget({
         ...environment,
-        STAGING_PROJECT_REF: 'bbbbbbbbbbbbbbbbbbbb',
+        STAGING_SUPABASE_PROJECT_REF: 'bbbbbbbbbbbbbbbbbbbb',
       }),
     /does not match/,
   );
@@ -60,6 +61,25 @@ test('staging target rejects host mismatch and insecure endpoints', () => {
           'https://user:secret@coach-staging.example.test',
       }),
     /credential-free/,
+  );
+});
+
+test('staging target rejects pilot crossover and conflicting ref aliases', () => {
+  assert.throws(
+    () =>
+      stagingTarget({
+        ...environment,
+        PILOT_SUPABASE_PROJECT_REF: environment.STAGING_SUPABASE_PROJECT_REF,
+      }),
+    /refuses the pilot/,
+  );
+  assert.throws(
+    () =>
+      stagingTarget({
+        ...environment,
+        STAGING_PROJECT_REF: 'bbbbbbbbbbbbbbbbbbbb',
+      }),
+    /conflict/,
   );
 });
 

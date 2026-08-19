@@ -86,11 +86,13 @@ budget, capacity assumptions, and go/no-go gates live only in
 
 The inspected hosted project remains staging. A distinct pilot project will
 own real participant Auth/data only after an authorized inventory and setup.
-Hosted Flutter will migrate to a current Supabase publishable key and backend/
-backup components to separately scoped secret keys where supported; PostgreSQL
-policies and grants may continue to name database role `service_role`. The
-current checkout still uses legacy configuration names, so this is a focused
-future compatibility boundary rather than current implementation truth.
+The repository configuration now accepts current Supabase publishable and
+backend secret keys, with current values winning during a bounded legacy-key
+rotation. Hosted Flutter and FastAPI bind exact `staging`/`pilot` environments
+to their separately configured project refs; pilot requires current keys and
+rejects the staging URL or equal refs. PostgreSQL policies and grants continue
+to name database role `service_role`. No remote key rotation or pilot-project
+existence follows from this local compatibility implementation.
 
 That planned topology separates cheap process liveness, sanitized FastAPI/
 Supabase core readiness, and authenticated Coach-provider capability. Codex
@@ -265,12 +267,18 @@ The mobile app reads Dart defines through `AppConfig.fromEnvironment()`:
 - `APP_ENV`
 - `USE_MOCK_DATA`
 - `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_ANON_KEY`
+- `STAGING_SUPABASE_PROJECT_REF`
+- `PILOT_SUPABASE_PROJECT_REF`
 - `AI_SERVICE_BASE_URL`
 - `COACH_SURFACE_ENABLED`
 
-Supabase is initialized only when both Supabase values are non-empty. Without
-them, the app can still run through local guest mode and mock data.
+Supabase is initialized only when the URL and one compatible client key are
+non-empty. A current publishable key wins over a simultaneously retained legacy
+anon JWT. Hosted environments additionally require the exact project-ref/URL
+binding; pilot requires the current key. Without client configuration, the app
+can still run through local guest mode and mock data.
 
 ## Data Source Selection
 
@@ -293,8 +301,8 @@ FastAPI-backed integration source, while guest/mock renders an honest local
 state and makes no calendar API call.
 Coach follows it too: `COACH_SURFACE_ENABLED` controls whether navigation is
 shown and whether `/coach` remains accessible. It is fail-closed in every
-release build and for `APP_ENV=production` unless the exact value `true` is
-supplied. When the surface is enabled, a static real-account capability permits
+release build and for `APP_ENV=staging|pilot|production` unless the exact value
+`true` is supplied. When the surface is enabled, a static real-account capability permits
 backend access while the authenticated backend capability independently reports
 `disabled|unavailable|ready` and controls sending. Provider outage does not hide
 persisted history or memory controls.
@@ -1445,7 +1453,9 @@ independent Sleep Recommendation.
 
 - Supabase RLS is enabled and forced where migrations touch tables.
 - User-owned tables scope access by `auth.uid()` or admin role helpers.
-- Supabase service-role secrets are not used by the mobile app.
+- Supabase current backend secret keys and legacy service-role JWTs are not used
+  by the mobile app. Hosted clients receive only a publishable key; build and
+  local supervisors explicitly strip backend keys from Flutter child processes.
 - The atomic Setup apply RPC revokes execute from `public`, `anon`, and
   `authenticated`; only the FastAPI service-role client can invoke it.
 - Canonical profile identity and eligibility are backend-owned. Application

@@ -31,7 +31,7 @@ class SupabaseRestClient:
     ) -> None:
         if not url.strip() or not service_role_key.strip():
             raise SupabaseConfigurationError(
-                "Supabase URL and service-role key are required for backend access.",
+                "Supabase URL and backend key are required for backend access.",
             )
         self._url = url.rstrip("/")
         self._service_role_key = service_role_key
@@ -45,12 +45,16 @@ class SupabaseRestClient:
         *,
         http_client: httpx.AsyncClient | None = None,
     ) -> "SupabaseRestClient":
-        return cls(
-            url=settings.supabase_url,
-            service_role_key=settings.supabase_service_role_key,
-            timeout_seconds=settings.supabase_timeout_seconds,
-            http_client=http_client,
-        )
+        try:
+            url, backend_key = settings.supabase_backend_configuration()
+            return cls(
+                url=url,
+                service_role_key=backend_key,
+                timeout_seconds=settings.supabase_timeout_seconds,
+                http_client=http_client,
+            )
+        except ValueError as exc:
+            raise SupabaseConfigurationError(str(exc)) from exc
 
     @classmethod
     def pooled_from_settings(cls, settings: Settings) -> "SupabaseRestClient":

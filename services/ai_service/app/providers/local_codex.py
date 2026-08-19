@@ -569,7 +569,7 @@ class LocalCodexCoachProvider:
             return "provider_not_enabled"
         if not (
             self._settings.supabase_url.strip()
-            and self._settings.supabase_service_role_key.strip()
+            and self._settings.supabase_backend_configuration()[1].strip()
         ):
             return "persistence_unconfigured"
         docker_bin = self._settings.coach_analysis_docker_bin

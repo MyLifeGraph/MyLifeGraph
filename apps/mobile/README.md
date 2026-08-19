@@ -13,9 +13,11 @@ before it becomes active. Staging and production expose Coach only with exact
 The public-signup VPS pilot, explicit shared operator-provider proposal,
 tagged-release flow, and signed-device acceptance are future work owned by
 `../../docs/vps-pilot-release-plan.md`; they are not current Flutter behavior.
-That future plan also requires a visible synthetic-only staging build, a
-separate real-data pilot project, current Supabase publishable keys, and a
-pre-signup 18-or-older choice whose backend record must succeed before Setup.
+The configuration foundation now accepts current Supabase publishable keys,
+binds hosted builds to distinct exact staging/pilot project refs, and rejects a
+pilot build using a legacy key or staging URL. A visible synthetic-only staging
+surface, the separate remote real-data project, and the pre-signup
+18-or-older/backend-acceptance flow remain to be implemented.
 
 Feature code keeps its data and presentation internals private. Riverpod
 factories or widgets that deliberately wire multiple features live under
@@ -91,16 +93,21 @@ The app reads configuration from Dart defines in
 
 | Define | Default | Purpose |
 | --- | --- | --- |
-| `APP_ENV` | `development` | Environment label. |
+| `APP_ENV` | `development` | `development` is local; hosted builds accept exact `staging` or `pilot`. |
 | `USE_MOCK_DATA` | `false` in code, `true` in scripts | Enables mock repository paths. |
-| `SUPABASE_URL` | empty | Enables Supabase when paired with anon key. |
-| `SUPABASE_ANON_KEY` | empty | Public anon key for Supabase client. |
+| `SUPABASE_URL` | empty | Enables Supabase when paired with one compatible client key. |
+| `SUPABASE_PUBLISHABLE_KEY` | empty | Current public `sb_publishable_` key for the Supabase client; required by pilot builds. |
+| `SUPABASE_ANON_KEY` | empty | Legacy anon-JWT compatibility for local Supabase and bounded staging migration. |
+| `STAGING_SUPABASE_PROJECT_REF` | empty | Exact non-secret staging ref; required by hosted staging and pilot builds. |
+| `PILOT_SUPABASE_PROJECT_REF` | empty | Exact non-secret pilot ref; required by pilot builds and distinct from staging. |
 | `AI_SERVICE_BASE_URL` | `http://localhost:8000` | FastAPI service base URL. |
 | `COACH_SURFACE_ENABLED` | unset/fail-closed in release and production | Exact `true` explicitly exposes Coach; backend capability still controls sending. |
 | `LEARNED_FOCUS_PLANNING_PILOT_ENABLED` | `false` | Exact `true` enables the development-only learned-timing Planner pilot; the backend must use the same flag. Production builds stay fail-closed. |
 
-Supabase is only initialized when both `SUPABASE_URL` and
-`SUPABASE_ANON_KEY` are non-empty.
+Supabase is initialized only when `SUPABASE_URL` and one compatible client key
+are non-empty. A current key wins while a legacy key may remain configured
+during rotation. Hosted URLs must be credential-free HTTPS roots matching the
+exact environment ref; pilot requires the current key and both distinct refs.
 
 `USE_MOCK_DATA=true` forces product data surfaces to local/demo sources even
 when an authenticated Supabase session exists. Use `false` for real Setup,

@@ -8,19 +8,18 @@ commands below. Do not use `APP_ENV=development`, `--reload`, `tmux`, or the
 local Codex start command as an Internet-facing deployment shortcut.
 
 The inspected hosted target remains staging. No command in this guide creates
-or seeds a real-data pilot project. The planned hosted split, current Supabase
-publishable/secret-key compatibility, staging-only scenario generator,
-project-ref crossover guards, and 18-or-older acceptance do not exist yet;
-their future design lives in the pilot plan. Until that focused implementation
-lands, the current variable names and remote harness below remain the truthful
-supported interfaces.
+or seeds a real-data pilot project. Current code now supports Supabase
+publishable/secret-key names, exact staging/pilot project-ref binding, and
+pilot crossover denial. Remote key rotation, the staging-only scenario
+generator, the real pilot project, and 18-or-older acceptance do not exist yet;
+their remaining design lives in the pilot plan.
 
 For a local BYOK-compatible backend, set `COACH_BYOK_PROVIDERS=openai,gemini`;
 do not place OpenAI or Gemini keys in `.env`. Keys arrive per capabilities or
-response request and are not used by history/deletion. Staging/production
+response request and are not used by history/deletion. Staging/pilot
 Flutter builds require `COACH_SURFACE_ENABLED=true` and an HTTPS
 `AI_SERVICE_BASE_URL`. `render.yaml` and the Vercel build script contain only
-non-secret topology; hosted Supabase and service-role values remain platform
+non-secret topology; hosted Supabase backend-key values remain platform
 secrets. The staging debug APK workflow reads GitHub Environment `staging`
 secrets into a mode-0600 temporary define file.
 
@@ -29,10 +28,13 @@ immutable Frankfurt service region; do not create the service from an older
 Blueprint that would fall back to Render's current defaults.
 
 Hosted Flutter builds use `scripts/write_hosted_flutter_defines.mjs` and fail
-before compiling unless `APP_ENV` is exactly `staging` or `production`,
-`USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, both Supabase client values
-are present, and Supabase/FastAPI URLs are credential-free HTTPS endpoints.
-Neither the helper nor CI prints the resulting values.
+before compiling unless `APP_ENV` is exactly `staging` or `pilot`,
+`USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, a compatible Supabase
+client key is present, and Supabase/FastAPI URLs are credential-free HTTPS
+roots. Staging binds to `STAGING_SUPABASE_PROJECT_REF` and may temporarily use
+the legacy anon key; pilot additionally requires a distinct
+`PILOT_SUPABASE_PROJECT_REF` and a current `sb_publishable_` key. Neither the
+helper nor CI prints the resulting values.
 
 ## Remote Staging Verification
 
@@ -42,7 +44,7 @@ or arbitrary cleanup authority. Preview binds approval to the exact project
 ref, Supabase host, FastAPI host, and expected migration:
 
 ```bash
-STAGING_PROJECT_REF=<exact-project-ref> \
+STAGING_SUPABASE_PROJECT_REF=<exact-project-ref> \
 STAGING_SUPABASE_URL=https://<exact-project-ref>.supabase.co \
 STAGING_AI_SERVICE_BASE_URL=https://<render-service-host> \
 npm run verify:staging:remote
@@ -50,9 +52,12 @@ npm run verify:staging:remote
 
 Only the confirmed run additionally receives
 `STAGING_SUPABASE_PUBLISHABLE_KEY` and
-`STAGING_SUPABASE_SERVICE_ROLE_KEY` from the caller environment. Never place
-those values in command arguments, chat, fixtures, or documentation. Pass the
-fresh preview fingerprint back exactly:
+`STAGING_SUPABASE_SECRET_KEY` from the caller environment. The legacy
+`STAGING_PROJECT_REF` and `STAGING_SUPABASE_SERVICE_ROLE_KEY` names remain
+temporary fallbacks; current keys win when both key types are present. An
+optional `PILOT_SUPABASE_PROJECT_REF` makes preview and execution reject an
+equal pilot target. Never place key values in command arguments, chat,
+fixtures, or documentation. Pass the fresh preview fingerprint back exactly:
 
 ```bash
 npm run verify:staging:remote -- --confirm staging-target-<fingerprint>
@@ -204,7 +209,10 @@ The root `.env.example` documents the shared local values:
 APP_ENV=development
 USE_MOCK_DATA=true
 SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_ANON_KEY=
+STAGING_SUPABASE_PROJECT_REF=
+PILOT_SUPABASE_PROJECT_REF=
 AI_SERVICE_BASE_URL=http://localhost:8000
 LEARNED_FOCUS_PLANNING_PILOT_ENABLED=false
 ```
@@ -253,11 +261,15 @@ HOST=0.0.0.0 PORT=8080 scripts/start_frontend.sh
 ```bash
 USE_MOCK_DATA=false \
 SUPABASE_URL=https://your-project.supabase.co \
-SUPABASE_ANON_KEY=your-anon-key \
+SUPABASE_PUBLISHABLE_KEY=your-publishable-key \
 scripts/start_frontend.sh
 ```
 
-In `staging` and `production`, Coach is exposed only when
+For the local CLI stack, keep using its generated legacy anon JWT through
+`SUPABASE_ANON_KEY`; the client compatibility resolver supports that local
+path. Do not put backend keys in the root Flutter `.env`.
+
+In `staging`, `pilot`, and `production`, Coach is exposed only when
 `COACH_SURFACE_ENABLED` is exactly `true`, including release builds. In
 `development`, an explicit value wins; otherwise debug/profile enables Coach
 and release disables it. Unknown environment labels fail closed. Exposing the
@@ -267,7 +279,8 @@ independent send gate.
 `LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` must be supplied to both FastAPI
 and Flutter for the optional learned-timing control to become actionable.
 `scripts/start_frontend.sh` forwards it as a Dart define. The backend reads the
-same environment name. Flutter also forces the gate off for production builds,
+same environment name. Flutter also forces the gate off for pilot and
+production builds,
 and the account preference remains off by default. A convenient local
 full-stack invocation is:
 
@@ -678,15 +691,20 @@ Backend-only Supabase configuration for the AI service:
 
 ```env
 SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SECRET_KEY=
 SUPABASE_SERVICE_ROLE_KEY=<local service-role key from supabase status>
 SUPABASE_TIMEOUT_SECONDS=10
 SCHEDULED_REFRESH_TOKEN=<local scheduler token>
 ```
 
-Keep `SUPABASE_SERVICE_ROLE_KEY` only in the FastAPI service environment. Do
-not add it to Flutter `.env`, docs examples with real values, browser runtime
-configuration, or committed files. Keep `SCHEDULED_REFRESH_TOKEN` backend-only
-for local scheduler invocations and tests.
+Current hosted environments use `SUPABASE_SECRET_KEY`; the local CLI continues
+to provide `SUPABASE_SERVICE_ROLE_KEY`, and a staging migration may temporarily
+retain it. When both are configured, the current key wins. Keep both names only
+in the FastAPI service environment. Do not add them to the root Flutter `.env`,
+browser runtime configuration, or committed files. A hosted backend also needs
+the exact non-secret staging/pilot ref variables described above. Keep
+`SCHEDULED_REFRESH_TOKEN` backend-only for local scheduler invocations and
+tests.
 
 The scheduler-triggered daily preparation endpoint is intentionally not a
 Flutter client endpoint:
@@ -1622,8 +1640,9 @@ the listed screens. Keep manual testing for flows not listed in
   whether the app is already running.
 - A `HEAD /` request may not prove the Flutter web-server is broken. Test with
   a normal browser request or `curl http://127.0.0.1:7357/`.
-- If Supabase auth buttons fail, confirm `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-  and provider redirect URLs.
+- If Supabase auth buttons fail, confirm `SUPABASE_URL`, the current
+  `SUPABASE_PUBLISHABLE_KEY` or local legacy `SUPABASE_ANON_KEY`, the exact
+  hosted project ref, and provider redirect URLs.
 - If real Supabase reads return empty data, confirm the authenticated user and
   expected tables exist.
 - If `scripts/verify_supabase_local.sh` cannot connect to Docker, rerun it in an

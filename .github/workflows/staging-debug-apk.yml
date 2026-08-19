@@ -39,7 +39,9 @@ jobs:
           APP_ENV: staging
           USE_MOCK_DATA: "false"
           COACH_SURFACE_ENABLED: "true"
+          STAGING_SUPABASE_PROJECT_REF: oscrunlndfrecjilojja
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           AI_SERVICE_BASE_URL: ${{ secrets.AI_SERVICE_BASE_URL }}
         run: |

@@ -71,13 +71,15 @@ publishable/secret key, row, or migration has been created or inspected by that
 decision. Assigning or creating it is a future authorized remote operation;
 repository documentation must not infer it from the staging target.
 
-The current repository and local tooling still use legacy anon/service-role
-configuration names. The VPS pilot plans a focused compatibility migration to
-Supabase publishable keys in Flutter and separate backend secret keys where
-supported. That future credential change does not rename PostgreSQL role
-`service_role`, weaken RLS/grants, or authorize remote key rotation. Until code,
-tests, every caller, and a separately approved remote rotation converge, this
-document makes no claim that either hosted environment uses the new keys.
+The repository now supports current `SUPABASE_PUBLISHABLE_KEY` and
+`SUPABASE_SECRET_KEY` configuration while retaining legacy anon/service-role
+names for local Supabase and a bounded staging transition. Current values win
+when both generations coexist. Hosted clients/backends bind exact staging or
+pilot project refs to the default project-ref URL; pilot requires current keys
+and rejects the staging URL or equal refs. This configuration change does not
+rename PostgreSQL role `service_role`, weaken RLS/grants, mutate either remote
+project, or authorize key rotation. Neither hosted environment is claimed to
+use a current key until separately authorized remote evidence proves it.
 
 No remote synthetic-scenario generator currently exists. The planned tool must
 be allowlisted to the exact staging project, preview and confirm its bounded
@@ -143,10 +145,24 @@ kind-authority guard in
 The Flutter app initializes Supabase only when both values are non-empty:
 
 - `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
+- one current `SUPABASE_PUBLISHABLE_KEY` or compatible legacy
+  `SUPABASE_ANON_KEY`.
+
+`development` remains the local environment. Exact `staging` additionally
+requires `STAGING_SUPABASE_PROJECT_REF`; exact `pilot` requires that ref plus a
+distinct `PILOT_SUPABASE_PROJECT_REF` and the current publishable key. The URL
+must be the credential-free HTTPS root for the selected default
+`<project-ref>.supabase.co` host. Current keys win during rotation.
 
 Without those values, `supabaseClientProvider` returns `null`. The app still
 runs through guest mode and mock data.
+
+FastAPI uses `SUPABASE_SECRET_KEY` when present and otherwise accepts the local/
+staging compatibility name `SUPABASE_SERVICE_ROLE_KEY`. Pilot requires a
+current `sb_secret_` value. The API gateway continues to project that backend
+key onto PostgreSQL role `service_role`; database policies, grants, and RPC
+names therefore do not change. Invalid hosted URL/ref/key configuration aborts
+hosted startup instead of serving an apparently healthy unconfigured API.
 
 `USE_MOCK_DATA=true` is also an explicit source override: product surfaces stay
 local/demo even when Supabase is configured and an authenticated session exists.

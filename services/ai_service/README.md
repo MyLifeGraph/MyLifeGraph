@@ -14,10 +14,11 @@ need provider keys. Response V1/V2 rows remain readable.
 
 The VPS/HTTPS release and proposed explicit shared operator provider are future
 work owned by `../../docs/vps-pilot-release-plan.md`. The plan does not make
-the current development-only Codex adapter deployable. It also plans distinct
-staging/pilot project guards, current Supabase backend secret-key support, a
-staging-only fixture generator, and a bearer-derived adult-participation
-acceptance before product access; none is a current route or schema claim.
+the current development-only Codex adapter deployable. Distinct staging/pilot
+project guards and current Supabase backend secret-key support are now
+implemented configuration boundaries. The staging-only fixture generator and
+bearer-derived adult-participation acceptance before product access remain
+future route/schema work.
 
 ## Current Status
 
@@ -305,7 +306,8 @@ python -m pip install --require-hashes -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-OpenAPI docs are available in non-production environments:
+OpenAPI docs are available only in exact `APP_ENV=development`; staging, pilot,
+production, and unknown labels disable them:
 
 ```text
 http://localhost:8000/docs
@@ -768,6 +770,9 @@ USE_MOCK_DATA=true
 API_PREFIX=/v1
 ALLOWED_ORIGINS=http://127.0.0.1:7357,http://localhost:7357
 SUPABASE_URL=
+STAGING_SUPABASE_PROJECT_REF=
+PILOT_SUPABASE_PROJECT_REF=
+SUPABASE_SECRET_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_TIMEOUT_SECONDS=10
 SCHEDULED_REFRESH_TOKEN=
@@ -787,9 +792,13 @@ COACH_EVIDENCE_TIMEOUT_SECONDS=15
 COACH_EVIDENCE_GLOBAL_CONCURRENCY=4
 ```
 
-Do not expose the Supabase service-role key to the Flutter app. It belongs only
-in the backend service environment. Keep `SCHEDULED_REFRESH_TOKEN` backend-only
-as well; it authorizes scheduler-triggered refresh runs.
+Hosted pilot uses the current `SUPABASE_SECRET_KEY`; local Supabase and staged
+migration may retain `SUPABASE_SERVICE_ROLE_KEY`. When both exist the current
+key wins. Staging may temporarily use the legacy key, while pilot requires a
+current `sb_secret_` value. Never expose either backend key to Flutter. Hosted
+startup also requires the exact environment project ref and rejects a crossed
+URL or equal staging/pilot refs. Keep `SCHEDULED_REFRESH_TOKEN` backend-only as
+well; it authorizes scheduler-triggered refresh runs.
 
 Coach is off by default. Standard automation may explicitly use
 `COACH_PROVIDER=fake` with `COACH_FAKE_PROVIDER_ENABLED=true`. The real local

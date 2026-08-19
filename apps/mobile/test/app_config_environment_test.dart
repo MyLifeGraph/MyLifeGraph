@@ -26,7 +26,7 @@ void main() {
     );
   });
 
-  test('staging and production require an exact explicit opt in', () {
+  test('staging, pilot, and production require an exact explicit opt in', () {
     expect(
       resolveCoachSurfaceEnabled(
         environment: 'development',
@@ -35,7 +35,12 @@ void main() {
       ),
       isTrue,
     );
-    for (final environment in ['production', ' PRODUCTION ', 'staging']) {
+    for (final environment in [
+      'production',
+      ' PRODUCTION ',
+      'staging',
+      'pilot',
+    ]) {
       expect(
         resolveCoachSurfaceEnabled(
           environment: environment,
@@ -64,5 +69,90 @@ void main() {
         reason: 'explicitValue=$value',
       );
     }
+  });
+
+  test('current publishable key wins during legacy-key rotation', () {
+    expect(
+      resolveSupabaseClientKey(
+        environment: 'staging',
+        publishableKey: 'sb_publishable_current',
+      ),
+      'sb_publishable_current',
+    );
+    expect(
+      resolveSupabaseClientKey(
+        environment: 'development',
+        legacyAnonKey: 'legacy-anon-key',
+      ),
+      'legacy-anon-key',
+    );
+    expect(
+      resolveSupabaseClientKey(
+        environment: 'staging',
+        publishableKey: 'sb_publishable_current',
+        legacyAnonKey: 'different-legacy-key',
+      ),
+      'sb_publishable_current',
+    );
+    expect(
+      () => resolveSupabaseClientKey(
+        environment: 'pilot',
+        legacyAnonKey: 'legacy-anon-key',
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('hosted Supabase target is bound to its exact environment project', () {
+    const stagingRef = 'abcdefghijklmnopqrst';
+    const pilotRef = 'bcdefghijklmnopqrstu';
+    expect(
+      () => validateHostedSupabaseTarget(
+        environment: 'staging',
+        supabaseUrl: 'https://$stagingRef.supabase.co',
+        stagingProjectRef: stagingRef,
+        pilotProjectRef: pilotRef,
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validateHostedSupabaseTarget(
+        environment: 'pilot',
+        supabaseUrl: 'https://$pilotRef.supabase.co',
+        stagingProjectRef: stagingRef,
+        pilotProjectRef: pilotRef,
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validateHostedSupabaseTarget(
+        environment: 'pilot',
+        supabaseUrl: 'https://$stagingRef.supabase.co',
+        stagingProjectRef: stagingRef,
+        pilotProjectRef: pilotRef,
+      ),
+      throwsStateError,
+    );
+    expect(
+      () => validateHostedSupabaseTarget(
+        environment: 'pilot',
+        supabaseUrl: 'https://$stagingRef.supabase.co',
+        stagingProjectRef: stagingRef,
+        pilotProjectRef: stagingRef,
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('staging app configuration cannot fall back to guest mode', () {
+    const config = AppConfig(
+      environment: 'staging',
+      supabaseUrl: '',
+      aiServiceBaseUrl: 'https://coach-staging.example.test',
+      useMockData: false,
+      stagingSupabaseProjectRef: 'abcdefghijklmnopqrst',
+    );
+
+    expect(config.validateSupabaseConfiguration, throwsStateError);
   });
 }

@@ -1,9 +1,29 @@
 from functools import lru_cache
+import re
 
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_PROJECT_REF_PATTERN = re.compile(r"^[a-z]{20}$")
+
+
+def _configured_value(name: str, value: str) -> str:
+    if value and value.strip() != value:
+        raise ValueError(f"{name} must not contain surrounding whitespace.")
+    return value
+
+
+def _project_ref(name: str, value: str, *, optional: bool = False) -> str:
+    configured = _configured_value(name, value)
+    if optional and not configured:
+        return ""
+    if _PROJECT_REF_PATTERN.fullmatch(configured) is None:
+        raise ValueError(f"{name} must be an exact 20-letter project ref.")
+    return configured
 
 
 class Settings(BaseSettings):
@@ -20,9 +40,18 @@ class Settings(BaseSettings):
         alias="ALLOWED_ORIGINS",
     )
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
+    supabase_secret_key: str = Field(default="", alias="SUPABASE_SECRET_KEY")
     supabase_service_role_key: str = Field(
         default="",
         alias="SUPABASE_SERVICE_ROLE_KEY",
+    )
+    staging_supabase_project_ref: str = Field(
+        default="",
+        alias="STAGING_SUPABASE_PROJECT_REF",
+    )
+    pilot_supabase_project_ref: str = Field(
+        default="",
+        alias="PILOT_SUPABASE_PROJECT_REF",
     )
     supabase_timeout_seconds: float = Field(
         default=10,
@@ -104,6 +133,69 @@ class Settings(BaseSettings):
             for origin in self.allowed_origins_raw.split(",")
             if origin.strip()
         ]
+
+    @property
+    def normalized_app_env(self) -> str:
+        return self.app_env.strip().lower()
+
+    @property
+    def is_hosted_environment(self) -> bool:
+        return self.normalized_app_env in {"staging", "pilot"}
+
+    def supabase_backend_configuration(self) -> tuple[str, str]:
+        current_key = _configured_value(
+            "SUPABASE_SECRET_KEY",
+            self.supabase_secret_key,
+        )
+        legacy_key = _configured_value(
+            "SUPABASE_SERVICE_ROLE_KEY",
+            self.supabase_service_role_key,
+        )
+        if current_key and not current_key.startswith("sb_secret_"):
+            raise ValueError(
+                "SUPABASE_SECRET_KEY must use the current sb_secret_ format.",
+            )
+        if self.normalized_app_env == "pilot" and not current_key:
+            raise ValueError("SUPABASE_SECRET_KEY is required for pilot.")
+
+        url = _configured_value("SUPABASE_URL", self.supabase_url)
+        if self.is_hosted_environment:
+            staging_ref = _project_ref(
+                "STAGING_SUPABASE_PROJECT_REF",
+                self.staging_supabase_project_ref,
+            )
+            pilot_ref = _project_ref(
+                "PILOT_SUPABASE_PROJECT_REF",
+                self.pilot_supabase_project_ref,
+                optional=self.normalized_app_env == "staging",
+            )
+            if pilot_ref and staging_ref == pilot_ref:
+                raise ValueError(
+                    "Staging and pilot Supabase project refs must be distinct.",
+                )
+            expected_ref = (
+                staging_ref
+                if self.normalized_app_env == "staging"
+                else pilot_ref
+            )
+            parsed = urlsplit(url)
+            if (
+                parsed.scheme != "https"
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.port is not None
+                or parsed.path not in {"", "/"}
+                or parsed.query
+                or parsed.fragment
+                or parsed.hostname != f"{expected_ref}.supabase.co"
+            ):
+                raise ValueError(
+                    "SUPABASE_URL must exactly match the configured hosted "
+                    "project ref.",
+                )
+            url = f"https://{parsed.hostname}"
+
+        return url, current_key or legacy_key
 
     @property
     def coach_byok_providers(self) -> frozenset[str]:

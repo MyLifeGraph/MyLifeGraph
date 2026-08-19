@@ -22,37 +22,40 @@ The future hosted acceptance sequence is centralized in
 [VPS Pilot Release Plan](vps-pilot-release-plan.md). Its repository,
 infrastructure, Supabase/Auth, provider, Vercel, Android, capacity, rollback,
 and professor-handoff gates are requirements, not current pass evidence. That
-future gate now also requires distinct staging/pilot project identities,
+future gate also requires distinct staging/pilot project identities,
 publishable/secret-key compatibility, pilot-target denial in synthetic seed
-tooling, and versioned 18-or-older acceptance. The current checkout still has
-no VPS deployment or hosted shared Codex provider.
+tooling, and versioned 18-or-older acceptance. The local configuration and
+hosted-build guards now cover the first two: pilot current-key enforcement,
+exact URL/ref binding, and staging crossover denial have focused tests. Remote
+key state, the scenario generator, adult acceptance, VPS deployment, and the
+hosted shared Codex provider remain open.
 
 ## Current Verified Baseline
 
-The staging-hardening working tree was verified locally on 2026-08-15 against
-task base `ed00d8024bce75bc94d8d7d9bb80a5a3ff2d7313`. The affected selector
-chose the Full lane. Documentation consistency passed for 92 Markdown files and
-78 FastAPI routes; the Visual contract, Flutter analysis, all 1,055 Flutter
-tests, the Flutter web build, Ruff, Python compilation, and `1555 passed, 2
-skipped` FastAPI tests passed. The isolated migration chains and both the
-isolated and normal final states passed 375 assertions across 16 pgTAP files.
-The selector's first browser start refused an occupied port as designed; all
-eight independent journeys then passed on alternate owned loopback ports and
-removed their temporary Auth identities. A local debug APK also built through
-the new hosted-define helper with non-secret test values. Android JVM/lint and
-the local Codex smoke remain the preceding BYOK baseline because their source
-did not change in this follow-up. No reset, hosted deployment, OpenAI/Gemini
-live turn, or installed-device check occurred during this local gate. A
-separate dated staging migration audit is recorded below.
+The hosted Supabase identity/configuration working tree was verified locally on
+2026-08-19 against task base
+`afcc9f7e667e2daed8faf233746279c186463a75`. The affected selector chose the
+Full lane. Documentation consistency passed for 92 Markdown files and 78
+FastAPI routes; the Visual contract, Flutter analysis, all 1,058 Flutter tests,
+the Flutter web build, Ruff, Python compilation, and `1561 passed, 2 skipped`
+FastAPI tests passed. The isolated migration chains and both the isolated and
+normal final states passed 375 assertions across 16 pgTAP files. All eight
+independent browser journeys passed and removed their temporary Auth
+identities. The current run did not build an APK; Android JVM/lint, the debug
+APK, and the local Codex smoke remain the preceding baseline because their
+implementation source did not change in this configuration slice. No reset,
+hosted deployment, OpenAI/Gemini live turn, remote project mutation, or
+installed-device check occurred during this local gate. A separate dated
+staging migration audit is recorded below.
 
 The latest recorded lane evidence for this checkout is:
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Docs, visual, Flutter, FastAPI, and web | On 2026-08-15, the staging-hardening working tree passed Docs, Visual, Flutter analysis, all 1,055 Flutter tests, the web build, Ruff/compile, and `1555 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
+| Docs, visual, Flutter, FastAPI, and web | On 2026-08-19, the hosted Supabase identity/configuration working tree passed Docs, Visual, Flutter analysis, all 1,058 Flutter tests, the web build, Ruff/compile, and `1561 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
 | Representative browser smoke | On 2026-08-11, all four profile-mode Setup, Auth/Capture/Today, Planner-confirmation, and fake-Coach journeys passed and removed their temporary Auth identities. | Deterministic local browser integration only. |
-| Database transition/final state | On 2026-08-15, the isolated Goal, Exam Health, Multi-Exam, and Recommendation-retirement chains passed, followed by all 375 final-state assertions in isolated and normal local databases. | Physically isolated RAM-only transition targets plus the exact normal local database; no reset or remote state. |
-| Full browser | On 2026-08-15, the full eight-journey profile-mode suite passed and removed every temporary Auth identity. | Deterministic local browser integration against the BYOK working tree only. |
+| Database transition/final state | On 2026-08-19, the isolated Goal, Exam Health, Multi-Exam, and Recommendation-retirement chains passed, followed by all 375 final-state assertions in isolated and normal local databases. | Physically isolated RAM-only transition targets plus the exact normal local database; no reset or remote state. |
+| Full browser | On 2026-08-19, the full eight-journey profile-mode suite passed and removed every temporary Auth identity. | Deterministic local browser integration against the hosted-configuration working tree only. |
 | Android source/build | On 2026-08-15, Android JVM/lint and a debug APK build passed. | Debug signing only; no current installed-device or OEM behavior claim. |
 | Local database safety | On 2026-08-05, a full archive restore-verification and the reset preview passed; destructive reset execution was not run. | The ignored local archive and exact local database only. |
 | Demo seed | On 2026-08-04, the four local demo identities were recreated and the enriched Student fixture passed its focused verification. | Not a remote seed or full-product gate. |
@@ -556,8 +559,10 @@ replace browser or product verification.
 
 - Never paste, print, or commit Supabase keys, database passwords, scheduler
   tokens, bearer tokens, `.env` contents, or Codex OAuth state.
-- Local anon keys are valid client configuration but still credentials in chat
-  and logs; service-role keys remain FastAPI/Node-only.
+- Current publishable and legacy anon keys are valid client configuration but
+  still credentials in chat and logs. Current backend secret keys and legacy
+  service-role JWTs remain FastAPI/Node-only and are stripped from Flutter
+  build/start child environments.
 - Sanitized `codex login status` is the maximum routine OAuth inspection. Never
   read or copy `~/.codex/auth.json`.
 - Use run-specific ignored artifacts under `.tools/`; do not install replacement
@@ -605,10 +610,11 @@ gate until that hosted job succeeds.
 - Public hosted signup CAPTCHA, release-day Google OAuth/redirect settings,
   shared-provider global admission/budget behavior, and invalid-BYOK
   no-fallback behavior through the public origins remain unverified.
-- No separate real-data pilot Supabase project is repository-proven. Current
-  code has no publishable/secret-key migration, staging/pilot crossover guard,
-  hosted staging-only scenario generator, visible staging identity, or
-  versioned 18-or-older acceptance test.
+- No separate real-data pilot Supabase project or remote current-key rotation is
+  repository-proven. Local code now supports publishable/secret keys and exact
+  staging/pilot crossover guards, but the hosted staging-only scenario
+  generator, visible staging identity, and versioned 18-or-older acceptance
+  test remain absent.
 - The current stream commits HTTP 200/`started` before provider concurrency is
   acquired; pre-stream HTTP 429 admission, same-id retry without claim/budget,
   executor reservation cleanup, and race/disconnect behavior are not yet

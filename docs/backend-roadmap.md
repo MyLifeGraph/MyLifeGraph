@@ -19,8 +19,11 @@ The cross-platform delivery and release sequence is now owned by
 `docs/vps-pilot-release-plan.md`: protected `main`, tagged releases, public
 self-registration, VPS/HTTPS operation, Vercel, signed Android delivery,
 shared-provider safeguards, and professor handoff. That document plans future
-work; it does not alter this roadmap's current implementation claims. In
-particular, there is still no hosted operator-provider path in this checkout.
+work; it does not alter this roadmap's current implementation claims. The first
+configuration foundation is implemented: current Supabase client/backend key
+names, exact staging/pilot ref binding, pilot current-key enforcement, and
+crossover denial. There is still no remote pilot project, key rotation, or
+hosted operator-provider path in this checkout.
 
 The implemented Setup-personalization retirement in
 `docs/setup-personalization-retirement-contract.md` is authoritative wherever
@@ -434,7 +437,8 @@ Not yet implemented:
 ## Architectural Principles
 
 - Keep Supabase as the source of truth for auth and user-owned data.
-- Keep the Supabase service-role key only in backend environments.
+- Keep current Supabase backend secret keys and legacy service-role JWTs only
+  in backend environments; Flutter receives only a publishable/anon client key.
 - Derive `user_id` on the backend from a verified Supabase bearer token.
 - Never trust request-provided `user_id`.
 - Use RLS on every exposed Supabase table.

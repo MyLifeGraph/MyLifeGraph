@@ -32,7 +32,7 @@ COACH_ANALYSIS_IMAGE="${COACH_ANALYSIS_IMAGE:-mylifegraph-coach-analysis:1}"
 # A caller cannot inject backend credentials into unrelated child processes.
 # The local values used below are derived afresh and remain unexported shell
 # variables until they are scoped to the exact backend/runner command.
-unset SUPABASE_SERVICE_ROLE_KEY SCHEDULED_REFRESH_TOKEN
+unset SUPABASE_SECRET_KEY SUPABASE_SERVICE_ROLE_KEY SCHEDULED_REFRESH_TOKEN
 
 declare -a CHILD_PIDS=()
 SHUTTING_DOWN=false
@@ -284,7 +284,7 @@ fi
 
 if [[ -f "$ROOT_DIR/.env" ]] &&
   grep -Eq \
-    '^[[:space:]]*(export[[:space:]]+)?(SUPABASE_SERVICE_ROLE_KEY|SCHEDULED_REFRESH_TOKEN)[[:space:]]*=' \
+    '^[[:space:]]*(export[[:space:]]+)?(SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|SCHEDULED_REFRESH_TOKEN)[[:space:]]*=' \
     "$ROOT_DIR/.env"; then
   fail "Root .env must not define backend-only service or scheduler credentials."
 fi
@@ -384,7 +384,7 @@ CHILD_PIDS+=("$SCHEDULER_PID")
 
 (
   cd "$ROOT_DIR"
-  unset SUPABASE_SERVICE_ROLE_KEY SCHEDULED_REFRESH_TOKEN
+  unset SUPABASE_SECRET_KEY SUPABASE_SERVICE_ROLE_KEY SCHEDULED_REFRESH_TOKEN
   APP_ENV=development \
     USE_MOCK_DATA=false \
     SUPABASE_URL="$api_url" \

@@ -57,7 +57,10 @@ in the repository.
 
 The intended first hosted pilot uses Vercel for Flutter Web, hosted Supabase
 for Auth/Postgres, and a separately operated HTTPS FastAPI/Coach service on a
-VPS. That topology is not implemented by the current checkout. Its complete
+VPS. The repository now has fail-closed staging/pilot project-ref guards and
+current Supabase publishable/secret-key configuration with bounded legacy
+compatibility, but the complete topology is not yet implemented or deployed. Its
+remaining
 implementation, `main`/tag release, VPS, HTTPS, public-signup, Android, and
 acceptance sequence is owned by the
 [VPS pilot release plan](docs/vps-pilot-release-plan.md).

@@ -68,6 +68,7 @@ run_source_checks() {
   node --check e2e/web/support/local-auth-users.mjs
   node --check scripts/cleanup_local_e2e_users.mjs
   node --check scripts/verify_affected.mjs
+  node --check scripts/lib/supabase_deployment.mjs
   node --check scripts/write_hosted_flutter_defines.mjs
   node --check scripts/write_hosted_flutter_defines.test.mjs
   node --check scripts/verify_staging_remote.mjs
