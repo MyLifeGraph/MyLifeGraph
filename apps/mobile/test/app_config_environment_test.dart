@@ -155,4 +155,31 @@ void main() {
 
     expect(config.validateSupabaseConfiguration, throwsStateError);
   });
+
+  test('hosted participation requires an explicit contact address', () {
+    const missing = AppConfig(
+      environment: 'staging',
+      supabaseUrl: 'https://abcdefghijklmnopqrst.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+      stagingSupabaseProjectRef: 'abcdefghijklmnopqrst',
+      aiServiceBaseUrl: 'https://coach-staging.example.test',
+      useMockData: false,
+    );
+    const configured = AppConfig(
+      environment: 'pilot',
+      supabaseUrl: 'https://bcdefghijklmnopqrstu.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+      stagingSupabaseProjectRef: 'abcdefghijklmnopqrst',
+      pilotSupabaseProjectRef: 'bcdefghijklmnopqrstu',
+      pilotContactEmail: 'pilot-contact@example.org',
+      aiServiceBaseUrl: 'https://coach.example.org',
+      useMockData: false,
+    );
+
+    expect(missing.validatePilotParticipationConfiguration, throwsStateError);
+    expect(
+      configured.validatePilotParticipationConfiguration,
+      returnsNormally,
+    );
+  });
 }

@@ -11,8 +11,10 @@ deletion; it must never show a transient database failure as a cancelled
 accepted deletion. This is future work owned by the VPS pilot plan, not current
 V1 account behavior.
 
-The planned public pilot is adult-only and allows ordinary personal use. Its
-pre-signup copy must present the privacy notice before one explicit
+The public-pilot repository flow is adult-only and allows ordinary personal
+use. Its implemented `pilot-participation-v1` /
+`pilot-participation-notice-v1` pre-signup copy presents the privacy notice
+before one explicit
 `I confirm that I am 18 or older` acceptance, record the accepted notice
 version/time through the backend after authentication but before product
 access, and never ask for a birth date solely for this gate. Editable Auth
@@ -20,7 +22,9 @@ profile metadata must not be presented as proof of eligibility. The notice
 must not describe real mood, sleep, stress, study, calendar, planning,
 reflection, or Coach data as anonymous test data. A staging client containing
 synthetic fixtures must display a persistent `Staging · Test data` identity and
-must never be presented as the public pilot.
+must never be presented as the public pilot. Both surfaces are implemented in
+the current Flutter source; that is not hosted legal review or deployment
+evidence.
 
 Status: implemented V1 product-copy contract for the current checkout,
 including Coach BYOK and shell behavior, Exam-Week Outlook, and Personal

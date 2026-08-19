@@ -57,7 +57,7 @@ request-scoped but not yet hosted-release-verified. The separate Codex CLI/OAuth
 adapter is explicitly enabled and development-only; none of these provider
 paths creates a new Flutter-to-Supabase authority.
 
-### Planned VPS Pilot Shape (Not Implemented)
+### VPS Pilot Shape (Repository Implementation In Progress)
 
 The accepted pilot direction keeps Flutter Web on Vercel and Auth/Postgres in
 hosted Supabase while placing FastAPI behind Caddy and HTTPS on a VPS. Public
@@ -93,6 +93,20 @@ to their separately configured project refs; pilot requires current keys and
 rejects the staging URL or equal refs. PostgreSQL policies and grants continue
 to name database role `service_role`. No remote key rotation or pilot-project
 existence follows from this local compatibility implementation.
+
+The repository now implements the first participation seam. Hosted Flutter
+shows `pilot-participation-notice-v1` before account creation/OAuth, stores a
+matching choice only across the short current auth flow, and routes an
+authenticated account without acceptance to a dedicated gate before Setup or
+product routes. `POST /v1/account/pilot-participation` derives the owner from
+the verified bearer and calls the service-role-only
+`accept_pilot_participation_v1` RPC. The canonical `profiles` row owns the exact
+notice version and backend timestamp; Auth metadata is not authority and no
+birth date exists. Normal staging/pilot FastAPI dependencies read that pair
+before product service composition, while account export and deletion retain a
+raw-verified-principal escape path. Staging Flutter also wraps every route with
+the persistent `Staging · Test data` identity. These are source boundaries, not
+evidence that the migration or clients are deployed remotely.
 
 That planned topology separates cheap process liveness, sanitized FastAPI/
 Supabase core readiness, and authenticated Coach-provider capability. Codex
@@ -1365,6 +1379,13 @@ an optional bounded account-wide daily preparation rule, a strict bounded
 Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
+
+The same account boundary owns hosted adult participation. The strict
+`pilot-participation-v1` command accepts only the current notice and literal
+confirmation, derives the profile id from the bearer, and persists the paired
+version/backend time through a service-role-only RPC. Exact retries retain the
+first timestamp. Hosted product dependencies fail closed until this pair is
+current, but export and deletion remain available to the authenticated owner.
 
 Export reads only owner-filtered canonical product tables, including the
 current Study Setup and Personal Learning projections, applies field

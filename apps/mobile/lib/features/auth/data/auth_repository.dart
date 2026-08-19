@@ -5,9 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_tables.dart';
 import 'guest_setup_data_source.dart';
+import 'pilot_participation_api_data_source.dart';
+import 'pilot_participation_pending_store.dart';
 import '../domain/app_session.dart';
 import '../domain/auth_failure.dart';
 import '../domain/intake_response.dart';
+import '../domain/pilot_participation.dart';
 
 const localDeviceTimezoneMarker = 'device-local';
 
@@ -21,16 +24,29 @@ class AuthRepository {
     GuestSetupDataSource guestSetupDataSource = const GuestSetupDataSource(),
     GoogleOAuthLauncher? googleOAuthLauncher,
     GuestCheckInMigrator? guestCheckInMigrator,
+    PilotParticipationGateway? pilotParticipationGateway,
+    PilotParticipationPendingStore pilotParticipationPendingStore =
+        const PilotParticipationPendingStore(),
+    bool requiresPilotParticipation = false,
+    DateTime Function()? now,
   })  : _useMockData = useMockData,
         _guestSetupDataSource = guestSetupDataSource,
         _googleOAuthLauncher = googleOAuthLauncher,
-        _guestCheckInMigrator = guestCheckInMigrator;
+        _guestCheckInMigrator = guestCheckInMigrator,
+        _pilotParticipationGateway = pilotParticipationGateway,
+        _pilotParticipationPendingStore = pilotParticipationPendingStore,
+        _requiresPilotParticipation = requiresPilotParticipation,
+        _now = now ?? DateTime.now;
 
   final SupabaseClient _client;
   final bool _useMockData;
   final GuestSetupDataSource _guestSetupDataSource;
   final GoogleOAuthLauncher? _googleOAuthLauncher;
   final GuestCheckInMigrator? _guestCheckInMigrator;
+  final PilotParticipationGateway? _pilotParticipationGateway;
+  final PilotParticipationPendingStore _pilotParticipationPendingStore;
+  final bool _requiresPilotParticipation;
+  final DateTime Function() _now;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -42,6 +58,12 @@ class AuthRepository {
       final profile = await _resolveAuthenticatedProfile(user);
       _cachedSession = AppSession.authenticated(profile);
       return _cachedSession;
+    }
+
+    if (_requiresPilotParticipation) {
+      await _clearGuestActiveFlag();
+      _cachedSession = null;
+      return null;
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -87,7 +109,13 @@ class AuthRepository {
     required String email,
     required String password,
     String? name,
+    bool confirmed18OrOlder = false,
   }) async {
+    await _preparePilotParticipation(
+      confirmed18OrOlder: confirmed18OrOlder,
+      flow: PilotParticipationFlow.email,
+      identity: email,
+    );
     final response = await _client.auth.signUp(
       email: email,
       password: password,
@@ -111,7 +139,12 @@ class AuthRepository {
     return session;
   }
 
-  Future<void> signInWithGoogle() async {
+  Future<void> signInWithGoogle({bool confirmed18OrOlder = false}) async {
+    await _preparePilotParticipation(
+      confirmed18OrOlder: confirmed18OrOlder,
+      flow: PilotParticipationFlow.google,
+      identity: '',
+    );
     final redirectTo = authRedirectUrl();
     final opened = await (_googleOAuthLauncher?.call(redirectTo) ??
         _client.auth.signInWithOAuth(
@@ -143,6 +176,10 @@ class AuthRepository {
   }
 
   Future<AppSession> continueAsGuest() async {
+    if (_requiresPilotParticipation) {
+      throw const PilotParticipationUnavailableException();
+    }
+    await _pilotParticipationPendingStore.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_Prefs.guestActive, true);
     final session = AppSession.guest(
@@ -163,6 +200,7 @@ class AuthRepository {
   Future<void> signOut() async {
     await _client.auth.signOut();
     await _clearGuestActiveFlag();
+    await _pilotParticipationPendingStore.clear();
     _cachedSession = null;
   }
 
@@ -171,6 +209,7 @@ class AuthRepository {
       await _client.auth.signOut();
     } finally {
       await _clearGuestActiveFlag();
+      await _pilotParticipationPendingStore.clear();
       _cachedSession = null;
     }
   }
@@ -189,7 +228,8 @@ class AuthRepository {
         .select(
           'id,email,display_name,timezone,daily_preparation_budget_minutes,'
           'timezone_revision,preparation_budget_revision,auth_provider,'
-          'onboarding_completed_at,role',
+          'onboarding_completed_at,role,pilot_participation_notice_version,'
+          'pilot_participation_accepted_at',
         )
         .eq('id', id)
         .limit(1);
@@ -201,6 +241,11 @@ class AuthRepository {
     Map<String, dynamic> row, {
     User? fallbackUser,
   }) {
+    final acceptedAtValue = row['pilot_participation_accepted_at'];
+    final parsedAcceptedAt =
+        acceptedAtValue is String ? DateTime.tryParse(acceptedAtValue) : null;
+    final acceptedAt =
+        parsedAcceptedAt?.isUtc == true ? parsedAcceptedAt : null;
     return AppProfile(
       id: '${row['id'] ?? fallbackUser?.id ?? ''}',
       email: '${row['email'] ?? fallbackUser?.email ?? ''}',
@@ -214,6 +259,9 @@ class AuthRepository {
       timezoneRevision: (row['timezone_revision'] as num?)?.toInt() ?? 1,
       preparationBudgetRevision:
           (row['preparation_budget_revision'] as num?)?.toInt() ?? 1,
+      pilotParticipationNoticeVersion:
+          row['pilot_participation_notice_version'] as String?,
+      pilotParticipationAcceptedAt: acceptedAt,
     );
   }
 
@@ -241,6 +289,18 @@ class AuthRepository {
       }
     }
     final profile = await requireProfileForAuthUser(user);
+    final participatingProfile = await _maybeCommitPendingPilotParticipation(
+      user: user,
+      profile: profile,
+    );
+    if (_requiresPilotParticipation &&
+        !participatingProfile.hasCurrentPilotParticipation) {
+      return participatingProfile;
+    }
+    return _finishAuthenticatedProfile(participatingProfile);
+  }
+
+  Future<AppProfile> _finishAuthenticatedProfile(AppProfile profile) async {
     if (shouldMigrateGuestCheckIns(
       useMockData: _useMockData,
       profile: profile,
@@ -256,6 +316,86 @@ class AuthRepository {
     } catch (_) {
       return profile;
     }
+  }
+
+  Future<void> _preparePilotParticipation({
+    required bool confirmed18OrOlder,
+    required PilotParticipationFlow flow,
+    required String identity,
+  }) async {
+    if (!_requiresPilotParticipation) return;
+    if (!confirmed18OrOlder) {
+      throw const PilotParticipationConfirmationRequiredException();
+    }
+    await _pilotParticipationPendingStore.record(
+      noticeVersion: pilotParticipationNoticeVersion,
+      flow: flow,
+      identity: identity,
+      now: _now(),
+    );
+  }
+
+  Future<AppProfile> _maybeCommitPendingPilotParticipation({
+    required User user,
+    required AppProfile profile,
+  }) async {
+    if (!_requiresPilotParticipation) return profile;
+    if (profile.hasCurrentPilotParticipation) {
+      await _pilotParticipationPendingStore.clear();
+      return profile;
+    }
+    final provider = user.appMetadata['provider']?.toString() ?? 'email';
+    final flow = provider == 'google'
+        ? PilotParticipationFlow.google
+        : PilotParticipationFlow.email;
+    final identity =
+        flow == PilotParticipationFlow.email ? user.email ?? '' : '';
+    final matches = await _pilotParticipationPendingStore.matches(
+      noticeVersion: pilotParticipationNoticeVersion,
+      flow: flow,
+      identity: identity,
+      now: _now(),
+    );
+    if (!matches) return profile;
+    try {
+      return await _recordCurrentPilotParticipation(profile);
+    } catch (_) {
+      return profile;
+    }
+  }
+
+  Future<AppProfile> acceptCurrentPilotParticipation() async {
+    final session = _cachedSession;
+    if (!_requiresPilotParticipation ||
+        session == null ||
+        session.isGuestSession) {
+      throw const PilotParticipationUnavailableException();
+    }
+    final accepted = await _recordCurrentPilotParticipation(session.profile);
+    final complete = await _finishAuthenticatedProfile(accepted);
+    _cachedSession = AppSession.authenticated(complete);
+    return complete;
+  }
+
+  Future<AppProfile> _recordCurrentPilotParticipation(
+    AppProfile profile,
+  ) async {
+    final gateway = _pilotParticipationGateway;
+    final currentSession = _client.auth.currentSession;
+    if (gateway == null ||
+        currentSession == null ||
+        currentSession.user.id != profile.id ||
+        currentSession.accessToken.isEmpty) {
+      throw const PilotParticipationUnavailableException();
+    }
+    final accepted = await gateway.accept(
+      accessToken: currentSession.accessToken,
+    );
+    await _pilotParticipationPendingStore.clear();
+    return profile.copyWith(
+      pilotParticipationNoticeVersion: accepted.noticeVersion,
+      pilotParticipationAcceptedAt: accepted.acceptedAt,
+    );
   }
 
   Future<void> _migrateGuestCheckIns(String userId) async {
@@ -389,4 +529,12 @@ class _Prefs {
   static const guestActive = 'auth_guest_active';
   static const guestName = 'auth_guest_name';
   static const guestOnboardingDone = 'auth_guest_onboarding_done';
+}
+
+class PilotParticipationConfirmationRequiredException implements Exception {
+  const PilotParticipationConfirmationRequiredException();
+}
+
+class PilotParticipationUnavailableException implements Exception {
+  const PilotParticipationUnavailableException();
 }

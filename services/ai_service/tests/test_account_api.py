@@ -18,6 +18,7 @@ from app.models.account import (
     AccountExportResponse,
     AccountPreparationBudgetResponse,
     AccountProfileResponse,
+    PilotParticipationResponse,
 )
 from app.services.account_service import (
     AccountExportTooLargeError,
@@ -71,6 +72,23 @@ class Service:
         self.preparation_budget_error: Exception | None = None
         self.export_error: Exception | None = None
         self.delete_error: Exception | None = None
+        self.participation_error: Exception | None = None
+
+    async def accept_pilot_participation(
+        self,
+        *,
+        user_id: str,
+        notice_version: str,
+    ):
+        self.calls.append(("participation", user_id, notice_version))
+        if self.participation_error is not None:
+            raise self.participation_error
+        return PilotParticipationResponse(
+            contract_version="pilot-participation-v1",
+            notice_version="pilot-participation-notice-v1",
+            accepted_at=NOW,
+            replayed=False,
+        )
 
     async def update_timezone(
         self,
@@ -216,6 +234,45 @@ def test_patch_profile_is_strict_authenticated_and_owner_derived() -> None:
     )
     assert unknown.status_code == 422
     assert unknown_service.calls == []
+
+
+def test_pilot_participation_is_explicit_and_bearer_derived() -> None:
+    response, service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/account/pilot-participation",
+            json={
+                "contract_version": "pilot-participation-v1",
+                "notice_version": "pilot-participation-notice-v1",
+                "confirmed_18_or_older": True,
+            },
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "contract_version": "pilot-participation-v1",
+        "notice_version": "pilot-participation-notice-v1",
+        "accepted_at": NOW.isoformat().replace("+00:00", "Z"),
+        "replayed": False,
+    }
+    assert service.calls == [
+        ("participation", USER_ID, "pilot-participation-notice-v1"),
+    ]
+
+    rejected, rejected_service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/account/pilot-participation",
+            json={
+                "contract_version": "pilot-participation-v1",
+                "notice_version": "pilot-participation-notice-v1",
+                "confirmed_18_or_older": False,
+            },
+        ),
+    )
+    assert rejected.status_code == 422
+    assert rejected_service.calls == []
 
 
 def test_patch_maps_timezone_missing_and_persistence_errors_safely() -> None:

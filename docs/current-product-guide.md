@@ -96,11 +96,30 @@ Quelle verwendet werden. Es gibt keinen Live-Sync und keinen Calendar-Write.
 | Coach mit `local_codex_oauth` | Synced account plus explizit aktivierter Codex-CLI-Zugang und lokales Analyse-Image | Ein echter `gpt-5.5`-Fast-Turn mit drei Read-only-Werkzeugen | Nur lokale Entwicklung; nicht in Release/Produktion verfügbar |
 
 Ein neu registrierter echter Account erhält seine Auth-Identität und sein
-kanonisches Profil in Supabase. Danach erzwingt die App das Setup. Erst dessen
+kanonisches Profil in Supabase. In exaktem `staging` oder `pilot` zeigt die App
+vor der Kontoerstellung beziehungsweise Google-Anmeldung den
+`pilot-participation-notice-v1`-Hinweis des
+`pilot-participation-v1`-Vertrags mit expliziter Bestätigung „I confirm
+that I am 18 or older“. Nach Authentifizierung schreibt ausschließlich der
+bearer-abgeleitete Backend-Befehl Version und Backend-Zeit in das Profil; eine
+fehlende oder alte Bestätigung sperrt Setup und Produkt, aber nicht Abmeldung,
+Export oder Löschung. Es wird kein Geburtsdatum gespeichert und editierbare
+Auth-Metadaten zählen nicht als Nachweis. Staging zeigt dauerhaft
+`Staging · Test data`; gehostete Builds bieten keinen Gastzugang. Danach
+erzwingt die App das Setup. Erst dessen
 explizite Bestätigung materialisiert die gewählten Setup-Daten. Leere optionale
 Felder erzeugen keine Habits oder Schedule Items. Setup verändert niemals die
 separat in Settings gespeicherten Reminder-Einstellungen. Ein echter neuer
 Account erhält keine Daten des `student`-Testusers.
+
+Für gezielte gehostete Tests gibt es getrennt den versionierten
+`staging-scenarios-v1`-Generator mit den Fällen Fresh account, Exam week,
+Overdue tasks, Sleep deficit/high stress, Existing Coach history und Deadline
+conflicts. Er arbeitet ausschließlich gegen die fest geprüfte Staging-Ref,
+erzeugt klar synthetisch benannte Accounts und besitzt keine Pilot-Autorität.
+Seine bestätigte Nutzung ist ein Betriebs-/Testschritt und kein normaler
+Produktweg; echte Nutzerkonten werden weiterhin nach und nach durch eigene
+Eingaben befüllt.
 
 ## Navigation: Was befindet sich wo?
 
@@ -308,7 +327,7 @@ Budget-, Calendar-, Plan- oder Belegungsdaten muss neu geprüft werden.
 
 | Feature | Wie es funktioniert | Verwendete Daten | Geschriebene Daten / LLM |
 | --- | --- | --- | --- |
-| **Auth und Account** | E-Mail/Passwort, Recovery und optional konfiguriertes Google OAuth über Supabase Auth | Auth-Identität und Profil | `profiles`; kein LLM |
+| **Auth und Account** | E-Mail/Passwort, Recovery und optional konfiguriertes Google OAuth über Supabase Auth; hosted zusätzlich versionierte 18+-Selbstbestätigung vor Produktzugang | Auth-Identität und Profil; `pilot-participation-notice-v1` plus Backend-Zeit, kein Geburtsdatum | `profiles` und bearer-abgeleitete FastAPI/RPC-Autorität; kein LLM |
 | **Setup** | nur Typical weekday und Best energy window sind erforderlich; Name, Routinen, Commitments und Study Setup sind optional; Focus setup speichert Rhythmus und Start-Ritual, Semester planning genau ein aktuelles/nächstes Semester; atomar, revisioniert und retry-sicher | explizite Tagesstruktur/Energiefenster sowie optionale Routine-, Commitment-, Focus-/Pausen-, Ritual- und Semesterangaben; keine Focus Areas, Goals, Frictions, Coaching-Style-, Reminder- oder Context-Frage; `responses.goals` wird abgelehnt | `intake_responses`, `study_setup_profiles`, `habits`, `schedule_items`, die Best-Energy-`memory_entries` und Onboarding-Snapshot; `notification_preferences` bleibt vollständig unverändert; kein LLM |
 | **Morning check-in** | zwei lokale Schritte: zuerst korrigierbarer geschätzter Schlafbeginn, Aufwachzeit, automatisch berechnete „Estimated sleep duration“ und das verwendete Schlafziel, danach separat geschätzte Schlafqualität (1–10) und aktuelle Energie; `Back` erhält alle Angaben, gespeichert wird nur am Ende; drei Erklärungen starten eingeklappt | explizite Selbstauskunft; Qualität wird nicht aus der Dauer abgeleitet, Rohzeiten gelten nicht als objektive Messung | `daily-capture-v5` im lokalen Tag; Rohzeiten bleiben nur in `daily_logs`, Dauer/Qualität werden kompatibel projiziert, kein fünftes Event und kein LLM; historische V2–V4-Werte bleiben lesbar, Day Shape wird nicht mehr gezeigt oder genutzt |
 | **Evening check-in** | drei kurze Schritte für Mood, Energie, Stress, geplante Schlafzeit mit Dauerziel sowie optionale Reflection und Specific Blocker; keine Possible Priority oder Friction-Auswahl; die zwei Sleep-Plan-Erklärungen starten eingeklappt | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle mit separater Info-Hilfe und Kontrollierbarkeit; zuerst sichtbar sind acht Stunden, persönlich wird der Wert erst beim Speichern | `daily-capture-v5` im selben `daily_logs`-Tag plus abgeleitete `behavioral_events`; während des Rollouts bleiben vollständige V4-Schreibvorgänge zulässig, ein V5-Container wird nie herabgestuft; V2–V4 bleiben lesbar; freie Texte/Rohzeiten gelangen nicht in Daily State, können aber im ausdrücklich ausgelösten persönlichen Coach-Snapshot als nicht vertrauenswürdige Daten enthalten sein |
@@ -911,7 +930,7 @@ Es ist kein Befehl für eine Remote-Datenbank.
 
 ## Vertiefende technische Dokumente
 
-- `docs/vps-pilot-release-plan.md`: noch nicht implementierte zentrale
+- `docs/vps-pilot-release-plan.md`: zentrale, teilweise lokal implementierte
   Liefer- und Freigabesequenz für öffentliche Registrierung, VPS/HTTPS,
   Coach-Provider, `main`, Vercel, Android und Abgabe.
 - `docs/setup-personalization-retirement-contract.md`: schlankes Setup,

@@ -111,6 +111,7 @@ select is_empty(
         'timestamp with time zone,integer)'::regprocedure,
       'public.persist_weekly_review_v3('
         'uuid,text,timestamp with time zone,jsonb)'::regprocedure,
+      'public.accept_pilot_participation_v1(uuid,text)'::regprocedure,
       'public.start_focus_session_v2('
         'uuid,uuid,text,text,uuid,integer,integer,text,uuid,text,'
         'timestamp with time zone)'::regprocedure

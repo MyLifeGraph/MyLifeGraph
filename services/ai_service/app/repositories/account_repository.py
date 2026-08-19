@@ -31,6 +31,10 @@ class AccountPreparationBudgetUpdateOutcomeUnknownError(RuntimeError):
     pass
 
 
+class AccountParticipationOutcomeUnknownError(RuntimeError):
+    pass
+
+
 class AccountExportSourceTooLargeError(RuntimeError):
     pass
 
@@ -55,7 +59,22 @@ class StoredTimezone:
     replayed: bool
 
 
+@dataclass(frozen=True)
+class StoredPilotParticipation:
+    notice_version: str
+    accepted_at: datetime
+    replayed: bool
+
+
 class AccountRepository(Protocol):
+    async def accept_pilot_participation(
+        self,
+        *,
+        user_id: str,
+        notice_version: str,
+    ) -> StoredPilotParticipation | None:
+        pass
+
     async def update_timezone(
         self,
         *,
@@ -120,6 +139,51 @@ class SupabaseAccountRepository:
 
     def __init__(self, client: SupabaseRestClient) -> None:
         self._client = client
+
+    async def accept_pilot_participation(
+        self,
+        *,
+        user_id: str,
+        notice_version: str,
+    ) -> StoredPilotParticipation | None:
+        params = {
+            "p_user_id": user_id,
+            "p_notice_version": notice_version,
+        }
+        try:
+            result = await self._client.rpc(
+                "accept_pilot_participation_v1",
+                params=params,
+            )
+        except httpx.HTTPStatusError as exc:
+            if _response_error_code(exc.response) == "PT404":
+                return None
+            if exc.response.status_code < 500:
+                raise AccountPersistenceError(
+                    "Pilot participation persistence is unavailable.",
+                ) from exc
+            result = await self._replay_pilot_participation(params=params)
+        except (httpx.HTTPError, ValueError):
+            result = await self._replay_pilot_participation(params=params)
+        return _stored_pilot_participation(
+            result,
+            expected_notice_version=notice_version,
+        )
+
+    async def _replay_pilot_participation(
+        self,
+        *,
+        params: dict[str, Any],
+    ) -> Any:
+        try:
+            return await self._client.rpc(
+                "accept_pilot_participation_v1",
+                params=params,
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            raise AccountParticipationOutcomeUnknownError(
+                "Pilot participation outcome could not be determined.",
+            ) from exc
 
     async def update_timezone(
         self,
@@ -454,6 +518,47 @@ def _stored_timezone(
         timezone=expected_timezone,
         revision=result["revision"],
         updated_at=updated_at,
+        replayed=result["replayed"],
+    )
+
+
+def _stored_pilot_participation(
+    result: object,
+    *,
+    expected_notice_version: str,
+) -> StoredPilotParticipation:
+    expected_keys = {
+        "contract_version",
+        "notice_version",
+        "accepted_at",
+        "replayed",
+    }
+    if (
+        not isinstance(result, dict)
+        or set(result) != expected_keys
+        or result.get("contract_version") != "pilot-participation-v1"
+        or result.get("notice_version") != expected_notice_version
+        or not isinstance(result.get("accepted_at"), str)
+        or type(result.get("replayed")) is not bool
+    ):
+        raise AccountParticipationOutcomeUnknownError(
+            "Pilot participation outcome could not be determined.",
+        )
+    try:
+        accepted_at = datetime.fromisoformat(
+            result["accepted_at"].replace("Z", "+00:00"),
+        )
+    except ValueError as exc:
+        raise AccountParticipationOutcomeUnknownError(
+            "Pilot participation outcome could not be determined.",
+        ) from exc
+    if accepted_at.tzinfo is None:
+        raise AccountParticipationOutcomeUnknownError(
+            "Pilot participation outcome could not be determined.",
+        )
+    return StoredPilotParticipation(
+        notice_version=expected_notice_version,
+        accepted_at=accepted_at,
         replayed=result["replayed"],
     )
 

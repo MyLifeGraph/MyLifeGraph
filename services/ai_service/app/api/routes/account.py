@@ -2,17 +2,23 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from app.api.deps.auth import Principal, get_current_principal
+from app.api.deps.auth import (
+    Principal,
+    get_current_principal,
+    get_verified_principal,
+)
 from app.api.deps.services import get_account_service
 from app.api.problems.account import (
     ACCOUNT_DELETE_ERRORS,
     ACCOUNT_EXPORT_ERRORS,
     ACCOUNT_PREPARATION_BUDGET_ERRORS,
     ACCOUNT_PROFILE_ERRORS,
+    ACCOUNT_PARTICIPATION_ERRORS,
     account_delete_problem,
     account_export_problem,
     account_preparation_budget_problem,
     account_profile_problem,
+    account_participation_problem,
 )
 from app.models.account import (
     AccountDeleteRequest,
@@ -21,6 +27,8 @@ from app.models.account import (
     AccountPreparationBudgetUpdateRequest,
     AccountProfileResponse,
     AccountProfileUpdateRequest,
+    PilotParticipationRequest,
+    PilotParticipationResponse,
 )
 from app.services.account_service import (
     AccountService,
@@ -34,6 +42,24 @@ _RECENT_AUTHENTICATION_FUTURE_TOLERANCE = timedelta(minutes=1)
 _RECENT_AUTHENTICATION_REQUIRED_DETAIL = (
     "Recent authentication is required before account deletion."
 )
+
+
+@router.post(
+    "/pilot-participation",
+    response_model=PilotParticipationResponse,
+)
+async def accept_pilot_participation(
+    body: PilotParticipationRequest,
+    principal: Principal = Depends(get_verified_principal),
+    service: AccountService = Depends(get_account_service),
+) -> PilotParticipationResponse:
+    try:
+        return await service.accept_pilot_participation(
+            user_id=principal.user_id,
+            notice_version=body.notice_version,
+        )
+    except ACCOUNT_PARTICIPATION_ERRORS as exc:
+        raise account_participation_problem(exc) from exc
 
 
 def _require_recent_authentication(
@@ -104,7 +130,7 @@ async def update_account_preparation_budget(
     response_model=AccountExportResponse,
 )
 async def export_account(
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_verified_principal),
     service: AccountService = Depends(get_account_service),
 ) -> Response:
     try:
@@ -126,7 +152,7 @@ async def export_account(
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
     body: AccountDeleteRequest,
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_verified_principal),
     service: AccountService = Depends(get_account_service),
 ) -> Response:
     _require_recent_authentication(principal, now=datetime.now(UTC))

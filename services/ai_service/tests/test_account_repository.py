@@ -11,8 +11,10 @@ from app.repositories.account_repository import (
     AccountExportTable,
     AccountPersistenceError,
     AccountPreparationBudgetUpdateOutcomeUnknownError,
+    AccountParticipationOutcomeUnknownError,
     AccountProfileUpdateOutcomeUnknownError,
     StoredPreparationBudget,
+    StoredPilotParticipation,
     StoredTimezone,
     SupabaseAccountRepository,
 )
@@ -137,6 +139,72 @@ def test_timezone_update_calls_owner_locked_v2_rpc_and_returns_projection() -> N
         ),
     ]
     assert client.update_calls == []
+
+
+def test_pilot_participation_calls_exact_idempotent_rpc() -> None:
+    client = Client()
+    client.rpc_result = {
+        "contract_version": "pilot-participation-v1",
+        "notice_version": "pilot-participation-notice-v1",
+        "accepted_at": NOW.isoformat(),
+        "replayed": False,
+    }
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        repository.accept_pilot_participation(
+            user_id="owner-1",
+            notice_version="pilot-participation-notice-v1",
+        ),
+    )
+
+    assert result == StoredPilotParticipation(
+        notice_version="pilot-participation-notice-v1",
+        accepted_at=NOW,
+        replayed=False,
+    )
+    assert client.rpc_calls == [
+        (
+            "accept_pilot_participation_v1",
+            {
+                "p_user_id": "owner-1",
+                "p_notice_version": "pilot-participation-notice-v1",
+            },
+        ),
+    ]
+
+
+def test_pilot_participation_replays_response_loss_and_rejects_bad_shape() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {
+            "contract_version": "pilot-participation-v1",
+            "notice_version": "pilot-participation-notice-v1",
+            "accepted_at": NOW.isoformat(),
+            "replayed": True,
+        },
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        repository.accept_pilot_participation(
+            user_id="owner-1",
+            notice_version="pilot-participation-notice-v1",
+        ),
+    )
+    assert result is not None and result.replayed is True
+    assert client.rpc_calls[0] == client.rpc_calls[1]
+
+    client.rpc_result = {"accepted": True}
+    client.rpc_outcomes = []
+    with pytest.raises(AccountParticipationOutcomeUnknownError):
+        asyncio.run(
+            repository.accept_pilot_participation(
+                user_id="owner-1",
+                notice_version="pilot-participation-notice-v1",
+            ),
+        )
 
 
 def test_timezone_update_returns_missing_and_rejects_mismatched_result() -> None:

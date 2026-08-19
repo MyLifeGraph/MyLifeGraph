@@ -11,13 +11,18 @@ before it becomes active. Staging and production expose Coach only with exact
 `COACH_SURFACE_ENABLED=true` and send keys only to a configured HTTPS AI URL.
 
 The public-signup VPS pilot, explicit shared operator-provider proposal,
-tagged-release flow, and signed-device acceptance are future work owned by
-`../../docs/vps-pilot-release-plan.md`; they are not current Flutter behavior.
-The configuration foundation now accepts current Supabase publishable keys,
-binds hosted builds to distinct exact staging/pilot project refs, and rejects a
-pilot build using a legacy key or staging URL. A visible synthetic-only staging
-surface, the separate remote real-data project, and the pre-signup
-18-or-older/backend-acceptance flow remain to be implemented.
+tagged-release flow, and signed-device acceptance are owned by
+`../../docs/vps-pilot-release-plan.md`; most remain future work. The current
+Flutter repository now accepts current Supabase publishable keys, binds hosted
+builds to distinct exact staging/pilot project refs, rejects a pilot build
+using a legacy key or staging URL, displays persistent `Staging · Test data`
+identity in staging, and implements the versioned adult-participation flow.
+Hosted auth shows the privacy notice and explicit 18-or-older checkbox before
+account creation/Google OAuth; a short-lived choice may be committed only by
+the authenticated backend, and an unaccepted synced account is routed to the
+post-auth gate before Setup or product access. Guest mode is unavailable in
+hosted builds. No separate remote real-data project or remote acceptance state
+is implied by this source.
 
 Feature code keeps its data and presentation internals private. Riverpod
 factories or widgets that deliberately wire multiple features live under
@@ -100,6 +105,7 @@ The app reads configuration from Dart defines in
 | `SUPABASE_ANON_KEY` | empty | Legacy anon-JWT compatibility for local Supabase and bounded staging migration. |
 | `STAGING_SUPABASE_PROJECT_REF` | empty | Exact non-secret staging ref; required by hosted staging and pilot builds. |
 | `PILOT_SUPABASE_PROJECT_REF` | empty | Exact non-secret pilot ref; required by pilot builds and distinct from staging. |
+| `PILOT_CONTACT_EMAIL` | empty | Required hosted project/incident contact rendered in the adult/privacy notice. |
 | `AI_SERVICE_BASE_URL` | `http://localhost:8000` | FastAPI service base URL. |
 | `COACH_SURFACE_ENABLED` | unset/fail-closed in release and production | Exact `true` explicitly exposes Coach; backend capability still controls sending. |
 | `LEARNED_FOCUS_PLANNING_PILOT_ENABLED` | `false` | Exact `true` enables the development-only learned-timing Planner pilot; the backend must use the same flag. Production builds stay fail-closed. |
@@ -315,6 +321,10 @@ confirmed.
   copied automatically into an account later. Canonical guest captures are
   migrated best-effort only when real, non-demo authentication succeeds with
   `USE_MOCK_DATA=false`.
+- Exact `staging` and `pilot` builds disable guest entry. They require
+  `pilot-participation-v1` / `pilot-participation-notice-v1` before Setup or any
+  synced product route. Eligibility comes only from the backend-owned profile
+  version/time pair, never editable Auth metadata; no birth date is collected.
 - Email/password auth requires Supabase configuration.
 - Google auth requires Supabase configuration and redirect allowlist entries for
   `http://127.0.0.1:7357`, `http://localhost:7357`, and installed Android builds
@@ -397,6 +407,8 @@ destination rather than restoring Settings; Settings-owned routes such as
 
 - `/auth`
 - `/auth/recovery` (Supabase password-recovery event only)
+- `/pilot/privacy` (public and Settings-reachable hosted privacy notice)
+- `/pilot/participation` (authenticated hosted pre-product acceptance gate)
 - `/onboarding` (`?edit=1` re-enters the durable Setup flow)
 - `/dashboard`
 - `/insights`

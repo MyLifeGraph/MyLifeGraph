@@ -12,6 +12,7 @@
     "verify:db": "bash scripts/verify_supabase_local.sh",
     "verify:web": "bash scripts/verify_web.sh",
     "verify:staging:remote": "node scripts/verify_staging_remote.mjs",
+    "seed:staging-scenarios": "node scripts/generate_staging_scenarios.mjs",
     "verify:affected": "bash scripts/verify_affected.sh",
     "verify:full": "npm run verify:fast && npm run verify:db && npm run verify:web && npm run e2e:web:full",
     "verify:docs": "node --test scripts/check_docs_consistency.test.mjs && node scripts/check_docs_consistency.mjs",

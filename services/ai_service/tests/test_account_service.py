@@ -21,6 +21,7 @@ from app.models.account import (
 from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
     AccountExportTable,
+    StoredPilotParticipation,
     StoredPreparationBudget,
     StoredTimezone,
 )
@@ -55,6 +56,14 @@ class Repository:
             replayed=False,
         )
         self.preparation_budget_calls: list[dict[str, object]] = []
+        self.participation_result: StoredPilotParticipation | None = (
+            StoredPilotParticipation(
+                notice_version="pilot-participation-notice-v1",
+                accepted_at=NOW,
+                replayed=False,
+            )
+        )
+        self.participation_calls: list[dict[str, object]] = []
         self.export_calls: list[
             tuple[str, AccountExportTable, str | None, str, int, int]
         ] = []
@@ -66,6 +75,10 @@ class Repository:
     async def update_timezone(self, **kwargs):
         self.update_calls.append(kwargs)
         return self.timezone_result
+
+    async def accept_pilot_participation(self, **kwargs):
+        self.participation_calls.append(kwargs)
+        return self.participation_result
 
     async def update_preparation_budget(self, **kwargs):
         self.preparation_budget_calls.append(kwargs)
@@ -145,6 +158,37 @@ def test_timezone_update_validates_iana_name_and_derives_owner() -> None:
     assert call["timezone"] == "America/New_York"
     assert call["now"] == NOW
     assert isinstance(call["request_fingerprint"], str)
+
+
+def test_pilot_participation_is_owner_derived_and_versioned() -> None:
+    repository = Repository()
+    service = AccountService(repository=repository)
+
+    result = asyncio.run(
+        service.accept_pilot_participation(
+            user_id="owner-1",
+            notice_version="pilot-participation-notice-v1",
+        ),
+    )
+
+    assert result.contract_version == "pilot-participation-v1"
+    assert result.notice_version == "pilot-participation-notice-v1"
+    assert result.accepted_at == NOW
+    assert result.replayed is False
+    assert repository.participation_calls == [
+        {
+            "user_id": "owner-1",
+            "notice_version": "pilot-participation-notice-v1",
+        },
+    ]
+
+    with pytest.raises(ValueError, match="Unsupported"):
+        asyncio.run(
+            service.accept_pilot_participation(
+                user_id="owner-1",
+                notice_version="editable-metadata-v1",
+            ),
+        )
 
 
 @pytest.mark.parametrize(

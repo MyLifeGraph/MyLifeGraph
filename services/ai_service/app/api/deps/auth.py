@@ -4,11 +4,14 @@ import json
 from datetime import UTC, datetime
 from uuid import UUID
 
+import httpx
 from fastapi import Depends, Header, HTTPException, Request, status
 from pydantic import AwareDatetime, BaseModel
 
 from app.api.deps.supabase import get_supabase_client
 from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
+from app.core.config import get_settings
+from app.models.account import PILOT_PARTICIPATION_NOTICE_VERSION
 
 
 class Principal(BaseModel):
@@ -156,7 +159,7 @@ async def get_token_verifier(request: Request) -> TokenVerifier:
         return UnconfiguredTokenVerifier()
 
 
-async def get_current_principal(
+async def get_verified_principal(
     authorization: str | None = Header(default=None, alias="Authorization"),
     verifier: TokenVerifier = Depends(get_token_verifier),
 ) -> Principal:
@@ -165,3 +168,71 @@ async def get_current_principal(
     if principal is None:
         raise _unauthorized()
     return principal
+
+
+async def get_current_principal(
+    request: Request,
+    principal: Principal = Depends(get_verified_principal),
+) -> Principal:
+    if not get_settings().requires_pilot_participation:
+        return principal
+    try:
+        rows = await get_supabase_client(request).select(
+            "profiles",
+            params={
+                "select": (
+                    "id,pilot_participation_notice_version,"
+                    "pilot_participation_accepted_at"
+                ),
+                "id": f"eq.{principal.user_id}",
+                "limit": "1",
+            },
+        )
+    except (SupabaseConfigurationError, httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Pilot participation verification is unavailable.",
+        ) from exc
+    if not _has_current_pilot_participation(rows, user_id=principal.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "pilot_participation_required",
+                "message": (
+                    "Confirm the current adult pilot notice before using "
+                    "product services."
+                ),
+                "notice_version": PILOT_PARTICIPATION_NOTICE_VERSION,
+            },
+        )
+    return principal
+
+
+def _has_current_pilot_participation(
+    rows: object,
+    *,
+    user_id: str,
+) -> bool:
+    if not isinstance(rows, list) or len(rows) != 1:
+        return False
+    row = rows[0]
+    if not isinstance(row, dict) or set(row) != {
+        "id",
+        "pilot_participation_notice_version",
+        "pilot_participation_accepted_at",
+    }:
+        return False
+    if (
+        row.get("id") != user_id
+        or row.get("pilot_participation_notice_version")
+        != PILOT_PARTICIPATION_NOTICE_VERSION
+        or not isinstance(row.get("pilot_participation_accepted_at"), str)
+    ):
+        return False
+    try:
+        accepted_at = datetime.fromisoformat(
+            row["pilot_participation_accepted_at"].replace("Z", "+00:00"),
+        )
+    except ValueError:
+        return False
+    return accepted_at.tzinfo is not None

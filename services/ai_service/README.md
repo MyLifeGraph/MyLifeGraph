@@ -15,10 +15,14 @@ need provider keys. Response V1/V2 rows remain readable.
 The VPS/HTTPS release and proposed explicit shared operator provider are future
 work owned by `../../docs/vps-pilot-release-plan.md`. The plan does not make
 the current development-only Codex adapter deployable. Distinct staging/pilot
-project guards and current Supabase backend secret-key support are now
-implemented configuration boundaries. The staging-only fixture generator and
-bearer-derived adult-participation acceptance before product access remain
-future route/schema work.
+project guards and current Supabase backend secret-key support are implemented
+configuration boundaries. The current repository also implements strict
+`pilot-participation-v1`: an authenticated raw principal may record the exact
+`pilot-participation-notice-v1` through a service-role-only RPC, while normal
+staging/pilot product dependencies require the backend-owned profile
+version/time pair. Account export and deletion remain reachable for an
+unaccepted authenticated account. Development remains ungated. The
+staging-only fixture generator and all remote/deployment evidence remain open.
 
 ## Current Status
 
@@ -246,6 +250,9 @@ future route/schema work.
   request ids and independent expected revisions. `/v1/account/export` returns
   `account-export-v5`, and `/v1/account` remains the confirmed permanent
   deletion boundary. The client never supplies an owner id.
+  `POST /v1/account/pilot-participation` accepts only the exact versioned
+  18-or-older self-attestation and derives its owner from the verified bearer;
+  it stores no birth date and ignores editable Auth metadata for eligibility.
   See `../../docs/v1-account-controls-contract.md`.
 - `POST /v1/notifications/{notification_id}/actions` exposes strict,
   bearer-derived `notification-lifecycle-v1` read/unread/dismiss commands
@@ -676,6 +683,7 @@ non-replayed acknowledgement after current consent/category/quiet/due checks.
 V1 account controls are authenticated and owner-derived:
 
 ```text
+POST   /v1/account/pilot-participation
 PATCH  /v1/account/profile
 PATCH  /v1/account/preparation-budget
 GET    /v1/account/export

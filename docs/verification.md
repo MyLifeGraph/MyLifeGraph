@@ -27,8 +27,13 @@ publishable/secret-key compatibility, pilot-target denial in synthetic seed
 tooling, and versioned 18-or-older acceptance. The local configuration and
 hosted-build guards now cover the first two: pilot current-key enforcement,
 exact URL/ref binding, and staging crossover denial have focused tests. Remote
-key state, the scenario generator, adult acceptance, VPS deployment, and the
-hosted shared Codex provider remain open.
+key state, a confirmed remote scenario run, VPS deployment, and the hosted
+shared Codex provider remain open. The `staging-scenarios-v1` generator has
+source/unit/preview coverage only. `pilot-participation-v1` /
+`pilot-participation-notice-v1` adult acceptance and persistent staging
+identity now exist in the working tree with focused unit/widget/source tests; their pending
+normal-database, complete affected, browser, and remote gates are not current
+baseline evidence.
 
 ## Current Verified Baseline
 
@@ -612,9 +617,11 @@ gate until that hosted job succeeds.
   no-fallback behavior through the public origins remain unverified.
 - No separate real-data pilot Supabase project or remote current-key rotation is
   repository-proven. Local code now supports publishable/secret keys and exact
-  staging/pilot crossover guards, but the hosted staging-only scenario
-  generator, visible staging identity, and versioned 18-or-older acceptance
-  test remain absent.
+  staging/pilot crossover guards plus source-level visible staging identity,
+  versioned 18-or-older acceptance, and a hard-allowlisted staging scenario
+  generator. Normal local migration evidence, confirmed remote fixture
+  creation/cleanup, remote migration, and public-origin acceptance remain
+  absent.
 - The current stream commits HTTP 200/`started` before provider concurrency is
   acquired; pre-stream HTTP 429 admission, same-id retry without claim/budget,
   executor reservation cleanup, and race/disconnect behavior are not yet

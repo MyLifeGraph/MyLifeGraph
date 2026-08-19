@@ -73,6 +73,9 @@ run_source_checks() {
   node --check scripts/write_hosted_flutter_defines.test.mjs
   node --check scripts/verify_staging_remote.mjs
   node --check scripts/verify_staging_remote.test.mjs
+  node --check scripts/staging_scenario_manifest.mjs
+  node --check scripts/generate_staging_scenarios.mjs
+  node --check scripts/generate_staging_scenarios.test.mjs
   node --test scripts/check_docs_consistency.test.mjs
   node --test scripts/check_frontend_visual_contract.test.mjs
   node --test scripts/check_e2e_split_contract.test.mjs
@@ -82,6 +85,7 @@ run_source_checks() {
   node --test scripts/verify_affected.test.mjs
   node --test scripts/write_hosted_flutter_defines.test.mjs
   node --test scripts/verify_staging_remote.test.mjs
+  node --test scripts/generate_staging_scenarios.test.mjs
   node scripts/check_docs_consistency.mjs
   node scripts/check_frontend_visual_contract.mjs
   node scripts/check_e2e_split_contract.mjs

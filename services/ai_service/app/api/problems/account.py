@@ -30,6 +30,9 @@ type AccountExportError = AccountExportTooLargeError | AccountUnavailableError
 type AccountDeleteError = (
     AccountNotFoundError | AccountOutcomeUnknownError | AccountUnavailableError
 )
+type AccountParticipationError = (
+    AccountNotFoundError | AccountOutcomeUnknownError | AccountUnavailableError
+)
 
 ACCOUNT_PROFILE_ERRORS = (
     InvalidAccountTimezoneError,
@@ -51,6 +54,32 @@ ACCOUNT_DELETE_ERRORS = (
     AccountOutcomeUnknownError,
     AccountUnavailableError,
 )
+ACCOUNT_PARTICIPATION_ERRORS = (
+    AccountNotFoundError,
+    AccountOutcomeUnknownError,
+    AccountUnavailableError,
+)
+
+
+def account_participation_problem(
+    error: AccountParticipationError,
+) -> HTTPException:
+    if isinstance(error, AccountNotFoundError):
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Account profile is unavailable.",
+        )
+    if isinstance(error, AccountOutcomeUnknownError):
+        return HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Pilot participation outcome could not be determined.",
+        )
+    if isinstance(error, AccountUnavailableError):
+        return HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Pilot participation acceptance could not be recorded.",
+        )
+    assert_never(error)
 
 
 def account_profile_problem(error: AccountProfileError) -> HTTPException:

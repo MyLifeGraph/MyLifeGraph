@@ -10,7 +10,7 @@ import {
 } from './lib/supabase_deployment.mjs';
 
 export const STAGING_HARNESS_VERSION = 'staging-remote-v1';
-export const EXPECTED_MIGRATION = '20260815082606';
+export const EXPECTED_MIGRATION = '20260819185740';
 
 export function stagingTarget(environment = process.env) {
   const currentRef = environment.STAGING_SUPABASE_PROJECT_REF ?? '';
@@ -304,6 +304,33 @@ async function completeMinimalIntake({
   });
 }
 
+async function acceptPilotParticipation({
+  target,
+  accessToken,
+  fetchImpl,
+}) {
+  const result = await backendRequest({
+    target,
+    path: '/v1/account/pilot-participation',
+    accessToken,
+    method: 'POST',
+    body: {
+      contract_version: 'pilot-participation-v1',
+      notice_version: 'pilot-participation-notice-v1',
+      confirmed_18_or_older: true,
+    },
+    fetchImpl,
+  });
+  if (
+    result?.contract_version !== 'pilot-participation-v1' ||
+    result?.notice_version !== 'pilot-participation-notice-v1' ||
+    typeof result?.accepted_at !== 'string' ||
+    typeof result?.replayed !== 'boolean'
+  ) {
+    throw new Error('Staging participation returned an invalid contract.');
+  }
+}
+
 export async function runConfirmedStagingHarness({
   target,
   environment = process.env,
@@ -360,6 +387,17 @@ export async function runConfirmedStagingHarness({
       publishableKey,
       email: `mylifegraph-${markerB}@example.test`,
       password: passwordB,
+      fetchImpl,
+    });
+
+    await acceptPilotParticipation({
+      target,
+      accessToken: tokenA,
+      fetchImpl,
+    });
+    await acceptPilotParticipation({
+      target,
+      accessToken: tokenB,
       fetchImpl,
     });
 

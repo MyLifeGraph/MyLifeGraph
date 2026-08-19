@@ -22,6 +22,9 @@ from app.models.account import (
     AccountProfileResponse,
     DAILY_PREPARATION_BUDGET_MINUTES_MAX,
     DAILY_PREPARATION_BUDGET_MINUTES_MIN,
+    PILOT_PARTICIPATION_CONTRACT_VERSION,
+    PILOT_PARTICIPATION_NOTICE_VERSION,
+    PilotParticipationResponse,
 )
 from app.owner_data_catalog import (
     ACCOUNT_EXPORT_TABLES,
@@ -35,6 +38,7 @@ from app.repositories.account_repository import (
     AccountNotFoundError as AccountPersistenceNotFound,
     AccountPersistenceError,
     AccountPreparationBudgetUpdateOutcomeUnknownError as AccountPersistenceBudgetOutcomeUnknown,
+    AccountParticipationOutcomeUnknownError as AccountPersistenceParticipationOutcomeUnknown,
     AccountProfileUpdateOutcomeUnknownError as AccountPersistenceProfileOutcomeUnknown,
     AccountRepository,
     AccountSettingConflictError as AccountPersistenceConflict,
@@ -106,6 +110,36 @@ class AccountService:
         self._repository = repository
         self._owner_data_reader = OwnerDataReader(repository=repository)
         self._now = now or (lambda: datetime.now(UTC))
+
+    async def accept_pilot_participation(
+        self,
+        *,
+        user_id: str,
+        notice_version: str,
+    ) -> PilotParticipationResponse:
+        if notice_version != PILOT_PARTICIPATION_NOTICE_VERSION:
+            raise ValueError("Unsupported pilot participation notice.")
+        try:
+            stored = await self._repository.accept_pilot_participation(
+                user_id=user_id,
+                notice_version=notice_version,
+            )
+        except AccountPersistenceParticipationOutcomeUnknown as exc:
+            raise AccountOutcomeUnknownError(str(exc)) from exc
+        except AccountPersistenceNotFound as exc:
+            raise AccountNotFoundError(str(exc)) from exc
+        except AccountPersistenceError as exc:
+            raise AccountUnavailableError(
+                "Pilot participation acceptance could not be recorded.",
+            ) from exc
+        if stored is None:
+            raise AccountNotFoundError("Account profile is unavailable.")
+        return PilotParticipationResponse(
+            contract_version=PILOT_PARTICIPATION_CONTRACT_VERSION,
+            notice_version=stored.notice_version,
+            accepted_at=stored.accepted_at,
+            replayed=stored.replayed,
+        )
 
     async def update_timezone(
         self,

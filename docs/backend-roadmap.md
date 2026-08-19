@@ -25,6 +25,17 @@ names, exact staging/pilot ref binding, pilot current-key enforcement, and
 crossover denial. There is still no remote pilot project, key rotation, or
 hosted operator-provider path in this checkout.
 
+The next local pilot foundation is also implemented in repository source:
+`pilot-participation-v1` / `pilot-participation-notice-v1` stores a
+backend-owned version/time pair on the canonical profile through a
+service-role-only, bearer-derived command. Exact staging/pilot product
+dependencies fail closed without that pair; development, account export, and
+account deletion preserve their explicit boundaries. Flutter provides the
+pre-signup notice, post-auth gate, Settings notice link, hosted guest denial,
+and persistent staging identity. This does not prove any remote migration,
+Auth setting, privacy approval, or deployment. The staging scenario generator
+is still absent.
+
 The implemented Setup-personalization retirement in
 `docs/setup-personalization-retirement-contract.md` is authoritative wherever
 older roadmap history below mentions Setup Goals, focus/friction/style answers,

@@ -127,6 +127,44 @@ void main() {
     expect(overlaid.onboardingDone, isTrue);
   });
 
+  test('profile participation comes from backend columns, not user metadata',
+      () async {
+    final requests = <http.Request>[];
+    final client = SupabaseClient(
+      'http://localhost:54321',
+      'test-anon-key',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          '''[{"id":"profile-id","email":"person@example.test","display_name":"Person","timezone":"Europe/Berlin","daily_preparation_budget_minutes":null,"timezone_revision":1,"preparation_budget_revision":1,"auth_provider":"email","onboarding_completed_at":null,"role":"user","pilot_participation_notice_version":"pilot-participation-notice-v1","pilot_participation_accepted_at":"2026-08-19T12:00:00Z"}]''',
+          200,
+          request: request,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+      accessToken: () async => 'test-access-token',
+    );
+    addTearDown(client.dispose);
+    final repository = AuthRepository(client, useMockData: false);
+    const user = User(
+      id: 'profile-id',
+      appMetadata: {'provider': 'email'},
+      userMetadata: {'pilot_participation_notice_version': 'forged-v99'},
+      aud: 'authenticated',
+      email: 'person@example.test',
+      createdAt: '2026-08-19T08:00:00Z',
+    );
+
+    final profile = await repository.requireProfileForAuthUser(user);
+
+    expect(profile.hasCurrentPilotParticipation, isTrue);
+    expect(requests, hasLength(1));
+    expect(
+      requests.single.url.queryParameters['select'],
+      contains('pilot_participation_accepted_at'),
+    );
+  });
+
   test('authenticated local-demo reload honors compatibility setup prefs',
       () async {
     SharedPreferences.setMockInitialValues({

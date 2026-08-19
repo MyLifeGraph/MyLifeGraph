@@ -34,7 +34,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(null)],
+        overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
+          authRepositoryProvider.overrideWithValue(null),
+        ],
         child: MaterialApp(
           theme: AppTheme.light,
           home: const AuthPage(),
@@ -61,7 +64,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(null)],
+        overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
+          authRepositoryProvider.overrideWithValue(null),
+        ],
         child: MaterialApp(
           theme: AppTheme.light,
           builder: (context, child) => MediaQuery(
@@ -88,7 +94,10 @@ void main() {
     final repository = _FakeAuthRepository();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
+          authRepositoryProvider.overrideWithValue(repository),
+        ],
         child: const MaterialApp(home: AuthPage()),
       ),
     );
@@ -174,7 +183,10 @@ void main() {
     final repository = _FakeAuthRepository(failRegistration: true);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
+          authRepositoryProvider.overrideWithValue(repository),
+        ],
         child: const MaterialApp(home: AuthPage()),
       ),
     );
@@ -214,7 +226,10 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
+          authRepositoryProvider.overrideWithValue(repository),
+        ],
         child: const MaterialApp(home: AuthPage()),
       ),
     );
@@ -257,7 +272,10 @@ void main() {
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(null)],
+        overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
+          authRepositoryProvider.overrideWithValue(null),
+        ],
         child: const MaterialApp(home: AuthPage()),
       ),
     );
@@ -326,7 +344,10 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
+          authRepositoryProvider.overrideWithValue(repository),
+        ],
         child: MaterialApp(
           home: ValueListenableBuilder<bool>(
             valueListenable: showAuth,
@@ -710,6 +731,7 @@ class _FakeAuthRepository extends AuthRepository {
     required String email,
     required String password,
     String? name,
+    bool confirmed18OrOlder = false,
   }) async {
     if (failRegistration) {
       throw const AuthException('registration failed');
@@ -728,7 +750,7 @@ class _FakeAuthRepository extends AuthRepository {
   }
 
   @override
-  Future<void> signInWithGoogle() async {
+  Future<void> signInWithGoogle({bool confirmed18OrOlder = false}) async {
     googleSignInCalls += 1;
     final completer = googleSignInCompleter;
     if (completer != null) await completer.future;

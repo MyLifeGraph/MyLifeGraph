@@ -3,16 +3,21 @@
 This remains the authority for supported workstation and loopback workflows.
 The intended Vercel + hosted Supabase + VPS FastAPI/Coach pilot, including
 public signup, HTTPS, `systemd`, release tags, and signed Android delivery, is
-planned in `docs/vps-pilot-release-plan.md` and is not implemented by the
-commands below. Do not use `APP_ENV=development`, `--reload`, `tmux`, or the
-local Codex start command as an Internet-facing deployment shortcut.
+owned by `docs/vps-pilot-release-plan.md` and remains mostly unimplemented by
+the commands below. The environment/key guards and adult-participation source
+are local repository foundations only. Do not use `APP_ENV=development`,
+`--reload`, `tmux`, or the local Codex start command as an Internet-facing
+deployment shortcut.
 
 The inspected hosted target remains staging. No command in this guide creates
 or seeds a real-data pilot project. Current code now supports Supabase
 publishable/secret-key names, exact staging/pilot project-ref binding, and
-pilot crossover denial. Remote key rotation, the staging-only scenario
-generator, the real pilot project, and 18-or-older acceptance do not exist yet;
-their remaining design lives in the pilot plan.
+pilot crossover denial. Remote key rotation and the real pilot project do not
+exist yet. The staging-only `staging-scenarios-v1` generator is implemented but
+has no confirmed remote-run evidence. Versioned
+`pilot-participation-v1` / `pilot-participation-notice-v1` acceptance and
+persistent staging identity now exist in source;
+their migration/deployment and release evidence remain open.
 
 For a local BYOK-compatible backend, set `COACH_BYOK_PROVIDERS=openai,gemini`;
 do not place OpenAI or Gemini keys in `.env`. Keys arrive per capabilities or
@@ -31,7 +36,8 @@ Hosted Flutter builds use `scripts/write_hosted_flutter_defines.mjs` and fail
 before compiling unless `APP_ENV` is exactly `staging` or `pilot`,
 `USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, a compatible Supabase
 client key is present, and Supabase/FastAPI URLs are credential-free HTTPS
-roots. Staging binds to `STAGING_SUPABASE_PROJECT_REF` and may temporarily use
+roots. `PILOT_CONTACT_EMAIL` is also required and is rendered in the hosted
+privacy notice. Staging binds to `STAGING_SUPABASE_PROJECT_REF` and may temporarily use
 the legacy anon key; pilot additionally requires a distinct
 `PILOT_SUPABASE_PROJECT_REF` and a current `sb_publishable_` key. Neither the
 helper nor CI prints the resulting values.
@@ -64,6 +70,7 @@ npm run verify:staging:remote -- --confirm staging-target-<fingerprint>
 ```
 
 The run creates two unique confirmed Auth users, completes minimal Setup,
+records `pilot-participation-v1` for each verified bearer before product calls,
 persists an owned task, habit, timetable item, Focus session and Daily Capture,
 generates a snapshot and briefing, checks owner/foreign Data API reads plus
 foreign insert/update/delete rejection, checks a foreign FastAPI Focus update,
@@ -71,6 +78,53 @@ checks Today/Planner/Briefing/Coach reads through FastAPI, deletes Coach history
 without a provider key, and finally deletes only its two recorded Auth UUIDs.
 Cleanup is verified through the Auth Admin API. A cleanup failure fails the
 run. No OpenAI or Gemini turn is made.
+
+## Hosted Staging Scenario Fixtures
+
+`npm run seed:staging-scenarios` is the only supported persistent hosted
+fixture command. Its immutable repository allowlist contains only the reviewed
+staging ref `oscrunlndfrecjilojja`; a caller-provided ref cannot authorize a
+different project. It also rejects equality with
+`PILOT_SUPABASE_PROJECT_REF`, binds the URL to the exact project-ref host, and
+requires the `20260819185740` participation schema before mutation.
+
+The versioned manifest contains `fresh-account`, `exam-week`,
+`overdue-tasks`, `sleep-deficit-high-stress`, `existing-coach-history`, and
+`deadline-conflicts`. A lowercase 3-32 character run id makes every synthetic
+email and row identity deterministic. Preview needs no credential:
+
+```bash
+STAGING_SUPABASE_PROJECT_REF=<exact-staging-ref> \
+STAGING_SUPABASE_URL=https://<exact-staging-ref>.supabase.co \
+PILOT_SUPABASE_PROJECT_REF=<exact-pilot-ref-if-assigned> \
+npm run seed:staging-scenarios -- \
+  --run professor-demo \
+  --scenarios fresh-account,exam-week
+```
+
+Preview prints only the target ref/host, scenario ids, exact synthetic emails,
+and a content-bound confirmation. The token is single-use and expires after 15
+minutes. A confirmed run additionally receives
+`STAGING_SUPABASE_SECRET_KEY` (or the bounded legacy staging fallback) and
+`STAGING_SCENARIO_PASSWORD` from the caller environment; never put either value
+in arguments, chat, fixtures, or Git. The password is neither printed nor
+persisted. Rerun the unchanged command with `--confirm <fingerprint>`.
+
+Each run writes an ignored mode-0600 receipt under
+`.tools/staging-scenarios/`. It records only exact scenario ids, emails, and
+Auth UUIDs, including partial progress after a failed run. Cleanup is always a
+separate preview and confirmation:
+
+```bash
+STAGING_SUPABASE_PROJECT_REF=<exact-staging-ref> \
+STAGING_SUPABASE_URL=https://<exact-staging-ref>.supabase.co \
+npm run seed:staging-scenarios -- --cleanup --run professor-demo
+```
+
+The confirmed cleanup requires the backend staging key, rereads every exact
+Auth UUID, refuses ownership-marker drift, deletes only receipt-bound users,
+and verifies each UUID returns `404`. Auth deletion cascades their scenario
+rows. Do not hand-edit a receipt or use this command for participant accounts.
 
 ## Android SDK 36 And Wireless Device Setup
 

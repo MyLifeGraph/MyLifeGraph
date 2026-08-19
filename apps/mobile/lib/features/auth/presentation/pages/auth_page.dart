@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_brand_mark.dart';
 import '../../../../core/widgets/app_surface.dart';
 import '../../domain/auth_failure.dart';
@@ -25,6 +28,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   bool _submitting = false;
   String? _accountHelpMessage;
   bool _accountHelpFailed = false;
+  bool _adultPilotConfirmed = false;
 
   @override
   void dispose() {
@@ -37,13 +41,15 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final config = ref.watch(appConfigProvider);
     final authNotice = ref.watch(authNoticeProvider);
     final isBusy = _submitting || authState.isLoading;
     final profileUnavailable =
         authState.error is MissingProfileInvariantException;
     final authErrorMessage = switch (authState.error) {
-      AuthConfigurationException() =>
-        'Synced sign-in is unavailable right now. Continue as guest or try again later.',
+      AuthConfigurationException() => config.requiresPilotParticipation
+          ? 'Synced sign-in is unavailable right now. Try again later.'
+          : 'Synced sign-in is unavailable right now. Continue as guest or try again later.',
       MissingProfileInvariantException() =>
         'Your sign-in succeeded, but this synced account could not be opened. No account data was changed. Sign out, then try again. If it continues, the account needs repair.',
       _ =>
@@ -59,7 +65,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               final wide = constraints.maxWidth >= 960;
               final horizontalPadding = wide ? 56.0 : AppSpacing.md;
               final verticalPadding = wide ? 48.0 : AppSpacing.lg;
-              final intro = _AuthIntro(compact: !wide);
+              final intro = _AuthIntro(
+                compact: !wide,
+                syncedOnly: config.requiresPilotParticipation,
+              );
               final access = _AuthPanel(
                 child: _buildAccessPanel(
                   authHasError: authState.hasError,
@@ -67,6 +76,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   authErrorMessage: authErrorMessage,
                   showUnavailableAccountAction: profileUnavailable,
                   isBusy: isBusy,
+                  config: config,
                 ),
               );
 
@@ -117,6 +127,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     required String authErrorMessage,
     required bool showUnavailableAccountAction,
     required bool isBusy,
+    required AppConfig config,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -161,6 +172,21 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             },
           ),
         ),
+        if (config.requiresPilotParticipation) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _PilotPreSignupNotice(
+            contactEmail: config.pilotContactEmail,
+            confirmed: _adultPilotConfirmed,
+            onChanged: isBusy
+                ? null
+                : (value) {
+                    setState(() => _adultPilotConfirmed = value ?? false);
+                  },
+            onOpenNotice: isBusy
+                ? null
+                : () => context.push(AppRoutes.pilotPrivacyNotice),
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         _AuthForm(
           registrationMode: _registrationMode,
@@ -218,14 +244,16 @@ class _AuthPageState extends ConsumerState<AuthPage> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        _AuthActionTile(
-          icon: AppIcons.personOutlineRounded,
-          title: 'Continue as guest',
-          subtitle:
-              'Local demo. Setup stays on this device and will not move to a later account.',
-          onTap: isBusy ? null : _continueAsGuest,
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        if (!config.requiresPilotParticipation) ...[
+          _AuthActionTile(
+            icon: AppIcons.personOutlineRounded,
+            title: 'Continue as guest',
+            subtitle:
+                'Local demo. Setup stays on this device and will not move to a later account.',
+            onTap: isBusy ? null : _continueAsGuest,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         _AuthActionTile(
           leading: const _GoogleLogo(),
           title: 'Sign in with Google',
@@ -252,11 +280,19 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     setState(() => _submitting = true);
     try {
       if (_registrationMode) {
+        if (ref.read(appConfigProvider).requiresPilotParticipation &&
+            !_adultPilotConfirmed) {
+          _showMessage(
+            'Confirm that you are 18 or older before creating an account.',
+          );
+          return;
+        }
         final created =
             await ref.read(authControllerProvider.notifier).registerWithEmail(
                   email: email,
                   password: password,
                   name: _nameController.text.trim(),
+                  confirmed18OrOlder: _adultPilotConfirmed,
                 );
         if (!created && mounted) {
           final registrationState = ref.read(authControllerProvider);
@@ -307,9 +343,18 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
   Future<void> _signInWithGoogle() async {
     _clearAuthNotice();
+    if (ref.read(appConfigProvider).requiresPilotParticipation &&
+        !_adultPilotConfirmed) {
+      _showMessage(
+        'Confirm that you are 18 or older before continuing with Google.',
+      );
+      return;
+    }
     setState(() => _submitting = true);
     try {
-      await ref.read(authControllerProvider.notifier).signInWithGoogle();
+      await ref.read(authControllerProvider.notifier).signInWithGoogle(
+            confirmed18OrOlder: _adultPilotConfirmed,
+          );
     } catch (_) {
       if (mounted) {
         _showMessage(
@@ -412,9 +457,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 }
 
 class _AuthIntro extends StatelessWidget {
-  const _AuthIntro({required this.compact});
+  const _AuthIntro({required this.compact, required this.syncedOnly});
 
   final bool compact;
+  final bool syncedOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -443,7 +489,9 @@ class _AuthIntro extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Text(
-            'Use a synced account or explore locally as a guest. Guest Setup stays on this device and is not copied into a later account; only guest check-ins may migrate best-effort.',
+            syncedOnly
+                ? 'Create or open a synced account for this adult evaluation pilot. Your saved data remains scoped to your account.'
+                : 'Use a synced account or explore locally as a guest. Guest Setup stays on this device and is not copied into a later account; only guest check-ins may migrate best-effort.',
             style: theme.textTheme.bodyLarge,
           ),
         ),
@@ -464,6 +512,59 @@ class _AuthPanel extends StatelessWidget {
       radius: AppRadii.xl,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: child,
+    );
+  }
+}
+
+class _PilotPreSignupNotice extends StatelessWidget {
+  const _PilotPreSignupNotice({
+    required this.contactEmail,
+    required this.confirmed,
+    required this.onChanged,
+    required this.onOpenNotice,
+  });
+
+  final String contactEmail;
+  final bool confirmed;
+  final ValueChanged<bool?>? onChanged;
+  final VoidCallback? onOpenNotice;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurface(
+      key: const ValueKey('pilot-pre-signup-notice'),
+      variant: AppSurfaceVariant.accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Adult pilot and privacy notice',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'This evaluation is for adults. A synced account may store real mood, sleep, stress, study, planning, calendar, reflection, and Coach data. Project and incident contact: $contactEmail.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: onOpenNotice,
+              child: const Text('Read pilot privacy notice'),
+            ),
+          ),
+          CheckboxListTile(
+            value: confirmed,
+            onChanged: onChanged,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('I confirm that I am 18 or older'),
+            subtitle: const Text(
+              'This records the current notice version and acceptance time after authentication. No birth date is collected.',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../capabilities/app_surface_capabilities.dart';
+import '../config/app_config.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
 import '../../features/auth/presentation/pages/password_recovery_page.dart';
+import '../../features/auth/presentation/pages/pilot_participation_page.dart';
+import '../../features/auth/presentation/pages/pilot_privacy_notice_page.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 import '../../features/calendar_integration/presentation/pages/calendar_integration_page.dart';
 import '../../features/coach/presentation/pages/coach_page.dart';
@@ -70,6 +73,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final path = state.uri.path;
       final isAuthRoute = path == AppRoutes.auth;
       final isPasswordRecoveryRoute = path == AppRoutes.passwordRecovery;
+      final isPilotPrivacyRoute = path == AppRoutes.pilotPrivacyNotice;
+      final isPilotParticipationRoute = path == AppRoutes.pilotParticipation;
 
       if (passwordRecoveryActive) {
         return isPasswordRecoveryRoute ? null : AppRoutes.passwordRecovery;
@@ -80,7 +85,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (authState.isLoading) {
-        if (isAuthRoute) return null;
+        if (isAuthRoute || isPilotPrivacyRoute) return null;
         pendingPostAuthLocation = _validPostAuthLocation(state.uri);
         return _authLocationFor(state.uri);
       }
@@ -91,9 +96,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           isOnboardingRoute && state.uri.queryParameters['edit'] == '1';
 
       if (session == null) {
-        if (isAuthRoute) return null;
+        if (isAuthRoute || isPilotPrivacyRoute) return null;
         pendingPostAuthLocation = _validPostAuthLocation(state.uri);
         return _authLocationFor(state.uri);
+      }
+
+      if (isPilotPrivacyRoute) return null;
+
+      final participationRequired =
+          ref.read(appConfigProvider).requiresPilotParticipation &&
+              session.isAuthenticated &&
+              !session.profile.hasCurrentPilotParticipation;
+      if (participationRequired) {
+        return isPilotParticipationRoute ? null : AppRoutes.pilotParticipation;
+      }
+
+      if (isPilotParticipationRoute) {
+        if (session.requiresOnboarding) return AppRoutes.onboarding;
+        final continuation = pendingPostAuthLocation?.toString();
+        pendingPostAuthLocation = null;
+        return continuation ?? AppRoutes.dashboard;
       }
 
       if (session.requiresOnboarding && !isOnboardingRoute) {
@@ -128,6 +150,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.passwordRecovery,
         builder: (context, state) => const PasswordRecoveryPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.pilotPrivacyNotice,
+        builder: (context, state) => const PilotPrivacyNoticePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.pilotParticipation,
+        builder: (context, state) => const PilotParticipationPage(),
       ),
       GoRoute(
         path: AppRoutes.onboarding,

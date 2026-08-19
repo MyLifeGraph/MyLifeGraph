@@ -34,6 +34,7 @@ export function hostedFlutterDefines(environment = process.env) {
     COACH_SURFACE_ENABLED: 'true',
     STAGING_SUPABASE_PROJECT_REF: target.stagingProjectRef,
     PILOT_SUPABASE_PROJECT_REF: target.pilotProjectRef,
+    PILOT_CONTACT_EMAIL: target.pilotContactEmail,
     SUPABASE_URL: target.supabaseUrl,
     SUPABASE_PUBLISHABLE_KEY:
       publishableKey.source === 'current' ? publishableKey.value : '',

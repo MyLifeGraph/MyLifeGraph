@@ -9,6 +9,7 @@ class AppBootstrap {
   static Future<void> initialize(AppConfig config) async {
     initializeProfileTimeZones();
     config.validateSupabaseConfiguration();
+    config.validatePilotParticipationConfiguration();
     if (!config.isSupabaseConfigured) {
       return;
     }

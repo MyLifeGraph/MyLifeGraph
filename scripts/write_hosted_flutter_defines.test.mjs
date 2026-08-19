@@ -16,6 +16,7 @@ const validEnvironment = {
   STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
   SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co/',
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
+  PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
   AI_SERVICE_BASE_URL: 'https://coach-staging.example.test/',
 };
 
@@ -29,6 +30,7 @@ test('hosted defines require complete fail-closed staging configuration', () => 
     SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co',
     SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
     SUPABASE_ANON_KEY: '',
+    PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
     AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
   });
 
@@ -37,6 +39,7 @@ test('hosted defines require complete fail-closed staging configuration', () => 
     'STAGING_SUPABASE_PROJECT_REF',
     'SUPABASE_URL',
     'SUPABASE_PUBLISHABLE_KEY',
+    'PILOT_CONTACT_EMAIL',
     'AI_SERVICE_BASE_URL',
   ]) {
     assert.throws(
@@ -147,6 +150,7 @@ test('hosted defines are written with owner-only permissions', () => {
       SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co',
       SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
       SUPABASE_ANON_KEY: '',
+      PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
       AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
     });
   } finally {

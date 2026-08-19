@@ -2,12 +2,21 @@ import asyncio
 import base64
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
+from starlette.requests import Request
 
-from app.api.deps.auth import Principal, SupabaseTokenVerifier, extract_bearer_token
+from app.api.deps import auth as auth_dependencies
+from app.api.deps.auth import (
+    Principal,
+    SupabaseTokenVerifier,
+    _has_current_pilot_participation,
+    extract_bearer_token,
+)
 
 
 class AuthClient:
@@ -127,3 +136,173 @@ def test_bearer_extraction_rejects_oversized_tokens_before_verification() -> Non
         extract_bearer_token("Bearer " + "x" * (16 * 1024 + 1))
 
     assert raised.value.status_code == 401
+
+
+def test_pilot_participation_gate_requires_exact_persisted_profile_fields() -> None:
+    valid = [
+        {
+            "id": "owner-1",
+            "pilot_participation_notice_version": ("pilot-participation-notice-v1"),
+            "pilot_participation_accepted_at": "2026-08-19T12:00:00Z",
+        },
+    ]
+    assert _has_current_pilot_participation(valid, user_id="owner-1") is True
+
+    invalid_rows = [
+        [],
+        [{**valid[0], "id": "other-owner"}],
+        [
+            {
+                **valid[0],
+                "pilot_participation_notice_version": "user-metadata-v1",
+            },
+        ],
+        [{**valid[0], "pilot_participation_accepted_at": None}],
+        [{**valid[0], "extra": True}],
+    ]
+    for rows in invalid_rows:
+        assert _has_current_pilot_participation(rows, user_id="owner-1") is False
+
+
+class _ParticipationProfileClient:
+    def __init__(self, rows: object = None, *, error: Exception | None = None) -> None:
+        self.rows = rows
+        self.error = error
+        self.calls: list[tuple[str, dict]] = []
+
+    async def select(self, table: str, *, params: dict):
+        self.calls.append((table, params))
+        if self.error is not None:
+            raise self.error
+        return self.rows
+
+
+def _request() -> Request:
+    return Request({"type": "http", "method": "GET", "path": "/v1/today"})
+
+
+def test_development_principal_bypasses_hosted_participation_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    principal = Principal(user_id="owner-1")
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_settings",
+        lambda: SimpleNamespace(requires_pilot_participation=False),
+    )
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_supabase_client",
+        lambda _: (_ for _ in ()).throw(AssertionError("unexpected lookup")),
+    )
+
+    result = asyncio.run(
+        auth_dependencies.get_current_principal(_request(), principal),
+    )
+
+    assert result is principal
+
+
+def test_hosted_principal_requires_and_accepts_exact_profile_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    principal = Principal(user_id="owner-1")
+    client = _ParticipationProfileClient(
+        [
+            {
+                "id": "owner-1",
+                "pilot_participation_notice_version": ("pilot-participation-notice-v1"),
+                "pilot_participation_accepted_at": "2026-08-19T12:00:00Z",
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_settings",
+        lambda: SimpleNamespace(requires_pilot_participation=True),
+    )
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_supabase_client",
+        lambda _: client,
+    )
+
+    result = asyncio.run(
+        auth_dependencies.get_current_principal(_request(), principal),
+    )
+
+    assert result is principal
+    assert client.calls == [
+        (
+            "profiles",
+            {
+                "select": (
+                    "id,pilot_participation_notice_version,"
+                    "pilot_participation_accepted_at"
+                ),
+                "id": "eq.owner-1",
+                "limit": "1",
+            },
+        ),
+    ]
+
+
+def test_hosted_principal_missing_acceptance_is_a_structured_403(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_settings",
+        lambda: SimpleNamespace(requires_pilot_participation=True),
+    )
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_supabase_client",
+        lambda _: _ParticipationProfileClient([]),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(
+            auth_dependencies.get_current_principal(
+                _request(),
+                Principal(user_id="owner-1"),
+            ),
+        )
+
+    assert raised.value.status_code == 403
+    assert raised.value.detail == {
+        "code": "pilot_participation_required",
+        "message": (
+            "Confirm the current adult pilot notice before using product services."
+        ),
+        "notice_version": "pilot-participation-notice-v1",
+    }
+
+
+def test_hosted_principal_lookup_failure_is_a_sanitized_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = httpx.Request("GET", "https://example.test/profiles")
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_settings",
+        lambda: SimpleNamespace(requires_pilot_participation=True),
+    )
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_supabase_client",
+        lambda _: _ParticipationProfileClient(
+            error=httpx.ConnectError("private detail", request=request),
+        ),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(
+            auth_dependencies.get_current_principal(
+                _request(),
+                Principal(user_id="owner-1"),
+            ),
+        )
+
+    assert raised.value.status_code == 503
+    assert raised.value.detail == "Pilot participation verification is unavailable."

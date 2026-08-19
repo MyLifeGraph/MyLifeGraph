@@ -6,6 +6,8 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/app_theme_selection_provider.dart';
 import 'core/widgets/app_backdrop.dart';
 import 'core/widgets/offline_status_banner.dart';
+import 'core/widgets/hosted_environment_banner.dart';
+import 'core/config/app_config.dart';
 
 class PersonalOptimizationApp extends ConsumerWidget {
   const PersonalOptimizationApp({super.key});
@@ -14,6 +16,7 @@ class PersonalOptimizationApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     final themeSelection = ref.watch(appThemeSelectionProvider);
+    final config = ref.watch(appConfigProvider);
 
     return MaterialApp.router(
       title: 'MyLifeGraph',
@@ -22,8 +25,11 @@ class PersonalOptimizationApp extends ConsumerWidget {
       routerConfig: router,
       builder: (context, child) {
         final content = AppBackdrop(
-          child: OfflineStatusBanner(
-            child: child ?? const SizedBox.shrink(),
+          child: HostedEnvironmentBanner(
+            environment: config.environment,
+            child: OfflineStatusBanner(
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
         );
         final highContrast = MediaQuery.highContrastOf(context);

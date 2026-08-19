@@ -31,6 +31,13 @@ fails closed before Setup, performs no profile insert/upsert, and offers
 sign-out before another sign-in attempt. Guest Setup remains local and does not
 use this remote profile boundary.
 
+Exact hosted `staging` and `pilot` sessions additionally require the current
+backend-owned `pilot-participation-v1` /
+`pilot-participation-notice-v1` version/time pair before Setup.
+The acceptance command is bearer-derived, stores no birth date, and does not
+trust editable Auth metadata. This precondition changes no Intake payload,
+Setup revision, or Setup-owned materialization behavior.
+
 Goals have no current schema, export entry, Setup field, product surface,
 ranking role, Snapshot source, or Coach context. The removal migration deletes
 the prior rows and structurally dependent derived data; recovery requires a

@@ -39,6 +39,7 @@ $supabasePublishableKey = Get-DefineValue "SUPABASE_PUBLISHABLE_KEY" ""
 $supabaseAnonKey = Get-DefineValue "SUPABASE_ANON_KEY" ""
 $stagingSupabaseProjectRef = Get-DefineValue "STAGING_SUPABASE_PROJECT_REF" ""
 $pilotSupabaseProjectRef = Get-DefineValue "PILOT_SUPABASE_PROJECT_REF" ""
+$pilotContactEmail = Get-DefineValue "PILOT_CONTACT_EMAIL" ""
 $aiServiceBaseUrl = Get-DefineValue "AI_SERVICE_BASE_URL" "http://localhost:8000"
 $coachSurfaceEnabled = Get-DefineValue "COACH_SURFACE_ENABLED" ""
 
@@ -61,6 +62,7 @@ if ($LASTEXITCODE -ne 0) {
     --dart-define=SUPABASE_ANON_KEY=$supabaseAnonKey `
     --dart-define=STAGING_SUPABASE_PROJECT_REF=$stagingSupabaseProjectRef `
     --dart-define=PILOT_SUPABASE_PROJECT_REF=$pilotSupabaseProjectRef `
+    --dart-define=PILOT_CONTACT_EMAIL=$pilotContactEmail `
     --dart-define=AI_SERVICE_BASE_URL=$aiServiceBaseUrl `
     --dart-define=COACH_SURFACE_ENABLED=$coachSurfaceEnabled
 if ($LASTEXITCODE -ne 0) {

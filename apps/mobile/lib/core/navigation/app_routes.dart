@@ -4,6 +4,8 @@ class AppRoutes {
   static const dashboard = '/dashboard';
   static const auth = '/auth';
   static const passwordRecovery = '/auth/recovery';
+  static const pilotPrivacyNotice = '/pilot/privacy';
+  static const pilotParticipation = '/pilot/participation';
   static const onboarding = '/onboarding';
   static const settings = '/settings';
   static const notificationSettings = '/settings/notifications';

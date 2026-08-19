@@ -9,6 +9,7 @@ import '../../../../composition/coach_credentials_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/app_theme_selection_provider.dart';
@@ -41,6 +42,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(authControllerProvider).valueOrNull;
+    final config = ref.watch(appConfigProvider);
     final profile = session?.profile;
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final themeSelection = ref.watch(appThemeSelectionProvider);
@@ -234,6 +236,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           title: 'Account and appearance',
           description: 'Export, deletion, device theme, and sign-out.',
         ),
+        if (config.requiresPilotParticipation)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const ValueKey('pilot-privacy-notice-setting-entry'),
+              leading: const Icon(AppIcons.lockOutline),
+              title: const Text('Pilot privacy notice'),
+              subtitle: const Text(
+                'Review adult participation, data processing, export, and deletion information.',
+              ),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: () => context.push(AppRoutes.pilotPrivacyNotice),
+            ),
+          ),
         AppCard(
           padding: EdgeInsets.zero,
           child: Column(

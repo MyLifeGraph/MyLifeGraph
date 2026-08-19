@@ -15,12 +15,36 @@ gates for the proposed hosted pilot live in
 `docs/vps-pilot-release-plan.md`. They are not a current legal-compliance or
 deployment claim of this account-control contract.
 
-That future pilot is restricted to adults. Its planned versioned
-18-or-older/privacy-notice acceptance is shown before signup but committed only
-through a bearer-derived backend command after authentication and before Setup
-or product access. It stores version/time rather than date of birth and never
-uses editable Auth `user_metadata` as eligibility authority. No such endpoint,
-table, or current V1 behavior exists yet.
+The pilot is restricted to adults. The implemented shared contracts are
+`pilot-participation-v1` and `pilot-participation-notice-v1`. Flutter shows the
+notice and an explicit `I confirm that I am 18 or older` checkbox before
+account creation or Google OAuth. A matching choice is retained only for the
+current short-lived auth flow; after authentication the bearer-derived backend
+command records the backend timestamp before Setup or product access. A user
+who reaches an authenticated session without that matching pending choice is
+sent to a dedicated confirmation gate. The notice remains reachable from
+Settings.
+
+`POST /v1/account/pilot-participation` accepts exactly:
+
+```json
+{
+  "contract_version": "pilot-participation-v1",
+  "notice_version": "pilot-participation-notice-v1",
+  "confirmed_18_or_older": true
+}
+```
+
+The owner comes only from the verified bearer. The service-role-only
+`accept_pilot_participation_v1` RPC locks the canonical profile, records the
+notice version plus backend UTC time, and returns the original time with
+`replayed=true` for an exact retry. `profiles` enforces the nullable pair and
+application roles cannot update either field. No date of birth or numeric age
+is stored. Auth `user_metadata` is deliberately ignored. Normal FastAPI
+product dependencies require the current persisted pair in exact `staging` and
+`pilot`; development is unchanged. Export and permanent deletion use the raw
+verified principal so a blocked account retains those controls. Repository
+source does not prove the migration is applied remotely.
 
 ## Trust Boundary
 

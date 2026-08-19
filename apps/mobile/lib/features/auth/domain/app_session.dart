@@ -1,3 +1,5 @@
+import 'pilot_participation.dart' as participation;
+
 enum AppRole {
   user,
   vip,
@@ -28,6 +30,8 @@ class AppProfile {
     this.dailyPreparationBudgetMinutes,
     this.timezoneRevision = 1,
     this.preparationBudgetRevision = 1,
+    this.pilotParticipationNoticeVersion,
+    this.pilotParticipationAcceptedAt,
   });
 
   final String id;
@@ -40,9 +44,15 @@ class AppProfile {
   final int? dailyPreparationBudgetMinutes;
   final int timezoneRevision;
   final int preparationBudgetRevision;
+  final String? pilotParticipationNoticeVersion;
+  final DateTime? pilotParticipationAcceptedAt;
 
   bool get isGuest => role == AppRole.guest;
   bool get isAdmin => role == AppRole.admin;
+  bool get hasCurrentPilotParticipation =>
+      pilotParticipationNoticeVersion ==
+          participation.pilotParticipationNoticeVersion &&
+      pilotParticipationAcceptedAt?.isUtc == true;
 
   AppProfile copyWith({
     String? name,
@@ -52,6 +62,8 @@ class AppProfile {
     bool? onboardingDone,
     String? authProvider,
     int? timezoneRevision,
+    String? pilotParticipationNoticeVersion,
+    DateTime? pilotParticipationAcceptedAt,
   }) {
     return AppProfile(
       id: id,
@@ -64,6 +76,10 @@ class AppProfile {
       dailyPreparationBudgetMinutes: dailyPreparationBudgetMinutes,
       timezoneRevision: timezoneRevision ?? this.timezoneRevision,
       preparationBudgetRevision: preparationBudgetRevision,
+      pilotParticipationNoticeVersion: pilotParticipationNoticeVersion ??
+          this.pilotParticipationNoticeVersion,
+      pilotParticipationAcceptedAt:
+          pilotParticipationAcceptedAt ?? this.pilotParticipationAcceptedAt,
     );
   }
 
@@ -82,6 +98,8 @@ class AppProfile {
       dailyPreparationBudgetMinutes: minutes,
       timezoneRevision: timezoneRevision,
       preparationBudgetRevision: revision ?? preparationBudgetRevision,
+      pilotParticipationNoticeVersion: pilotParticipationNoticeVersion,
+      pilotParticipationAcceptedAt: pilotParticipationAcceptedAt,
     );
   }
 }

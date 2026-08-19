@@ -11,11 +11,36 @@ from app.owner_data_catalog import (
 )
 
 ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v5"
+PILOT_PARTICIPATION_CONTRACT_VERSION = "pilot-participation-v1"
+PILOT_PARTICIPATION_NOTICE_VERSION = "pilot-participation-notice-v1"
 ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE = 10_000
 ACCOUNT_EXPORT_MAX_TOTAL_ROWS = 50_000
 ACCOUNT_EXPORT_MAX_JSON_BYTES = 8 * 1024 * 1024
 DAILY_PREPARATION_BUDGET_MINUTES_MIN = 25
 DAILY_PREPARATION_BUDGET_MINUTES_MAX = 480
+
+
+class PilotParticipationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["pilot-participation-v1"]
+    notice_version: Literal["pilot-participation-notice-v1"]
+    confirmed_18_or_older: Literal[True]
+
+
+class PilotParticipationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["pilot-participation-v1"]
+    notice_version: Literal["pilot-participation-notice-v1"]
+    accepted_at: datetime
+    replayed: bool
+
+    @model_validator(mode="after")
+    def validate_timestamp(self) -> "PilotParticipationResponse":
+        if self.accepted_at.tzinfo is None:
+            raise ValueError("accepted_at must be timezone-aware")
+        return self
 
 
 class AccountProfileUpdateRequest(BaseModel):

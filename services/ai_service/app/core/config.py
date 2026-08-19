@@ -142,6 +142,10 @@ class Settings(BaseSettings):
     def is_hosted_environment(self) -> bool:
         return self.normalized_app_env in {"staging", "pilot"}
 
+    @property
+    def requires_pilot_participation(self) -> bool:
+        return self.normalized_app_env in {"staging", "pilot"}
+
     def supabase_backend_configuration(self) -> tuple[str, str]:
         current_key = _configured_value(
             "SUPABASE_SECRET_KEY",

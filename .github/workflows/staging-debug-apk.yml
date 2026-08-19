@@ -43,6 +43,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PILOT_CONTACT_EMAIL: ${{ secrets.PILOT_CONTACT_EMAIL }}
           AI_SERVICE_BASE_URL: ${{ secrets.AI_SERVICE_BASE_URL }}
         run: |
           export MLG_DEFINES_FILE="$RUNNER_TEMP/mylifegraph-staging-defines.json"

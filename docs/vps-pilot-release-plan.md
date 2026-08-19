@@ -1,6 +1,8 @@
 # VPS Pilot Release Plan
 
-Status: planned, not implemented. This plan was consolidated on 2026-08-19.
+Status: local implementation in progress. This plan was consolidated on
+2026-08-19; checked items are repository work only and never imply remote
+deployment or live-project state.
 
 This document is the delivery and release authority for turning the current
 checkout into the first assessable, phone-usable MyLifeGraph pilot. It owns the
@@ -146,8 +148,14 @@ The following gaps make the current checkout a no-go for the target topology:
     enforcement, and crossover denial with bounded legacy compatibility.
     Remote pilot-project assignment, current-key configuration/rotation, and
     release evidence still do not exist.
-14. There is no staging-only scenario generator with an exact project-ref
-    guard, and no versioned 18-or-older participation acceptance exists.
+14. The working tree now contains the versioned staging-only scenario
+    generator, adult-participation contract/profile migration/backend gate,
+    Flutter pre-signup and post-auth surfaces, and persistent staging identity.
+    The generator hard-allowlists only the reviewed staging ref, binds a
+    15-minute one-use confirmation to the exact run/scenarios/identities,
+    records exact Auth UUIDs in an ignored mode-0600 receipt, and verifies
+    bounded cleanup. None of their normal local-database, complete affected,
+    confirmed remote, or deployment gates is yet evidence.
 
 These are implementation tasks, not suggestions to weaken the current
 development-only guards.
@@ -470,6 +478,14 @@ The following work is done and reviewed on developer machines before any VPS
 configuration becomes the primary debugging environment.
 
 ### 0. Establish environment, key, participation, and fixture foundations
+
+Working-tree status on 2026-08-19: the environment/key boundary, visible
+staging identity, and `pilot-participation-v1` /
+`pilot-participation-notice-v1` implementation below exist locally. The
+`staging-scenarios-v1` manifest/generator also exists with six named cases and
+bounded receipt-owned cleanup. The additive migration has not been applied to
+a hosted project and no confirmed generator run occurred; this status is not
+release evidence.
 
 - Add distinct `local`, `staging`, and `pilot` configuration identities and
   fail-closed project-ref guards to the hosted define helper, FastAPI startup,
@@ -1454,10 +1470,10 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 
 ### Phase A — local design and implementation
 
-- [ ] Implement local/staging/pilot identities, current Supabase publishable/
+- [x] Implement local/staging/pilot identities, current Supabase publishable/
       secret-key compatibility, crossover denial, and distinct staging UI.
-- [ ] Implement versioned 18-or-older acceptance without date-of-birth storage.
-- [ ] Implement the previewed, confirmed, staging-only synthetic scenario
+- [x] Implement versioned 18-or-older acceptance without date-of-birth storage.
+- [x] Implement the previewed, confirmed, staging-only synthetic scenario
       generator and pilot-target denial.
 - [ ] Run the time-boxed stable Codex Python SDK compatibility spike; retain the
       pinned CLI adapter unless every required control passes.

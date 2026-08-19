@@ -15,6 +15,7 @@ class AppConfig {
     this.supabaseAnonKey = '',
     this.stagingSupabaseProjectRef = '',
     this.pilotSupabaseProjectRef = '',
+    this.pilotContactEmail = '',
     this.coachSurfaceEnabled = false,
     this.learnedFocusPlanningPilotEnabled = false,
   });
@@ -38,6 +39,10 @@ class AppConfig {
     );
     const pilotSupabaseProjectRef = String.fromEnvironment(
       'PILOT_SUPABASE_PROJECT_REF',
+      defaultValue: '',
+    );
+    const pilotContactEmail = String.fromEnvironment(
+      'PILOT_CONTACT_EMAIL',
       defaultValue: '',
     );
     const aiServiceBaseUrl = String.fromEnvironment(
@@ -64,6 +69,7 @@ class AppConfig {
       supabaseAnonKey: supabaseAnonKey,
       stagingSupabaseProjectRef: stagingSupabaseProjectRef,
       pilotSupabaseProjectRef: pilotSupabaseProjectRef,
+      pilotContactEmail: pilotContactEmail,
       aiServiceBaseUrl: aiServiceBaseUrl,
       useMockData: const bool.fromEnvironment(
         'USE_MOCK_DATA',
@@ -90,10 +96,14 @@ class AppConfig {
   final String supabaseAnonKey;
   final String stagingSupabaseProjectRef;
   final String pilotSupabaseProjectRef;
+  final String pilotContactEmail;
   final String aiServiceBaseUrl;
   final bool useMockData;
   final bool coachSurfaceEnabled;
   final bool learnedFocusPlanningPilotEnabled;
+
+  bool get requiresPilotParticipation =>
+      {'staging', 'pilot'}.contains(environment.trim().toLowerCase());
 
   String get supabaseClientKey => resolveSupabaseClientKey(
         environment: environment,
@@ -137,6 +147,17 @@ class AppConfig {
       stagingProjectRef: stagingSupabaseProjectRef,
       pilotProjectRef: pilotSupabaseProjectRef,
     );
+  }
+
+  void validatePilotParticipationConfiguration() {
+    if (!requiresPilotParticipation) return;
+    _rejectSurroundingWhitespace('PILOT_CONTACT_EMAIL', pilotContactEmail);
+    if (pilotContactEmail.length > 254 ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(pilotContactEmail)) {
+      throw StateError(
+        'PILOT_CONTACT_EMAIL must be a valid hosted-pilot contact address.',
+      );
+    }
   }
 }
 

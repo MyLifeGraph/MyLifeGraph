@@ -1,7 +1,16 @@
 # Supabase Current State
 
-The BYOK migrations are `20260815075711_coach_byok_provider_v1.sql` and the
-latest `20260815082606_coach_byok_completion_dispatch_v1.sql`. They add OpenAI/Gemini
+The latest repository migration is
+`20260819185740_pilot_participation_v1.sql`. It adds the nullable, constrained
+`profiles.pilot_participation_notice_version` /
+`pilot_participation_accepted_at` pair, protects both fields from application
+writes, and adds service-role-only `accept_pilot_participation_v1`. The RPC
+accepts only `pilot-participation-notice-v1`, locks the canonical profile,
+preserves the first backend timestamp on exact replay, and stores no birth
+date. Editable Auth metadata is not eligibility authority.
+
+The preceding BYOK migrations are `20260815075711_coach_byok_provider_v1.sql`
+and `20260815082606_coach_byok_completion_dispatch_v1.sql`. They add OpenAI/Gemini
 `user_supplied_key` provenance, the service-role-only
 `claim_coach_request_v7`, and strict response-V3 validation while retaining
 V1/V2 response compatibility. It adds no key column: provider API keys never
@@ -81,17 +90,24 @@ rename PostgreSQL role `service_role`, weaken RLS/grants, mutate either remote
 project, or authorize key rotation. Neither hosted environment is claimed to
 use a current key until separately authorized remote evidence proves it.
 
-No remote synthetic-scenario generator currently exists. The planned tool must
-be allowlisted to the exact staging project, preview and confirm its bounded
-identities, reject the pilot project, and verify cleanup. The current local
-`seed:demo` workflow remains local-only and is not remote staging authority.
+The repository now contains the remote `staging-scenarios-v1` generator. Its
+code-level immutable allowlist contains only the reviewed staging ref; exact
+URL/ref binding and pilot-ref equality denial happen before secrets are read.
+A fresh 15-minute one-use preview binds the exact run, selected cases, and
+synthetic emails. Confirmed creation records exact Auth UUIDs in an ignored
+mode-0600 receipt, uses deterministic row/request identities, and verifies the
+participation/profile plus scenario rows. Confirmed cleanup rereads the current
+Auth ownership markers, deletes only receipt UUIDs, and verifies absence. No
+confirmed remote generator run is recorded here. The local `seed:demo`
+workflow remains local-only and is not remote staging authority.
 
-There is likewise no current adult-participation acceptance table, RPC, or wire
-contract. The planned 18-or-older gate must use bearer-derived backend
-ownership and a backend-owned acceptance version/time record before product
-access; editable Auth `user_metadata` must not become eligibility authority.
-Any resulting schema is future additive work with forced RLS, explicit grants,
-and synchronized Auth/Account/verification owners.
+The repository now contains `pilot-participation-v1` and
+`pilot-participation-notice-v1`. The additive migration stores the pair on the
+existing forced-RLS canonical profile rather than creating another public
+table; application roles retain owner read but cannot update either field, and
+only `service_role` can execute the acceptance RPC. FastAPI supplies the owner
+only from a verified bearer. This repository fact does not mean the migration
+is applied to the dated staging project or any future pilot project.
 
 The current schema has no backup-independent account-deletion intent/receipt
 ledger. The restore-safe encrypted journal and optional service-role-only
@@ -138,7 +154,9 @@ additive dependency/locking repair
 finite weekly Assignment Series boundary in
 `20260810092841_finite_assignment_series_v1.sql`, then the final Deadline Plan
 kind-authority guard in
-`20260812212833_deadline_plan_kind_guard.sql`.
+`20260812212833_deadline_plan_kind_guard.sql`, the two Coach BYOK migrations,
+and finally the additive adult-participation boundary in
+`20260819185740_pilot_participation_v1.sql`.
 
 ## Runtime Activation
 
@@ -196,7 +214,7 @@ The app table constants live in
 
 | Table | Current app use |
 | --- | --- |
-| `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`) and onboarding eligibility are backend-owned; `setup_revision`, `timezone_revision`, and `preparation_budget_revision` are monotonic backend guards, and timezone/preparation-budget writes require revisioned service-role RPCs. |
+| `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`), onboarding eligibility, and the paired pilot notice version/backend acceptance time are backend-owned; no birth date is stored. `setup_revision`, `timezone_revision`, and `preparation_budget_revision` are monotonic backend guards, and timezone/preparation-budget/participation writes require service-role RPCs. |
 | `daily_logs` | One canonical daily row whose V4 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; authenticated callers have owner reads but no direct DML. |
 | `behavioral_events` | Granular AI signal stream; the Capture RPC transactionally replaces only the dynamic deterministic maximum of four `quick_check_in` events linked to its `daily_logs` row. Other sources are preserved and application roles have no direct DML. |
 | `daily_capture_request_identities` | Service-role-only exact payload/result anti-replay ledger for branch-local `daily-capture-write-v1`; omitted from Account Export. |
@@ -1355,7 +1373,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260815082606_coach_byok_completion_dispatch_v1.sql
+20260819185740_pilot_participation_v1.sql
 ```
 
 Then configure `.env` with:
@@ -1552,7 +1570,11 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260813200057_retire_recommendations_and_decision_feedback.sql`. It takes a
+`20260819185740_pilot_participation_v1.sql`, with the paired profile fields,
+application-write denial, and service-role-only exact-replay command described
+above. It adds no public table and does not change Account Export's table set.
+The earlier
+`20260813200057_retire_recommendations_and_decision_feedback.sql` takes a
 fixed alphabetic lock graph with a five-second timeout, erases Daily Briefing,
 Weekly Review, and Coach content, removes exactly typed deterministic
 `daily_briefing` notifications/actions, and preserves content-free append-only

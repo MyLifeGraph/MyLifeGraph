@@ -10,6 +10,7 @@ import '../core/supabase/supabase_providers.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/auth/data/guest_setup_data_source.dart';
 import '../features/auth/data/intake_api_data_source.dart';
+import '../features/auth/data/pilot_participation_api_data_source.dart';
 import '../features/auth/domain/app_session.dart';
 import '../features/quick_action/data/guest_quick_check_in_data_source.dart';
 import '../features/quick_action/data/quick_check_in_supabase_data_source.dart';
@@ -26,6 +27,11 @@ final authRepositoryProvider = Provider<AuthRepository?>((ref) {
           client,
           useMockData: ref.watch(appConfigProvider).useMockData,
           guestSetupDataSource: const GuestSetupDataSource(),
+          pilotParticipationGateway: PilotParticipationApiDataSource(
+            ref.watch(apiClientProvider),
+          ),
+          requiresPilotParticipation:
+              ref.watch(appConfigProvider).requiresPilotParticipation,
           guestCheckInMigrator: (userId) async {
             final local = GuestQuickCheckInDataSource();
             final entries = await local.readAll();
@@ -132,6 +138,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     required String email,
     required String password,
     String? name,
+    bool confirmed18OrOlder = false,
   }) async {
     state = const AsyncValue.loading();
     final result = await AsyncValue.guard(
@@ -139,15 +146,28 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
         email: email,
         password: password,
         name: name,
+        confirmed18OrOlder: confirmed18OrOlder,
       ),
     );
     state = result;
     return result.valueOrNull != null;
   }
 
-  Future<void> signInWithGoogle() async {
+  Future<void> signInWithGoogle({bool confirmed18OrOlder = false}) async {
     final repository = _requireRepository();
-    await repository.signInWithGoogle();
+    await repository.signInWithGoogle(
+      confirmed18OrOlder: confirmed18OrOlder,
+    );
+  }
+
+  Future<void> acceptCurrentPilotParticipation() async {
+    final session = state.valueOrNull;
+    if (session == null || session.isGuestSession) {
+      throw StateError('A synced account session is required.');
+    }
+    final profile =
+        await _requireRepository().acceptCurrentPilotParticipation();
+    state = AsyncValue.data(AppSession.authenticated(profile));
   }
 
   Future<void> requestPasswordReset({required String email}) {

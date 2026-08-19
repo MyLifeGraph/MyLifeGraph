@@ -79,6 +79,17 @@ export function resolveCompatibleKey({
   };
 }
 
+export function requireContactEmail(name, value) {
+  const configured = configuredValue(name, value);
+  if (
+    configured.length > 254 ||
+    !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(configured)
+  ) {
+    throw new Error(`${name} must be a valid contact email address.`);
+  }
+  return configured;
+}
+
 export function hostedSupabaseTarget(environment = process.env) {
   const appEnvironment = environment.APP_ENV;
   if (appEnvironment !== 'staging' && appEnvironment !== 'pilot') {
@@ -105,6 +116,10 @@ export function hostedSupabaseTarget(environment = process.env) {
     projectRef,
     stagingProjectRef,
     pilotProjectRef,
+    pilotContactEmail: requireContactEmail(
+      'PILOT_CONTACT_EMAIL',
+      environment.PILOT_CONTACT_EMAIL,
+    ),
     supabaseUrl: requireHttpsBaseUrl('SUPABASE_URL', environment.SUPABASE_URL, {
       supabaseProjectRef: projectRef,
     }),
