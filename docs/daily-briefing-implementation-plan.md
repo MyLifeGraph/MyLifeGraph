@@ -18,8 +18,9 @@ current surface authority lives in the linked contracts.
 Current disposition overrides the historical phase text below: the generic
 Today Recommendation feed, Recommendation refresh, and Decision Feedback are
 retired end to end. `daily-briefing-v2` ranks without those sources,
-`weekly-review-v3` has no Feedback facts, Account Export is V5, and new free
-Coach turns use `free-coach-agent-prompt-v4` with `personal-snapshot-v3`.
+`weekly-review-v3` has no Feedback facts, and Account Export is V5. Current
+Coach turns use `free-coach-agent-prompt-v5` with
+`personal-snapshot-v3`; persisted V4-prompt turns remain replay-compatible.
 Sleep Recommendation, `ai_insights.recommendation`, recommendation Memories,
 Skillset, and ordinary Coach advice remain distinct supported concepts.
 
@@ -1681,46 +1682,52 @@ Goal:
 
 Implemented:
 
-- Added authenticated `coach-request-v3`, `coach-response-v2`, capabilities,
-  history/delete, and SSE lifecycle contracts with one in-flight request per
-  owner, a retained profile-local daily question budget, and safe feature flags.
+- Added authenticated `coach-request-v3`, `coach-response-v3`,
+  `coach-capabilities-v3`, `coach-history-v3`, history deletion, and SSE
+  lifecycle contracts with one in-flight request per owner, a retained
+  profile-local daily question budget, and safe feature flags.
 - Replaced Today/Patterns/Focus/Review, horizons, Focus selection, prompt
   starters, memory selection, and structured suggestions with one free field.
 - Builds a fresh immutable owner-only SQLite snapshot for each non-safety turn
   from retained relevant Setup, Capture, action, planning, calendar, review,
   insight, memory, and Coach data. It includes catalog,
   relationship, count, period, and helper-view metadata under
-  `free-coach-agent-prompt-v4`/`personal-snapshot-v3`, while excluding auth,
+  `free-coach-agent-prompt-v5`/`personal-snapshot-v3`, while excluding auth,
   secrets, cross-user, anti-replay, provider, and operational rows.
 - Reuses Account Export's 10,000-per-table, 50,000-total, and 8 MiB limits and
   reports overflow instead of truncating.
-- Gives the model one required per-turn stdio MCP with exactly catalog
-  inspection, bounded immutable SQL, and Python in a no-network, non-root,
-  read-only Docker sandbox. A turn has 12 tools/180 seconds; SQL/Python have
-  shorter limits. Internal plots are temporary and never visible.
-- Lets the agent answer directly, combine queries, use Python, test or correct a
-  premise, explain absent information, or ask a concise question. Stored free
-  text is untrusted data, never instructions.
+- Gives request-scoped OpenAI/Gemini BYOK providers bounded catalog-inspection
+  and immutable-SQL results without the SQLite file. Private local Codex uses
+  one required per-turn stdio MCP and additionally receives Python in a
+  no-network, non-root, read-only Docker sandbox. A turn has 12 tools/180
+  seconds; SQL/Python have shorter limits. Internal plots are temporary and
+  never visible.
+- Lets the agent answer directly, combine queries, use Python only through the
+  private local adapter, test or correct a premise, explain absent information,
+  or ask a concise question. Stored free text is untrusted data, never
+  instructions.
 - Adds deterministic pre/post wellness safety boundaries, urgent provider
   bypass, explicit uncertainty, non-causal/diagnostic rules, and source-aware
   responses.
-- Adds an injectable
+- Adds request-scoped OpenAI `gpt-5.6-terra` and Gemini
+  `gemini-3.6-flash` user-key adapters plus an injectable
   `local_codex_oauth` provider that invokes the current Linux/WSL user's
-  explicitly enabled, already authenticated Codex CLI. It uses no application
-  API key, shares no OAuth state, and is not the production provider design.
-- Requires `gpt-5.5`, `service_tier="fast"`, and Fast mode on every real turn.
-  Model/tier rejection fails honestly with no model or standard-tier fallback.
+  explicitly enabled, already authenticated Codex CLI. Keys and OAuth state are
+  not persisted, and no provider falls back to another.
+- Requires `gpt-5.5`, `service_tier="fast"`, and Fast mode on every private
+  local Codex turn. Model/tier rejection fails honestly with no model or
+  standard-tier fallback.
 - Derives conservative accessed-source coverage, agent tool trace, snapshot
-  size, and model/Fast provenance from actual backend execution; inspection
-  alone adds no row coverage, SQL keeps returned rows separate, arbitrary
-  Python records full-snapshot scope, and the model owns only reply,
+  size, and provider/model/tier provenance from actual backend execution;
+  inspection alone adds no row coverage, SQL keeps returned rows separate,
+  arbitrary Python records full-snapshot scope, and the model owns only reply,
   uncertainty, and safety.
 - Streams safe lifecycle activity and supports cancellation without showing
   hidden reasoning. Temporary snapshot, scripts, plots, and workspaces are
   removed after every terminal path.
-- Keeps compatible V1/V2 request/response/history and legacy context/memory
-  routes readable while current Flutter uses only V3 and history V2. The newest
-  legacy provenance pair remains
+- Keeps compatible V1/V2 response history and legacy context/memory routes
+  readable while current Flutter uses request/response/capability/history V3.
+  The newest legacy fixed-mode provenance pair remains
   `controlled-coach-prompt-v3`/`coach-context-v3`.
 - Adds database follow-up guards for exact provider-call safety provenance,
   owner-first Coach lock order, backend-owned profile identity and onboarding
@@ -1735,6 +1742,8 @@ Current evaluation boundary:
   authority?
 - Are all state-changing suggestions plain text and explicitly non-executable?
 - Does Coach add value beyond the existing briefing instead of restating it?
+- Do OpenAI/Gemini BYOK and private local Codex each expose only their declared
+  tools and preserve the no-fallback/key-retention boundary?
 - Can two Linux developers use their own eligible Codex logins without copying
   credentials while disabled/login/model/Fast/image failures remain honest?
 
@@ -1860,14 +1869,15 @@ moves an active reservation or infers missing scheduling input automatically.
 
 Phase 10 is implemented as an authenticated, budgeted, free-question,
 source-aware read-only data agent. It uses a fresh bounded owner-only snapshot,
-three required read-only analysis tools, backend-derived conservative source
-coverage/trace, and validated history with no executable suggestion. Live
+provider-scoped read-only tools, backend-derived conservative source
+coverage/trace, and validated V3 history with no executable suggestion. Live
 provider calendar sync/writes, product mutation, broad autonomous changes,
 deployed/background delivery or scheduling, vector search, automatic memory
 extraction, and unbounded snapshots/tools remain separate later concerns. The
-real path is the explicitly enabled `gpt-5.5` Fast local Codex OAuth development
-adapter defined in `docs/phase-10-controlled-coach-plan.md`; it does not
-establish a deployable provider or universal subscription/model availability.
+real paths are request-scoped OpenAI/Gemini BYOK plus the explicitly enabled
+`gpt-5.5` Fast local Codex OAuth development adapter defined in
+`docs/phase-10-controlled-coach-plan.md`. Implemented adapters do not establish
+hosted release acceptance or universal subscription/model availability.
 Select later work from a separately verified user need rather than broadening
 Coach automatically.
 

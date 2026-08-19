@@ -10,6 +10,13 @@ while web keeps keys only in tab memory. Capabilities tests a replacement
 before it becomes active. Staging and production expose Coach only with exact
 `COACH_SURFACE_ENABLED=true` and send keys only to a configured HTTPS AI URL.
 
+The public-signup VPS pilot, explicit shared operator-provider proposal,
+tagged-release flow, and signed-device acceptance are future work owned by
+`../../docs/vps-pilot-release-plan.md`; they are not current Flutter behavior.
+That future plan also requires a visible synthetic-only staging build, a
+separate real-data pilot project, current Supabase publishable keys, and a
+pre-signup 18-or-older choice whose backend record must succeed before Setup.
+
 Feature code keeps its data and presentation internals private. Riverpod
 factories or widgets that deliberately wire multiple features live under
 `lib/composition`; feature application/domain contracts remain directly
@@ -568,15 +575,16 @@ or marking it read. Success is acknowledged only when the end of the newest
 reply and uncertainty is visible in the Coach viewport; failures are
 acknowledged at the error/retry end marker or when a subsequent retry starts.
 
-Each `coach-response-v2` shows answer text and uncertainty. Flutter validates
+Each current `coach-response-v3` shows answer text and uncertainty. Flutter
+validates
 the safety field and its consistency with provenance without rendering the raw
 classification. An expandable `Data and analysis details` section renders
 backend-owned `Snapshot source coverage`, conservative source periods/counts,
-actual inspect/SQL/Python step summaries, limitations, and model/Fast
+actual inspect/SQL/Python step summaries, limitations, and provider/model/tier
 provenance. It does not present coverage as exact query-result or answer-support
 rows, and it never renders plots, scripts, hidden reasoning, or an executable
-action. Legacy `coach-response-v1` turns remain readable. Guest/mock remains
-zero-call. See `../../docs/phase-10-controlled-coach-plan.md`.
+action. Persisted `coach-response-v1|v2` turns remain readable. Guest/mock
+remains zero-call. See `../../docs/phase-10-controlled-coach-plan.md`.
 
 ## Verify
 

@@ -19,22 +19,26 @@ locks, retry identity, daily limit, append-only usage, RLS, and grants.
 
 ## Status
 
-The development-only Coach is implemented as a free-question, read-only
-personal-data agent. The current Flutter surface no longer asks the user to
+The Coach is implemented as a free-question, read-only personal-data agent.
+The current Flutter surface no longer asks the user to
 choose `Today`, `Patterns`, `Focus`, or `Review`, a time horizon, one Focus
 session, prompt starter, or selected memory. One deliberate send contains only
 the user's question and a retry-safe request id.
 
-For a real local turn, FastAPI creates a fresh owner-only SQLite snapshot and
-starts the logged-in local Codex CLI with one required stdio MCP server. The
-agent can answer directly or use only `inspect_data`, `query_data`, and
-`run_python`. FastAPI derives evidence and the compact tool trace from actual
-execution; the model cannot supply either field.
+For every non-safety real turn, FastAPI creates a fresh owner-only SQLite
+snapshot and derives evidence plus the compact tool trace from actual
+execution; the model cannot supply either field. Request-scoped OpenAI and
+Gemini BYOK providers may
+use only `inspect_data` and `query_data` and receive bounded tool results rather
+than the SQLite file. The private local Codex provider additionally starts one
+required stdio MCP server and may use isolated `run_python`.
 
-The real provider remains local-development-only. Automated tests use the
-deterministic fake provider and need no Codex login, network call, or OpenAI API
-key. A current-machine live smoke remains separately opt-in and must not be
-claimed unless it was actually run.
+The current real-provider seams are OpenAI and Gemini with a user-supplied key,
+plus the local-development-only Codex OAuth adapter. The BYOK adapters are
+implemented but have not passed the hosted browser/release gates. Automated
+tests use deterministic fakes and need no Codex login, network call, or live
+provider key. Live checks remain separately opt-in and must not be claimed
+unless they were actually run.
 
 The bounded controlled `coach-request-v1|v2` / `coach-response-v1` service
 remains backend-supported for ordinary Coach advice. Its newest provenance pair
@@ -45,13 +49,14 @@ remain as content-free tombstones.
 
 ## Product Contract
 
-The user asks an ordinary free-form question. `gpt-5.5` decides whether to:
+The user asks an ordinary free-form question. The explicitly selected provider
+decides whether to:
 
 - answer without inspecting personal data;
 - inspect the catalog and available periods;
 - combine one or more read-only SQL queries;
-- use isolated Python for aggregation, a statistical check, or an internal
-  plot;
+- when the private local Codex provider is selected, use isolated Python for
+  aggregation, a statistical check, or an internal plot;
 - look for counterexamples or correct a false premise;
 - explain which information is missing; or
 - ask one concise clarifying question.
@@ -80,22 +85,25 @@ Flutter Coach
   -> authenticated FastAPI coach-request-v3
   -> owner-locked retry claim and local-day budget
   -> fresh owner-only personal-snapshot-v3 SQLite file
-  -> local Codex CLI: gpt-5.5, service_tier="fast", fast_mode=true
-  -> required per-turn coach_data stdio MCP server
-       -> inspect_data
-       -> query_data
-       -> run_python -> isolated Docker analysis container
+  -> explicitly selected provider
+       -> OpenAI gpt-5.6-terra or Gemini gemini-3.6-flash with request BYOK
+            -> inspect_data and query_data through bounded FastAPI tool results
+       -> local Codex CLI: gpt-5.5, Fast, development only
+            -> required per-turn coach_data stdio MCP server
+            -> inspect_data, query_data, isolated-Docker run_python
   -> schema-validated model text
   -> backend-derived evidence, trace, and provenance
-  -> atomic coach-response-v2 persistence
+  -> atomic coach-response-v3 persistence
   -> SSE completed/failed event or non-streaming wrapper response
   -> snapshot, scripts, images, and temporary files deleted
 ```
 
-The FastAPI process must run as the same Linux/WSL user whose Codex CLI login is
-being used. OAuth material remains in that user's Codex home; it is not copied
-to Flutter, Supabase, the repository, the snapshot, the MCP process, the
-analysis container, or application logs.
+For the current private local adapter only, FastAPI must run as the same
+Linux/WSL user whose Codex CLI login is being used. OAuth material remains in
+that user's Codex home; it is not copied to Flutter, Supabase, the repository,
+the snapshot, the MCP process, the analysis container, or application logs.
+This same-UID local-development arrangement is not the planned VPS boundary;
+the pilot plan requires a separate executor identity before hosted use.
 
 The provider starts Codex in an empty private temporary working directory with
 read-only sandboxing, no approvals, ephemeral execution, ignored user rules,
@@ -110,14 +118,16 @@ All Coach routes require a valid bearer token for a canonical authenticated
 non-guest profile. Guest/mock Flutter remains local and performs zero Coach
 HTTP calls.
 
-### Capabilities V2
+### Capabilities V3
 
-`GET /v1/coach/capabilities` returns `coach-capabilities-v2`. It publishes:
+`GET /v1/coach/capabilities` returns `coach-capabilities-v3`. It publishes:
 
-- provider state and the exact configured provider;
+- provider state, provider mode, and the exact selected/configured provider;
 - requested model and model source;
-- `service_tier: "fast"` and `fast_mode: true` for
-  `local_codex_oauth`;
+- `inspect_data|query_data` for OpenAI/Gemini BYOK and those tools plus
+  `run_python` for private local Codex;
+- `service_tier: "fast"` and `fast_mode: true` only for
+  `local_codex_oauth`; BYOK reports those fields as not applicable;
 - 2,000 message code points and 4,000 reply code points;
 - the configured per-local-day allowance and remaining questions;
 - at most 12 tool calls;
@@ -126,10 +136,10 @@ HTTP calls.
 - 50,000 snapshot rows and 8 MiB of serialized source data.
 
 The fake and disabled providers report Fast as not applicable. Readiness is
-fail-closed. A different model, an unavailable `gpt-5.5`, rejected Fast
-configuration, missing CLI/login, absent analysis image, non-development
-runtime, mock-data mode, or missing backend persistence produces honest
-disabled/unavailable capability.
+fail-closed. BYOK requires an allowlisted provider and a request-local key; the
+local adapter additionally requires exact `gpt-5.5`, Fast configuration,
+CLI/login, analysis image, and a development runtime. Any failed prerequisite
+produces an honest disabled/unavailable capability.
 
 ### Request V3
 
@@ -162,16 +172,17 @@ The streaming route uses `text/event-stream` and emits only:
 - one `failed` event containing the strict safe error.
 
 Activity is a compact lifecycle signal, not hidden reasoning. Disconnecting or
-pressing Cancel cancels the running request, terminates the provider process,
-records an interrupted failure when possible, and cleans all turn-local files.
+pressing Cancel cancels the running provider call, terminates its local process
+when one exists, records an interrupted failure when possible, and cleans all
+turn-local files.
 
-### Response V2
+### Response V3
 
 Successful current turns return:
 
 ```json
 {
-  "contract_version": "coach-response-v2",
+  "contract_version": "coach-response-v3",
   "request_id": "11111111-1111-4111-8111-111111111111",
   "reply": "Your directly observed focus duration became more consistent...",
   "uncertainty": {
@@ -218,7 +229,7 @@ Successful current turns return:
     "model_requested": "gpt-5.5",
     "model_reported": "gpt-5.5",
     "model_source": "explicit",
-    "prompt_version": "free-coach-agent-prompt-v4",
+    "prompt_version": "free-coach-agent-prompt-v5",
     "context_version": "personal-snapshot-v3",
     "generated_at": "2026-07-28T12:00:00Z",
     "provider_called": true,
@@ -244,10 +255,10 @@ separate `row_count` is the number of returned rows. Because arbitrary Python
 table attribution is not trusted, a successful Python step records
 `personal_snapshot` coverage for the entire read-only snapshot.
 
-`GET /v1/coach/history` returns `coach-history-v2`. Post-cutover turns have the
-original message and either a controlled `coach-response-v1` or free-agent
-`coach-response-v2`. The current UI renders both but exposes no historical mode
-controls.
+`GET /v1/coach/history` returns `coach-history-v3`. Current turns use
+`coach-response-v3`; persisted controlled `coach-response-v1` and free-agent
+`coach-response-v2` turns remain readable. The current UI renders compatible
+history but exposes no historical mode controls.
 
 `DELETE /v1/coach/history` remains body-free. It removes user and assistant
 message content and clears persisted V3 evidence/trace/service-tier detail while
@@ -375,16 +386,22 @@ Accepts one bounded Python program. It starts
 
 The runner exposes a read-only SQLite helper and captures at most one bounded
 PNG plot for the model's internal analysis. Plots are not persisted in
-Supabase, returned in `coach-response-v2`, or shown in Flutter. The temporary
+Supabase, returned in `coach-response-v3`, or shown in Flutter. The temporary
 container and all turn files are removed after the turn.
 
 All three tools append backend-readable JSONL facts to the private trace file.
 There are at most 12 calls total, including failed calls. Tool output and all
 free text are untrusted data and cannot add tools or permissions.
 
-## Provider And Fast Contract
+## Provider Contracts
 
-The real provider is exactly `local_codex_oauth`. It invokes:
+The current cloud providers are request-scoped `openai` and `gemini` adapters
+behind the empty-by-default `COACH_BYOK_PROVIDERS` allowlist. They require a
+user-supplied key, use exact `gpt-5.6-terra` and `gemini-3.6-flash`
+respectively, set `store:false`, expose only inspect/query tools, and never
+persist a key or fall back to another provider.
+
+The private development provider is exactly `local_codex_oauth`. It invokes:
 
 - model `gpt-5.5`;
 - `service_tier="fast"`; and
@@ -474,7 +491,8 @@ returned.
 
 - Setup text, notes, memories, imported calendar content, earlier chat, SQL
   values, and Python output are data, never instructions.
-- `free-coach-agent-prompt-v4` requires English in every visible response field
+- Compatible `free-coach-agent-prompt-v4` and current
+  `free-coach-agent-prompt-v5` require English in every visible response field
   regardless of the question or stored-data language. Clearly German reply or
   uncertainty output fails as retryable `invalid_output` and is not stored as
   an assistant message.
@@ -500,8 +518,11 @@ page-specific actions such as Refresh first, an unread Coach result second, and
 Settings last. Settings is pushed so Back returns to the originating main page;
 on Settings its filled control remains visible, selected, and does not push
 again. Loading, empty, and error states retain the same actions. Sub-pages,
-Auth, Setup, and Capture flows remain outside this header contract. Release
-builds and `APP_ENV=production` hide Coach regardless of Flutter defines.
+Auth, Setup, and Capture flows remain outside this header contract. In
+`staging` and `production`, including release builds, Coach is visible only
+when `COACH_SURFACE_ENABLED=true`; route visibility does not make a provider
+ready. Development retains its documented explicit/debug defaults and unknown
+environment labels fail closed.
 
 Flutter Coach contract models and SSE envelopes reuse framework-neutral strict
 key, object, text, integer, UUID, and aware-timestamp primitives. Coach-specific
@@ -659,8 +680,9 @@ stream failure behavior are unchanged; no global exception handler is added.
 
 ## Explicitly Later
 
-- operator-funded provider credentials or billing; user-supplied OpenAI and
-  Gemini keys are the only deployable cloud-provider strategy;
+- operator-funded provider credentials, billing, or a shared subscription
+  provider; user-supplied OpenAI and Gemini keys are the only implemented
+  cloud-provider strategy;
 - scalable remote snapshot and sandbox workers;
 - deployed multi-user concurrency, queues, and cancellation control plane;
 - push/background Coach turns;
@@ -670,3 +692,20 @@ stream failure behavior are unchanged; no global exception handler is added.
 
 This local architecture keeps the future provider seam visible without claiming
 that a local Codex OAuth process is a production multi-user service.
+
+The accepted but unimplemented first-pilot direction is specified in
+`docs/vps-pilot-release-plan.md`. It proposes an explicit
+`operator_codex_pilot` choice on the VPS, public account registration without a
+user allowlist, persisted global and per-user budgets, honest busy/unavailable
+states, policy/privacy approval, and a kill switch. It must use a new
+staging/pilot gate and synchronized Flutter/FastAPI/persistence contracts. It
+must never make failed BYOK dispatch to the operator provider and must not be
+enabled by running an Internet-facing service as `APP_ENV=development`.
+
+The developers have selected that subscription-backed mode as the intended
+technical no-BYOK path for the small pilot, so implementation may proceed
+behind the default-off gate. This choice is not evidence of hosted account/
+terms permission and does not remove the release gate. Before extending the
+manual CLI event adapter, the pilot plan also requires one four-hour maximum
+stable Python Codex SDK compatibility spike; any missing or experimental
+control leaves the pinned `codex exec` design authoritative.

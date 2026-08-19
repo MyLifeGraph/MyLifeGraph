@@ -48,6 +48,54 @@ no index was added or removed during this migration. The dated audit does not
 prove OAuth configuration, a deployed FastAPI service, two-user hosted
 isolation, provider model access, or production state.
 
+## Read-Only Planning Recheck (2026-08-19)
+
+A later project-scoped, read-only Supabase MCP inspection during VPS pilot
+planning again observed 59 migration records through `20260815082606`, one
+Auth user, and one Google identity in the approved staging project. No remote
+row, schema, migration, Auth setting, or provider setting was changed.
+
+The Google identity proves only that Google authentication succeeded for that
+identity at least once. The connector did not prove the current Google provider
+toggle or credentials, public-signup switch, email-confirmation policy, Site
+URL, redirect allowlist, CAPTCHA, rate limits, or a current web/Android OAuth
+round trip. Those remain explicit release-day checks in
+`docs/vps-pilot-release-plan.md`. The planned public pilot has no invite or
+three-user allowlist; abuse protection belongs to CAPTCHA, Auth throttling, and
+bounded application/provider use.
+
+The team has since chosen to keep this inspected target as **staging** for
+synthetic fixtures and remote isolation tests. It is not the real-data public
+pilot project. No second pilot project, project ref, Auth configuration,
+publishable/secret key, row, or migration has been created or inspected by that
+decision. Assigning or creating it is a future authorized remote operation;
+repository documentation must not infer it from the staging target.
+
+The current repository and local tooling still use legacy anon/service-role
+configuration names. The VPS pilot plans a focused compatibility migration to
+Supabase publishable keys in Flutter and separate backend secret keys where
+supported. That future credential change does not rename PostgreSQL role
+`service_role`, weaken RLS/grants, or authorize remote key rotation. Until code,
+tests, every caller, and a separately approved remote rotation converge, this
+document makes no claim that either hosted environment uses the new keys.
+
+No remote synthetic-scenario generator currently exists. The planned tool must
+be allowlisted to the exact staging project, preview and confirm its bounded
+identities, reject the pilot project, and verify cleanup. The current local
+`seed:demo` workflow remains local-only and is not remote staging authority.
+
+There is likewise no current adult-participation acceptance table, RPC, or wire
+contract. The planned 18-or-older gate must use bearer-derived backend
+ownership and a backend-owned acceptance version/time record before product
+access; editable Auth `user_metadata` must not become eligibility authority.
+Any resulting schema is future additive work with forced RLS, explicit grants,
+and synchronized Auth/Account/verification owners.
+
+The current schema has no backup-independent account-deletion intent/receipt
+ledger. The restore-safe encrypted journal and optional service-role-only
+pending/receipt table proposed by the VPS pilot are future additive work; they
+must not be inferred from the current `delete_account_v1` transaction.
+
 This file is the sole current owner of the latest repository migration filename
 and reset boundary. The scoped synchronization catalog for named
 Flutter/FastAPI contract versions and explicit exceptions, including exact code
@@ -142,7 +190,7 @@ The app table constants live in
 | `notification_action_requests` | Service-role-only exact retry/result ledger for `notification-lifecycle-v1`; it contains identities and lifecycle projections, not notification copy. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. Setup-owned metadata may add inclusive optional `valid_from`/`valid_until` semester dates; older/undated rows remain unbounded. |
 | `ai_insights` | Insights list. |
-| `coach_messages` | Bounded validated user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI inserts/deletes turns. V3 answers use `coach-response-v2`; legacy and fixed-mode V1/V2 rows remain readable. |
+| `coach_messages` | Bounded validated user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI inserts/deletes turns. Current V3 answers use `coach-response-v3`; persisted free-agent V2 and fixed-mode V1 rows remain readable. |
 | `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read it. Current free-question Coach snapshots may include sanitized owner memory detail as untrusted data; the old explicit selection projection remains only for V1/V2 compatibility and never changes content ownership. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
 | `focus_session_schedule_sources` | Immutable optional origin for a scheduled Focus session: one owned Deadline or Planner Task block plus its original Focus interval and recovery snapshot. Forced owner-read RLS; direct application DML is forbidden and source deletion is restricted until Focus/account deletion removes the provenance. |
@@ -861,8 +909,13 @@ versions. Partial `(user_id, completed_at, id)` and
 `(user_id, cancelled_at, id)` Task indexes accelerate owner-scoped terminal
 history without changing Task lifecycle authority.
 
-`20260728160000_free_read_only_coach_agent_v1.sql` additively implements the
-current free-question persistence contract without rewriting old rows. It adds
+The following paragraphs record the V6/V4/V2 base introduced in July. The
+August BYOK migrations summarized at the top of this document supersede its
+current-writer claims with claim V7, prompt V5, and response V3 while retaining
+the described stored compatibility.
+
+`20260728160000_free_read_only_coach_agent_v1.sql` additively implemented the
+base free-question persistence contract without rewriting old rows. It adds
 nullable `evidence`, `agent_trace`, `tool_call_count`, and `service_tier`
 columns to `coach_requests`; V1/V2 rows keep those fields null.
 
@@ -870,15 +923,15 @@ columns to `coach_requests`; V1/V2 rows keep those fields null.
 service-role-only `claim_coach_request_v6` reuses the established owner-before-
 request locks, one-pending-owner rule, lease, terminal replay, and profile-local
 daily budget. Replay binds derived owner, request UUID, and exact message
-fingerprint only. A new claim stores
+fingerprint only. At this migration boundary, a new claim stored
 `free-coach-agent-prompt-v4`/`personal-snapshot-v3`. The legacy physical scope
 columns stay neutral `today`/`{}` for schema compatibility and are not a
 current product mode.
 
-The service-role-only `complete_coach_request_v2` is the current free-agent
-completion path. It accepts only a `coach-request-v3` row with exact
+The service-role-only `complete_coach_request_v2` was the corresponding
+free-agent completion path. It accepts only a `coach-request-v3` row with exact
 `free-coach-agent-prompt-v4`/`personal-snapshot-v3` provenance and one exact
-`coach-response-v2`; it does not accept historical free-agent prompt pairs.
+`coach-response-v2`; it did not accept the earlier free-agent prompt pairs.
 The separately preserved controlled V1/V2 flow continues through its V1
 completion RPC. Free-agent V2 validates:
 
@@ -889,7 +942,7 @@ completion RPC. Free-agent V2 validates:
   limitations;
 - exact equality between response and separately supplied evidence/trace/tool
   count;
-- exact current `free-coach-agent-prompt-v4` with
+- exact V6-era `free-coach-agent-prompt-v4` with
   `personal-snapshot-v3` provenance; pre-P7 free-agent pairs survive only on
   content-free deleted request identities;
 - snapshot rows no greater than 50,000 and bytes no greater than 8 MiB; and
@@ -902,10 +955,11 @@ retaining usage/request tombstones. The history-delete wrapper calls the prior o
 V3 evidence, trace, tool count, and service tier from tombstones. It does not
 delete usage/request identities and conflicts with an active turn.
 
-All current validator and mutation functions are revoked from `public`, `anon`,
-and `authenticated`. Only `service_role` may execute controlled V1/V2 claims,
-the free-agent V6 claim, V1/V2 completion, failure, or history-delete RPCs. No
-new application-role table write is introduced.
+All validators and mutation functions at that boundary were revoked from
+`public`, `anon`, and `authenticated`. Only `service_role` could execute
+controlled V1/V2 claims, the then-current free-agent V6 claim, V1/V2 completion,
+failure, or history-delete RPCs. The later BYOK migration revokes V6 execution
+and exposes only its V7 writer. No application-role table write is introduced.
 
 ## V1 Account Deletion
 

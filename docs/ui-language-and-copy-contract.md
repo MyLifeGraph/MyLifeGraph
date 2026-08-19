@@ -5,9 +5,26 @@ that relevant read-only Coach query results are sent to the selected provider.
 Web copy must say keys live only in the current tab and disappear on reload.
 Failed replacement testing must explicitly say the previous key is unchanged.
 
-Status: implemented V1 product-copy contract, including the current
-Coach-enabled shell, Exam-Week Outlook, and Personal Learning terminology, as
-of 2026-07-26.
+The planned restore-safe hosted deletion flow must state the exact irreversible
+off-host-journal point and distinguish `deletion_pending` from completed
+deletion; it must never show a transient database failure as a cancelled
+accepted deletion. This is future work owned by the VPS pilot plan, not current
+V1 account behavior.
+
+The planned public pilot is adult-only and allows ordinary personal use. Its
+pre-signup copy must present the privacy notice before one explicit
+`I confirm that I am 18 or older` acceptance, record the accepted notice
+version/time through the backend after authentication but before product
+access, and never ask for a birth date solely for this gate. Editable Auth
+profile metadata must not be presented as proof of eligibility. The notice
+must not describe real mood, sleep, stress, study, calendar, planning,
+reflection, or Coach data as anonymous test data. A staging client containing
+synthetic fixtures must display a persistent `Staging · Test data` identity and
+must never be presented as the public pilot.
+
+Status: implemented V1 product-copy contract for the current checkout,
+including Coach BYOK and shell behavior, Exam-Week Outlook, and Personal
+Learning terminology.
 
 ## Supported Language
 
@@ -382,12 +399,16 @@ says `Early evidence`.
   `Rule-based reminder`. Reminder Settings may explain fixed templates and the
   exclusion of private check-in details behind optional information; it does
   not repeat an AI disclaimer on each item.
-- Coach is a development preview. Release builds and `APP_ENV=production` hide
-  it regardless of Flutter defines. When enabled, `Coach` is the right shell
-  destination; `Settings` remains the last top-right action on Today, Insights,
-  Quick actions, Planner, Coach, and Settings and is not duplicated in the
-  shell. Page-specific actions precede any unread Coach action and Settings.
-  The local Codex path proves one developer machine only and is not a
+- Coach is exposed in `staging` and `production` only when
+  `COACH_SURFACE_ENABLED` is exactly `true`; without that explicit gate it is
+  hidden. In development, an explicit value wins and an unset release build
+  stays hidden. When enabled, `Coach` is the right shell destination;
+  `Settings` remains the last top-right action on Today, Insights, Quick
+  actions, Planner, Coach, and Settings and is not duplicated in the shell.
+  Page-specific actions precede any unread Coach action and Settings. Surface
+  visibility does not prove provider readiness. OpenAI/Gemini BYOK is the
+  current hosted provider strategy but still needs the public release gates;
+  the local Codex path proves one developer machine only and is not a
   production provider.
 - Current Coach uses `Ask anything`, `Your question`, and `Ask Coach`. It has no
   `Today`, `Patterns`, `Focus`, `Review`, horizon, session, prompt-starter,

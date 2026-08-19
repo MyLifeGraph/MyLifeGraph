@@ -1,11 +1,10 @@
 # Product Review Handoff
 
 Status: current whole-product review entry point for the checkout containing
-this document, updated through Today Overview V2, Planner V1, Study Setup V1,
-Personal Learning V1, the Coach-enabled shell navigation, Setup
-personalization retirement, Daily Capture V5, Daily State V3, learned Sleep
-Recommendation, Exam-Week Outlook V1, and the stabilized application-composition
-boundaries on 2026-08-04.
+this document, including Today Overview V2, Planner V1, Study Setup V1,
+Personal Learning V1, Coach BYOK and shell navigation, Setup personalization
+retirement, Daily Capture V5, Daily State V3, learned Sleep Recommendation,
+Exam-Week Outlook V1, and the stabilized application-composition boundaries.
 
 ## Objective
 
@@ -14,6 +13,11 @@ repeated daily use, planning, execution, recovery, reflection, and account
 control. Test the implemented boundaries before proposing another feature. Fix
 proved defects in the smallest owning contract; do not redesign the product or
 introduce model authority by default.
+
+When the review includes deployment, release readiness, public signup, hosted
+Coach behavior, Android handoff, or professor acceptance, also review
+`docs/vps-pilot-release-plan.md`. Its unchecked items are future requirements,
+not proof of the current product slice.
 
 ## Current Product Slice
 
@@ -109,6 +113,7 @@ Read `AGENTS.md` first and follow its complete document routing. For a current
 whole-product review, the minimum set includes:
 
 - `README.md`
+- `docs/vps-pilot-release-plan.md` for deployment/release or hosted-pilot scope
 - `docs/architecture.md`
 - `docs/backend-roadmap.md`
 - `docs/daily-briefing-implementation-plan.md`

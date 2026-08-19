@@ -1,9 +1,16 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
-Status: Beschreibung des tatsächlich implementierten Repository-Stands vom
-31. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
-Die verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
+Status: Beschreibung des tatsächlich implementierten aktuellen Checkouts.
+Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap. Die
+verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
+
+Die beschlossene Zielsequenz für einen öffentlich registrierbaren, auf dem
+Handy nutzbaren ersten VPS-Piloten steht getrennt im
+[VPS Pilot Release Plan](vps-pilot-release-plan.md). Sie ändert den hier
+beschriebenen Ist-Zustand noch nicht: Insbesondere ist der Codex-OAuth-Provider
+weiterhin development-only und ein geteilter Betreiber-Provider noch nicht
+implementiert oder deployt.
 
 Die Oberfläche ist in V1 vollständig englisch. Deshalb stehen die sichtbaren
 englischen Namen in diesem Dokument in Klammern. Eine deutsche Lokalisierung ist
@@ -28,19 +35,19 @@ ehrlichen Tagesüberblick und vorsichtige regelbasierte Unterstützung übersetz
 6. Der **Planner** lässt Tasks, Habits, Preparation Plans und feste Termine
    bewusst als Vorschau planen und reserviert Zeit erst nach Bestätigung.
 7. Ein persistiertes **Daily Briefing** kann intern weiterhin eine primäre und
-   höchstens zwei unterstützende Aktionen ranken. Es dient Scheduler, Reminder,
-   Coach-Kontext und Feedback-Historie, ist aber nicht mehr die primäre
+   höchstens zwei unterstützende Aktionen ranken. Es dient Scheduler, Reminder
+   und Coach-Kontext, ist aber nicht mehr die primäre
    Today-Darstellung.
-8. **Feedback, Insights und Weekly Review** machen Reaktionen und Entwicklungen
-   sichtbar. Nur das Feedback verändert derzeit automatisch und begrenzt die
-   spätere Rangfolge ähnlicher Vorschläge.
+8. **Insights und Weekly Review** machen Muster und Entwicklungen sichtbar,
+   verändern aber weder Briefing-Ranking noch Produktdaten.
 9. Der **Coach** beantwortet freie Fragen auf Englisch, untersucht bei Bedarf den gesamten
    verfügbaren persönlichen Datenzeitraum read-only und kann Annahmen prüfen
    oder fehlende Daten benennen. Er darf keine Produktdaten ändern.
 
 Der Großteil des Produkts ist bewusst regelbasiert und verwendet **kein LLM**.
-Der Coach ist die einzige Oberfläche, die in einer explizit aktivierten lokalen
-Entwicklungsumgebung ein echtes Sprachmodell aufrufen kann.
+Der Coach ist die einzige Oberfläche, die ein echtes Sprachmodell aufrufen
+kann: mit einem expliziten nutzereigenen OpenAI-/Gemini-Key oder, nur in lokaler
+Entwicklung, über den angemeldeten Codex-CLI-Nutzer.
 
 ## Das beabsichtigte Produktmodell
 
@@ -85,6 +92,7 @@ Quelle verwendet werden. Es gibt keinen Live-Sync und keinen Calendar-Write.
 | Local guest/demo | Check-ins und ausgewählte Beispieldaten lokal auf dem Gerät | Grundnavigation, Morning/Evening, ehrliche Demo- oder Leerzustände | Keine synchronisierten Tasks, Habits, Focus sessions, Planner-Pläne, Reviews, Kalenderimporte oder Preparation Plans |
 | Synced account | Supabase Auth und die eigenen, per RLS geschützten Supabase-Daten; abgeleitete Workflows über FastAPI | Der vollständige aktuelle Produktumfang | Fehler werden angezeigt und niemals durch personalisiert wirkende Mock-Daten ersetzt |
 | Coach mit `fake` provider | Wie ein synced account, aber Coach-Antworten sind feste Testantworten | Freie Frage, Stream, History, Evidence/Trace, Limits und UI lassen sich testen | Das ist kein aktives LLM und führt keine Analyse aus |
+| Coach mit OpenAI-/Gemini-BYOK | Synced account; Android speichert den Key verschlüsselt und Web nur im aktuellen Tab | Ein echter nutzerfinanzierter Provider-Turn mit Read-only Snapshot, Inspection und SQL | Implementiert, aber der gehostete Browserpfad ist bis zum CORS- und vollständigen Release-Gate nicht abgenommen; ein Fehler fällt nie auf einen anderen Provider zurück |
 | Coach mit `local_codex_oauth` | Synced account plus explizit aktivierter Codex-CLI-Zugang und lokales Analyse-Image | Ein echter `gpt-5.5`-Fast-Turn mit drei Read-only-Werkzeugen | Nur lokale Entwicklung; nicht in Release/Produktion verfügbar |
 
 Ein neu registrierter echter Account erhält seine Auth-Identität und sein
@@ -96,9 +104,10 @@ Account erhält keine Daten des `student`-Testusers.
 
 ## Navigation: Was befindet sich wo?
 
-Mit aktiviertem Development-Coach hat die Hauptnavigation genau fünf Ziele.
-In Release/Produktion oder bei ausgeschaltetem Coach-Gate entfällt `Coach`
-vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
+Mit aktiviertem Coach hat die Hauptnavigation genau fünf Ziele. In `staging`
+und `production` erscheint Coach nur bei exakt
+`COACH_SURFACE_ENABLED=true`; ohne dieses Gate entfällt `Coach` vollständig.
+`Settings` wird nicht als redundanter Ersatz eingeblendet.
 
 | Sichtbarer Bereich | Aufgabe | Was dort aktuell zu sehen oder zu tun ist |
 | --- | --- | --- |
@@ -106,7 +115,7 @@ vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
 | **Insights** | Entwicklungen untersuchen | Für echte Accounts die unabhängigen Backend-Karten `Personal study pattern` und `Sleep recommendation` mit Stichprobe und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung und keine erfundene Schlafempfehlung. |
 | **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
 | **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, endliche wöchentliche Assignment-Serie und Fixed commitment anlegen; Exam/Assignment bleiben nach dem gewählten Add-new-Button fest; Vorschauen bestätigen; sieben Tage, quellengenaue Konflikte, alle aktiven Habits, ausschließlich unplatzierte offene Tasks und laufende Preparation verwalten (`planner-overview-v2`) |
-| **Coach** | Eine freie Frage zu den eigenen Daten stellen | Development Preview mit frischem persönlichen Snapshot, Read-only-Analyse, sichtbarer Evidence/Provenance und validierter englischer Textantwort |
+| **Coach** | Eine freie Frage zu den eigenen Daten stellen | Provider-gesteuerte Oberfläche mit frischem persönlichen Snapshot, Read-only-Analyse, sichtbarer Evidence/Provenance und validierter englischer Textantwort; BYOK ist implementiert, lokaler Codex bleibt Development |
 
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
@@ -119,7 +128,7 @@ Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
   die bisherigen Routen bleiben kompatibel.
 - `Inbox` gehört zu `Settings`; `/alerts` bleibt ein kompatibler Link.
 - `Calendar import` und `In-app reminders` gehören zu `Settings`. Der
-  Entwicklungs-`Coach` hat bei aktiviertem Surface-Gate den rechten
+  `Coach` hat bei aktiviertem Surface-Gate den rechten
   Hauptnavigationseintrag; der Settings-Eintrag bleibt als sekundärer Zugang
   erhalten.
 - Goals sind vollständig entfernt: Es gibt weder Tabelle, Export-Eintrag,
@@ -270,7 +279,7 @@ Dashboards:
 | Screen | Sichtbare Daten | Wirkung |
 | --- | --- | --- |
 | **Planner** | Add new, Needs attention, sieben lokale Tage, aktive Preparation, eingeklappte aktive Habits, Unscheduled Tasks, Pending previews und Historie (`planner-overview-v2`) | Vorschläge reservieren nichts; nur `Confirm plan` aktiviert Task-/Habit-Zeiten, feste Termine bleiben autoritativ und Konflikte verschieben nichts automatisch |
-| **Weekly review** | letzte abgeschlossene ISO-Woche, completed/carried/overdue Tasks, completed/skipped/missed/unknown Habit-Möglichkeiten, Focus-Sessions und Minuten, Recovery-Tage, Feedback-Anzahl, Datenqualität und Freshness | rein beobachtend; `Update weekly review` aktualisiert nur Fakten, historische Vorschläge bleiben unsichtbar und sind nicht ausführbar |
+| **Weekly review** | letzte abgeschlossene ISO-Woche, completed/carried/overdue Tasks, completed/skipped/missed/unknown Habit-Möglichkeiten, Focus-Sessions und Minuten, Recovery-Tage, Datenqualität und Freshness | rein beobachtend; `Update weekly review` aktualisiert nur Fakten, historische Vorschläge bleiben unsichtbar und sind nicht ausführbar |
 | **Preparation plans** | kompakte Open-/History-Accordions; im gezielt geöffneten Plan Schätzung, Deadline, Revisionen, datierte Blöcke, bestätigte Reservierungen und gemessener Focus-Fortschritt; Assignment-Serien zeigen ihren endlichen wöchentlichen Umfang; Exam-Balancing zeigt ausschließlich tatsächlich geänderte Pläne in einer gemeinsamen Review | Vorschlag bleibt Preview; erst Bestätigung aktiviert Blöcke und den verwalteten Task; eine Serien- oder Multi-Exam-Bestätigung aktiviert ihren vollständigen Satz atomar; die 7-Tage-Auslastung bleibt in Today/Planner; keine automatische Verschiebung oder Benachrichtigung |
 | **Inbox** | Anzahl unread/read/actionable innerhalb der höchstens 30 geladenen Einträge sowie einzelne Hinweise | Lifecycle-Änderungen und sichere interne Navigation; kein Analyse-Dashboard |
 
@@ -315,7 +324,7 @@ Budget-, Calendar-, Plan- oder Belegungsdaten muss neu geprüft werden.
 | **Insights** | `personal-patterns-v1` liefert die persönliche Musterkarte und Korrelationen; `sleep-recommendation-v1` liefert unabhängig Fortschritt, Unstable-Grund oder drei robuste Ready-Fenster; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung und ruft die Schlafroute nicht auf | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; für Schlafempfehlung mindestens 30 geeignete Tage; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage, kein Apply und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Focus-Previews |
 | **Inbox lifecycle** | fällige gespeicherte Hinweise lesen, unread/read setzen oder dismissen | owner-scoped `notifications` | Lifecycle-Zeitstempel plus Retry-Ledger; kein LLM |
 | **In-app reminders** | nach separater Einwilligung werden höchstens zwei Kandidaten mit fixer Copy regelbasiert erzeugt und bei offener App höchstens einmal als Banner gezeigt | aktueller Recovery-/Briefing-Zustand oder aktuelles Weekly Review, Kategorien, Quiet Hours und Tageslimit | `notification_preferences`, `notifications` und Delivery-Provenance; kein Push, kein Background und kein LLM |
-| **Coach** | freie Frage, bei Bedarf Read-only-Inspektion/SQL/isoliertes Python, Safety-Prüfung und validierte englische Textantwort | frischer owner-only SQLite-Snapshot über den verfügbaren relevanten Produktzeitraum, inklusive Detailtexten und Datenkatalog | `coach_requests`, `coach_messages`, Usage sowie backend-erzeugte Evidence/Trace/Fast-Provenance; klar deutsche Provider-Ausgabe wird vor Assistant-Persistenz verworfen; kein Plot und keine Produktmutation; nur dieser Pfad kann lokal ein LLM verwenden |
+| **Coach** | freie Frage, bei Bedarf Read-only-Inspektion/SQL und beim lokalen Codex zusätzlich isoliertes Python, Safety-Prüfung und validierte englische Textantwort | frischer owner-only SQLite-Snapshot über den verfügbaren relevanten Produktzeitraum, inklusive Detailtexten und Datenkatalog | `coach_requests`, `coach_messages`, Usage sowie backend-erzeugte Evidence/Trace/Provider-Provenance; klar deutsche Provider-Ausgabe wird vor Assistant-Persistenz verworfen; kein Plot und keine Produktmutation; nur dieser Pfad kann ein LLM verwenden |
 | **Account controls** | Zeitzone, JSON-Export, Passwort-Recovery und permanente Löschung | Profil und owner-scoped Produktdaten | kontrollierte FastAPI/RPC-Operationen; kein LLM |
 
 Ein einzelnes Abgabeto-do ohne eigenen Vorbereitungsplan wird als Task erfasst.
@@ -564,19 +573,13 @@ Focus-Sessions liefern belastbarere Fakten als eine weitere Selbsteinschätzung.
 Sie fließen in Snapshots, Wochenfakten und Insights ein, ändern aber nicht
 heimlich Definitionen.
 
-### 4. Begrenztes adaptives Ranking durch Feedback
+### 4. Stillgelegte Feedback-Anpassung
 
-Das ist der aktuell echte automatische Anpassungsmechanismus:
-
-- Ein Nutzer bewertet eine Briefing-Aktion.
-- Das Event bleibt als getrennte Evidenz erhalten.
-- Beim nächsten passenden Kontext berücksichtigt das Ranking maximal 28 Tage
-  alte, zeitlich abgewertete und gedeckelte Effekte.
-- Sicherheits-, Recovery- und Dringlichkeitsregeln behalten Vorrang.
-
-Die App „merkt“ sich damit beispielsweise, dass eine bestimmte Art Vorschlag in
-einem `recover`-Kontext wiederholt `too_much` war. Sie trainiert dafür kein
-Modell.
+Der frühere generische Recommendation-/Decision-Feedback-Loop ist vollständig
+retired. Es gibt aktuell keine Feedback-Eingabe, Feedback-Historie oder
+feedbackbasierte Anpassung des Briefing-Rankings. Briefings bleiben
+deterministisch; Insights und Weekly Review beobachten Fakten, ohne daraus eine
+neue Rangfolge zu lernen.
 
 ### 5. Deskriptive Insights
 
@@ -586,7 +589,7 @@ Muster sichtbar machen, verändert aber kein Ranking und beweist keine Ursache.
 ### 6. Rein beobachtende Wochenfakten
 
 Weekly Review fasst ausschließlich Fakten der abgeschlossenen Woche zusammen:
-Tasks, Habit-Möglichkeiten und -Outcomes, Focus, Recovery-Tage und Feedback.
+Tasks, Habit-Möglichkeiten und -Outcomes, Focus und Recovery-Tage.
 Neue oder aktualisierte Reviews erzeugen keine Vorschläge und ändern weder
 Habits noch Tasks, Schedule oder Pläne. Historische Proposal-Arrays bleiben nur
 für alte gespeicherte Zeilen transportlesbar; Flutter zeigt sie nicht an und
@@ -598,8 +601,9 @@ kann sie nicht ausführen.
 - kein persönlicher gelernter Baseline- oder Readiness-Score;
 - keine Embeddings und keine Vector Search;
 - keine automatische Memory-Extraktion aus Check-ins oder Coach-Chats;
-- kein autonomer Hintergrund-Agent; der Coach besitzt genau drei begrenzte
-  Read-only-Analysewerkzeuge und keine Shell-, Web- oder Schreibwerkzeuge;
+- kein autonomer Hintergrund-Agent; Coach-Werkzeuge sind providerabhängig auf
+  Inspect/SQL und beim privaten lokalen Codex zusätzlich Python begrenzt; kein
+  Provider besitzt Shell-, Web- oder Schreibwerkzeuge;
 - keine versteckten Änderungen an Tasks, Habits, Schedule oder Plänen;
 - keine automatische Kalender-Synchronisation;
 - keine kausalen Gesundheits- oder Leistungsbehauptungen.
@@ -610,15 +614,23 @@ kann sie nicht ausführen.
 
 Der Screen heißt `Coach` und beginnt mit `Ask anything`.
 
-- Er ist in Release-Builds und bei `APP_ENV=production` immer verborgen.
+- In `staging` und `production` ist er nur bei exakt
+  `COACH_SURFACE_ENABLED=true` sichtbar; die sichtbare Route beweist noch keine
+  Provider-Verfügbarkeit.
 - Mit `provider=fake` zeigt er feste Testantworten. Die UI sagt dann ausdrücklich
   dass es Testdaten und kein Live-Assistant sind.
+- Mit einem getesteten nutzereigenen OpenAI- oder Gemini-Key kann der aktuelle
+  BYOK-Pfad einen echten Provider pro Request aufrufen. Android hält den Key
+  verschlüsselt gerätelokal, Web nur im aktuellen Tab; FastAPI persistiert ihn
+  nicht. Der gehostete Browserpfad ist vor dem geplanten CORS- und Release-Gate
+  noch nicht abgenommen.
 - Mit explizit aktiviertem `local_codex_oauth` kann FastAPI lokal die bereits
   angemeldete Codex CLI desselben Linux/WSL-Nutzers aufrufen. Jeder Turn
   verlangt exakt `gpt-5.5`, `service_tier="fast"` und aktivierten Fast Mode.
 - Fehlen Modell, Fast-Unterstützung, Login, Docker oder Analyse-Image, ist der
-  Provider ehrlich nicht verfügbar. Es gibt keinen Modell-/Tier-Fallback und
-  keinen deploybaren Produktionsprovider.
+  lokale Provider ehrlich nicht verfügbar. Es gibt keinen Modell-/Tier- oder
+  providerübergreifenden Fallback. BYOK ist implementiert; ein abgenommener
+  gehosteter Betreiber-Provider existiert noch nicht.
 
 ### Was er lesen darf
 
@@ -641,17 +653,20 @@ Datensatzanzahlen, verfügbare Zeiträume und Hilfs-Views. Maximal gelten 10.000
 Zeilen je Quelle, 50.000 insgesamt und 8 MiB. Überschreitung bricht ehrlich ab;
 es gibt keine stille Kürzung.
 
-Der Agent erhält ausschließlich:
+Jeder aktuelle reale Provider kann ausschließlich:
 
 - `inspect_data` für Katalog und Abdeckung;
-- `query_data` für begrenzte read-only `SELECT`-/`WITH`-Abfragen; und
-- `run_python` in einem separaten Docker-Container ohne Netzwerk oder Secrets,
-  als Non-root mit read-only Root und ausschließlich read-only gemountetem
-  Snapshot.
+- `query_data` für begrenzte read-only `SELECT`-/`WITH`-Abfragen.
 
-Pandas, NumPy, SciPy, Statsmodels und Matplotlib sind vorhanden. Ein interner
-Plot kann dem Modell bei der Analyse helfen, wird aber weder gespeichert noch
-in Flutter dargestellt.
+OpenAI/Gemini BYOK erhalten nur die begrenzten Tool-Ergebnisse, nie die
+SQLite-Datei oder Python. Nur der private lokale Codex-Adapter erhält zusätzlich
+`run_python` in einem separaten Docker-Container ohne Netzwerk oder Secrets,
+als Non-root mit read-only Root und ausschließlich read-only gemountetem
+Snapshot.
+
+Für diesen lokalen Python-Pfad sind Pandas, NumPy, SciPy, Statsmodels und
+Matplotlib vorhanden. Ein interner Plot kann dem lokalen Modell bei der Analyse
+helfen, wird aber weder gespeichert noch in Flutter dargestellt.
 
 ### Was er nicht lesen darf
 
@@ -674,8 +689,9 @@ vertrauenswürdige Inhalte und niemals als Anweisung.
 - mehrere begründete Vorschläge im normalen Text, aber keine strukturierte
   Action/Suggestion;
 - einen aufklappbaren Bereich mit tatsächlich verwendeten Datenquellen,
-  Zeiträumen, Counts, Inspect-/SQL-/Python-Schritten, Einschränkungen und
-  `gpt-5.5 · Fast configured`-Provenance.
+  Zeiträumen, Counts, den tatsächlich verfügbaren Inspect-/SQL-/Python-Schritten,
+  Einschränkungen und Provider-/Modell-/Tier-Provenance. Nur lokale Codex-Turns
+  tragen die genaue Anzeige `gpt-5.5 · Fast configured`.
 
 Die sichtbare Antwort trennt beobachtete Daten, unsichere Interpretation,
 fehlende Information und allgemeines Modellwissen. Sie darf einer falschen
@@ -701,14 +717,16 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 - höchstens ein gleichzeitig aktiver Turn pro Nutzer plus globales
   Parallelitätslimit;
 - höchstens zwölf Tool-Aufrufe und 180 Sekunden pro Turn;
-- SQL höchstens fünf Sekunden, Python höchstens 30 Sekunden;
+- SQL höchstens fünf Sekunden; Python ausschließlich lokal und höchstens 30
+  Sekunden;
 - erfolgreiche validierte User-/Assistant-Paare werden gespeichert;
-- Evidence, kompakter Tool-Trace und Fast-Provenance stammen aus Backend-
-  Ausführung, nicht aus dem Modell;
+- Evidence, kompakter Tool-Trace und Provider-/Modell-/Tier-Provenance stammen
+  aus Backend-Ausführung, nicht aus dem Modell;
 - `Delete conversation` entfernt Gespräch, Evidence und Trace, aber nicht
   Request-Tombstones oder Usage. Löschen setzt das Tagesbudget nicht zurück;
-- Prompt, SQLite-Snapshot, Python-Scripts, Plots, Temp-Dateien und roher
-  CLI-Eventstream werden nach dem Turn gelöscht und nicht persistiert.
+- Prompt, SQLite-Snapshot und Temp-Dateien sowie gegebenenfalls lokale
+  Python-Scripts, Plots und der rohe CLI-Eventstream werden nach dem Turn
+  gelöscht und nicht persistiert.
 
 ## Welche Daten liegen wo?
 
@@ -786,7 +804,7 @@ Bis zu einer späteren Informationsarchitektur kann man die App so lesen:
 | Was passierte letzte Woche? | `Today → Weekly review` |
 | Welche Zusammenhänge sehe ich über mehrere Tage? | `Insights` |
 | Welche Hinweise warten auf mich? | `Settings → Inbox` |
-| Kann mir ein Modell den Zustand erklären? | `Coach` in der Hauptnavigation, nur Development Preview |
+| Kann mir ein Modell den Zustand erklären? | `Coach` in der Hauptnavigation bei explizitem Surface-Gate; OpenAI/Gemini BYOK ist implementiert, lokaler Codex bleibt Development-only |
 
 Setup-owned Habit-/Commitment-Definitionen bleiben bewusst unter Settings
 Setup; Planner darf aktive Setup-Habits zeitlich einplanen und zeigt
@@ -879,7 +897,8 @@ Es ist kein Befehl für eine Remote-Datenbank.
 - deutsche Lokalisierung;
 - Goals in Schema, Export, Setup, Oberfläche oder Auswertung sowie eine
   allgemeine Memory-Verwaltungsseite;
-- produktionsfähiger LLM-Provider;
+- abgenommener gehosteter Betreiber-Provider und vollständige öffentliche
+  BYOK-Releasefreigabe;
 - ein persönliches trainiertes Modell oder Vector Memory;
 - autonomer Hintergrund-Coach, zusätzliche Tools oder model-gesteuerte
   Schreibaktionen;
@@ -892,6 +911,9 @@ Es ist kein Befehl für eine Remote-Datenbank.
 
 ## Vertiefende technische Dokumente
 
+- `docs/vps-pilot-release-plan.md`: noch nicht implementierte zentrale
+  Liefer- und Freigabesequenz für öffentliche Registrierung, VPS/HTTPS,
+  Coach-Provider, `main`, Vercel, Android und Abgabe.
 - `docs/setup-personalization-retirement-contract.md`: schlankes Setup,
   Goal-/Friction-Stilllegung, Kompatibilität und Datenbereinigung.
 - `docs/architecture.md`: Systemgrenzen und Datenflüsse.

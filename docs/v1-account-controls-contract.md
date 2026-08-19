@@ -10,6 +10,18 @@ optional account-wide daily preparation budget, portable JSON export, password
 recovery, and permanent account deletion. Guest and mock sessions remain local
 and never call these endpoints.
 
+The privacy, provider disclosure, public-registration, and release-operations
+gates for the proposed hosted pilot live in
+`docs/vps-pilot-release-plan.md`. They are not a current legal-compliance or
+deployment claim of this account-control contract.
+
+That future pilot is restricted to adults. Its planned versioned
+18-or-older/privacy-notice acceptance is shown before signup but committed only
+through a bearer-derived backend command after authentication and before Setup
+or product access. It stores version/time rather than date of birth and never
+uses editable Auth `user_metadata` as eligibility authority. No such endpoint,
+table, or current V1 behavior exists yet.
+
 ## Trust Boundary
 
 - Every FastAPI account endpoint requires the normal verified Supabase bearer
@@ -277,6 +289,16 @@ index. The three integer `FOR` loops still use their identical automatically
 scoped index, and confirmation, locks, dynamic legacy validation/deletion,
 canonical/Auth cascade, result, fixed search path, signature, and grants remain
 unchanged.
+
+Current V1 creates no backup-independent deletion receipt. Therefore a restore
+from an older logical backup could otherwise resurrect an account deleted after
+that backup. The hosted-pilot plan makes this an explicit No-Go until a new
+versioned flow durably records an encrypted off-host deletion intent before the
+database delete, represents an accepted-but-not-finished deletion as
+`deletion_pending`, blocks product use while it converges, and replays all such
+intents against an isolated restore before access. That future change requires
+the additive service-role-only schema/contract and verification synchronization
+defined in `docs/vps-pilot-release-plan.md`; it is not implemented V1 behavior.
 
 The account-deletion migration also revokes application-role mutation of all
 known CamelCase tables. Those tables have no canonical profile FK, so this

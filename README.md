@@ -55,6 +55,13 @@ must provide the synchronized account configuration described in
 `docs/local-dev.md`; secrets belong in Vercel environment variables and never
 in the repository.
 
+The intended first hosted pilot uses Vercel for Flutter Web, hosted Supabase
+for Auth/Postgres, and a separately operated HTTPS FastAPI/Coach service on a
+VPS. That topology is not implemented by the current checkout. Its complete
+implementation, `main`/tag release, VPS, HTTPS, public-signup, Android, and
+acceptance sequence is owned by the
+[VPS pilot release plan](docs/vps-pilot-release-plan.md).
+
 ## Verification
 
 Capture the task base before editing, then use it for affected-path selection:
@@ -82,6 +89,10 @@ older results are retained only in the
 
 ## Documentation Map
 
+- [VPS pilot release plan](docs/vps-pilot-release-plan.md) — authoritative
+  future delivery sequence for public signup, VPS/HTTPS, provider choices,
+  protected `main`, tagged releases, Vercel, Android, and professor handoff;
+  it is not evidence of a current deployment.
 - [Current product guide](docs/current-product-guide.md) — concise user-facing
   map of navigation, features, data, learning behavior, and current limits.
 - [Local development](docs/local-dev.md) and

@@ -1,9 +1,11 @@
 # Backend Roadmap
 
-Current Coach delivery adds production-ready per-request BYOK plumbing for
-OpenAI and Gemini behind an empty-by-default `COACH_BYOK_PROVIDERS` allowlist.
-There is no operator-key or automatic-fallback path. The local Codex OAuth
-provider remains development/self-hosted only.
+Current Coach delivery adds implemented request-scoped BYOK plumbing for OpenAI
+and Gemini behind an empty-by-default `COACH_BYOK_PROVIDERS` allowlist. It is
+not yet hosted-release-ready because the browser CORS and complete public
+acceptance gates remain open. There is no operator-key or automatic-fallback
+path. The local Codex OAuth provider remains development-only; the proposed
+self-hosted pilot requires a new explicit contract and gate.
 The synchronized public versions are `coach-capabilities-v3`,
 `coach-history-v3`, `coach-response-v3`, and
 `free-coach-agent-prompt-v5`.
@@ -12,6 +14,13 @@ This document is the source of truth for the intended backend flow and the next
 implementation sequence. It describes the target product architecture, the
 background service roles, the data model direction, and how to keep LLM usage
 low enough for multiple users.
+
+The cross-platform delivery and release sequence is now owned by
+`docs/vps-pilot-release-plan.md`: protected `main`, tagged releases, public
+self-registration, VPS/HTTPS operation, Vercel, signed Android delivery,
+shared-provider safeguards, and professor handoff. That document plans future
+work; it does not alter this roadmap's current implementation claims. In
+particular, there is still no hosted operator-provider path in this checkout.
 
 The implemented Setup-personalization retirement in
 `docs/setup-personalization-retirement-contract.md` is authoritative wherever
@@ -23,7 +32,7 @@ below mentions the generic Today Recommendation feed, Recommendation refresh,
 Decision Feedback, or feedback-based ranking. Those routes, Flutter surfaces,
 runtime modules, tables, and scheduler fields are removed. Current contracts
 are `daily-briefing-v2`, `weekly-review-v3`, `account-export-v5`,
-`personal-snapshot-v3`, and `free-coach-agent-prompt-v4`. The independent
+`personal-snapshot-v3`, and `free-coach-agent-prompt-v5`. The independent
 Insights Sleep Recommendation, `ai_insights.recommendation`, memory type
 `recommendation`, skillset, and ordinary Coach advice remain.
 
@@ -376,9 +385,10 @@ Already implemented:
     window creates Planner attention only, never a Task, calendar row,
     notification, or background command.
 - Phase 10 free read-only Coach:
-  - Strict authenticated V3 free-question, V2 response/capability/history,
+  - Strict authenticated V3 free-question, response/capability/history,
     streaming/cancel, and history-delete contracts with guest/mock zero calls.
-  - A deterministic fake provider for normal tests and an opt-in,
+  - Request-scoped OpenAI/Gemini BYOK adapters with inspect/query tools, a
+    deterministic fake provider for normal tests, and an opt-in,
     development-only `local_codex_oauth` adapter that requires `gpt-5.5` Fast,
     one required three-tool data MCP, bounded process state, and no fallback.
   - A fresh owner-only SQLite snapshot per turn covering retained relevant
@@ -412,9 +422,10 @@ Not yet implemented:
   Phase 8 implements only bounded observational review navigation and refresh.
 - A production background job queue or worker.
 - Deployed cron wiring for the scheduler-triggered refresh endpoint.
-- A deployable Coach provider, production provider credentials/billing, and
-  provider failover. The implemented real-model adapter is local development
-  only.
+- A hosted-release-verified operator-funded Coach provider, operator
+  credentials/billing, and provider failover. Request-scoped OpenAI/Gemini BYOK
+  is implemented but still lacks the hosted browser and public acceptance gates;
+  local Codex remains development-only.
 - Memory extraction beyond current direct writes.
 - Autonomous weekly planning.
 - Live calendar-provider OAuth, refresh tokens, URL subscriptions, background
@@ -457,7 +468,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, habits/outcomes, focus, daily snapshots | `weekly_reviews` derived output only | None |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
 | Deadline planning service | Explicit user proposal/confirmation/lifecycle command | User-entered estimate, profile timezone/energy window, app commitments, confirmed blocks, optional current imported busy time | `deadline_plans`, immutable revisions/blocks, one first-confirm managed task, opaque request identities | None |
-| Coach service | Deliberate authenticated free question | Fresh owner-only SQLite snapshot; required read-only inspect/SQL/isolated-Python MCP | Validated `coach_messages`, backend-derived evidence/trace/provenance, request/usage state only | One configured `gpt-5.5` Fast agent turn, budgeted |
+| Coach service | Deliberate authenticated free question | Fresh owner-only SQLite snapshot; OpenAI/Gemini receive bounded inspect/SQL results, while private local Codex uses the inspect/SQL/isolated-Python MCP | Validated `coach_messages`, backend-derived evidence/trace/provenance, request/usage state only | One explicitly selected OpenAI/Gemini user-key or `gpt-5.5` Fast local turn, budgeted; no fallback |
 | Legacy memory selection service | Pre-V3 compatibility call only | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate legacy selection projection; current Coach ignores it and content changes only through its owner | None |
 | Planning service | Explicit user planning request | Tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `coach_messages` | Optional for complex plans |
 | Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
@@ -477,9 +488,9 @@ without adaptation authority. Phase 9 adds the first optional
 consented integration boundary as a user-selected `.ics` import with no
 provider access or writes. Phase 10 adds the controlled Coach boundary without
 changing that deterministic loop. Deployed cron/job wiring, notification
-delivery, real calendar provider integration, and a deployable LLM provider
-remain unimplemented and must not be inferred from the callable endpoints or
-the development-only local adapter. See
+delivery, real calendar provider integration, hosted BYOK release acceptance,
+and an operator-funded hosted LLM provider remain unimplemented and must not be
+inferred from the callable endpoints or the development-only local adapter. See
 `docs/daily-briefing-implementation-plan.md` for the current product contract
 and phase sequence, and
 `docs/phase-3-executable-actions-contract.md` for the completed action contract.
@@ -807,22 +818,24 @@ Current behavior:
    Account Export sources. Include detail text and a catalog/count/period/
    relationship layer; exclude auth, credentials, provider internals,
    anti-replay/usage/selection ledgers, operational state, and other owners.
-   The current pair is `free-coach-agent-prompt-v4` with
+   The current pair is `free-coach-agent-prompt-v5` with
    `personal-snapshot-v3`; pre-P7 free-agent content is erased while required
    content-free request/usage identities remain.
    Fail rather than truncate beyond 10,000 rows per table, 50,000 total, or
    8 MiB.
-4. Start the explicitly configured agent only after deliberate send and
-   deterministic pre-safety. Provide one required stdio MCP with exactly
-   `inspect_data`, bounded immutable-SQL `query_data`, and no-network,
-   non-root, read-only-container `run_python`. Allow at most 12 tools and
-   180 seconds; SQL and Python have shorter limits.
+4. Start the explicitly selected agent only after deliberate send and
+   deterministic pre-safety. OpenAI/Gemini BYOK receives bounded
+   `inspect_data`/immutable-SQL `query_data` results but never SQLite or Python.
+   Private local Codex receives one required stdio MCP with those tools plus
+   no-network, non-root, read-only-container `run_python`. Allow at most 12 tools
+   and 180 seconds; SQL and local Python have shorter limits.
 5. Let the model answer directly, combine tools, test a hypothesis, correct a
    premise, state missing information, or ask a concise question. Treat all
    stored free text and calendar content as untrusted data.
 6. Validate model-owned reply/uncertainty/safety only. Derive evidence
-   source/count/period, SQL/Python/inspection trace, limitations, model/Fast
-   provenance, and snapshot size from backend execution records.
+   source/count/period, available SQL/Python/inspection trace, limitations,
+   provider/model/tier provenance, and snapshot size from backend execution
+   records.
 7. Stream only `started`, allowlisted lifecycle `activity`, and one
    `completed|failed`; cancellation terminates work and cleans temporary files.
    The non-streaming route awaits the same service.
@@ -904,9 +917,9 @@ Review, Phase 9's bounded `.ics` import, and
 Phase 10 Controlled Coach, Notification Delivery V1's local foreground path,
 Deadline Planner V1, central Planner V1 with Today Overview V2, and Study Setup
 V1's optional focus/recovery and semester projection. The Coach keeps the
-deterministic standalone loop as
-the source of truth and uses the development-only local Codex OAuth adapter plus
-the deterministic fake-provider test seam fixed in
+deterministic standalone loop as the source of truth and uses request-scoped
+OpenAI/Gemini BYOK, the development-only local Codex OAuth adapter, and the
+deterministic fake-provider test seam fixed in
 `docs/phase-10-controlled-coach-plan.md`. The next slice must be selected from a
 separately verified product need; do not generalize this checkpoint into a
 production provider or autonomous agent platform by default.
@@ -1260,18 +1273,20 @@ The exact behavior, schema, routes, copy, and verification boundary live in
 ### Completed Slice 10: Free Read-Only Coach Data Agent
 
 - Added strict authenticated message-only `coach-request-v3`,
-  `coach-response-v2`, `coach-capabilities-v2`, `coach-history-v2`, and an SSE
-  lifecycle stream while retaining readable V1/V2 history.
+  `coach-response-v3`, `coach-capabilities-v3`, `coach-history-v3`, and an SSE
+  lifecycle stream while retaining readable V1/V2 response history.
 - Removed current fixed mode, horizon, Focus-session, prompt-starter, selected
   memory, and structured suggestion surfaces. Guest/mock remains zero-call.
 - Added one fresh owner-only SQLite snapshot per turn with retained relevant
   product detail, catalog, relationships, counts, periods, and helper views.
   Auth, credentials, cross-user, anti-replay, and operational rows are excluded;
   50,000 rows/8 MiB fail rather than truncate.
-- Added one required per-turn stdio MCP with exactly catalog inspection,
-  immutable bounded SQL, and isolated Python. The Python image has no network or
-  secrets, runs non-root with read-only root/snapshot, and bounds temp space,
-  CPU, RAM, PIDs, output, and time. Internal plots are ephemeral.
+- Added request-scoped OpenAI/Gemini BYOK with bounded catalog inspection and
+  immutable SQL tool results. The local Codex adapter additionally uses one
+  required per-turn stdio MCP with those tools and isolated Python. Its Python
+  image has no network or secrets, runs non-root with read-only root/snapshot,
+  and bounds temp space, CPU, RAM, PIDs, output, and time. Internal plots are
+  ephemeral.
 - Added backend-derived conservative snapshot-source coverage and compact tool
   trace. Inspection alone adds no row coverage, SQL returned-row counts stay
   separate, and arbitrary Python is attributed to the full snapshot. The model
@@ -1397,10 +1412,12 @@ route or Flutter surface implements it.
   compound plan mutation.
 - Restoring the canned Coach, direct Flutter Coach writes, or persisting its
   placeholder response.
-- Any model integration other than the explicit development-only
-  `local_codex_oauth` adapter behind the provider seam.
-- A deployable OpenAI/OpenRouter/other API provider, API-key fallback, provider
-  failover, or claims that a local subscription adapter is production-ready.
+- Any model integration other than the explicit OpenAI/Gemini user-key adapters,
+  development-only `local_codex_oauth`, and deterministic fake behind the
+  provider seam.
+- An operator API key, OpenRouter/other provider, automatic API-key fallback,
+  provider failover, hosted-readiness claim before the public gates, or claim
+  that a local subscription adapter is production-ready.
 - Any Coach tool beyond the required read-only inspection/SQL/isolated-Python
   set; direct Supabase credentials, writable database access, host shell/web/
   apps/plugins/sub-agents, unbounded snapshots, automatic memory promotion, or

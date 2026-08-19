@@ -80,9 +80,10 @@ sanitization. V3 has no friction or Day Shape context, risk, reason, or evidence
 Stress, sleep, energy, workload, and active Tasks continue to drive
 classification. `push` requires at least one active Task.
 
-Current free questions use `free-coach-agent-prompt-v4` with a per-turn
-`personal-snapshot-v3`. P7 erases pre-cutover free-agent content while
-preserving required content-free usage/request identities.
+Current free questions use `free-coach-agent-prompt-v5` with a per-turn
+`personal-snapshot-v3`. Persisted V4-prompt turns remain replay-compatible. P7
+erases pre-cutover free-agent content while preserving required content-free
+usage/request identities.
 The snapshot may include retained sanitized Intake, Memory, and Daily Capture
 rows as untrusted data, but it cannot include Goals or resurrect removed
 onboarding preference, coaching-style, or friction JSON. Weekly Review proposal

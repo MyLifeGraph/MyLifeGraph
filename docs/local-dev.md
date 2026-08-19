@@ -1,5 +1,20 @@
 # Local Development
 
+This remains the authority for supported workstation and loopback workflows.
+The intended Vercel + hosted Supabase + VPS FastAPI/Coach pilot, including
+public signup, HTTPS, `systemd`, release tags, and signed Android delivery, is
+planned in `docs/vps-pilot-release-plan.md` and is not implemented by the
+commands below. Do not use `APP_ENV=development`, `--reload`, `tmux`, or the
+local Codex start command as an Internet-facing deployment shortcut.
+
+The inspected hosted target remains staging. No command in this guide creates
+or seeds a real-data pilot project. The planned hosted split, current Supabase
+publishable/secret-key compatibility, staging-only scenario generator,
+project-ref crossover guards, and 18-or-older acceptance do not exist yet;
+their future design lives in the pilot plan. Until that focused implementation
+lands, the current variable names and remote harness below remain the truthful
+supported interfaces.
+
 For a local BYOK-compatible backend, set `COACH_BYOK_PROVIDERS=openai,gemini`;
 do not place OpenAI or Gemini keys in `.env`. Keys arrive per capabilities or
 response request and are not used by history/deletion. Staging/production
@@ -242,10 +257,10 @@ SUPABASE_ANON_KEY=your-anon-key \
 scripts/start_frontend.sh
 ```
 
-`COACH_SURFACE_ENABLED` is ignored in every release build and whenever
-`APP_ENV=production`; those modes always hide the Coach route. In a
-non-production debug/profile build, exact `true` enables and exact `false`
-disables the surface, with development defaulting to enabled. Exposing the
+In `staging` and `production`, Coach is exposed only when
+`COACH_SURFACE_ENABLED` is exactly `true`, including release builds. In
+`development`, an explicit value wins; otherwise debug/profile enables Coach
+and release disables it. Unknown environment labels fail closed. Exposing the
 Flutter route does not make a provider ready; FastAPI capability remains the
 independent send gate.
 

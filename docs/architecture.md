@@ -22,6 +22,9 @@ This document describes the current repository shape. It intentionally
 distinguishes implemented behavior from planned backend integration. For the
 target backend flow, product agents, LLM cost controls, and next implementation
 sequence, see `docs/backend-roadmap.md`.
+The end-to-end delivery sequence for the first VPS-hosted pilot is separately
+owned by `docs/vps-pilot-release-plan.md`. That plan is future work and must
+not be read as evidence that the hosted topology or shared provider exists.
 
 The current Setup-personalization boundary is defined in
 `docs/setup-personalization-retirement-contract.md`. It supersedes older
@@ -34,6 +37,7 @@ Setup-owned Reminder preferences.
 Flutter app <-> Supabase Auth/Postgres
 Flutter app <-> FastAPI AI service
 Flutter app <-> local mock data and guest storage
+FastAPI -> OpenAI/Gemini with one request-scoped user BYOK key
 FastAPI -> local Codex CLI/OAuth (explicit Phase 10 development adapter only)
 ```
 
@@ -46,11 +50,52 @@ scheduled preparation boundary for backend-generated daily state and briefings,
 the bounded deterministic weekly-review boundary, and the optional bounded
 read-only `.ics` import boundary.
 It also owns the bounded authenticated Coach boundary. Only a deliberate
-`POST /v1/coach/respond` may invoke a configured provider; capability, history,
-memory, Dashboard, capture, action, scheduler, and weekly-review
-paths remain generation-free. The first real provider is explicitly enabled and
-development-only; the CLI/OAuth process is not a new Flutter or Supabase
-connection.
+`POST /v1/coach/respond` or `/respond/stream` may invoke a configured provider;
+capability, history, memory, Dashboard, capture, action, scheduler, and weekly-review
+paths remain generation-free. OpenAI/Gemini BYOK adapters are implemented and
+request-scoped but not yet hosted-release-verified. The separate Codex CLI/OAuth
+adapter is explicitly enabled and development-only; none of these provider
+paths creates a new Flutter-to-Supabase authority.
+
+### Planned VPS Pilot Shape (Not Implemented)
+
+The accepted pilot direction keeps Flutter Web on Vercel and Auth/Postgres in
+hosted Supabase while placing FastAPI behind Caddy and HTTPS on a VPS. Public
+self-registration remains available without an invitation or user allowlist,
+but requires a versioned 18-or-older self-attestation without date-of-birth
+storage. Participants may use their own real data; a separate synthetic-only
+staging project and fail-closed scenario generator must never write fixtures to
+the real-data pilot project.
+OpenAI/Gemini BYOK remains request-scoped; a proposed shared operator Codex
+mode is an explicit provider choice with its own quota, concurrency, disclosure,
+and kill switch, never a failure fallback. The current hosted client and
+development-only provider do not yet implement that path. Hosted Codex requires
+a narrow Unix-socket executor under a separate UID: FastAPI keeps Supabase/app
+secrets and cannot read Codex OAuth or the rootless container socket, while the
+executor receives neither application secrets nor arbitrary commands.
+
+The team does not yet own the required public domain. The target uses an
+independently controlled root domain for `app.<domain>`, `api.<domain>`, and a
+transactional-mail sender subdomain, while Supabase keeps its default
+project-ref `*.supabase.co` endpoints. The paid Supabase Custom Domain is not
+part of the pilot. The stable public API hostname is intended to hide whether
+FastAPI currently runs on the VPS or later moves to Render. Exact
+implementation work, privileged host boundaries, release policy, operating
+budget, capacity assumptions, and go/no-go gates live only in
+`docs/vps-pilot-release-plan.md` until their owning contracts are changed.
+
+The inspected hosted project remains staging. A distinct pilot project will
+own real participant Auth/data only after an authorized inventory and setup.
+Hosted Flutter will migrate to a current Supabase publishable key and backend/
+backup components to separately scoped secret keys where supported; PostgreSQL
+policies and grants may continue to name database role `service_role`. The
+current checkout still uses legacy configuration names, so this is a focused
+future compatibility boundary rather than current implementation truth.
+
+That planned topology separates cheap process liveness, sanitized FastAPI/
+Supabase core readiness, and authenticated Coach-provider capability. Codex
+login, executor, or analysis-image failure must not make the rest of FastAPI
+appear dead.
 
 ## Mobile App
 
@@ -1004,16 +1049,18 @@ Current responsibilities:
   first confirm, enforces the 366-day horizon and current-import availability,
   owns every later managed-task/terminal projection, and never calls an LLM or
   notification/provider API.
-- Serve authenticated `coach-capabilities-v2`, message-only
-  `coach-request-v3`, `coach-response-v2`, `coach-history-v2`, and the
+- Serve authenticated `coach-capabilities-v3`, message-only
+  `coach-request-v3`, `coach-response-v3`, `coach-history-v3`, and the
   `started|activity|completed|failed` streaming route. The non-streaming respond
   route remains a V3 wrapper and accepts old V1/V2 requests for compatibility.
 - Claim one retry-safe free question, create a fresh owner-only SQLite snapshot,
-  run deterministic safety and a required three-tool read-only MCP agent, and
-  atomically persist the answer with backend-derived evidence, bounded trace,
-  service-tier truth, and retained usage. Fixed-mode V1/V2 history remains
-  readable; failed/deleted requests remain terminal, and history deletion does
-  not free budget.
+  run deterministic safety, and invoke the selected read-only provider. Cloud
+  BYOK exposes inspect/query only; private local Codex additionally exposes the
+  isolated Python tool. FastAPI atomically persists the answer with
+  backend-derived evidence, bounded trace, provider/tier truth, and retained
+  usage. Fixed-mode V1 and free-agent V2 history remain readable;
+  failed/deleted requests remain terminal, and history deletion does not free
+  budget.
 - Keep the retired generic Recommendation/Feedback paths absent while
   preserving the independent Sleep Recommendation Insights route.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
@@ -1196,30 +1243,35 @@ making claims about deployed data.
 ### Implemented Phase 10 Free Read-Only Coach Boundary
 
 The exact contract is
-`docs/phase-10-controlled-coach-plan.md`. Its real provider is a local
-development adapter, not a deployed service:
+`docs/phase-10-controlled-coach-plan.md`. Current real-provider seams are
+request-scoped OpenAI/Gemini BYOK plus a private local-development Codex
+adapter; none is evidence of a hosted release:
 
 ```text
-authenticated free question
+authenticated free question plus explicit request provider/key when BYOK
   -> retry-safe owner claim and local-day budget
   -> fresh owner-only personal SQLite snapshot
-  -> local `codex exec`: gpt-5.5 + explicit Fast
-  -> required per-turn stdio MCP
-       -> inspect_data
-       -> bounded read-only query_data
-       -> isolated no-network run_python
+  -> explicitly selected provider
+       -> OpenAI gpt-5.6-terra or Gemini gemini-3.6-flash
+            -> bounded inspect_data/query_data results; no SQLite/Python
+       -> local `codex exec`: gpt-5.5 + explicit Fast
+            -> required per-turn stdio MCP
+            -> inspect_data/query_data/isolated no-network run_python
   -> schema-validated text
   -> backend-derived evidence/trace/provenance
   -> atomic response/history/usage persistence
 ```
 
-Flutter sends only its normal Supabase bearer token. OAuth stays inside the
-current Linux user's Codex installation and is never copied into Flutter,
-Supabase, the snapshot, the MCP server, the Python container, Git, or logs.
-Every developer signs in independently. The provider requires exactly
-`gpt-5.5`, `service_tier="fast"`, and `fast_mode=true` for every agent turn.
-Missing model/Fast support or a different reported model fails closed; there is
-no model or standard-tier fallback.
+Flutter always sends its normal Supabase bearer token. For BYOK capability and
+response routes it additionally sends the deliberately selected provider/key
+headers; the key is request-local and never persisted. OpenAI/Gemini use exact
+`gpt-5.6-terra`/`gemini-3.6-flash`, `store:false`, and no Python. For the private
+local adapter only, OAuth stays inside the current Linux user's Codex
+installation and is never copied into Flutter, Supabase, the snapshot, the MCP
+server, the Python container, Git, or logs. Every developer signs in
+independently. Local Codex requires exact `gpt-5.5`, configured Fast tier, and
+Fast mode. Missing or mismatched provider/model/tier support fails closed;
+there is no provider, model, or tier fallback.
 
 FastAPI exports relevant retained data through the owner-filtered Account
 Export paging boundary. The snapshot covers Setup, Daily Capture, Tasks,
@@ -1232,7 +1284,7 @@ operational state, and other owners. It contains an explanatory catalog,
 relationships, record counts, periods, and helper views. It fails instead of
 truncating beyond 10,000 rows per table, 50,000 rows total, or 8 MiB.
 
-Codex runs in a private empty directory with read-only sandboxing, no approvals,
+The private local Codex adapter runs in a private empty directory with read-only sandboxing, no approvals,
 ignored user configuration/rules, bounded environment/output/time, and one
 required MCP server. No user MCP, app, plugin, web, shell, sub-agent, filesystem
 mutation, or product-mutation authority reaches the turn. The MCP exposes only:
@@ -1249,12 +1301,13 @@ stored or shown. Snapshot, trace, process workspaces, plots, and other temporary
 files are deleted after completion, failure, timeout, or cancellation. All free
 text and calendar values are untrusted data, never instructions.
 
-The HTTP boundary is message-only `coach-request-v3`,
-`coach-response-v2`, `coach-capabilities-v2`, `coach-history-v2`, and a
-`started|activity|completed|failed` SSE stream. The current agent pair is
-`free-coach-agent-prompt-v4` with `personal-snapshot-v3`; P7 erases old free-
-agent content while retaining content-free request/usage identities. V4 makes
-English the non-overridable
+The current HTTP boundary is message-only `coach-request-v3`,
+`coach-response-v3`, `coach-capabilities-v3`, `coach-history-v3`, and a
+`started|activity|completed|failed` SSE stream. Persisted V1/V2 responses stay
+readable. The current agent pair is `free-coach-agent-prompt-v5` with
+`personal-snapshot-v3`; P7 erases old free-agent content while retaining
+content-free request/usage identities. The compatible V4 and current V5 prompts
+make English the non-overridable
 output language for reply and uncertainty. FastAPI rejects clearly German
 provider output as retryable `invalid_output` before persistence. Activity is
 allowlisted lifecycle copy rather than hidden reasoning; a real client
@@ -1271,26 +1324,27 @@ support-window/data-migration decision rather than inference from current
 Flutter call sites.
 
 The model returns only reply, uncertainty, and safety. FastAPI derives
-conservative snapshot-source coverage in the `evidence` field, actual
-inspection/SQL/Python steps, limitations, model/Fast provenance, and snapshot
-size. Inspection alone contributes no row coverage; SQL has separate
-returned-row counts; arbitrary successful Python is attributed to the full
-snapshot. The current answer has no structured suggestion or visible artifact.
+conservative snapshot-source coverage in the `evidence` field, actual available
+inspection/SQL/Python steps, limitations, provider/model/tier provenance, and
+snapshot size. Inspection alone contributes no row coverage; SQL has separate
+returned-row counts; local arbitrary successful Python is attributed to the
+full snapshot. The current answer has no structured suggestion or visible artifact.
 Existing safety checks may bypass or replace the provider, and no response can
 execute an app action.
 
 One owner may have one pending turn and, by default, 20 newly started questions
 per profile-local day. A turn allows at most 12 tools and 180 seconds; SQL and
-Python have shorter limits. Exact request-id/message replay returns the terminal
+local Python have shorter limits. Exact request-id/message replay returns the terminal
 result without another call. History deletion removes message and V3
 evidence/trace detail but retains usage and tombstones, so budget and identity
 cannot be reset.
 
-All standard tests use an injected fake provider. The opt-in live smoke is
-machine/account/image specific and is the only valid evidence that a current
-CLI login accepted `gpt-5.5` Fast and completed a multi-tool question. It is not
-CI, FastAPI persistence, Flutter presentation, production readiness, or
-evidence about another developer's account. Deterministic API/browser tests
+Standard tests use injected providers and deterministic HTTP fakes. The opt-in
+local live smoke is machine/account/image specific and is the only valid
+evidence that a current CLI login accepted `gpt-5.5` Fast and completed a
+multi-tool question. It is not CI, FastAPI persistence, Flutter presentation,
+production readiness, or evidence about another developer's account.
+Deterministic API/browser tests
 cover persistence and UI behavior separately.
 
 ### Revisioned Account Controls
@@ -1518,13 +1572,13 @@ independent Sleep Recommendation.
   retains legacy CamelCase tables for compatibility. Production remains
   uninspected and no production migration state is inferred from staging.
 - The repository does not contain real Supabase credentials.
-- OpenAI and Gemini have deployable request-local BYOK adapters behind the
+- OpenAI and Gemini have implemented request-local BYOK adapters behind the
   empty-by-default `COACH_BYOK_PROVIDERS` allowlist. They receive only bounded
   owner-scoped read-tool results, never SQLite or Python execution, and there is
   no operator key or automatic fallback. `local_codex_oauth` remains disabled
   by default, development-only, and same-Linux-user. Repository/provider mocks
-  do not establish subscription entitlement, live model access, or a hosted
-  server deployment.
+  do not establish hosted browser readiness, subscription entitlement, live
+  model access, or a deployed server.
 - Daily and weekly snapshot aggregation exists behind an authenticated backend
   endpoint, and daily capture plus task/habit/focus writes trigger daily refresh
   best-effort. The protected scheduled endpoint can prepare profile-local daily

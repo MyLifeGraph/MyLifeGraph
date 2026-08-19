@@ -18,6 +18,15 @@ status; they never prove a later checkout.
 Before running or claiming a gate, inspect the affected boundary and its owning
 contract. Test source or a historical pass is not current evidence.
 
+The future hosted acceptance sequence is centralized in
+[VPS Pilot Release Plan](vps-pilot-release-plan.md). Its repository,
+infrastructure, Supabase/Auth, provider, Vercel, Android, capacity, rollback,
+and professor-handoff gates are requirements, not current pass evidence. That
+future gate now also requires distinct staging/pilot project identities,
+publishable/secret-key compatibility, pilot-target denial in synthetic seed
+tooling, and versioned 18-or-older acceptance. The current checkout still has
+no VPS deployment or hosted shared Codex provider.
+
 ## Current Verified Baseline
 
 The staging-hardening working tree was verified locally on 2026-08-15 against
@@ -223,7 +232,7 @@ boundary explicitly owns verification requirements:
 | Calendar import | `calendar-import-v2` |
 | Calendar consent | `calendar-import-consent-v1` |
 | Coach snapshot | `personal-snapshot-v3` |
-| Coach prompt | `free-coach-agent-prompt-v4` |
+| Coach prompt | `free-coach-agent-prompt-v5` |
 | Daily briefing | `daily-briefing-v2` |
 | Daily Capture | `daily-capture-v5` |
 | Daily State | `explainable-daily-state-v3` |
@@ -577,6 +586,8 @@ gate until that hosted job succeeds.
 
 - Hosted CI evidence must come from GitHub; repository source or a local run
   proves only that the workflow is defined.
+- The VPS/HTTPS/tagged-release and signed-Android acceptance gates in
+  `docs/vps-pilot-release-plan.md` have no current deployment evidence.
 - There is no deployed scheduler/cron or production background worker.
 - Notification Delivery has no Android/system, push, browser, email, or
   background-mobile channel; physical foreground acceptance remains useful.
@@ -589,7 +600,25 @@ gate until that hosted job succeeds.
 - OpenAI/Gemini BYOK adapters are covered by deterministic HTTP mocks but have
   no live-key turn. The local Codex provider remains development-only; hosted
   backend isolation and autonomous answer-quality evaluation are not yet
-  established.
+  established. The current same-UID local adapter is not evidence for the
+  planned separate `coach-executor` Unix-socket/permission boundary.
+- Public hosted signup CAPTCHA, release-day Google OAuth/redirect settings,
+  shared-provider global admission/budget behavior, and invalid-BYOK
+  no-fallback behavior through the public origins remain unverified.
+- No separate real-data pilot Supabase project is repository-proven. Current
+  code has no publishable/secret-key migration, staging/pilot crossover guard,
+  hosted staging-only scenario generator, visible staging identity, or
+  versioned 18-or-older acceptance test.
+- The current stream commits HTTP 200/`started` before provider concurrency is
+  acquired; pre-stream HTTP 429 admission, same-id retry without claim/budget,
+  executor reservation cleanup, and race/disconnect behavior are not yet
+  implemented or verified.
+- No executable off-host Supabase backup/restore job, RPO/RTO evidence, external
+  API/TLS monitor, backup heartbeat, or tested incident alert currently exists
+  in repository evidence.
+- Current Account Delete has no backup-independent encrypted intent ledger or
+  restore replay tool; an older backup must not be opened as if post-backup
+  deletions were already preserved.
 - The manual student usability study and longitudinal product-outcome evidence
   remain unrun.
 

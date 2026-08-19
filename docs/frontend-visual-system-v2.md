@@ -4,6 +4,15 @@ The Coach provider/key controls use the existing Settings card, field,
 dropdown, button, spacing, and error-text primitives; they introduce no new
 visual token or icon family.
 
+The planned hosted-pilot provider choice, CAPTCHA lifecycle states,
+irreversible/pending account-deletion state, and secondary About/diagnostic
+build identity in
+`docs/vps-pilot-release-plan.md` must reuse these primitives, responsive
+breakpoints, focus treatment, reduced-motion behavior, and 200% text boundary.
+Busy, unavailable, expired challenge, invalid key, and provider-disabled states
+need visible text rather than color-only meaning. This paragraph routes future
+presentation work; it is not evidence that those pilot surfaces exist.
+
 Status: implemented repository visual contract for Flutter Web and Android as
 of 2026-08-01.
 

@@ -12,6 +12,13 @@ only through `COACH_BYOK_PROVIDERS`; keys are request-local and are never
 persisted, logged, traced, or returned. History and deletion never accept or
 need provider keys. Response V1/V2 rows remain readable.
 
+The VPS/HTTPS release and proposed explicit shared operator provider are future
+work owned by `../../docs/vps-pilot-release-plan.md`. The plan does not make
+the current development-only Codex adapter deployable. It also plans distinct
+staging/pilot project guards, current Supabase backend secret-key support, a
+staging-only fixture generator, and a bearer-derived adult-participation
+acceptance before product access; none is a current route or schema claim.
+
 ## Current Status
 
 - The service is optional for the default mock-data Flutter preview.
@@ -216,15 +223,16 @@ need provider keys. Response V1/V2 rows remain readable.
   future scope.
 - Phase 10 exposes authenticated free-question capability, streaming and
   non-streaming response, and mixed legacy/current history/delete contracts.
-  Each V3 turn creates a fresh owner-only SQLite snapshot and gives the local
-  agent exactly three required MCP tools: inspect, bounded immutable SQL, and
-  isolated Python. FastAPI derives conservative snapshot-source coverage,
-  actual trace, and provenance. Standard tests use the fake provider; the only
-  real adapter is development-only
-  `local_codex_oauth`, which requires `gpt-5.5` with Fast explicitly configured
-  and never falls back. Current Flutter has no fixed mode, horizon, Focus,
-  prompt, memory-selection, or structured-suggestion flow; readable V1/V2
-  history remains compatible. It is not a production provider.
+  Each non-safety V3 turn creates a fresh owner-only SQLite snapshot.
+  Request-scoped OpenAI/Gemini BYOK receives bounded inspect/query results; the
+  development-only `local_codex_oauth` additionally receives isolated Python
+  through its required MCP and requires `gpt-5.5` with Fast explicitly
+  configured. FastAPI derives
+  conservative snapshot-source coverage, actual trace, and provider provenance.
+  No provider falls back to another. Current Flutter has no fixed mode, horizon,
+  Focus, prompt, memory-selection, or structured-suggestion flow; readable
+  V1/V2 response history remains compatible. Hosted release acceptance remains
+  open.
   See `../../docs/phase-10-controlled-coach-plan.md`.
 - `PUT /v1/daily-capture/{entry_date}/{branch}` is the sole authenticated
   Capture writer. `daily-capture-write-v1` combines request replay with
@@ -698,7 +706,7 @@ accepts V3 only and emits `started`, allowlisted `activity`, and one
 
 Each non-safety V3 turn creates a fresh owner-only
 `personal-snapshot-v3` SQLite database from the relevant Account Export table
-set under `free-coach-agent-prompt-v4`. Goals, generic Recommendations,
+set under `free-coach-agent-prompt-v5`. Goals, generic Recommendations,
 Decision Feedback, and Weekly Review proposals are excluded from that snapshot.
 The prompt's non-overridable output
 rule requires English for both the reply and uncertainty explanation regardless
@@ -713,7 +721,7 @@ Coach request/usage/selection ledgers, provider internals, and operational
 request ledgers. The turn fails rather than truncates beyond 10,000 rows per
 table, 50,000 total, or 8 MiB.
 
-The required per-turn stdio MCP exposes exactly:
+The private local Codex provider's required per-turn stdio MCP exposes exactly:
 
 - `inspect_data`;
 - `query_data`, one immutable SQLite `SELECT|WITH` with authorizer,
@@ -722,16 +730,18 @@ The required per-turn stdio MCP exposes exactly:
   secrets, non-root user, read-only root/snapshot, dropped capabilities,
   bounded temp space, one CPU, 512 MiB RAM, 64 PIDs, and bounded output.
 
-The overall turn is limited to 12 tool calls and 180 seconds. At most one
-internal Python plot may be returned to the model, but it is not stored or
+OpenAI/Gemini BYOK exposes only `inspect_data` and `query_data` through bounded
+FastAPI tool-result calls; it receives neither the SQLite file nor Python. The
+overall turn is limited to 12 tool calls and 180 seconds. At most one local
+Codex Python plot may be returned to that model, but it is not stored or
 returned to Flutter.
 All free text is untrusted data, not tool instructions. There is no shell, web,
 app, plugin, sub-agent, host-file, Supabase, or product mutation tool.
 
-`coach-response-v2` contains reply, uncertainty, safety, backend-derived
+`coach-response-v3` contains reply, uncertainty, safety, backend-derived
 snapshot-source coverage in the `evidence` field, actual tool
-steps/limitations, and exact model/Fast/snapshot provenance. Coverage counts
-and periods describe each full accessed snapshot source, not exact supporting
+steps/limitations, and exact provider/model/tier/snapshot provenance. Coverage
+counts and periods describe each full accessed snapshot source, not exact supporting
 or SQL-returned rows. `inspect_data` alone adds no row coverage. A SQL step
 records its returned-row count separately, while successful arbitrary Python is
 conservatively attributed to the full `personal_snapshot` because table-level
@@ -745,8 +755,8 @@ Tool calls do not consume extra question budget.
 
 Conversation deletion is body-free. It removes messages and V3 evidence/trace/
 tier content while retaining request tombstones and append-only usage, so it
-cannot reset budget or reinterpret identity. `coach-history-v2` returns both
-readable legacy `coach-response-v1` and current `coach-response-v2` turns.
+cannot reset budget or reinterpret identity. `coach-history-v3` returns current
+`coach-response-v3` plus readable legacy `coach-response-v1|v2` turns.
 
 ## Environment
 
@@ -763,6 +773,7 @@ SUPABASE_TIMEOUT_SECONDS=10
 SCHEDULED_REFRESH_TOKEN=
 COACH_PROVIDER=disabled
 COACH_FAKE_PROVIDER_ENABLED=false
+COACH_BYOK_PROVIDERS=
 LOCAL_CODEX_ENABLED=false
 LOCAL_CODEX_BIN=codex
 LOCAL_CODEX_MODEL=gpt-5.5
