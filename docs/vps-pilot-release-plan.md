@@ -680,24 +680,36 @@ separate, explicit, account- and machine-bound acceptance gate.
 ### Transition from the current branch
 
 At plan creation the active integration branch is `new_backend_gh`, while
-`main` is substantially behind it. Treat this as a one-time transition:
+`main` is substantially behind it and the accumulated promotion pull request is
+already large. For this pilot, retain `new_backend_gh` as the temporary local
+integration authority through implementation rather than creating a second
+partially integrated branch stack:
 
-1. Finish this documentation baseline on `new_backend_gh` and run its captured-
-   base affected gate before adding pilot implementation code.
-2. Before a promotion, externally verify branch protection and that Vercel
-   cannot automatically assign its production domain to a `main` merge. If
-   either condition cannot be proven, stop before the remote merge.
-3. Open one deliberate baseline promotion pull request from the verified
-   `new_backend_gh` state into `main`. Review the entire accumulated diff and
-   release documentation; do not force-push or rewrite either branch.
-4. Once merged, make `main` the only integration authority immediately. Create
-   every VPS-pilot implementation branch from protected `main` and merge each
-   focused change back only through reviewed, green pull requests.
-5. Do not deploy from the baseline promotion. Vercel and VPS production remain
-   held until the later immutable release-candidate gates.
-6. Retire or archive the temporary integration branch after the baseline
-   promotion is verified. Deleting it or changing remote protection is a
-   separate authorized action.
+1. Keep the verified documentation baseline and every local VPS-pilot
+   implementation slice on `new_backend_gh`. Use focused, independently
+   testable commits even though they will later appear in one accumulated pull
+   request.
+2. Do not deploy, tag, or configure Vercel production from
+   `new_backend_gh`. It remains an implementation branch, not a release
+   authority.
+3. If `main` changes before promotion, incorporate and review that drift
+   explicitly without force-pushing, rewriting history, or silently dropping
+   either side.
+4. After the complete local pilot implementation passes its captured-base
+   affected gate, externally verify `main` branch protection and prove that a
+   merge cannot automatically assign the Vercel production domain. If either
+   condition cannot be proven, stop before the remote merge.
+5. Open or update one deliberate final promotion pull request from
+   `new_backend_gh` into `main`. Review the entire accumulated diff, its
+   focused commit sequence, release documentation, and green merge-candidate
+   gates; do not force-push or rewrite either branch.
+6. Once that pull request is merged, make protected `main` the sole release
+   authority. Create RC/final tags only from the verified `main` SHA and keep
+   Vercel/VPS promotion held until the immutable release-candidate gates.
+7. Retire or archive `new_backend_gh` only after the merge and source identity
+   are verified. Deleting it or changing remote protection is a separate
+   authorized action. Any later fix starts from protected `main` on a focused
+   branch.
 
 ### Branch protection
 
@@ -719,8 +731,9 @@ evidence.
 Release identity is deliberately two-stage so tags do not depend on artifacts
 that do not yet exist:
 
-1. After every focused pilot PR is merged into `main` and the source/CI gates
-   pass, create one immutable annotated RC tag such as
+1. After the complete pilot branch is promoted into `main` through the final
+   reviewed pull request and the source/CI gates pass, create one immutable
+   annotated RC tag such as
    `v0.1.0-pilot.1-rc.1` on the exact `main` SHA. Never move or reuse it.
 2. Publish a source manifest for that RC: Git SHA/tag, current contract and
    migration references, intended toolchain/lock identities, target project/API
@@ -752,13 +765,13 @@ from. They are not rebuilt merely to replace that label with the later final
 tag. The signed final attestation maps the final tag on the same SHA to those
 exact RC-labelled artifacts and checksums.
 
-The VPS is not automatically deployed from a mutable branch. Before both the
-one-time baseline promotion and later pilot PR merges, externally verify that
-Vercel cannot automatically assign the production domain to `main`. Build the
-RC candidate first and promote it only at step 6 above. A merge to `main` must
-not silently become public before the tag decision. A small two-person team
-benefits more from an observable manual promotion than from an unreviewed
-push-to-production hook.
+The VPS is not automatically deployed from a mutable branch. Before the final
+accumulated promotion into `main`, externally verify that Vercel cannot
+automatically assign the production domain to the merge. Build the RC candidate
+first and promote it only at step 6 above. A merge to `main` must not silently
+become public before the tag decision. A small two-person team benefits more
+from an observable manual promotion than from an unreviewed push-to-production
+hook.
 
 ## VPS Preparation And Privileged Bootstrap
 
@@ -1275,9 +1288,9 @@ until target-host measurements pass.
   secret-leakage tests pass.
 - `git diff --check` passes and staged, unstaged, and untracked files are
   reviewed.
-- The one-time baseline promotion and every focused pilot pull request are
-  approved and green on protected `main`; none silently promotes Vercel
-  production.
+- The single accumulated promotion pull request preserves the focused local
+  commit sequence, is approved and green against protected `main`, and does
+  not silently promote Vercel production.
 - Environment guards reject staging/pilot project-ref crossover, the synthetic
   scenario generator rejects the pilot target, and the hosted publishable/
   secret-key compatibility tests pass without exposing a credential.
@@ -1429,15 +1442,13 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 
 ## Ordered Execution Checklist
 
-### Phase 0 — documentation baseline and `main` transition
+### Phase 0 — documentation baseline and integration-branch setup
 
 - [ ] Synchronize and verify this decision baseline without remote mutation.
-- [ ] Prove remote `main` protection and that Vercel cannot auto-assign the
-      production domain to a baseline merge.
-- [ ] Promote the verified `new_backend_gh` baseline into `main` through one
-      reviewed, green pull request; do not deploy it.
-- [ ] Create all later implementation branches from protected `main` and stop
-      using `new_backend_gh` as an integration branch.
+- [ ] Retain `new_backend_gh` as the temporary implementation authority and
+      keep each local slice in a focused, independently verified commit.
+- [ ] Keep tags, Vercel production, and VPS deployment disabled for this
+      mutable integration branch.
 
 ### Phase A — local design and implementation
 
@@ -1470,8 +1481,12 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 - [ ] Run local full/browser/database gates selected by the change.
 - [ ] Rehearse install/update/rollback with the deployment artifacts.
 - [ ] Review secret handling and complete diff.
-- [ ] Merge each focused change into protected `main` through a reviewed,
-      fully green PR; do not accumulate a second integration branch.
+- [ ] Finish and review the focused commit sequence on `new_backend_gh`, then
+      run the complete captured-base affected gate over the accumulated task.
+- [ ] Prove remote `main` protection and that the merge cannot auto-assign the
+      Vercel production domain.
+- [ ] Promote the complete verified branch into protected `main` through one
+      reviewed, fully green pull request; do not deploy from the merge alone.
 - [ ] Confirm Vercel cannot assign the production domain automatically; verify
       Hobby eligibility/limits and keep the candidate deployment held.
 - [ ] Create one immutable annotated RC tag from the exact `main` SHA and publish
