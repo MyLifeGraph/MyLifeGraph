@@ -52,10 +52,12 @@ class _CoachPageState extends ConsumerState<CoachPage> {
           pageActions: [
             IconButton(
               tooltip: 'Refresh Coach',
-              onPressed:
-                  state.isLoading || state.isSending || state.isDeletingHistory
-                      ? null
-                      : () => ref.read(coachControllerProvider.notifier).load(),
+              onPressed: state.isLoading ||
+                      state.isSending ||
+                      state.isDeletingHistory ||
+                      state.busyRetrySeconds > 0
+                  ? null
+                  : () => ref.read(coachControllerProvider.notifier).load(),
               icon: const Icon(AppIcons.refreshOutlined),
             ),
           ],
@@ -276,8 +278,13 @@ class _CapabilityCard extends StatelessWidget {
           if (capability.state == CoachCapabilityState.ready) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
-              '${capability.limits.remainingRequests} of '
-              '${capability.limits.requestsPerLocalDay} questions remain today',
+              capability.limits.requestPeriod == 'utc_day'
+                  ? '${capability.limits.remainingRequests} of '
+                      '${capability.limits.requestsPerLocalDay} Project Coach '
+                      'questions remain for the current UTC day'
+                  : '${capability.limits.remainingRequests} of '
+                      '${capability.limits.requestsPerLocalDay} questions '
+                      'remain for your local day',
             ),
           ],
           if (state.capabilityError != null) ...[
@@ -349,7 +356,8 @@ class _ComposerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final available = state.capabilities?.canRespond == true;
+    final available = state.capabilities?.canRespond == true ||
+        state.exactRetryMessage != null;
     final countColor = state.draftCodepoints > coachMessageCodepoints
         ? Theme.of(context).colorScheme.error
         : Theme.of(context).colorScheme.onSurfaceVariant;
@@ -422,6 +430,14 @@ class _ComposerCard extends StatelessWidget {
           if (state.sendError != null) ...[
             const SizedBox(height: AppSpacing.sm),
             _ErrorText(coachErrorMessage(state.sendError)),
+            if (state.busyRetrySeconds > 0)
+              Padding(
+                key: const ValueKey('coach-busy-countdown'),
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Text(
+                  'Manual retry available in ${state.busyRetrySeconds} s.',
+                ),
+              ),
             if (state.exactRetryMessage != null)
               const Padding(
                 padding: EdgeInsets.only(top: AppSpacing.xs),
@@ -453,7 +469,9 @@ class _ComposerCard extends StatelessWidget {
                     key: const Key('coach-send-button'),
                     onPressed: state.canSend ? onSend : null,
                     icon: const Icon(AppIcons.sendOutlined),
-                    label: const Text('Ask Coach'),
+                    label: Text(
+                      state.canRetryExact ? 'Retry unchanged' : 'Ask Coach',
+                    ),
                   ),
           ),
         ],

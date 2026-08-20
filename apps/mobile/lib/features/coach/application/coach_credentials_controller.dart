@@ -14,24 +14,28 @@ class CoachCredentials {
   });
 
   final String? profileId;
-  final CoachProviderName provider;
+  final CoachProviderName? provider;
   final Map<CoachProviderName, String> keys;
   final bool busy;
   final String? error;
 
-  String? get activeKey => keys[provider];
+  String? get activeKey => provider == null ? null : keys[provider];
+  bool get hasSelection => provider != null;
+  bool get usesProjectCoach => provider == CoachProviderName.operatorCodexPilot;
   bool hasKey(CoachProviderName value) => keys[value]?.isNotEmpty ?? false;
 
   CoachCredentials copyWith({
     String? profileId,
-    CoachProviderName? provider,
+    Object? provider = _unchanged,
     Map<CoachProviderName, String>? keys,
     bool? busy,
     Object? error = _unchanged,
   }) =>
       CoachCredentials(
         profileId: profileId ?? this.profileId,
-        provider: provider ?? this.provider,
+        provider: identical(provider, _unchanged)
+            ? this.provider
+            : provider as CoachProviderName?,
         keys: keys ?? this.keys,
         busy: busy ?? this.busy,
         error: identical(error, _unchanged) ? this.error : error as String?,
@@ -51,7 +55,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
         super(
           const CoachCredentials(
             profileId: null,
-            provider: CoachProviderName.openai,
+            provider: null,
             keys: {},
           ),
         );
@@ -59,17 +63,20 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
   final CoachCredentialStore _store;
   final CoachApiDataSource _api;
   final Future<String?> Function() _accessToken;
+  int _profileGeneration = 0;
 
   Future<void> setProfile(String? profileId) async {
+    final generation = ++_profileGeneration;
     final previous = state.profileId;
     state = CoachCredentials(
-      profileId: profileId,
-      provider: CoachProviderName.openai,
+      profileId: previous == null || previous == profileId ? profileId : null,
+      provider: null,
       keys: const {},
     );
     try {
       if (previous != null && previous != profileId) {
-        await _store.deleteProfile(previous);
+        await _store.deleteAllCoachCredentials();
+        if (generation != _profileGeneration) return;
       }
       if (profileId == null) return;
       final keys = <CoachProviderName, String>{};
@@ -78,29 +85,43 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
         CoachProviderName.gemini,
       ]) {
         final value = await _store.read(profileId, provider);
+        if (generation != _profileGeneration) return;
         if (value != null && value.isNotEmpty) keys[provider] = value;
       }
-      if (state.profileId == profileId) state = state.copyWith(keys: keys);
+      state = CoachCredentials(
+        profileId: profileId,
+        provider: null,
+        keys: keys,
+      );
     } catch (_) {
-      if (state.profileId == profileId) {
-        state = state.copyWith(
-          keys: const {},
-          error: 'Saved keys could not be loaded or cleared.',
-        );
-      }
+      if (generation != _profileGeneration) return;
+      state = const CoachCredentials(
+        profileId: null,
+        provider: null,
+        keys: {},
+        error: 'Saved keys could not be loaded or cleared. Retry sign-out.',
+      );
     }
   }
 
   void select(CoachProviderName provider) {
-    if (!const {CoachProviderName.openai, CoachProviderName.gemini}
-        .contains(provider)) {
+    if (!const {
+      CoachProviderName.operatorCodexPilot,
+      CoachProviderName.openai,
+      CoachProviderName.gemini,
+    }.contains(provider)) {
       throw ArgumentError.value(provider, 'provider');
     }
     state = state.copyWith(provider: provider, error: null);
   }
 
   Future<bool> testAndSave(CoachProviderName provider, String value) async {
+    if (!const {CoachProviderName.openai, CoachProviderName.gemini}
+        .contains(provider)) {
+      throw ArgumentError.value(provider, 'provider');
+    }
     final profileId = state.profileId;
+    final profileGeneration = _profileGeneration;
     final key = value.trim();
     if (profileId == null || key.isEmpty) return false;
     state = state.copyWith(busy: true, error: null);
@@ -121,7 +142,15 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
         );
         return false;
       }
+      if (profileGeneration != _profileGeneration ||
+          state.profileId != profileId) {
+        return false;
+      }
       await _store.write(profileId, provider, key);
+      if (profileGeneration != _profileGeneration ||
+          state.profileId != profileId) {
+        return false;
+      }
       state = state.copyWith(
         keys: {...state.keys, provider: key},
         provider: provider,

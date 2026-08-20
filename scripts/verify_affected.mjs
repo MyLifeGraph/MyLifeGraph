@@ -47,7 +47,7 @@ export function classifyPath(path) {
   }
 
   if (
-    /^(?:package(?:-lock)?\.json|\.github\/|\.env|scripts\/(?:e2e|verify|start_|lib\/local_supabase)|apps\/mobile\/(?:pubspec(?:\.lock)?|web\/|android\/)|services\/ai_service\/(?:requirements|pyproject|Dockerfile))/.test(
+    /^(?:package(?:-lock)?\.json|\.github\/|\.env|deploy\/(?:vps|backup)\/|scripts\/(?:e2e|verify|start_|lib\/local_supabase)|apps\/mobile\/(?:pubspec(?:\.lock)?|web\/|android\/)|services\/ai_service\/(?:requirements|pyproject|Dockerfile))/.test(
       path,
     ) ||
     /^e2e\//.test(path)

@@ -35,15 +35,45 @@ class Verifier:
         return Principal(user_id=USER_ID) if token == "valid-agent-token" else None
 
 
+class PreparedTurn:
+    def __init__(self) -> None:
+        self.released = False
+
+    async def release(self) -> None:
+        self.released = True
+
+
 class AgentService:
+    requires_explicit_provider = False
+
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
         self.failure: CoachServiceError | None = None
+        self.preparation = PreparedTurn()
+
+    def for_operator_request(self):
+        self.calls.append(("select_operator", USER_ID))
+        return self
+
+    def for_byok_request(self, *, provider_name: str | None, api_key: str | None):
+        self.calls.append(("select_byok", provider_name, api_key))
+        if provider_name not in {"openai", "gemini"} or not api_key:
+            raise CoachServiceError(
+                "invalid_provider_credentials",
+                "A supported Coach provider and API key are required together.",
+                retryable=False,
+                status_code=422,
+            )
+        return self
+
+    async def prepare_turn(self, *, user_id: str, request):
+        self.calls.append(("prepare", user_id, request))
+        return self.preparation
 
     async def capabilities(self, *, user_id: str):
         self.calls.append(("capabilities", user_id))
         return CoachAgentCapabilitiesResponse(
-            contract_version="coach-capabilities-v2",
+            contract_version="coach-capabilities-v5",
             state="ready",
             provider="fake",
             provider_mode="deterministic_test_only",
@@ -56,6 +86,7 @@ class AgentService:
                 message_codepoints=2_000,
                 reply_codepoints=4_000,
                 requests_per_local_day=20,
+                request_period="profile_local_day",
                 remaining_requests=18,
                 max_tool_calls=12,
                 turn_timeout_seconds=180,
@@ -77,10 +108,28 @@ class AgentService:
             raise self.failure
         return _response(request.request_id)
 
+    async def respond_prepared(
+        self,
+        *,
+        user_id: str,
+        request,
+        prepared,
+        activity_callback=None,
+    ):
+        assert prepared is self.preparation
+        try:
+            return await self.respond(
+                user_id=user_id,
+                request=request,
+                activity_callback=activity_callback,
+            )
+        finally:
+            await prepared.release()
+
     async def history(self, *, user_id: str):
         self.calls.append(("history", user_id))
         return CoachAgentHistoryResponse(
-            contract_version="coach-history-v2",
+            contract_version="coach-history-v4",
             turns=[],
         )
 
@@ -113,6 +162,7 @@ async def _request(
     *,
     service: AgentService | None = None,
     json_body=None,
+    extra_headers: dict[str, str] | None = None,
 ):
     app = create_app()
     actual_service = service or AgentService()
@@ -126,10 +176,14 @@ async def _request(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",
     ) as client:
+        headers = {
+            "Authorization": "Bearer valid-agent-token",
+            **(extra_headers or {}),
+        }
         response = await client.request(
             method,
             path,
-            headers={"Authorization": "Bearer valid-agent-token"},
+            headers=headers,
             json=json_body,
         )
     return response, actual_service
@@ -197,6 +251,10 @@ def _v3_body() -> dict[str, object]:
     }
 
 
+def _v4_body() -> dict[str, object]:
+    return {**_v3_body(), "contract_version": "coach-request-v4"}
+
+
 def _sse_events(body: str) -> list[tuple[str, dict[str, object]]]:
     events = []
     for block in body.strip().split("\n\n"):
@@ -240,6 +298,52 @@ def test_v3_rejects_every_client_selected_scope_or_period() -> None:
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_request"
     assert service.calls == []
+
+
+def test_v4_requires_one_explicit_provider_without_fallback() -> None:
+    missing, missing_service = asyncio.run(
+        _request("POST", "/v1/coach/respond/stream", json_body=_v4_body()),
+    )
+
+    assert missing.status_code == 422
+    assert missing.json()["detail"]["code"] == "provider_selection_required"
+    assert missing_service.calls == []
+
+    selected, selected_service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/coach/respond/stream",
+            json_body=_v4_body(),
+            extra_headers={
+                "X-MyLifeGraph-Coach-Provider": "operator_codex_pilot",
+            },
+        ),
+    )
+
+    assert selected.status_code == 200
+    assert [call[0] for call in selected_service.calls] == [
+        "select_operator",
+        "prepare",
+        "respond",
+    ]
+
+
+def test_operator_selection_rejects_an_api_key_instead_of_falling_back() -> None:
+    response, service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/coach/respond/stream",
+            json_body=_v4_body(),
+            extra_headers={
+                "X-MyLifeGraph-Coach-Provider": "operator_codex_pilot",
+                "X-MyLifeGraph-Coach-Api-Key": "must-not-be-forwarded",
+            },
+        ),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_provider_credentials"
+    assert [call[0] for call in service.calls] == ["select_byok"]
 
 
 def test_v3_rejects_json_escaped_lone_surrogate_before_service_call() -> None:
@@ -322,7 +426,9 @@ def test_sse_streams_only_started_safe_activity_and_completed() -> None:
     assert events[2][1] == {"message": "Working with personal data …"}
     assert "chain-of-thought" not in response.text
     assert events[3][1]["response"]["contract_version"] == "coach-response-v2"
-    assert service.calls[0][0:2] == ("respond", USER_ID)
+    assert service.calls[0][0:2] == ("prepare", USER_ID)
+    assert service.calls[1][0:2] == ("respond", USER_ID)
+    assert service.preparation.released is True
 
 
 def test_sse_reports_strict_failed_event_without_partial_answer() -> None:
@@ -362,10 +468,12 @@ def test_closing_sse_stream_cancels_the_running_agent_turn() -> None:
     request = CoachAgentRequest.model_validate(_v3_body())
 
     async def run() -> None:
+        prepared = await service.prepare_turn(user_id=USER_ID, request=request)
         stream = _stream_turn(
             service=service,
             user_id=USER_ID,
             request=request,
+            prepared=prepared,
         )
         started = await anext(stream)
         assert started.startswith(b"event: started\n")
@@ -374,3 +482,69 @@ def test_closing_sse_stream_cancels_the_running_agent_turn() -> None:
         await asyncio.wait_for(service.cancelled.wait(), timeout=1)
 
     asyncio.run(run())
+
+
+def test_busy_admission_is_http_429_before_sse_commitment() -> None:
+    class BusyService(AgentService):
+        async def prepare_turn(self, *, user_id: str, request):
+            self.calls.append(("prepare", user_id, request))
+            raise CoachServiceError(
+                "provider_busy",
+                "The selected Coach provider is busy. Try again shortly.",
+                retryable=True,
+                status_code=429,
+                response_headers={"Retry-After": "15"},
+            )
+
+    response, service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/coach/respond/stream",
+            service=BusyService(),
+            json_body=_v3_body(),
+            extra_headers={"Origin": "http://localhost:7357"},
+        ),
+    )
+
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "15"
+    assert response.headers["access-control-allow-origin"] == ("http://localhost:7357")
+    assert "Retry-After" in response.headers["access-control-expose-headers"]
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json() == {
+        "detail": {
+            "code": "provider_busy",
+            "message": "The selected Coach provider is busy. Try again shortly.",
+            "retryable": True,
+        },
+    }
+    assert [call[0] for call in service.calls] == ["prepare"]
+
+
+def test_browser_preflight_allows_exact_coach_headers() -> None:
+    response, _ = asyncio.run(
+        _request(
+            "OPTIONS",
+            "/v1/coach/respond/stream",
+            extra_headers={
+                "Origin": "http://localhost:7357",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": (
+                    "X-MyLifeGraph-Coach-Provider,"
+                    "X-MyLifeGraph-Coach-Api-Key,Content-Type"
+                ),
+            },
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == ("http://localhost:7357")
+    allowed = {
+        value.strip().lower()
+        for value in response.headers["access-control-allow-headers"].split(",")
+    }
+    assert {
+        "x-mylifegraph-coach-provider",
+        "x-mylifegraph-coach-api-key",
+        "content-type",
+    } <= allowed

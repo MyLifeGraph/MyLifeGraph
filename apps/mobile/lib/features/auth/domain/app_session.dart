@@ -1,4 +1,5 @@
 import 'pilot_participation.dart' as participation;
+import '../../../core/contracts/account_deletion.dart';
 
 enum AppRole {
   user,
@@ -105,12 +106,20 @@ class AppProfile {
 }
 
 class AppSession {
-  const AppSession.authenticated(this.profile) : isGuestSession = false;
-  const AppSession.guest(this.profile) : isGuestSession = true;
+  const AppSession.authenticated(this.profile)
+      : isGuestSession = false,
+        deletionRecovery = null;
+  const AppSession.guest(this.profile)
+      : isGuestSession = true,
+        deletionRecovery = null;
+  const AppSession.deletionRecovery(this.profile, this.deletionRecovery)
+      : isGuestSession = false;
 
   final AppProfile profile;
   final bool isGuestSession;
+  final AccountDeletionRecovery? deletionRecovery;
 
   bool get isAuthenticated => !isGuestSession;
-  bool get requiresOnboarding => !profile.onboardingDone;
+  bool get isDeletionRecovery => deletionRecovery != null;
+  bool get requiresOnboarding => !isDeletionRecovery && !profile.onboardingDone;
 }

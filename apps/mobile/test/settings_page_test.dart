@@ -88,6 +88,11 @@ void main() {
 
     await _revealText(tester, 'Appearance', pageScrollable);
     expect(find.text('Dark · Saved on this device.'), findsOneWidget);
+    await _revealText(tester, 'Build identity', pageScrollable);
+    expect(
+      find.text('test · v0.1.0-pilot.0 · 0123456789ab'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
@@ -210,6 +215,8 @@ const _testConfig = AppConfig(
   supabaseUrl: '',
   supabaseAnonKey: '',
   aiServiceBaseUrl: 'http://localhost:8000',
+  appBuildSha: '0123456789abcdef0123456789abcdef01234567',
+  appReleaseTag: 'v0.1.0-pilot.0',
   useMockData: true,
 );
 

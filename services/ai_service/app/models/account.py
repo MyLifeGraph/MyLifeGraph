@@ -10,9 +10,13 @@ from app.owner_data_catalog import (
     ACCOUNT_EXPORT_TABLE_NAMES,
 )
 
-ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v5"
+ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v6"
 PILOT_PARTICIPATION_CONTRACT_VERSION = "pilot-participation-v1"
 PILOT_PARTICIPATION_NOTICE_VERSION = "pilot-participation-notice-v1"
+PILOT_PARTICIPATION_GATE_CONTRACT_VERSION = "pilot-participation-gate-v1"
+ACCOUNT_DELETION_CONTRACT_VERSION = "account-deletion-v2"
+ACCOUNT_DELETION_STATUS_CONTRACT_VERSION = "account-deletion-status-v2"
+ACCOUNT_DELETION_RECOVERY_CONTRACT_VERSION = "account-deletion-recovery-v2"
 ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE = 10_000
 ACCOUNT_EXPORT_MAX_TOTAL_ROWS = 50_000
 ACCOUNT_EXPORT_MAX_JSON_BYTES = 8 * 1024 * 1024
@@ -118,7 +122,41 @@ class AccountPreparationBudgetResponse(BaseModel):
 class AccountDeleteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
+    contract_version: Literal["account-deletion-v2"]
+    deletion_id: UUID = Field(strict=False)
     confirmation: Literal["DELETE"]
+
+
+class AccountDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["account-deletion-v2"]
+    deletion_id: UUID = Field(strict=False)
+    state: Literal["deletion_pending", "completed"]
+    accepted_at: datetime
+    completed_at: datetime | None
+    journal_durable: bool
+
+    @model_validator(mode="after")
+    def validate_state(self) -> "AccountDeleteResponse":
+        if self.accepted_at.tzinfo is None:
+            raise ValueError("accepted_at must be timezone-aware")
+        if self.completed_at is not None and self.completed_at.tzinfo is None:
+            raise ValueError("completed_at must be timezone-aware")
+        if self.state == "completed" and (
+            self.completed_at is None or not self.journal_durable
+        ):
+            raise ValueError("completed deletion requires journal and completion time")
+        if self.state == "deletion_pending" and self.completed_at is not None:
+            raise ValueError("pending deletion cannot have a completion time")
+        return self
+
+
+class AccountDeletionStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["account-deletion-status-v2"]
+    deletion: AccountDeleteResponse | None
 
 
 class AccountExportLedgerPolicy(BaseModel):
@@ -128,11 +166,11 @@ class AccountExportLedgerPolicy(BaseModel):
     omitted_tables: dict[str, str]
 
     @model_validator(mode="after")
-    def validate_exact_v5_policy(self) -> "AccountExportLedgerPolicy":
+    def validate_exact_v6_policy(self) -> "AccountExportLedgerPolicy":
         if tuple(self.sanitized_tables) != ACCOUNT_EXPORT_SANITIZED_TABLES:
-            raise ValueError("sanitized_tables must match the V5 ledger policy")
+            raise ValueError("sanitized_tables must match the V6 ledger policy")
         if self.omitted_tables != ACCOUNT_EXPORT_OMITTED_TABLES:
-            raise ValueError("omitted_tables must match the V5 ledger policy")
+            raise ValueError("omitted_tables must match the V6 ledger policy")
         return self
 
 
@@ -144,7 +182,7 @@ class AccountExportLimits(BaseModel):
     max_json_bytes: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def validate_exact_v5_limits(self) -> "AccountExportLimits":
+    def validate_exact_v6_limits(self) -> "AccountExportLimits":
         if (
             self.max_rows_per_table,
             self.max_total_rows,
@@ -154,14 +192,14 @@ class AccountExportLimits(BaseModel):
             ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
             ACCOUNT_EXPORT_MAX_JSON_BYTES,
         ):
-            raise ValueError("limits must match the account-export-v5 contract")
+            raise ValueError("limits must match the account-export-v6 contract")
         return self
 
 
 class AccountExportResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["account-export-v5"]
+    contract_version: Literal["account-export-v6"]
     exported_at: datetime
     data: dict[str, list[dict[str, Any]]]
     record_counts: dict[str, int]
@@ -174,9 +212,9 @@ class AccountExportResponse(BaseModel):
             raise ValueError("exported_at must be timezone-aware")
         expected_tables = set(ACCOUNT_EXPORT_TABLE_NAMES)
         if set(self.data) != expected_tables:
-            raise ValueError("data must contain the exact V5 export table set")
+            raise ValueError("data must contain the exact V6 export table set")
         if set(self.record_counts) != expected_tables:
-            raise ValueError("record_counts must contain the exact V5 table set")
+            raise ValueError("record_counts must contain the exact V6 table set")
         if any(
             self.record_counts[name] != len(rows) for name, rows in self.data.items()
         ):
@@ -185,7 +223,7 @@ class AccountExportResponse(BaseModel):
             count > ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE
             for count in self.record_counts.values()
         ):
-            raise ValueError("record_counts exceed the V5 per-table bound")
+            raise ValueError("record_counts exceed the V6 per-table bound")
         if sum(self.record_counts.values()) > ACCOUNT_EXPORT_MAX_TOTAL_ROWS:
-            raise ValueError("record_counts exceed the V5 total bound")
+            raise ValueError("record_counts exceed the V6 total bound")
         return self

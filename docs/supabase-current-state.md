@@ -1,6 +1,116 @@
 # Supabase Current State
 
 The latest repository migration is
+`20260820200000_account_deletion_replayer_role_guard_v2.sql`. It normalizes the
+restore-only `mylifegraph_deletion_replayer` role boundary to
+`NOLOGIN/NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOINHERIT`,
+zero login connections, and no role settings. The original V2 boundary creates
+the role with those exact attributes when absent and refuses any unsafe
+pre-existing attribute or unsafe incoming/outgoing membership before the first
+replay grant. PostgreSQL 15 requires zero incident memberships. PostgreSQL 16+
+automatically grants a role created by a non-superuser `CREATEROLE` principal
+back to that creator; the migration constrains `createrole_self_grant` to the
+empty value and accepts exactly one unavoidable edge: target role to the
+function-owning migration identity, bootstrap grantor OID 10, `ADMIN TRUE`,
+`INHERIT FALSE`, and `SET FALSE`. It reads the PG16-only option columns through
+`to_jsonb(pg_auth_members)`, so the same guard remains parseable on PostgreSQL
+15. Any additional, reverse, inheritable, settable, differently granted, or
+missing PG16+ edge fails closed. The additive guard re-attests rather than
+attempts to repair that role:
+Supabase's normal `postgres` migration identity is intentionally not a true
+superuser and cannot strip `SUPERUSER` from a hostile role. Neither an
+application role nor a pre-existing privileged role can therefore inherit a
+new `replay_account_deletion_v2` deletion grant. Runtime service credentials
+still receive no replay grant.
+
+The preceding repository migration is
+`20260820194500_coach_operator_budget_period_v1.sql`. It adds the nullable,
+trigger-maintained `coach_requests.operator_budget_utc_date`, backfills existing
+operator-funded requests from server creation time, and makes the five-turn
+owner allowance use that immutable UTC period. The request `local_date` remains
+the profile-local history/planning fact, so a timezone change cannot mint
+another operator allowance and an unchanged local date does not block the next
+UTC day's allowance. The serialized global dispatch budget remains a separate
+15-per-UTC-day authority.
+
+The preceding transitional migration is
+`20260820193000_coach_operator_utc_budget_v1.sql`. It first moved the operator
+claim boundary away from a caller-selected timezone date; the final separate
+period column above supersedes its temporary local-date normalization while
+retaining the same service-role-only V8 signature and revoking the renamed
+legacy implementation.
+
+The preceding migration is
+`20260820190000_hosted_database_contract_v1.sql`. Its service-role-only
+`hosted-database-contract-v1` RPC derives the full applied migration
+head/count/ordered-identity digest plus an exact requested prefix identity from
+`supabase_migrations`. It also derives the prepared-deletion guard from the
+installed function definitions. FastAPI binds the release manifest prefix to
+that response, so a missing or renamed intermediate history row fails
+readiness even when the maximum filename is unchanged. Before installing that
+seam, the migration converges historically environment-dependent grants:
+Capture/Account retry ledgers become service `SELECT,INSERT`, the Learning
+ledger becomes service `SELECT,INSERT,DELETE`, `lifestyle_entries` becomes
+service `SELECT` only, and Setup responses/snapshots become authenticated
+`SELECT` plus service CRUD. It also removes global and `public`-schema
+application-role defaults from future `postgres`-created tables, sequences,
+and functions, including PostgreSQL's built-in global `PUBLIC EXECUTE` function
+default. Each future migration must therefore grant its owned surface
+explicitly; a base-image default can no longer expose an object before its
+RLS/function contract exists.
+
+The preceding migration is
+`20260820183000_account_deletion_prepared_pending_guard_v2.sql`. It makes the
+first persisted `prepared` deletion state part of every product-access,
+principal-status, and recovery-readiness pending check. A process exit between
+prepare and off-host append therefore remains locked, visible to the
+reconciler, and capable of making hosted readiness stale instead of leaving an
+apparently healthy usable account.
+
+The preceding repository migration is
+`20260820170000_account_deletion_recovery_v2.sql`. It adds the forced-RLS,
+service-only `account_deletion_intents` recovery ledger and the
+`account-deletion-v2` prepare/append/accept/complete state machine. The public
+status seam is `account-deletion-status-v2`; the encrypted off-host payload is
+`account-deletion-journal-v2`. Runtime mutation RPCs remain `service_role`-
+only, direct V1 deletion is revoked so an old runtime fails closed, and replay
+is isolated to the dedicated `mylifegraph_deletion_replayer` database role.
+Restrictive policies block authenticated Data API access once an append is in
+flight, while FastAPI independently blocks product routes for a pending owner.
+The ledger stores UUIDs, object identity/hash, state, and timestamps only; it
+is deliberately omitted from Account Export and Coach snapshots.
+
+The preceding migration is
+`20260820150000_pilot_participation_rls_gate_v1.sql`. It adds the default-off
+private `pilot-participation-gate-v1` singleton and restrictive authenticated
+policies to every forced-RLS public table. When an authorized operator binds
+the gate to the exact project ref, only a profile with the persisted current
+notice pair can use direct product reads/writes. Missing gate configuration
+fails closed; profile SELECT remains available so an authenticated client can
+render the acceptance surface. Configuration and attestation RPCs are
+`service_role`-only.
+
+The preceding migration is
+`20260820120000_coach_terminal_replay_probe_v1.sql`. Its service-role-only,
+owner-locked read probe returns an exact terminal Coach replay before fresh
+provider admission, preserving completed/failed/deleted retries across quota,
+busy, or provider-disable transitions without creating a request.
+
+The preceding repository migration is
+`20260819203000_coach_operator_pilot_v1.sql`. It adds the
+`coach-request-v4`/`coach-response-v4` provider
+contract, `coach_requests.provider_dispatch_required`, forced-RLS
+`coach_operator_dispatches` plus the user-independent
+`coach_operator_daily_budgets`, and service-role-only V8 claim, V3 completion,
+dispatch-record, dispatch-finish, and startup-reconciliation RPCs. Application
+roles receive no access to either operator ledger. One unique
+reservation/request increments the serialized 15-per-UTC-day aggregate before
+provider dispatch; deleting owner-linked request/dispatch data does not reset
+that aggregate. Terminal transitions are replay-safe and expired ambiguous
+dispatches become accounted interruptions. V1-V3 rows remain compatible and no
+API key or OAuth state is stored.
+
+The preceding participation-record migration is
 `20260819185740_pilot_participation_v1.sql`. It adds the nullable, constrained
 `profiles.pilot_participation_notice_version` /
 `pilot_participation_accepted_at` pair, protects both fields from application
@@ -16,7 +126,8 @@ and `20260815082606_coach_byok_completion_dispatch_v1.sql`. They add OpenAI/Gemi
 V1/V2 response compatibility. It adds no key column: provider API keys never
 enter Postgres. V6 execution is revoked; RLS, explicit grants, advisory-lock
 order, retry identity, and append-only usage boundaries remain unchanged.
-Current rows use `coach-response-v3` with `free-coach-agent-prompt-v5`.
+Rows created by the new explicit-provider path use `coach-response-v4` with
+`free-coach-agent-prompt-v5`; the dated staging target below still stops at V3.
 
 This document primarily captures repository state; a live remote database must
 never be inferred from migration source alone. One explicitly inspected staging
@@ -109,10 +220,15 @@ only `service_role` can execute the acceptance RPC. FastAPI supplies the owner
 only from a verified bearer. This repository fact does not mean the migration
 is applied to the dated staging project or any future pilot project.
 
-The current schema has no backup-independent account-deletion intent/receipt
-ledger. The restore-safe encrypted journal and optional service-role-only
-pending/receipt table proposed by the VPS pilot are future additive work; they
-must not be inferred from the current `delete_account_v1` transaction.
+Repository source now contains the backup-independent deletion recovery ledger,
+write-only hosted S3/KMS/Object-Lock journal adapter, versioned export/replay
+tools, and isolated-restore watermark checks described above. This is source
+truth only: no journal bucket, credential, pilot migration, deletion receipt,
+or successful real restore/replay is inferred until the external release gates
+record it. The disposable backup restore and schema-reference templates pin
+PostgreSQL major 17 and the verifier requires the source and restore majors to
+match; the cross-version migration harness remains separate compatibility
+evidence rather than a fallback for a mismatched real backup.
 
 This file is the sole current owner of the latest repository migration filename
 and reset boundary. The scoped synchronization catalog for named
@@ -155,8 +271,22 @@ finite weekly Assignment Series boundary in
 `20260810092841_finite_assignment_series_v1.sql`, then the final Deadline Plan
 kind-authority guard in
 `20260812212833_deadline_plan_kind_guard.sql`, the two Coach BYOK migrations,
-and finally the additive adult-participation boundary in
-`20260819185740_pilot_participation_v1.sql`.
+the additive adult-participation boundary in
+`20260819185740_pilot_participation_v1.sql`, the V4 operator pilot boundary in
+`20260819203000_coach_operator_pilot_v1.sql`, the terminal-replay probe in
+`20260820120000_coach_terminal_replay_probe_v1.sql`, the database-enforced
+participation gate in `20260820150000_pilot_participation_rls_gate_v1.sql`, and
+finally the restore-safe deletion boundary in
+`20260820170000_account_deletion_recovery_v2.sql`, followed by the prepared-
+state crash guard in
+`20260820183000_account_deletion_prepared_pending_guard_v2.sql`, the exact
+hosted DB-history attestation in
+`20260820190000_hosted_database_contract_v1.sql`, the transitional operator UTC
+wrapper in `20260820193000_coach_operator_utc_budget_v1.sql`, and finally the
+separate immutable operator budget period in
+`20260820194500_coach_operator_budget_period_v1.sql`, followed by the
+restore-role attribute/membership guard in
+`20260820200000_account_deletion_replayer_role_guard_v2.sql`.
 
 ## Runtime Activation
 
@@ -224,7 +354,7 @@ The app table constants live in
 | `notification_action_requests` | Service-role-only exact retry/result ledger for `notification-lifecycle-v1`; it contains identities and lifecycle projections, not notification copy. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. Setup-owned metadata may add inclusive optional `valid_from`/`valid_until` semester dates; older/undated rows remain unbounded. |
 | `ai_insights` | Insights list. |
-| `coach_messages` | Bounded validated user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI inserts/deletes turns. Current V3 answers use `coach-response-v3`; persisted free-agent V2 and fixed-mode V1 rows remain readable. |
+| `coach_messages` | Bounded validated user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI inserts/deletes turns. Current V4 answers use `coach-response-v4`; persisted free-agent V2/V3 and fixed-mode V1 rows remain readable. |
 | `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read it. Current free-question Coach snapshots may include sanitized owner memory detail as untrusted data; the old explicit selection projection remains only for V1/V2 compatibility and never changes content ownership. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
 | `focus_session_schedule_sources` | Immutable optional origin for a scheduled Focus session: one owned Deadline or Planner Task block plus its original Focus interval and recovery snapshot. Forced owner-read RLS; direct application DML is forbidden and source deletion is restricted until Focus/account deletion removes the provenance. |
@@ -259,9 +389,11 @@ The app table constants live in
 | `planner_habit_slots` | Stable recurring wall-clock slots for planned Habit occurrences; Study rhythm does not apply. |
 | `planner_commitments` | Authoritative owner-created one-off or weekly fixed commitments. |
 | `planner_request_identities` | Backend-only global retry ledger for Planner preferences, plans, and commitments; omitted from Account Export. |
-| `coach_requests` | Backend-only retry/lease/terminal ledger. V1 remains `today` with `{}` and V2 stores fixed scope parameters; V3 replay binds only owner/request/message and persists exact backend-derived evidence, bounded agent trace/tool count, and service-tier truth on completion. Deleted rows are content-free tombstones and clear V3 detail without clearing usage. |
+| `coach_requests` | Backend-only retry/lease/terminal ledger. V1 remains `today` with `{}`, V2 stores fixed scope parameters, V3 is message-only BYOK compatibility, and V4 binds owner/request/message/provider plus whether dispatch is required. Completion persists exact backend-derived evidence, bounded agent trace/tool count, and service-tier truth. Deleted rows are content-free tombstones and clear V3/V4 detail without clearing usage. |
 | `coach_usage_events` | Backend-only append-only one-row-per-request outcome/counter ledger retained across conversation deletion and used with request rows for the profile-local daily attempt budget. |
-| `coach_memory_selections` | Legacy explicit selection of at most eight eligible memories for fixed-context V1/V2 Coach. It remains readable for compatibility but current V3 Flutter does not call or depend on it. |
+| `coach_operator_daily_budgets` | Forced-RLS service-role-only, user-independent UTC-day Project-Coach dispatch count. It survives owner/account deletion so the 15-turn global budget cannot be reset, contains no owner/request identity, and is omitted from Account Export and Coach Snapshot. |
+| `coach_operator_dispatches` | Forced-RLS service-role-only Project-Coach reservation/request anti-replay ledger. Unique request/reservation identities, replay-safe terminal state, and startup reconciliation prevent ambiguous redispatch. Owner/account deletion removes its personal linkage without decrementing the separate daily budget. It is omitted from Account Export and Coach Snapshot; owner-visible outcomes remain in sanitized request/usage rows. |
+| `coach_memory_selections` | Legacy explicit selection of at most eight eligible memories for fixed-context V1/V2 Coach. It remains readable for compatibility but current V4 Flutter does not call or depend on it. |
 
 Canonical authenticated Capture uses `apply_daily_capture_branch_v1` to merge
 one `daily_logs` row per user/date with source `quick_check_in`.
@@ -473,10 +605,11 @@ evidence and mark `timing_fell_back_to_setup=true` after allocation uses an
 ordinary Setup window. It changes no grant, active block, or confirmation
 authority.
 
-Account Export now contains exactly 43 owner-content tables, including
+Account Export now contains exactly 41 owner-content tables, including
 `learning_preferences`, `focus_session_reflections`, and
 `focus_session_schedule_sources` plus the three finite Assignment Series
-content tables, and names all eight retry ledgers under its omission policy.
+content tables. Its omission policy names all ten backend anti-replay ledgers
+plus the restore-safe account-deletion recovery ledger.
 Canonical profile deletion cascades the product projections.
 See `docs/personal-learning-v1-contract.md`.
 
@@ -660,7 +793,7 @@ atomically through the ungranted inner Deadline confirmation chain. Public
 single-plan proposal/replan, confirm, complete, and cancel wrappers return
 `PT409` for a linked batch child. Cancel supersedes only the staged child
 revisions and blocks. Batch metadata stays private and is not a second
-shape for `account-export-v5` or `personal-snapshot-v3`; the existing Deadline
+shape for `account-export-v6` or `personal-snapshot-v3`; the existing Deadline
 revision/block rows remain those contracts' user-plan content.
 
 This additive migration is verified only by
@@ -944,9 +1077,9 @@ versions. Partial `(user_id, completed_at, id)` and
 history without changing Task lifecycle authority.
 
 The following paragraphs record the V6/V4/V2 base introduced in July. The
-August BYOK migrations summarized at the top of this document supersede its
-current-writer claims with claim V7, prompt V5, and response V3 while retaining
-the described stored compatibility.
+August BYOK/operator migrations summarized at the top of this document
+supersede its current-writer claims with claim V8, prompt V5, and response V4
+while retaining the described stored compatibility.
 
 `20260728160000_free_read_only_coach_agent_v1.sql` additively implemented the
 base free-question persistence contract without rewriting old rows. It adds
@@ -994,6 +1127,32 @@ All validators and mutation functions at that boundary were revoked from
 controlled V1/V2 claims, the then-current free-agent V6 claim, V1/V2 completion,
 failure, or history-delete RPCs. The later BYOK migration revokes V6 execution
 and exposes only its V7 writer. No application-role table write is introduced.
+
+The current operator migration revokes the superseded V7 write surface and
+exposes service-role-only `claim_coach_request_v8` plus
+`complete_coach_request_v3`. V8 preserves the V3 compatibility branch and
+requires exact V4 provider identity. `operator_codex_pilot` must use
+`operator_subscription_pilot`, explicit `gpt-5.5`, daily limit 5, and one
+backend-derived `provider_dispatch_required` value; OpenAI/Gemini remain
+user-key modes with daily limit 20. The strict V4 validator accepts operator
+Fast provenance only and still delegates the shared evidence/trace invariants
+to the prior V3 validator.
+
+`coach_operator_daily_budgets` has one checked, user-independent aggregate per
+UTC date; `coach_operator_dispatches` has unique dispatch, request, and
+reservation identities plus an owner/request cascade foreign key. Both use
+forced RLS and only `service_role` SELECT/INSERT/UPDATE. Record locks the UTC
+date, owner, and request in that order, validates one pending operator V4
+request, locks/checks/increments the aggregate, then inserts the personal
+dispatch in the same transaction. Exact replay returns before increment. The
+aggregate survives account-deletion cascade while the personal dispatch does
+not. `provider_limit` is admitted by both persisted error validators so a
+serialized limit race can terminate the already-claimed request honestly.
+Finish is a terminal exact replay. Reconcile processes at most 100 expired or
+already-terminal dispatches per startup call and synchronizes their terminal
+state; a pending expired request is failed with `provider_called=true` before
+its dispatch is marked interrupted. No delete RPC or application-role policy is
+added.
 
 ## V1 Account Deletion
 
@@ -1054,6 +1213,13 @@ cascades. Six timestamp-order checks cover `notifications` and
 new or updated rows, but the migration neither scans nor claims validation of
 pre-existing remote rows. Legacy cleanup and later constraint validation remain
 separate evidence-driven work.
+
+The later hosted-database contract supersedes that transitional default posture
+at the release boundary. It removes global and `public`-schema
+application-role defaults for future `postgres` tables, sequences, and
+functions, including the built-in `PUBLIC EXECUTE` function default, and
+converges the known history-dependent table grants explicitly before readiness
+can pass.
 
 ## Legacy Tables
 
@@ -1373,7 +1539,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260819185740_pilot_participation_v1.sql
+20260820200000_account_deletion_replayer_role_guard_v2.sql
 ```
 
 Then configure `.env` with:
@@ -1511,9 +1677,10 @@ outcome/undo, task completion/undo, and focus start/finish. Negative
 task/focus/habit lifecycle, duration, active-target, and weekday-cadence writes
 include terminal-focus `updated_at` mutation. Phase 8/9 source adds weekly review
 and calendar import. Phase 10 source starts FastAPI with the deterministic fake
-provider and adds free-question streaming, snapshot/trace/evidence persistence,
-replay, cancellation, safety, limits, history deletion, RLS, no-fixed-mode UI,
-and guest-zero-call assertions. Exact current results and dated run
+provider and adds V4 free-question streaming, snapshot/trace/evidence
+persistence, pre-stream admission, local/global dispatch races, strict executor
+protocol, replay, cancellation, safety, limits, history deletion, RLS,
+no-fixed-mode UI, and guest-zero-call assertions. Exact current results and dated run
 history live in
 [Current Verified Baseline](verification.md#current-verified-baseline) and
 [Verification History](verification-history.md), respectively. They establish
@@ -1570,9 +1737,17 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260819185740_pilot_participation_v1.sql`, with the paired profile fields,
-application-write denial, and service-role-only exact-replay command described
-above. It adds no public table and does not change Account Export's table set.
+`20260820200000_account_deletion_replayer_role_guard_v2.sql`, with the exact
+PostgreSQL-version-aware restore-role attributes and membership invariant
+described at the start of this document. The ten-migration sequence after the
+dated staging boundary adds participation acceptance, Coach V4/V8 operator
+dispatch, terminal replay, database-side participation enforcement,
+restore-safe Account Deletion V2, hosted database attestation, immutable UTC
+operator budgets, and the PG16/17 role guard. Private recovery/operator
+metadata does not widen the strict `account-export-v6` owner-content shape.
+Current Coach claims use V8 with prompt V5 and response V4; persisted V1-V3
+responses remain readable through the current history contract.
+
 The earlier
 `20260813200057_retire_recommendations_and_decision_feedback.sql` takes a
 fixed alphabetic lock graph with a five-second timeout, erases Daily Briefing,
@@ -1582,9 +1757,7 @@ Coach usage/request identities. It installs Daily Briefing V2 and Weekly Review
 V3 constraints plus the service-role-only V3 writer, removes the Feedback table
 before the Recommendation table and then removes
 `daily_briefings.recommendation_ids`, explicitly without `CASCADE`. Current
-Free Coach claims use V6 with prompt V4/snapshot V3; controlled Coach V1/V2
-claims and response-v1 completion remain service-role-only and functional.
-Structured sanitization removes only retired relation identifiers and preserves
+structured sanitization removes only retired relation identifiers and preserves
 Sleep Recommendation, `ai_insights.recommendation`, recommendation Memories,
 Skillset, ordinary Coach advice, and unrelated prose. The current notification
 writer accepts only `daily_state|weekly_review` sources and rejects null or
@@ -1596,7 +1769,7 @@ Recommendation-retirement harness; the normal local migration history is
 checked read-only through a SHA-256 over complete ordered `version`, `name`, and
 `statements` facts and is not advanced by that proof.
 
-The preceding migration is `20260813081814_multi_exam_plan_v1.sql`. It adds the
+The earlier `20260813081814_multi_exam_plan_v1.sql` adds the
 private, forced-RLS Exam-balance orchestration metadata and service-role-only
 snapshot/list/detail/propose/confirm/cancel RPC boundary described in the
 Deadline Planner section. It also wraps the current Deadline confirmation

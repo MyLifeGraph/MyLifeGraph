@@ -1,0 +1,33 @@
+{
+  "schema_version": "mylifegraph-pilot-attestation-v1",
+  "source_release_tag": "v0.1.0-pilot.1-rc.1",
+  "final_release_tag": "v0.1.0-pilot.1",
+  "release_sha": "0000000000000000000000000000000000000000",
+  "source_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "vps": {
+    "source_archive_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysis_image_name": "mylifegraph-coach-analysis:sha256-replace-with-64-hex-revision",
+    "analysis_image_revision": "replace-with-64-hex-revision",
+    "analysis_image_digest": "sha256:replace-after-build",
+    "analysis_image_sbom_cyclonedx_sha256": "replace-after-scan",
+    "python_version": "replace-after-build",
+    "caddy_version": "replace-after-install",
+    "docker_version": "replace-after-install",
+    "codex_version": "0.148.0"
+  },
+  "web": {
+    "vercel_deployment_id": "replace-after-candidate-build",
+    "bundle_sha256": "replace-after-candidate-build"
+  },
+  "android": {
+    "version_name": "replace-after-build",
+    "version_code": 0,
+    "apk_sha256": "replace-after-build",
+    "source_sbom_cyclonedx_sha256": "replace-after-build",
+    "signing_certificate_sha256": "replace-after-build"
+  },
+  "gate_evidence": [],
+  "known_limitations": [],
+  "rollback_owner": "replace-before-signing",
+  "signed_attestation": "external-signature-required"
+}

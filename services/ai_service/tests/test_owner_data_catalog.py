@@ -39,7 +39,7 @@ def test_every_repo_owned_public_table_has_one_deliberate_policy() -> None:
         )
     catalog_names = [entry.name for entry in OWNER_DATA_CATALOG]
 
-    assert len(catalog_names) == len(set(catalog_names)) == 49
+    assert len(catalog_names) == len(set(catalog_names)) == 52
     assert set(catalog_names) == migration_tables
     assert all(
         type(entry.export_policy) is OwnerDataExportPolicy
@@ -61,6 +61,8 @@ def test_export_and_snapshot_are_independent_catalog_projections() -> None:
     assert "goals" not in export_names
     assert "goals" not in snapshot_names
     assert tuple(ACCOUNT_EXPORT_OMITTED_TABLES) == (
+        "coach_operator_daily_budgets",
+        "coach_operator_dispatches",
         "daily_capture_request_identities",
         "account_setting_request_identities",
         "calendar_request_identities",
@@ -69,6 +71,10 @@ def test_export_and_snapshot_are_independent_catalog_projections() -> None:
         "assignment_series_request_identities",
         "planner_request_identities",
         "learning_request_identities",
+        "account_deletion_intents",
+    )
+    assert ACCOUNT_EXPORT_OMITTED_TABLES["account_deletion_intents"] == (
+        "backend_only_restore_safe_deletion_ledger"
     )
     assert {
         "coach_requests",

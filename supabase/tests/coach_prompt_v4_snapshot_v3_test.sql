@@ -30,26 +30,33 @@ insert into auth.users (
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v7('
-      'uuid,uuid,text,date,text,text,text,text,'
-      'timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v7('
-      'uuid,uuid,text,date,text,text,text,text,'
-      'timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
     'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   ),
-  'only service_role can call the current V6 Coach claim'
+  'only service_role can call the current V8 Coach claim and V7 is retired'
 );
 
 select ok(
@@ -72,8 +79,9 @@ select ok(
 
 set local role service_role;
 create temporary table coach_prompt_v4_claim on commit drop as
-select public.claim_coach_request_v7(
+select public.claim_coach_request_v8(
   'c4000000-0000-4000-8000-000000000001',
+  'coach-request-v3',
   'c4000000-0000-4000-8000-000000000101',
   encode(
     extensions.digest(convert_to('V4 Goal-free claim', 'UTF8'), 'sha256'),
@@ -86,7 +94,8 @@ select public.claim_coach_request_v7(
   'not_applicable',
   '2026-08-04T09:00:00Z',
   '2026-08-04T09:02:00Z',
-  20
+  20,
+  true
 ) as value;
 reset role;
 
@@ -98,13 +107,14 @@ select ok(
     from public.coach_requests
     where request_id = 'c4000000-0000-4000-8000-000000000101'
   ),
-  'a new V6 claim atomically stores the current prompt and snapshot pair'
+  'a new V8 compatibility claim atomically stores the current prompt and snapshot pair'
 );
 
 set local role service_role;
 create temporary table coach_prompt_v4_replay on commit drop as
-select public.claim_coach_request_v7(
+select public.claim_coach_request_v8(
   'c4000000-0000-4000-8000-000000000001',
+  'coach-request-v3',
   'c4000000-0000-4000-8000-000000000101',
   encode(
     extensions.digest(convert_to('V4 Goal-free claim', 'UTF8'), 'sha256'),
@@ -117,7 +127,8 @@ select public.claim_coach_request_v7(
   'not_applicable',
   '2026-08-04T09:00:30Z',
   '2026-08-04T09:02:30Z',
-  20
+  20,
+  true
 ) as value;
 reset role;
 

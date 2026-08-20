@@ -44,6 +44,12 @@ class Repository:
     async def claim_agent_request(self, **kwargs) -> CoachClaimResult:
         return await self._claim()
 
+    async def probe_agent_terminal_replay(self, **kwargs) -> CoachClaimResult | None:
+        del kwargs
+        if self.claim.state in {"in_progress", "completed", "failed", "deleted"}:
+            return self.claim
+        return None
+
     async def _claim(self) -> CoachClaimResult:
         self.claim_calls += 1
         if self.claim_error is not None:

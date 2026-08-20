@@ -7,6 +7,7 @@ import {
   requireHttpsBaseUrl,
   requireProjectRef,
   resolveCompatibleKey,
+  supabaseBackendHeaders,
 } from './lib/supabase_deployment.mjs';
 
 export const STAGING_HARNESS_VERSION = 'staging-remote-v1';
@@ -129,19 +130,15 @@ function assertNotPresent(payload, marker, context) {
 }
 
 export class ExactRemoteAuthUsers {
-  constructor({ supabaseUrl, serviceRoleKey, fetchImpl = globalThis.fetch }) {
+  constructor({ supabaseUrl, backendKey, fetchImpl = globalThis.fetch }) {
     this.supabaseUrl = supabaseUrl;
-    this.serviceRoleKey = serviceRoleKey;
+    this.backendKey = backendKey;
     this.fetchImpl = fetchImpl;
     this.userIds = [];
   }
 
   headers(json = false) {
-    return {
-      apikey: this.serviceRoleKey,
-      Authorization: `Bearer ${this.serviceRoleKey}`,
-      ...(json ? { 'Content-Type': 'application/json' } : {}),
-    };
+    return supabaseBackendHeaders(this.backendKey, { json });
   }
 
   async create({ email, password, displayName }) {
@@ -346,10 +343,10 @@ export async function runConfirmedStagingHarness({
     legacyName: 'STAGING_SUPABASE_SERVICE_ROLE_KEY',
     currentPrefix: 'sb_secret_',
     context: 'confirmed staging harness',
-  }).value;
+  });
   const authUsers = new ExactRemoteAuthUsers({
     supabaseUrl: target.supabaseUrl,
-    serviceRoleKey: backendKey,
+    backendKey,
     fetchImpl,
   });
   const runId = `${Date.now()}-${randomBytes(4).toString('hex')}`;

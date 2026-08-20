@@ -4,12 +4,24 @@ Coach provider settings must state that provider requests may cost money and
 that relevant read-only Coach query results are sent to the selected provider.
 Web copy must say keys live only in the current tab and disappear on reload.
 Failed replacement testing must explicitly say the previous key is unchanged.
+Hosted mode selection uses `Project Coach`, `Use my OpenAI key`, and `Use my
+Gemini key`. Project Coach copy states that the VPS creates a temporary
+read-only app-data snapshot and restricted Coach tools send the question plus
+only queried results to the shared pilot Codex account. It publishes the
+5-per-account/15-global daily limits and never implies that a key or another
+provider will be used after failure.
+`provider_busy` says `Project Coach is busy. Retry manually when the countdown
+ends.`; the countdown is visible, bounded, and never an automatic retry.
 
-The planned restore-safe hosted deletion flow must state the exact irreversible
-off-host-journal point and distinguish `deletion_pending` from completed
-deletion; it must never show a transient database failure as a cancelled
-accepted deletion. This is future work owned by the VPS pilot plan, not current
-V1 account behavior.
+The implemented restore-safe hosted deletion flow states the exact irreversible
+off-host-journal point and distinguishes `deletion_pending` from completed
+deletion. Before that point, copy says deletion is paused and the account stays
+signed in for the same-request retry. After durable journal acceptance, recovery
+copy says the off-site journal is confirmed and the server keeps retrying until
+the account is removed; a transient database failure is never presented as a
+cancelled accepted deletion. This is current V2 source behavior, but it is not
+hosted availability evidence until the external journal, backup, migration, and
+deployment gates pass.
 
 The public-pilot repository flow is adult-only and allows ordinary personal
 use. Its implemented `pilot-participation-v1` /
@@ -27,8 +39,8 @@ the current Flutter source; that is not hosted legal review or deployment
 evidence.
 
 Status: implemented V1 product-copy contract for the current checkout,
-including Coach BYOK and shell behavior, Exam-Week Outlook, and Personal
-Learning terminology.
+including Coach V4 explicit-provider/busy behavior and shell behavior,
+Exam-Week Outlook, and Personal Learning terminology.
 
 ## Supported Language
 
@@ -403,17 +415,17 @@ says `Early evidence`.
   `Rule-based reminder`. Reminder Settings may explain fixed templates and the
   exclusion of private check-in details behind optional information; it does
   not repeat an AI disclaimer on each item.
-- Coach is exposed in `staging` and `production` only when
+- Coach is exposed in `staging`, `pilot`, and `production` only when
   `COACH_SURFACE_ENABLED` is exactly `true`; without that explicit gate it is
   hidden. In development, an explicit value wins and an unset release build
   stays hidden. When enabled, `Coach` is the right shell destination;
   `Settings` remains the last top-right action on Today, Insights, Quick
   actions, Planner, Coach, and Settings and is not duplicated in the shell.
   Page-specific actions precede any unread Coach action and Settings. Surface
-  visibility does not prove provider readiness. OpenAI/Gemini BYOK is the
-  current hosted provider strategy but still needs the public release gates;
-  the local Codex path proves one developer machine only and is not a
-  production provider.
+  visibility does not prove provider readiness. Hosted users must explicitly
+  choose Project Coach or one personal OpenAI/Gemini key. Both strategies still
+  need public release gates; the local same-user Codex path proves one
+  developer machine only and is not a production provider.
 - Current Coach uses `Ask anything`, `Your question`, and `Ask Coach`. It has no
   `Today`, `Patterns`, `Focus`, `Review`, horizon, session, prompt-starter,
   memory-selection, or structured suggestion controls. Older answers remain
@@ -432,7 +444,7 @@ says `Early evidence`.
   `Snapshot source coverage`, conservative source periods/counts, actual
   inspection/SQL/Python step summaries, limitations, uncertainty, and technical
   provenance. Coverage must not be described as the exact rows returned by one
-  query or used in the answer. The live local provider label is exactly
+  query or used in the answer. The live local/operator Codex label is exactly
   `gpt-5.5 · Fast configured`. It must not display a plot, chain-of-thought,
   invented evidence, or an executable app action.
 - Coach answers use observational language, separate observed data from

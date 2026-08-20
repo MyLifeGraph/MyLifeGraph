@@ -1,0 +1,62 @@
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+			write 300s
+			idle 2m
+		}
+		max_header_size 32KB
+		0rtt off
+	}
+}
+
+{$MYLIFEGRAPH_API_HOST} {
+	@internal path /docs* /redoc* /openapi.json /v1/internal/*
+	respond @internal 404
+
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-X-Powered-By
+	}
+
+	log {
+		output file /var/log/caddy/mylifegraph-api.json {
+			mode 0640
+			roll_size 10MiB
+			roll_keep 7
+			roll_keep_for 168h
+		}
+		format filter {
+			request>uri regexp \?.*$ ""
+			request>remote_ip ip_mask 24 48
+			request>client_ip ip_mask 24 48
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+			request>headers>Proxy-Authorization delete
+			request>headers>X-Scheduled-Refresh-Token delete
+			request>headers>X-MyLifeGraph-Coach-Api-Key delete
+			request>headers>X-MyLifeGraph-Coach-Provider delete
+			response>headers>Set-Cookie delete
+		}
+	}
+
+	reverse_proxy 127.0.0.1:8000 {
+		health_uri /v1/health
+		health_interval 30s
+		health_timeout 3s
+		health_status 200
+		stream_timeout 5m
+		stream_close_delay 5s
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 250s
+		}
+	}
+}

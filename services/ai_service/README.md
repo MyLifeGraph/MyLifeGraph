@@ -3,31 +3,72 @@
 FastAPI service boundary for deterministic planning, learning, and Coach
 workflows.
 
-The current BYOK extension publishes `coach-capabilities-v3`,
-`coach-response-v3`, and `coach-history-v3` with
-`free-coach-agent-prompt-v5`. `X-MyLifeGraph-Coach-Provider` and
-`X-MyLifeGraph-Coach-Api-Key` are accepted only by capabilities and response
-routes. OpenAI (`gpt-5.6-terra`) and Gemini (`gemini-3.6-flash`) are enabled
-only through `COACH_BYOK_PROVIDERS`; keys are request-local and are never
-persisted, logged, traced, or returned. History and deletion never accept or
-need provider keys. Response V1/V2 rows remain readable.
+`APP_ENV` is a closed value: `development`, test-only `test`, `staging`, or
+`pilot`. Unknown, case-folded, whitespace-padded, and premature `production`
+values fail settings construction. The VPS preflight additionally requires
+exact `pilot`, so a typo cannot bypass hosted project, participation, release,
+or provider guards.
 
-The VPS/HTTPS release and proposed explicit shared operator provider are future
-work owned by `../../docs/vps-pilot-release-plan.md`. The plan does not make
-the current development-only Codex adapter deployable. Distinct staging/pilot
-project guards and current Supabase backend secret-key support are implemented
+The current explicit-provider extension publishes `coach-request-v4`,
+`coach-capabilities-v5`, `coach-response-v4`, and `coach-history-v4` with
+`free-coach-agent-prompt-v5`. `X-MyLifeGraph-Coach-Provider` is required for
+hosted V4 capability/response routes; `X-MyLifeGraph-Coach-Api-Key` accompanies
+only OpenAI (`gpt-5.6-terra`) or Gemini (`gemini-3.6-flash`) BYOK. Keys are
+request-local and are never persisted, logged, traced, or returned. History and
+deletion never accept or need provider keys. V1-V3 rows remain compatible.
+Hosted CORS allowlists both request headers and exposes bounded `Retry-After`.
+The Gemini REST adapter pins `Api-Revision: 2026-05-20`, parses only the current
+`steps` schema, carries its exact returned steps through stateless function
+continuations, and uses the current text/JSON response-format shape. Mock
+contract coverage is not a live-provider acceptance claim. Both BYOK adapters
+enforce the 12-call allowance cumulatively before a parallel batch runs, retain
+at most 512 KiB of tool-result history, bound step/content counts, and stream
+provider responses through a 256-KiB decoded-body cap before JSON parsing.
+Every OpenAI Responses or Gemini Interactions call also carries a provider-side
+4,096-output-token ceiling, including all tool-loop continuations. This bounds
+provider generation/cost before the local byte parser runs; it is not a promise
+that every model will consume the allowance or report identical token usage.
+
+Hosted HTTP uses one-worker route-class admission before application work:
+client-IP rate limits and concurrency/body bounds cover readiness, reads,
+mutations, and Coach separately; after Supabase has verified a bearer token,
+the same controller applies a bearer-derived owner rate. `/v1/health` stays a
+cheap unmetered liveness path, while `/v1/ready` is bounded because it performs
+a Supabase probe. The in-memory counters are restart-local abuse protection,
+not a user cap or durable Coach quota; Postgres remains the authority for
+Coach budgets and replay.
+
+The repository implements the default-off explicit
+`operator_codex_pilot` adapter through a separately sandboxed Unix-socket
+executor with durable local/global budgets; it does not make the same-user
+development adapter deployable and is never a fallback. VPS/HTTPS and live
+acceptance remain external work owned by
+`../../docs/vps-pilot-release-plan.md`. Distinct staging/pilot project guards,
+release identity, and current Supabase backend secret-key support are implemented
 configuration boundaries. The current repository also implements strict
 `pilot-participation-v1`: an authenticated raw principal may record the exact
 `pilot-participation-notice-v1` through a service-role-only RPC, while normal
 staging/pilot product dependencies require the backend-owned profile
 version/time pair. Account export and deletion remain reachable for an
-unaccepted authenticated account. Development remains ungated. The
-staging-only fixture generator and all remote/deployment evidence remain open.
+unaccepted authenticated account. The database-side
+`pilot-participation-gate-v1` adds default-off restrictive RLS so public Data
+API calls cannot bypass those app/service checks. Development remains ungated.
+The staging-only fixture generator is implemented with preview/confirmation/
+cleanup guards; a confirmed remote run and all deployment evidence remain
+open.
 
 ## Current Status
 
 - The service is optional for the default mock-data Flutter preview.
-- `/v1/health` returns a simple health response.
+- `/v1/health` is cheap liveness and returns exact release SHA/tag. `/v1/ready`
+  separately checks hosted release/config shape, composition, and a bounded
+  live PostgREST probe without invoking a Coach provider. Hosted readiness also
+  attests the exact participation and Account Deletion V2 database contracts,
+  V1-delete revocation, and bounded pending-deletion age. The
+  `hosted-database-contract-v1` seam compares the release manifest's exact
+  ordered migration-prefix head/count/digest with Postgres; same-head history
+  drift fails readiness. Its loopback-only form additionally returns the full
+  database identity for protected promotion and compatible DB-ahead rollback.
 - `GET /v1/intake/setup` reads the newest typed Setup row: the latest pending
   row for exact retry/resume, otherwise the latest applied revision.
   `POST /v1/intake/complete` handles both authenticated Intake V1 completion
@@ -228,15 +269,15 @@ staging-only fixture generator and all remote/deployment evidence remain open.
   future scope.
 - Phase 10 exposes authenticated free-question capability, streaming and
   non-streaming response, and mixed legacy/current history/delete contracts.
-  Each non-safety V3 turn creates a fresh owner-only SQLite snapshot.
+  Each non-safety V4 turn creates a fresh owner-only SQLite snapshot.
   Request-scoped OpenAI/Gemini BYOK receives bounded inspect/query results; the
-  development-only `local_codex_oauth` additionally receives isolated Python
-  through its required MCP and requires `gpt-5.5` with Fast explicitly
-  configured. FastAPI derives
+  development-only `local_codex_oauth` and separate default-off pilot executor
+  additionally receive isolated Python through a required MCP and require
+  `gpt-5.5` with Fast explicitly configured. FastAPI derives
   conservative snapshot-source coverage, actual trace, and provider provenance.
   No provider falls back to another. Current Flutter has no fixed mode, horizon,
   Focus, prompt, memory-selection, or structured-suggestion flow; readable
-  V1/V2 response history remains compatible. Hosted release acceptance remains
+  V1-V3 response history remains compatible. Hosted release acceptance remains
   open.
   See `../../docs/phase-10-controlled-coach-plan.md`.
 - `PUT /v1/daily-capture/{entry_date}/{branch}` is the sole authenticated
@@ -248,8 +289,13 @@ staging-only fixture generator and all remote/deployment evidence remain open.
   opposite branch can downgrade an existing V5 container.
 - `/v1/account/profile` and `/v1/account/preparation-budget` use strict V2
   request ids and independent expected revisions. `/v1/account/export` returns
-  `account-export-v5`, and `/v1/account` remains the confirmed permanent
-  deletion boundary. The client never supplies an owner id.
+  `account-export-v6`, and `/v1/account` remains the confirmed permanent
+  `account-deletion-v2` boundary; `GET /v1/account/deletion` returns strict
+  `account-deletion-status-v2`. The client supplies only a stable retry UUID,
+  never an owner id. Hosted deletion must first append the
+  `account-deletion-journal-v2` KMS/Object-Lock receipt, then the reconciler
+  converges any durable pending state. The runtime can write but cannot list,
+  read, decrypt, or replay journal objects.
   `POST /v1/account/pilot-participation` accepts only the exact versioned
   18-or-older self-attestation and derives its owner from the verified bearer;
   it stores no birth date and ignores editable Auth metadata for eligibility.
@@ -280,6 +326,8 @@ python -m pip install --require-hashes -r requirements-dev.txt
 `pyproject.toml` owns the direct compatibility ranges.
 `requirements.txt` is the committed, hashed runtime lock;
 `requirements-dev.txt` is the committed, hashed runtime plus pytest/Ruff lock.
+`coach_analysis/requirements.in` owns the exact direct analysis inputs and
+`coach_analysis/requirements.txt` locks their complete image graph with hashes.
 CI and release-style installs must consume the appropriate lock with
 `--require-hashes`; they must not resolve directly from the open ranges. The
 equivalent project extra `.[test]` is metadata for dependency authorship, not
@@ -313,8 +361,8 @@ python -m pip install --require-hashes -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-OpenAPI docs are available only in exact `APP_ENV=development`; staging, pilot,
-production, and unknown labels disable them:
+OpenAPI docs are available only in exact `APP_ENV=development`; staging and
+pilot disable them, while `production` and unknown labels fail startup:
 
 ```text
 http://localhost:8000/docs
@@ -443,9 +491,9 @@ GET    /v1/insights/sleep-recommendation
 ```
 
 Set `LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` in FastAPI and the matching
-Flutter Dart define only for the development pilot. The account Planner switch
-is still independent and default-off. Production Flutter builds stay
-fail-closed.
+Flutter Dart define only for development, test, or staging verification. The
+account Planner switch is still independent and default-off. Both runtimes
+force the deployment gate off in the public `pilot` environment.
 
 Planner Overview V2 and Planner V1 mutations use these bearer-authenticated
 reads and deliberate commands:
@@ -550,7 +598,7 @@ calendar.
 Batch storage is private derived orchestration metadata exposed only through
 service-role RPC projections. Actual plan content remains in existing Deadline
 revisions/blocks. This boundary does not change the shapes or versions of
-`account-export-v5` or `personal-snapshot-v3`.
+`account-export-v6` or `personal-snapshot-v3`.
 
 Read today's persisted internal briefing without side effects:
 
@@ -680,41 +728,46 @@ The PATCH requires dedicated consent, a UUID request identity, and the loaded
 settings timestamp. The receipt is at-most-once: Flutter presents only a
 non-replayed acknowledgement after current consent/category/quiet/due checks.
 
-V1 account controls are authenticated and owner-derived:
+Account controls are authenticated and owner-derived:
 
 ```text
 POST   /v1/account/pilot-participation
 PATCH  /v1/account/profile
 PATCH  /v1/account/preparation-budget
 GET    /v1/account/export
+GET    /v1/account/deletion
 DELETE /v1/account
 ```
 
-The delete body must be exactly `{"confirmation":"DELETE"}`. The same verified
+The V2 delete body must be exactly
+`{"contract_version":"account-deletion-v2","deletion_id":"<uuidv4>","confirmation":"DELETE"}`.
+The same verified
 bearer session must also contain recognized, non-refresh Supabase `amr`
 authentication evidence no more than 15 minutes old; missing, stale, invalid,
 refresh-only, or materially future evidence fails closed with `403` before the
-delete service runs. Do not exercise deletion against anything except an
-intentionally disposable account.
+delete service runs. Success is `200`; durable or still-appending work is
+`202 deletion_pending` and must be retried with the same UUID. Do not exercise
+deletion against anything except an intentionally disposable account.
 
-Capability and history reads never call a model. Current respond accepts strict
-`coach-request-v3` with one UUID and a trimmed free question of at most 2,000
-Unicode code points. There is no scope or time parameter:
+History reads never call a model. Capability may make only a bounded readiness
+probe to the explicitly selected provider. Current hosted respond accepts
+strict `coach-request-v4` with one UUID and a trimmed free question of at most
+2,000 Unicode code points. There is no scope or time parameter:
 
 ```json
 {
-  "contract_version": "coach-request-v3",
+  "contract_version": "coach-request-v4",
   "request_id": "11111111-1111-4111-8111-111111111111",
   "message": "What changed in my focus consistency this semester?"
 }
 ```
 
 The non-streaming route awaits the same agent service and still dispatches old
-V1/V2 bodies through the legacy service for compatibility. The streaming route
-accepts V3 only and emits `started`, allowlisted `activity`, and one
-`completed|failed` SSE event. Client disconnect cancels the turn.
+V1/V2 bodies through the legacy service plus V3 BYOK compatibility. The
+streaming route accepts V3/V4 and emits `started`, allowlisted `activity`, and
+one `completed|failed` SSE event. Client disconnect cancels the turn.
 
-Each non-safety V3 turn creates a fresh owner-only
+Each non-safety V4 turn creates a fresh owner-only
 `personal-snapshot-v3` SQLite database from the relevant Account Export table
 set under `free-coach-agent-prompt-v5`. Goals, generic Recommendations,
 Decision Feedback, and Weekly Review proposals are excluded from that snapshot.
@@ -731,24 +784,50 @@ Coach request/usage/selection ledgers, provider internals, and operational
 request ledgers. The turn fails rather than truncates beyond 10,000 rows per
 table, 50,000 total, or 8 MiB.
 
-The private local Codex provider's required per-turn stdio MCP exposes exactly:
+Each local/operator Codex provider's required per-turn stdio MCP exposes exactly:
 
 - `inspect_data`;
 - `query_data`, one immutable SQLite `SELECT|WITH` with authorizer,
   five-second progress limit, 500-row limit, and 256 KiB result limit; and
-- `run_python`, 30 seconds in `mylifegraph-coach-analysis:1` with no network/
-  secrets, non-root user, read-only root/snapshot, dropped capabilities,
+- `run_python`, 30 seconds in the content-validated local `:1` image or the
+  release-owned `sha256-<revision>` image with no network/secrets, non-root
+  user, read-only root/snapshot, dropped capabilities,
   bounded temp space, one CPU, 512 MiB RAM, 64 PIDs, and bounded output.
 
 OpenAI/Gemini BYOK exposes only `inspect_data` and `query_data` through bounded
 FastAPI tool-result calls; it receives neither the SQLite file nor Python. The
-overall turn is limited to 12 tool calls and 180 seconds. At most one local
-Codex Python plot may be returned to that model, but it is not stored or
+overall turn is limited to 12 tool calls and 180 seconds. At most one Codex
+Python plot may be returned to that model, but it is not stored or
 returned to Flutter.
 All free text is untrusted data, not tool instructions. There is no shell, web,
 app, plugin, sub-agent, host-file, Supabase, or product mutation tool.
 
-`coach-response-v3` contains reply, uncertainty, safety, backend-derived
+For non-safety turns, provider admission completes before the streaming route
+commits SSE. BYOK/local work acquires the bounded process slot; Project Coach
+reserves one opaque executor token over the Unix socket. That reservation is a
+capacity-only operation with no CLI probe and is bounded by FastAPI to one
+second; provider readiness is checked separately before a dispatch record.
+Busy is HTTP
+`429 provider_busy` with `Retry-After: 15` and consumes neither request identity
+nor budget. After the request claim and immediately before executor dispatch,
+the service-role RPC increments one user-independent UTC-day aggregate and
+records one owner-linked dispatch in the same transaction. Exact replay does
+not increment. Account deletion may remove the personal dispatch but cannot
+reset the aggregate or recover shared capacity. A startup reconciliation marks
+expired ambiguous dispatches as accounted interruptions, so the same request
+cannot call Codex twice. The
+owner-visible request terminal write is confirmed before the private dispatch
+is terminalized; an ambiguous completion/failure response leaves the dispatch
+open for that reconciliation instead of guessing a terminal state.
+
+The `coach-executor` process accepts only bounded capability/reserve/release/
+execute frames from the configured API UID verified by `SO_PEERCRED`. It owns
+the exact pinned Codex binary, OAuth home, rootless Docker socket, and temporary
+snapshot. The API owns Supabase/application secrets and cannot use either
+executor credential. Core `/health` and `/ready` do not probe this provider;
+authenticated Coach capability reports its separate state.
+
+`coach-response-v4` contains reply, uncertainty, safety, backend-derived
 snapshot-source coverage in the `evidence` field, actual tool
 steps/limitations, and exact provider/model/tier/snapshot provenance. Coverage
 counts and periods describe each full accessed snapshot source, not exact supporting
@@ -758,15 +837,19 @@ conservatively attributed to the full `personal_snapshot` because table-level
 Python claims are not trusted. The model produces only reply/uncertainty/safety.
 No structured suggestion or artifact exists.
 
-Exact same-id/message replay does not call the provider; changed message
+Exact same-id/message/provider replay does not call the provider; changed input
 conflicts, and failed/deleted ids remain terminal. One owner has at most one
-pending turn and, by default, 20 newly started questions per profile-local day.
-Tool calls do not consume extra question budget.
+pending turn. Non-operator modes allow 20 newly started questions per
+profile-local day; Project Coach allows 5 per UTC day and a durable global
+maximum of 15 dispatches per UTC day. Its separate UTC budget field is not
+affected by profile-timezone edits; the request `local_date` remains a
+profile-local history fact. Tool calls do not consume extra question budget.
 
-Conversation deletion is body-free. It removes messages and V3 evidence/trace/
-tier content while retaining request tombstones and append-only usage, so it
-cannot reset budget or reinterpret identity. `coach-history-v3` returns current
-`coach-response-v3` plus readable legacy `coach-response-v1|v2` turns.
+Conversation deletion is body-free. It removes messages and V3/V4 evidence,
+trace, and tier content while retaining request tombstones, append-only usage,
+and operator dispatch accounting, so it cannot reset budget or reinterpret
+identity. `coach-history-v4` returns current `coach-response-v4` plus readable
+legacy V1-V3 turns.
 
 ## Environment
 
@@ -774,6 +857,11 @@ The service reads `.env` from `services/ai_service`:
 
 ```env
 APP_ENV=development
+APP_BUILD_SHA=
+APP_RELEASE_TAG=
+APP_MIGRATION_HEAD=
+APP_MIGRATION_COUNT=0
+APP_MIGRATION_IDENTITY_SHA256=
 USE_MOCK_DATA=true
 API_PREFIX=/v1
 ALLOWED_ORIGINS=http://127.0.0.1:7357,http://localhost:7357
@@ -787,17 +875,39 @@ SCHEDULED_REFRESH_TOKEN=
 COACH_PROVIDER=disabled
 COACH_FAKE_PROVIDER_ENABLED=false
 COACH_BYOK_PROVIDERS=
+OPERATOR_CODEX_PILOT_ENABLED=false
+COACH_EXECUTOR_SOCKET_PATH=/run/mylifegraph-coach/executor.sock
+COACH_EXECUTOR_ALLOWED_API_UID=0
+COACH_OPERATOR_MODEL=gpt-5.5
+COACH_OPERATOR_REQUESTS_PER_USER_PER_DAY=5
+COACH_OPERATOR_GLOBAL_REQUESTS_PER_DAY=15
+COACH_OPERATOR_GLOBAL_CONCURRENCY=1
+COACH_OPERATOR_RETRY_AFTER_SECONDS=15
 LOCAL_CODEX_ENABLED=false
 LOCAL_CODEX_BIN=codex
+LOCAL_CODEX_EXPECTED_VERSION=
 LOCAL_CODEX_MODEL=gpt-5.5
 LOCAL_CODEX_TIMEOUT_SECONDS=45
 COACH_AGENT_TIMEOUT_SECONDS=180
 COACH_ANALYSIS_DOCKER_BIN=docker
+COACH_ANALYSIS_DOCKER_HOST=
 COACH_ANALYSIS_IMAGE=mylifegraph-coach-analysis:1
 LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
 LOCAL_CODEX_GLOBAL_CONCURRENCY=2
 COACH_EVIDENCE_TIMEOUT_SECONDS=15
 COACH_EVIDENCE_GLOBAL_CONCURRENCY=4
+PUBLIC_ADMISSION_WAIT_MILLISECONDS=50
+PUBLIC_READY_IP_REQUESTS_PER_MINUTE=60
+PUBLIC_READY_CONCURRENCY=4
+PUBLIC_READ_IP_REQUESTS_PER_MINUTE=300
+PUBLIC_READ_OWNER_REQUESTS_PER_MINUTE=180
+PUBLIC_READ_CONCURRENCY=32
+PUBLIC_MUTATION_IP_REQUESTS_PER_MINUTE=120
+PUBLIC_MUTATION_OWNER_REQUESTS_PER_MINUTE=60
+PUBLIC_MUTATION_CONCURRENCY=8
+PUBLIC_COACH_IP_REQUESTS_PER_MINUTE=60
+PUBLIC_COACH_OWNER_REQUESTS_PER_MINUTE=12
+PUBLIC_COACH_CONCURRENCY=4
 ```
 
 Hosted pilot uses the current `SUPABASE_SECRET_KEY`; local Supabase and staged
@@ -807,6 +917,11 @@ current `sb_secret_` value. Never expose either backend key to Flutter. Hosted
 startup also requires the exact environment project ref and rejects a crossed
 URL or equal staging/pilot refs. Keep `SCHEDULED_REFRESH_TOKEN` backend-only as
 well; it authorizes scheduler-triggered refresh runs.
+Hosted CORS accepts exactly one canonical HTTPS hostname origin with no path,
+port, credentials, wildcard, IP literal, whitespace, or second preview origin.
+Local/test runtimes retain the documented loopback list.
+The VPS Caddy boundary rejects bodies above 1 MiB; FastAPI further caps Coach
+bodies at 32 KiB and all other mutations at 1 MiB, including chunked requests.
 
 Coach is off by default. Standard automation may explicitly use
 `COACH_PROVIDER=fake` with `COACH_FAKE_PROVIDER_ENABLED=true`. The real local
@@ -816,13 +931,28 @@ Supabase settings, an executable CLI, and an existing login for the FastAPI
 Linux user. Current agent capability requires
 `LOCAL_CODEX_MODEL=gpt-5.5`, explicit Fast support, Docker, and the pinned
 analysis image. Empty or another model is unavailable; there is no CLI-default,
-model, or standard-tier fallback for V3.
+model, or standard-tier fallback for V4.
 
 Codex OAuth remains private CLI state; the service may run sanitized
 help/feature/login capability commands but must never read or copy an auth file.
 Its child environment is allowlisted and excludes the Supabase service-role key
-and every other application secret. The adapter is rejected outside development
-and is not a deployment design.
+and every other application secret. The Codex child also receives neither the
+Docker endpoint nor rootless runtime directory; its built-in shell/exec features
+are disabled, while only the fixed MCP subprocess receives the exact analysis
+socket setting. The adapter is rejected outside development and is not a
+deployment design.
+
+Hosted Project Coach is instead enabled only in exact `staging|pilot` with
+`OPERATOR_CODEX_PILOT_ENABLED=true`; `production` stays fail-closed. The API
+environment contains only the executor socket and public limits. The executor
+environment separately requires one numeric non-root API UID, an absolute
+checksum-pinned Codex binary/version, exact
+`unix:///run/user/<executor-uid>/docker.sock`, matching `XDG_RUNTIME_DIR`, and
+an allowlisted environment without Supabase/application secrets. Templates and
+the operational sequence live under `deploy/vps/`. Hosted executor startup
+accepts only the generated
+`mylifegraph-coach-analysis:sha256-<64-hex-revision>` identity loaded after the
+mutable executor environment; the local `:1` tag remains development-only.
 
 Prepare the content-labelled analysis image explicitly from the repository
 root:
@@ -830,6 +960,14 @@ root:
 ```bash
 npm run prepare:coach-analysis
 ```
+
+The image uses an immutable official-Python base digest, binary-only installs
+from the complete hash lock in `coach_analysis/requirements.txt`, and a stable
+content revision over Dockerfile, lock, and runner. Regenerate the lock only
+through `scripts/update_python_requirements.sh` and review it as separate
+compatibility/security work. A prepared VPS release derives a unique image tag
+from that revision and retains the previous release's image so application
+rollback cannot silently bind old code to a newer mutable tag.
 
 From the repository root, `npm run start:local:coach` verifies the image label
 and builds it when missing or stale. Runtime Python analysis starts it with
@@ -917,19 +1055,31 @@ claim/complete/fail take the same owner-first advisory lock as history delete.
 The additive guards persist exact provider-call truth for safety redirects,
 make profile identity and onboarding eligibility backend-owned, remove legacy
 `"User"` role fallback and authenticated profile deletion, and retain
-service-role/atomic Intake authority. The final migration adds V3 claim/V2
+service-role/atomic Intake authority. The free-agent migration adds V3 claim/V2
 completion validators and RPCs plus evidence, agent-trace, tool-count, and Fast
-tier fields while retaining V1/V2 rows and application-role denial. Historical real local PostgreSQL parallel
+tier fields while retaining V1/V2 rows and application-role denial.
+
+`20260819203000_coach_operator_pilot_v1.sql` then adds V4
+request/response/provider constraints, `provider_dispatch_required`,
+service-role-only V8 claim/V3 completion, and the forced-RLS append-only
+`coach_operator_daily_budgets` aggregate plus owner-linked
+`coach_operator_dispatches` table and record/finish/reconcile RPCs. Exact
+dispatch replay increments once; account deletion cascades personal linkage
+without resetting the global day count. Both ledgers are backend-only;
+owner-visible outcomes remain in usage rows, so Account Export remains the
+strict 41-table V6 shape. Historical real local PostgreSQL parallel
 claim/completion/deletion smokes completed on 2026-07-13 without deadlock or
 timeout and converged on the expected state.
 
-Permanent account deletion requires
-`20260713233000_v1_account_delete.sql`. Its exact-confirmation RPC is
-service-role-only, removes the owner's restrict-linked focus history before
-deleting `auth.users`, and verifies the canonical profile/product cascade in
-the same transaction. FastAPI additionally requires session-bound Supabase JWT
-`amr` sign-in evidence no more than 15 minutes old before invoking that RPC; a
-refresh-only or stale session receives `403` without a database mutation.
+Permanent account deletion begins with the owner-locked implementation from
+`20260713233000_v1_account_delete.sql`, but the current public boundary is
+`20260820170000_account_deletion_recovery_v2.sql`. V2 records a minimal recovery
+intent, accepts only a write-only encrypted `account-deletion-journal-v2`
+receipt, revokes direct service-role V1 execution, and exposes service-only
+prepare/accept/complete/status/reconcile RPCs. Restore replay is granted only
+to the dedicated non-login database role. FastAPI additionally requires
+session-bound Supabase JWT `amr` sign-in evidence no more than 15 minutes old;
+a refresh-only or stale session receives `403` without starting the flow.
 
 Stored-Inbox lifecycle requires
 `20260714100000_notification_lifecycle_v1.sql`, followed by
@@ -983,16 +1133,18 @@ timezone/DST, sleep assignment/deduplication, every maturity gate,
 half-consistency, night exclusion, deterministic fingerprints, learned
 free/busy/fallback ordering and confirmation permission. P7 coverage additionally
 proves absent retired routes/scheduler fields, Briefing V2, Weekly Review V3,
-Export V5/Snapshot V3/Prompt V4, preserved independent concepts, and the
+Export V6/Snapshot V3/Prompt V4, preserved independent concepts, and the
 isolated erase/rollback/final-state database contract. A documented test suite
 alone is not a pass claim.
 Exact current results live in
 [Current Verified Baseline](../../docs/verification.md#current-verified-baseline).
 
-Phase 10 tests use fake services/providers/process runners. They cover the V3
-request/SSE, snapshot, three-tool MCP, SQL/Python isolation, trace/source-scope
-derivation, replay/budget/cancel/delete, and current no-fixed-mode UI without
-requiring Codex, OAuth, a subscription, or network access. Scripted provider
+Phase 10 tests use fake services/providers/process runners. They cover V4
+request/SSE and V1-V3 compatibility, snapshot, provider-specific tools,
+SQL/Python isolation, strict executor protocol/peer/reservation behavior,
+pre-stream admission, local/global races, trace/source-scope derivation,
+replay/budget/cancel/delete, and current no-fixed-mode UI without requiring
+Codex, OAuth, a subscription, or network access. Scripted provider
 responses prove strict envelopes and execution-path handling, not autonomous
 model tool choice, false-premise judgment, or answer quality. See
 [the current verification runbook](../../docs/verification.md) for the

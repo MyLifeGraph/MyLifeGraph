@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import '../../../core/contracts/strict_contract.dart';
 
-const accountExportContractVersion = 'account-export-v5';
+const accountExportContractVersion = 'account-export-v6';
 const accountExportTableNames = <String>[
   'profiles',
   'notification_preferences',
@@ -55,6 +55,8 @@ const accountExportV1SanitizedTables = <String>[
   'coach_usage_events',
 ];
 const accountExportV1OmittedTables = <String, String>{
+  'coach_operator_daily_budgets': 'backend_only_anti_replay_ledger',
+  'coach_operator_dispatches': 'backend_only_anti_replay_ledger',
   'daily_capture_request_identities': 'backend_only_anti_replay_ledger',
   'account_setting_request_identities': 'backend_only_anti_replay_ledger',
   'calendar_request_identities': 'backend_only_anti_replay_ledger',
@@ -63,6 +65,7 @@ const accountExportV1OmittedTables = <String, String>{
   'assignment_series_request_identities': 'backend_only_anti_replay_ledger',
   'planner_request_identities': 'backend_only_anti_replay_ledger',
   'learning_request_identities': 'backend_only_anti_replay_ledger',
+  'account_deletion_intents': 'backend_only_restore_safe_deletion_ledger',
 };
 const accountExportV1MaxRowsPerTable = 10000;
 const accountExportV1MaxTotalRows = 50000;

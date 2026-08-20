@@ -43,8 +43,10 @@ class AppSurfaceCapabilities {
         authProvider == 'anonymous' ||
         profile?.email.toLowerCase() == 'demo@personal-coach.local';
 
-    final canUseSyncedExecution =
-        !isLocalDemo && session?.isAuthenticated == true && hasSupabaseClient;
+    final canUseSyncedExecution = !isLocalDemo &&
+        session?.isAuthenticated == true &&
+        session?.isDeletionRecovery != true &&
+        hasSupabaseClient;
     return AppSurfaceCapabilities(
       isLocalDemo: isLocalDemo,
       canUseSyncedHabits: canUseSyncedExecution,

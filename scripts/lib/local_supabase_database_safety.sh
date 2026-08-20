@@ -84,13 +84,13 @@ local_supabase_assert_exact_database_target() {
 local_supabase_capture_reset_facts() {
   local root_dir="$1"
   local facts database_name database_user auth_users profiles database_bytes
-  local latest_migration wal_lsn token_input token_hash
+  local latest_migration protected_data_digest digest_output token_input token_hash
 
   local_supabase_assert_exact_database_target "$root_dir" || return $?
   facts="$(
     docker exec "$LOCAL_SUPABASE_SAFETY_CONTAINER" psql \
       -U postgres -d postgres -X -At -v ON_ERROR_STOP=1 \
-      -c "select concat_ws('|', current_database(), current_user, (select count(*) from auth.users), (select count(*) from public.profiles), pg_database_size(current_database()), coalesce((select max(version) from supabase_migrations.schema_migrations), ''), pg_current_wal_lsn()::text)"
+      -c "select concat_ws('|', current_database(), current_user, (select count(*) from auth.users), (select count(*) from public.profiles), pg_database_size(current_database()), coalesce((select max(version) from supabase_migrations.schema_migrations), ''))"
   )" || return $?
 
   IFS='|' read -r \
@@ -99,20 +99,38 @@ local_supabase_capture_reset_facts() {
     auth_users \
     profiles \
     database_bytes \
-    latest_migration \
-    wal_lsn <<<"$facts"
+    latest_migration <<<"$facts"
 
   if [[ "$database_name" != 'postgres' || "$database_user" != 'postgres' ||
     ! "$auth_users" =~ ^[0-9]+$ || ! "$profiles" =~ ^[0-9]+$ ||
     ! "$database_bytes" =~ ^[0-9]+$ ||
-    ! "$latest_migration" =~ ^[0-9]{14}$ ||
-    ! "$wal_lsn" =~ ^[0-9A-F]+/[0-9A-F]+$ ]]; then
+    ! "$latest_migration" =~ ^[0-9]{14}$ ]]; then
     printf 'Local database safety error: reset facts could not be validated (%q).\n' \
       "$facts" >&2
     return 1
   fi
 
-  token_input="project=${LOCAL_SUPABASE_SAFETY_PROJECT_ID}|container=${LOCAL_SUPABASE_SAFETY_CONTAINER}|database=${database_name}|auth_users=${auth_users}|profiles=${profiles}|database_bytes=${database_bytes}|latest_migration=${latest_migration}|wal_lsn=${wal_lsn}"
+  if ! digest_output="$(
+    docker exec "$LOCAL_SUPABASE_SAFETY_CONTAINER" \
+      pg_dump -U postgres -d postgres --data-only --no-owner \
+      --no-privileges --no-comments --strict-names \
+      --schema=auth --schema=private --schema=public --schema=storage \
+      --schema=supabase_migrations 2>/dev/null |
+      local_supabase_normalize_protected_data_dump |
+      sha256sum
+  )"; then
+    printf '%s\n' \
+      'Local database safety error: protected logical data could not be fingerprinted.' >&2
+    return 1
+  fi
+  protected_data_digest="${digest_output%% *}"
+  if [[ ! "$protected_data_digest" =~ ^[0-9a-f]{64}$ ]]; then
+    printf 'Local database safety error: protected data digest is malformed (%q).\n' \
+      "$digest_output" >&2
+    return 1
+  fi
+
+  token_input="project=${LOCAL_SUPABASE_SAFETY_PROJECT_ID}|container=${LOCAL_SUPABASE_SAFETY_CONTAINER}|database=${database_name}|auth_users=${auth_users}|profiles=${profiles}|database_bytes=${database_bytes}|latest_migration=${latest_migration}|protected_data_sha256=${protected_data_digest}"
   token_hash="$(printf '%s' "$token_input" | sha256sum | awk '{print $1}')"
 
   LOCAL_SUPABASE_RESET_DATABASE="$database_name"
@@ -120,8 +138,53 @@ local_supabase_capture_reset_facts() {
   LOCAL_SUPABASE_RESET_PROFILES="$profiles"
   LOCAL_SUPABASE_RESET_DATABASE_BYTES="$database_bytes"
   LOCAL_SUPABASE_RESET_LATEST_MIGRATION="$latest_migration"
-  LOCAL_SUPABASE_RESET_WAL_LSN="$wal_lsn"
+  LOCAL_SUPABASE_RESET_PROTECTED_DATA_SHA256="$protected_data_digest"
   LOCAL_SUPABASE_RESET_TOKEN="reset-local-${LOCAL_SUPABASE_SAFETY_PROJECT_ID}-${token_hash:0:16}"
+}
+
+local_supabase_normalize_protected_data_dump() {
+  # PostgreSQL 17 emits a fresh psql \restrict nonce in every plain dump. It is
+  # transport metadata, not database content. Remove only the exact paired
+  # meta-command shape so identical logical data produces an identical reset
+  # token; reject a future or malformed marker shape instead of weakening the
+  # content binding silently.
+  awk '
+    function fail_marker() {
+      print "Local database safety error: malformed pg_dump restrict marker pair." > "/dev/stderr"
+      invalid = 1
+      exit 65
+    }
+    $0 ~ /^\\restrict [A-Za-z0-9]+$/ {
+      if (marker_state != 0) {
+        fail_marker()
+      }
+      marker_nonce = $0
+      sub(/^\\restrict /, "", marker_nonce)
+      marker_state = 1
+      next
+    }
+    $0 ~ /^\\unrestrict [A-Za-z0-9]+$/ {
+      if (marker_state != 1) {
+        fail_marker()
+      }
+      closing_nonce = $0
+      sub(/^\\unrestrict /, "", closing_nonce)
+      if (closing_nonce != marker_nonce) {
+        fail_marker()
+      }
+      marker_state = 2
+      next
+    }
+    $0 ~ /^[[:space:]]*\\(un)?restrict([[:space:]]|$)/ {
+      fail_marker()
+    }
+    { print }
+    END {
+      if (!invalid && marker_state == 1) {
+        fail_marker()
+      }
+    }
+  '
 }
 
 local_supabase_print_reset_preview() {
@@ -134,6 +197,7 @@ local_supabase_print_reset_preview() {
     "  profiles: ${LOCAL_SUPABASE_RESET_PROFILES}" \
     "  database bytes: ${LOCAL_SUPABASE_RESET_DATABASE_BYTES}" \
     "  latest migration: ${LOCAL_SUPABASE_RESET_LATEST_MIGRATION}" \
+    "  protected data digest: ${LOCAL_SUPABASE_RESET_PROTECTED_DATA_SHA256:0:16}" \
     "  required confirmation: ${LOCAL_SUPABASE_RESET_TOKEN}"
 }
 
@@ -141,7 +205,12 @@ isolated_postgres_start() {
   local root_dir="$1"
   local purpose="$2"
   local database_name="$3"
+  local requested_image="${4:-}"
+  local bootstrap_user="${5:-postgres}"
+  local preload_libraries='pg_net'
+  local enable_ssl='true'
   local image_user identity uid gid container_name container_id label port_line
+  local postgres_image
   local docker_gateway
   local attempt
 
@@ -154,10 +223,32 @@ isolated_postgres_start() {
       "$database_name" >&2
     return 2
   fi
+  if [[ ! "$bootstrap_user" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
+    printf 'Isolated Postgres error: unsafe bootstrap user %q.\n' \
+      "$bootstrap_user" >&2
+    return 2
+  fi
+  if [[ "$bootstrap_user" != 'postgres' ]]; then
+    preload_libraries=''
+  fi
 
   local_supabase_assert_exact_database_target "$root_dir" || return $?
+  postgres_image="$LOCAL_SUPABASE_SAFETY_IMAGE"
+  if [[ -n "$requested_image" ]]; then
+    if [[ ! "$requested_image" =~ ^public\.ecr\.aws/supabase/postgres:[A-Za-z0-9._-]+$ ]]; then
+      printf 'Isolated Postgres error: unsafe image %q.\n' \
+        "$requested_image" >&2
+      return 2
+    fi
+    if ! docker image inspect "$requested_image" >/dev/null 2>&1; then
+      printf 'Isolated Postgres error: required local image is absent: %s\n' \
+        "$requested_image" >&2
+      return 1
+    fi
+    postgres_image="$requested_image"
+  fi
   identity="$(
-    docker run --rm --entrypoint id "$LOCAL_SUPABASE_SAFETY_IMAGE" postgres
+    docker run --rm --entrypoint id "$postgres_image" postgres
   )" || return $?
   if [[ ! "$identity" =~ uid=([0-9]+)\(postgres\)[[:space:]]gid=([0-9]+)\(postgres\) ]]; then
     printf '%s\n' \
@@ -212,19 +303,24 @@ isolated_postgres_start() {
       --pids-limit 256 \
       --env "MYLIFEGRAPH_ISOLATED_DATABASE=${database_name}" \
       --env "MYLIFEGRAPH_DOCKER_GATEWAY=${docker_gateway}" \
+      --env "MYLIFEGRAPH_ISOLATED_BOOTSTRAP_USER=${bootstrap_user}" \
+      --env "MYLIFEGRAPH_ISOLATED_PRELOAD_LIBRARIES=${preload_libraries}" \
+      --env "MYLIFEGRAPH_ISOLATED_ENABLE_SSL=${enable_ssl}" \
       --entrypoint bash \
-      "$LOCAL_SUPABASE_SAFETY_IMAGE" \
-      -ceu 'initdb -D /var/lib/postgresql/data --username=postgres --auth-local=trust --auth-host=trust; printf "host all all %s/32 trust\n" "${MYLIFEGRAPH_DOCKER_GATEWAY}" >>/var/lib/postgresql/data/pg_hba.conf; openssl req -new -x509 -nodes -days 1 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" -keyout /var/lib/postgresql/data/server.key -out /var/lib/postgresql/data/server.crt >/dev/null 2>&1; chmod 600 /var/lib/postgresql/data/server.key; exec postgres -D /var/lib/postgresql/data -c "listen_addresses=*" -c "ssl=on" -c "ssl_cert_file=/var/lib/postgresql/data/server.crt" -c "ssl_key_file=/var/lib/postgresql/data/server.key" -c "shared_preload_libraries=pg_net" -c "pg_net.database_name=${MYLIFEGRAPH_ISOLATED_DATABASE}"'
+      "$postgres_image" \
+      -ceu 'initdb -D /var/lib/postgresql/data --username="${MYLIFEGRAPH_ISOLATED_BOOTSTRAP_USER}" --auth-local=trust --auth-host=trust; printf "host all all %s/32 trust\n" "${MYLIFEGRAPH_DOCKER_GATEWAY}" >>/var/lib/postgresql/data/pg_hba.conf; if [ "${MYLIFEGRAPH_ISOLATED_ENABLE_SSL}" = true ]; then openssl_bin="$(command -v openssl || find /nix/store -type f -path "*openssl-*-bin/bin/openssl" -print -quit 2>/dev/null)"; test -n "${openssl_bin}" && test -x "${openssl_bin}"; "${openssl_bin}" req -new -x509 -nodes -days 1 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" -keyout /var/lib/postgresql/data/server.key -out /var/lib/postgresql/data/server.crt >/dev/null 2>&1; chmod 600 /var/lib/postgresql/data/server.key; exec postgres -D /var/lib/postgresql/data -c "listen_addresses=*" -c "ssl=on" -c "ssl_cert_file=/var/lib/postgresql/data/server.crt" -c "ssl_key_file=/var/lib/postgresql/data/server.key" -c "shared_preload_libraries=${MYLIFEGRAPH_ISOLATED_PRELOAD_LIBRARIES}" -c "pg_net.database_name=${MYLIFEGRAPH_ISOLATED_DATABASE}"; else exec postgres -D /var/lib/postgresql/data -c "listen_addresses=*" -c "ssl=off" -c "shared_preload_libraries=${MYLIFEGRAPH_ISOLATED_PRELOAD_LIBRARIES}" -c "pg_net.database_name=${MYLIFEGRAPH_ISOLATED_DATABASE}"; fi'
   )" || return $?
 
   ISOLATED_POSTGRES_CONTAINER="$container_name"
   ISOLATED_POSTGRES_DATABASE="$database_name"
   ISOLATED_POSTGRES_OWNERSHIP_LABEL="$label"
+  ISOLATED_POSTGRES_IMAGE="$postgres_image"
+  ISOLATED_POSTGRES_BOOTSTRAP_USER="$bootstrap_user"
   ISOLATED_POSTGRES_CREATED=true
 
   for attempt in $(seq 1 120); do
     if docker exec "$container_name" pg_isready \
-      -U postgres -d postgres >/dev/null 2>&1; then
+      -U "$bootstrap_user" -d postgres >/dev/null 2>&1; then
       break
     fi
     if [[ "$(docker inspect --format '{{.State.Running}}' "$container_name")" != 'true' ]]; then
@@ -236,7 +332,7 @@ isolated_postgres_start() {
     sleep 0.25
   done
   if ! docker exec "$container_name" pg_isready \
-    -U postgres -d postgres >/dev/null 2>&1; then
+    -U "$bootstrap_user" -d postgres >/dev/null 2>&1; then
     printf 'Isolated Postgres error: container %s did not become ready.\n' \
       "$container_name" >&2
     return 1
@@ -244,7 +340,7 @@ isolated_postgres_start() {
 
   if [[ "$database_name" != 'postgres' ]]; then
     docker exec "$container_name" createdb \
-      -U postgres -T template0 "$database_name" || return $?
+      -U "$bootstrap_user" -T template0 "$database_name" || return $?
   fi
   image_user="$(
     docker inspect \
@@ -264,7 +360,7 @@ isolated_postgres_start() {
     return 1
   fi
   ISOLATED_POSTGRES_PORT="${BASH_REMATCH[1]}"
-  ISOLATED_POSTGRES_URL="postgresql://postgres@127.0.0.1:${ISOLATED_POSTGRES_PORT}/${database_name}?sslmode=disable"
+  ISOLATED_POSTGRES_URL="postgresql://${bootstrap_user}@127.0.0.1:${ISOLATED_POSTGRES_PORT}/${database_name}?sslmode=disable"
 
   if [[ -z "$container_id" ]]; then
     printf '%s\n' 'Isolated Postgres error: Docker returned no container id.' >&2

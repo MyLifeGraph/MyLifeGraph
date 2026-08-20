@@ -23,6 +23,12 @@ ProviderName = Literal["openai", "gemini"]
 _MODELS = {"openai": "gpt-5.6-terra", "gemini": "gemini-3.6-flash"}
 _OPENAI_BASE = "https://api.openai.com/v1"
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
+_GEMINI_API_REVISION = "2026-05-20"
+_MAX_PROVIDER_OUTPUT_TOKENS = 4_096
+_MAX_PROVIDER_RESPONSE_BYTES = 256 * 1024
+_MAX_PROVIDER_OUTPUT_ITEMS = 32
+_MAX_PROVIDER_CONTENT_BLOCKS = 8
+_MAX_TOOL_RESULT_HISTORY_BYTES = 512 * 1024
 _TOOLS = [
     {
         "name": "inspect_data",
@@ -82,20 +88,20 @@ class CloudByokCoachProvider:
         try:
             async with self._client_context() as client:
                 if self._provider == "openai":
-                    response = await client.get(
+                    status_code = await _get_status(
+                        client,
                         f"{_OPENAI_BASE}/models/{self.model}",
                         headers={"Authorization": f"Bearer {self._api_key}"},
                     )
                 else:
-                    response = await client.get(
+                    status_code = await _get_status(
+                        client,
                         f"{_GEMINI_BASE}/models/{self.model}",
                         headers={"x-goog-api-key": self._api_key},
                     )
-            if response.status_code == 200:
+            if status_code == 200:
                 return self._capability("ready", "ready")
-            return self._capability(
-                "unavailable", _reason_for_status(response.status_code)
-            )
+            return self._capability("unavailable", _reason_for_status(status_code))
         except httpx.TimeoutException:
             return self._capability("unavailable", "provider_timeout")
         except httpx.HTTPError:
@@ -166,10 +172,13 @@ class CloudByokCoachProvider:
             {"role": "user", "content": [{"type": "input_text", "text": prompt}]},
         ]
         tools = [{"type": "function", "strict": True, **tool} for tool in _TOOLS]
+        total_tool_calls = 0
+        tool_result_bytes = 0
         for _ in range(COACH_AGENT_MAX_TOOL_CALLS + 1):
             body = {
                 "model": self.model,
                 "store": False,
+                "max_output_tokens": _MAX_PROVIDER_OUTPUT_TOKENS,
                 "input": input_items,
                 "tools": tools,
                 "text": {
@@ -186,18 +195,22 @@ class CloudByokCoachProvider:
                 body,
                 {"Authorization": f"Bearer {self._api_key}"},
             )
-            output = response.get("output")
-            if not isinstance(output, list):
-                raise _invalid_output()
+            output = _openai_output_items(response)
             calls = [item for item in output if item.get("type") == "function_call"]
             if calls:
+                total_tool_calls = _next_tool_call_count(total_tool_calls, len(calls))
                 input_items.extend(output)
                 for call in calls:
+                    tool_output = self._call_tool(executor, call)
+                    tool_result_bytes = _next_tool_result_bytes(
+                        tool_result_bytes,
+                        tool_output,
+                    )
                     input_items.append(
                         {
                             "type": "function_call_output",
                             "call_id": _required_string(call, "call_id"),
-                            "output": self._call_tool(executor, call),
+                            "output": tool_output,
                         },
                     )
                 continue
@@ -212,48 +225,65 @@ class CloudByokCoachProvider:
         prompt: str,
         executor: CoachDataMcpServer,
     ) -> CoachAgentModelOutput:
-        inputs: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        inputs: list[dict[str, Any]] = [
+            {
+                "type": "user_input",
+                "content": [{"type": "text", "text": prompt}],
+            }
+        ]
         tools = [{"type": "function", **tool} for tool in _TOOLS]
+        total_tool_calls = 0
+        tool_result_bytes = 0
         for _ in range(COACH_AGENT_MAX_TOOL_CALLS + 1):
             response = await self._post(
                 f"{_GEMINI_BASE}/interactions",
                 {
                     "model": self.model,
                     "store": False,
+                    "generation_config": {
+                        "max_output_tokens": _MAX_PROVIDER_OUTPUT_TOKENS,
+                    },
                     "input": inputs,
                     "tools": tools,
                     "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": "coach_agent_output",
-                            "schema": _output_schema(),
-                        },
+                        "type": "text",
+                        "mime_type": "application/json",
+                        "schema": _output_schema(),
                     },
                 },
-                {"x-goog-api-key": self._api_key},
+                {
+                    "x-goog-api-key": self._api_key,
+                    "Api-Revision": _GEMINI_API_REVISION,
+                },
             )
-            outputs = response.get("outputs") or response.get("output")
-            if not isinstance(outputs, list):
-                raise _invalid_output()
-            calls = [item for item in outputs if item.get("type") == "function_call"]
+            steps = _gemini_steps(response)
+            calls = [item for item in steps if item["type"] == "function_call"]
             if calls:
-                inputs.extend(outputs)
+                total_tool_calls = _next_tool_call_count(total_tool_calls, len(calls))
+                # With store=false the complete exact step timeline is required
+                # for every continuation, including signed thought steps.
+                inputs.extend(steps)
                 for call in calls:
+                    tool_output = self._call_tool(executor, call)
+                    tool_result_bytes = _next_tool_result_bytes(
+                        tool_result_bytes,
+                        tool_output,
+                    )
                     inputs.append(
                         {
                             "type": "function_result",
                             "name": _required_string(call, "name"),
-                            "call_id": _required_string(call, "id", fallback="call_id"),
+                            "call_id": _required_string(call, "id"),
                             "result": [
                                 {
                                     "type": "text",
-                                    "text": self._call_tool(executor, call),
+                                    "text": tool_output,
                                 }
                             ],
                         },
                     )
                 continue
-            return _parse_output(_gemini_text(outputs))
+            return _parse_output(_gemini_text(steps))
         raise CoachProviderError(
             "tool_limit", "Coach exceeded its tool limit.", retryable=False
         )
@@ -281,7 +311,31 @@ class CloudByokCoachProvider:
     ) -> dict[str, Any]:
         try:
             async with self._client_context() as client:
-                response = await client.post(url, json=body, headers=headers)
+                async with client.stream(
+                    "POST",
+                    url,
+                    json=body,
+                    headers=headers,
+                ) as response:
+                    if response.status_code >= 400:
+                        reason = _reason_for_status(response.status_code)
+                        raise CoachProviderError(
+                            reason,
+                            "The Coach provider rejected the request.",
+                            retryable=reason
+                            in {"provider_failure", "provider_timeout"},
+                        )
+                    content_length = response.headers.get("Content-Length")
+                    if content_length is not None:
+                        if not content_length.isdigit():
+                            raise _invalid_output()
+                        if int(content_length) > _MAX_PROVIDER_RESPONSE_BYTES:
+                            raise _invalid_output()
+                    raw = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        raw.extend(chunk)
+                        if len(raw) > _MAX_PROVIDER_RESPONSE_BYTES:
+                            raise _invalid_output()
         except httpx.TimeoutException:
             raise CoachProviderError(
                 "provider_timeout", "The Coach provider timed out.", retryable=True
@@ -290,16 +344,9 @@ class CloudByokCoachProvider:
             raise CoachProviderError(
                 "provider_failure", "The Coach provider request failed.", retryable=True
             ) from None
-        if response.status_code >= 400:
-            reason = _reason_for_status(response.status_code)
-            raise CoachProviderError(
-                reason,
-                "The Coach provider rejected the request.",
-                retryable=reason in {"provider_failure", "provider_timeout"},
-            )
         try:
-            value = response.json()
-        except ValueError as exc:
+            value = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
             raise _invalid_output() from exc
         if not isinstance(value, dict):
             raise _invalid_output()
@@ -336,6 +383,49 @@ def _output_schema() -> dict[str, Any]:
     return CoachAgentModelOutput.model_json_schema()
 
 
+async def _get_status(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    headers: dict[str, str],
+) -> int:
+    async with client.stream("GET", url, headers=headers) as response:
+        return response.status_code
+
+
+def _next_tool_call_count(current: int, batch_size: int) -> int:
+    next_count = current + batch_size
+    if batch_size < 1 or next_count > COACH_AGENT_MAX_TOOL_CALLS:
+        raise CoachProviderError(
+            "tool_limit",
+            "Coach exceeded its tool limit.",
+            retryable=False,
+        )
+    return next_count
+
+
+def _next_tool_result_bytes(current: int, output: str) -> int:
+    next_count = current + len(output.encode("utf-8"))
+    if next_count > _MAX_TOOL_RESULT_HISTORY_BYTES:
+        raise CoachProviderError(
+            "tool_limit",
+            "Coach exceeded its bounded tool-result history.",
+            retryable=False,
+        )
+    return next_count
+
+
+def _openai_output_items(response: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = response.get("output")
+    if (
+        not isinstance(raw, list)
+        or len(raw) > _MAX_PROVIDER_OUTPUT_ITEMS
+        or any(not isinstance(item, dict) for item in raw)
+    ):
+        raise _invalid_output()
+    return raw
+
+
 def _required_string(
     value: dict[str, Any], key: str, *, fallback: str | None = None
 ) -> str:
@@ -358,13 +448,75 @@ def _openai_text(response: dict[str, Any]) -> str:
     raise _invalid_output()
 
 
-def _gemini_text(outputs: list[dict[str, Any]]) -> str:
-    for item in outputs:
-        if isinstance(item, dict) and item.get("type") in {"text", "model_output"}:
-            text = item.get("text") or item.get("content")
-            if isinstance(text, str):
-                return text
-    raise _invalid_output()
+def _gemini_steps(response: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = response.get("steps")
+    if (
+        not isinstance(raw, list)
+        or not raw
+        or len(raw) > _MAX_PROVIDER_OUTPUT_ITEMS
+    ):
+        raise _invalid_output()
+    steps: list[dict[str, Any]] = []
+    for step in raw:
+        if not isinstance(step, dict):
+            raise _invalid_output()
+        step_type = step.get("type")
+        if step_type == "function_call":
+            _required_string(step, "id")
+            _required_string(step, "name")
+            if not isinstance(step.get("arguments"), dict):
+                raise _invalid_output()
+        elif step_type == "model_output":
+            content = step.get("content")
+            if (
+                not isinstance(content, list)
+                or not content
+                or len(content) > _MAX_PROVIDER_CONTENT_BLOCKS
+            ):
+                raise _invalid_output()
+            for block in content:
+                if (
+                    not isinstance(block, dict)
+                    or block.get("type") != "text"
+                    or not isinstance(block.get("text"), str)
+                ):
+                    raise _invalid_output()
+        elif step_type == "thought":
+            # Preserve opaque thought signatures/summaries byte-for-byte in the
+            # next request. They are provider state, never exposed as evidence.
+            signature = step.get("signature")
+            if signature is not None and (
+                not isinstance(signature, str) or not signature
+            ):
+                raise _invalid_output()
+            summary = step.get("summary")
+            if summary is not None and (
+                not isinstance(summary, list)
+                or len(summary) > _MAX_PROVIDER_CONTENT_BLOCKS
+                or any(
+                    not isinstance(block, dict)
+                    or block.get("type") != "text"
+                    or not isinstance(block.get("text"), str)
+                    for block in summary
+                )
+            ):
+                raise _invalid_output()
+        else:
+            raise _invalid_output()
+        steps.append(step)
+    return steps
+
+
+def _gemini_text(steps: list[dict[str, Any]]) -> str:
+    text_blocks: list[str] = []
+    for step in steps:
+        if step["type"] != "model_output":
+            continue
+        for block in step["content"]:
+            text_blocks.append(block["text"])
+    if not text_blocks:
+        raise _invalid_output()
+    return "".join(text_blocks)
 
 
 def _parse_output(value: str) -> CoachAgentModelOutput:

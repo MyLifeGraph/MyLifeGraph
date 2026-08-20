@@ -1,24 +1,43 @@
 import '../../../core/config/app_config.dart';
+import '../../../core/contracts/account_deletion.dart';
 import '../domain/account_settings.dart';
 import '../domain/account_settings_repository.dart';
 import 'account_api_data_source.dart';
+import 'account_deletion_coordinator.dart';
 
 typedef AccountAccessTokenProvider = String? Function();
+
+class AccountAuthSnapshot {
+  const AccountAuthSnapshot({required this.userId, required this.accessToken});
+
+  final String userId;
+  final String accessToken;
+}
+
+typedef AccountAuthSnapshotProvider = AccountAuthSnapshot? Function();
+
+AccountAuthSnapshot? _noAccountAuthSnapshot() => null;
 
 class AccountSettingsRepositoryImpl implements AccountSettingsRepository {
   const AccountSettingsRepositoryImpl({
     required AppConfig config,
     required AccountApiDataSource apiDataSource,
+    AccountDeletionCoordinator? deletionCoordinator,
     required AccountAccessTokenProvider accessTokenProvider,
+    AccountAuthSnapshotProvider authSnapshotProvider = _noAccountAuthSnapshot,
     required bool canUseSyncedAccount,
   })  : _config = config,
         _apiDataSource = apiDataSource,
+        _deletionCoordinator = deletionCoordinator,
         _accessTokenProvider = accessTokenProvider,
+        _authSnapshotProvider = authSnapshotProvider,
         _canUseSyncedAccount = canUseSyncedAccount;
 
   final AppConfig _config;
   final AccountApiDataSource _apiDataSource;
+  final AccountDeletionCoordinator? _deletionCoordinator;
   final AccountAccessTokenProvider _accessTokenProvider;
+  final AccountAuthSnapshotProvider _authSnapshotProvider;
   final bool _canUseSyncedAccount;
 
   @override
@@ -62,8 +81,26 @@ class AccountSettingsRepositoryImpl implements AccountSettingsRepository {
   }
 
   @override
-  Future<void> deleteAccount() async {
-    await _apiDataSource.deleteAccount(accessToken: _requireAccessToken());
+  Future<AccountDeletionResult> deleteAccount({
+    required String expectedUserId,
+  }) async {
+    final deletionCoordinator = _deletionCoordinator;
+    final snapshot = _authSnapshotProvider();
+    if (deletionCoordinator == null ||
+        snapshot == null ||
+        snapshot.userId != expectedUserId ||
+        snapshot.userId.isEmpty ||
+        snapshot.accessToken.trim().isEmpty) {
+      throw const AccountSettingsAccessException(
+        'Your account identity is unavailable. Sign in again and retry.',
+      );
+    }
+    return deletionCoordinator.request(
+      userId: snapshot.userId,
+      accessToken: snapshot.accessToken,
+      principalStillMatches: () =>
+          _authSnapshotProvider()?.userId == expectedUserId,
+    );
   }
 
   String _requireAccessToken() {

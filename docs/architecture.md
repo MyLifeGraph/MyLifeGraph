@@ -1,15 +1,16 @@
 # Architecture
 
-Coach BYOK V3 keeps provider secrets at the client/device and in one FastAPI
-request only. FastAPI exports the authenticated owner's bounded SQLite
-snapshot, executes `inspect_data`/`query_data` locally, and sends only bounded
-tool results to OpenAI or Gemini. Cloud providers never receive the SQLite
-file and never receive `run_python`; the private development Codex provider
-retains the isolated Python tool. Supabase stores request provenance and
-usage, never API keys. The V3 response/history/capabilities contracts retain
-read compatibility for persisted V1/V2 responses.
-The named versions are `coach-capabilities-v3`, `coach-history-v3`,
-`coach-response-v3`, and `free-coach-agent-prompt-v5`.
+Coach V4 keeps BYOK secrets at the client/device and in one FastAPI request
+only. FastAPI exports the authenticated owner's bounded SQLite snapshot,
+executes `inspect_data`/`query_data` locally, and sends only bounded tool
+results to OpenAI or Gemini. Cloud providers never receive the SQLite file or
+`run_python`; private development Codex and the separately sandboxed pilot
+executor retain the isolated Python tool. Supabase stores request provenance,
+usage, and append-only operator dispatch accounting, never API keys or Codex
+OAuth. The V4 response/history/capabilities contracts retain read compatibility
+for persisted V1-V3 responses. The named current versions are
+`coach-request-v4`, `coach-capabilities-v5`, `coach-history-v4`,
+`coach-response-v4`, and `free-coach-agent-prompt-v5`.
 
 Android Focus Protection V1 adds a device-local adapter below the existing
 Flutter Focus presentation. Supabase remains the session authority; Flutter
@@ -23,8 +24,10 @@ distinguishes implemented behavior from planned backend integration. For the
 target backend flow, product agents, LLM cost controls, and next implementation
 sequence, see `docs/backend-roadmap.md`.
 The end-to-end delivery sequence for the first VPS-hosted pilot is separately
-owned by `docs/vps-pilot-release-plan.md`. That plan is future work and must
-not be read as evidence that the hosted topology or shared provider exists.
+owned by `docs/vps-pilot-release-plan.md`. Its repository code and deployment
+templates are implementation evidence only; they must not be read as evidence
+that VPS identities, HTTPS, live OAuth/provider access, or public deployment
+exist.
 
 The current Setup-personalization boundary is defined in
 `docs/setup-personalization-retirement-contract.md`. It supersedes older
@@ -37,8 +40,13 @@ Setup-owned Reminder preferences.
 Flutter app <-> Supabase Auth/Postgres
 Flutter app <-> FastAPI AI service
 Flutter app <-> local mock data and guest storage
+Hosted Flutter -> same-origin Turnstile challenge -> Supabase Auth CAPTCHA
 FastAPI -> OpenAI/Gemini with one request-scoped user BYOK key
 FastAPI -> local Codex CLI/OAuth (explicit Phase 10 development adapter only)
+FastAPI -> peer-authenticated Unix socket -> dedicated pilot Coach executor
+Pilot Coach executor -> pinned Codex CLI/OAuth + executor-only rootless Docker
+FastAPI -> write-only KMS/Object-Lock deletion journal
+Backup owner -> read/decrypt journal -> isolated restore/replay role
 ```
 
 The Flutter app is the main product surface. Supabase is the intended auth and
@@ -53,11 +61,12 @@ It also owns the bounded authenticated Coach boundary. Only a deliberate
 `POST /v1/coach/respond` or `/respond/stream` may invoke a configured provider;
 capability, history, memory, Dashboard, capture, action, scheduler, and weekly-review
 paths remain generation-free. OpenAI/Gemini BYOK adapters are implemented and
-request-scoped but not yet hosted-release-verified. The separate Codex CLI/OAuth
-adapter is explicitly enabled and development-only; none of these provider
-paths creates a new Flutter-to-Supabase authority.
+request-scoped but not yet hosted-release-verified. The same-user Codex
+CLI/OAuth adapter remains development-only; the default-off hosted operator
+path uses the separate executor. None of these provider paths creates a new
+Flutter-to-Supabase authority.
 
-### VPS Pilot Shape (Repository Implementation In Progress)
+### VPS Pilot Shape (Repository-Packaged, Not Deployed)
 
 The accepted pilot direction keeps Flutter Web on Vercel and Auth/Postgres in
 hosted Supabase while placing FastAPI behind Caddy and HTTPS on a VPS. Public
@@ -66,13 +75,15 @@ but requires a versioned 18-or-older self-attestation without date-of-birth
 storage. Participants may use their own real data; a separate synthetic-only
 staging project and fail-closed scenario generator must never write fixtures to
 the real-data pilot project.
-OpenAI/Gemini BYOK remains request-scoped; a proposed shared operator Codex
-mode is an explicit provider choice with its own quota, concurrency, disclosure,
-and kill switch, never a failure fallback. The current hosted client and
-development-only provider do not yet implement that path. Hosted Codex requires
-a narrow Unix-socket executor under a separate UID: FastAPI keeps Supabase/app
+OpenAI/Gemini BYOK remains request-scoped. The implemented shared operator
+Codex mode is an explicit provider choice with its own quota, concurrency,
+disclosure, and kill switch, never a failure fallback. Hosted Codex uses a
+narrow Unix-socket executor under a separate UID: FastAPI keeps Supabase/app
 secrets and cannot read Codex OAuth or the rootless container socket, while the
-executor receives neither application secrets nor arbitrary commands.
+executor receives neither application secrets nor arbitrary commands. The
+repository also contains Caddy, `systemd`, release/rollback, permission,
+monitoring, signed-APK, and encrypted-backup automation; none is target-host or
+public acceptance evidence.
 
 The team does not yet own the required public domain. The target uses an
 independently controlled root domain for `app.<domain>`, `api.<domain>`, and a
@@ -95,10 +106,11 @@ to name database role `service_role`. No remote key rotation or pilot-project
 existence follows from this local compatibility implementation.
 
 The repository now implements the first participation seam. Hosted Flutter
-shows `pilot-participation-notice-v1` before account creation/OAuth, stores a
-matching choice only across the short current auth flow, and routes an
-authenticated account without acceptance to a dedicated gate before Setup or
-product routes. `POST /v1/account/pilot-participation` derives the owner from
+shows `pilot-participation-notice-v1` before account creation/OAuth and persists
+no pre-auth choice. Only an immediately authenticated email signup may record
+that same-session choice; confirmation-link and OAuth returns route an
+unaccepted account to a dedicated gate before Setup or product routes.
+`POST /v1/account/pilot-participation` derives the owner from
 the verified bearer and calls the service-role-only
 `accept_pilot_participation_v1` RPC. The canonical `profiles` row owns the exact
 notice version and backend timestamp; Auth metadata is not authority and no
@@ -107,6 +119,14 @@ before product service composition, while account export and deletion retain a
 raw-verified-principal escape path. Staging Flutter also wraps every route with
 the persistent `Staging · Test data` identity. These are source boundaries, not
 evidence that the migration or clients are deployed remotely.
+
+The database-side `pilot-participation-gate-v1` independently composes
+restrictive authenticated RLS with existing owner policies. It is default-off
+locally, exact-project-bound when enabled, and missing/corrupt state fails
+closed. This prevents a public Supabase publishable key from bypassing the
+Flutter/FastAPI gate. A release crossing this boundary is fix-forward unless
+every public client and API have first been withdrawn; an older service-role
+runtime cannot be treated as a safe automatic rollback target.
 
 That planned topology separates cheap process liveness, sanitized FastAPI/
 Supabase core readiness, and authenticated Coach-provider capability. Codex
@@ -169,6 +189,14 @@ conflict, stale-state, exact-retry, reload, and student-facing message rules;
 the Coach data boundary additionally converts transport evidence into its
 typed `CoachRemoteException`. Dio stream and cancellation types remain limited
 to `core/network` and the Coach data implementation that owns SSE transport.
+
+Hosted FastAPI runs behind Caddy with one Uvicorn worker and a bounded
+route-class admission controller. It limits IP traffic before Auth, applies a
+second owner bucket only after Supabase token verification, bounds readiness,
+read, mutation, and Coach concurrency separately, and pre-reads mutation bodies
+under a 32-KiB Coach/1-MiB general cap so chunked transfer cannot bypass the
+limit. The controller never treats an unverified token claim as authority and
+does not cap registrations or replace durable Postgres Coach budgets.
 
 Deadline Plan root identity owns the immutable Exam/Assignment kind across
 Flutter edit/deep-link state and FastAPI proposal validation; revisions may not
@@ -756,7 +784,7 @@ ungranted `BEFORE` triggers; the Task/Habit triggers run before their
 reservation-release `AFTER` triggers. RPC-owned context writers already use
 the same ordering.
 Existing Deadline revisions and blocks remain exported/snapshotted user
-content. `account-export-v5` and `personal-snapshot-v3` omit the private batch
+content. `account-export-v6` and `personal-snapshot-v3` omit the private batch
 orchestration metadata as well as the retired Recommendation and Decision
 Feedback tables.
 
@@ -878,6 +906,15 @@ The current auth modes are:
 - Local guest session through `shared_preferences`.
 - Supabase email/password auth.
 - Supabase Google OAuth.
+
+Hosted email sign-in, sign-up, reset, and confirmation resend first acquire one
+fresh Cloudflare Turnstile token. Web uses an exact-origin popup; Android uses a
+navigation-constrained WebView with the cookie/storage behavior required by
+Turnstile. The public site key may reach Flutter, while the secret is configured
+only in Supabase. Timeout, cancellation, origin/action/nonce mismatch, and
+missing/expired challenge state fail closed. Google remains its independent
+OAuth flow. Repository code does not prove a real widget, Supabase provider
+setting, allowed hostname, or physical-device challenge.
 
 Guest sessions can complete onboarding locally. If a user later authenticates
 with a real, non-demo Supabase account while `USE_MOCK_DATA=false`, canonical
@@ -1071,16 +1108,18 @@ Current responsibilities:
   first confirm, enforces the 366-day horizon and current-import availability,
   owns every later managed-task/terminal projection, and never calls an LLM or
   notification/provider API.
-- Serve authenticated `coach-capabilities-v3`, message-only
-  `coach-request-v3`, `coach-response-v3`, `coach-history-v3`, and the
+- Serve authenticated `coach-capabilities-v5`, message-only
+  `coach-request-v4`, `coach-response-v4`, `coach-history-v4`, and the
   `started|activity|completed|failed` streaming route. The non-streaming respond
-  route remains a V3 wrapper and accepts old V1/V2 requests for compatibility.
+  route remains a compatibility wrapper and accepts old V1-V3 requests.
 - Claim one retry-safe free question, create a fresh owner-only SQLite snapshot,
   run deterministic safety, and invoke the selected read-only provider. Cloud
-  BYOK exposes inspect/query only; private local Codex additionally exposes the
-  isolated Python tool. FastAPI atomically persists the answer with
+  BYOK exposes inspect/query only; local and operator Codex additionally expose
+  the isolated Python tool. Operator admission uses a one-use executor
+  reservation before the owner claim, then records the durable UTC-day dispatch
+  immediately before the socket execute. FastAPI atomically persists the answer with
   backend-derived evidence, bounded trace, provider/tier truth, and retained
-  usage. Fixed-mode V1 and free-agent V2 history remain readable;
+  usage. Fixed-mode V1 and free-agent V2/V3 history remain readable;
   failed/deleted requests remain terminal, and history deletion does not free
   budget.
 - Keep the retired generic Recommendation/Feedback paths absent while
@@ -1266,11 +1305,14 @@ making claims about deployed data.
 
 The exact contract is
 `docs/phase-10-controlled-coach-plan.md`. Current real-provider seams are
-request-scoped OpenAI/Gemini BYOK plus a private local-development Codex
-adapter; none is evidence of a hosted release:
+request-scoped OpenAI/Gemini BYOK, a private local-development Codex adapter,
+and the default-off pilot operator executor; none is evidence of a hosted
+release:
 
 ```text
-authenticated free question plus explicit request provider/key when BYOK
+authenticated coach-request-v4 plus explicit provider (key only for BYOK)
+  -> message-only safety check
+  -> pre-stream in-process slot or executor reservation
   -> retry-safe owner claim and local-day budget
   -> fresh owner-only personal SQLite snapshot
   -> explicitly selected provider
@@ -1279,21 +1321,39 @@ authenticated free question plus explicit request provider/key when BYOK
        -> local `codex exec`: gpt-5.5 + explicit Fast
             -> required per-turn stdio MCP
             -> inspect_data/query_data/isolated no-network run_python
+       -> operator_codex_pilot over strict Unix-socket frames
+            -> peer UID + one-use 240-second capacity reservation (<= 1s admission)
+            -> dedicated pinned Codex/rootless Docker executor
+            -> deletion-safe 15-per-UTC-day aggregate + dispatch anti-replay
   -> schema-validated text
   -> backend-derived evidence/trace/provenance
   -> atomic response/history/usage persistence
 ```
 
-Flutter always sends its normal Supabase bearer token. For BYOK capability and
-response routes it additionally sends the deliberately selected provider/key
-headers; the key is request-local and never persisted. OpenAI/Gemini use exact
+Flutter always sends its normal Supabase bearer token. Capability/response
+routes additionally receive the deliberately selected provider header; only
+BYOK sends a key header, and that key is request-local and never persisted.
+Hosted FastAPI admits exactly one canonical HTTPS browser origin; local
+loopback CORS values cannot start a hosted app. CORS wraps admission errors so
+browser clients receive the same allowlisted `429`/`413` responses and
+`Retry-After` semantics as native clients.
+OpenAI/Gemini use exact
 `gpt-5.6-terra`/`gemini-3.6-flash`, `store:false`, and no Python. For the private
 local adapter only, OAuth stays inside the current Linux user's Codex
 installation and is never copied into Flutter, Supabase, the snapshot, the MCP
 server, the Python container, Git, or logs. Every developer signs in
 independently. Local Codex requires exact `gpt-5.5`, configured Fast tier, and
 Fast mode. Missing or mismatched provider/model/tier support fails closed;
-there is no provider, model, or tier fallback.
+there is no provider, model, or tier fallback. Hosted operator turns never give
+FastAPI access to Codex OAuth or the rootless Docker socket; the executor
+environment is allowlisted and contains no application/Supabase secret.
+Each VPS release loads a generated, source-revision-tagged analysis-image name
+after mutable executor configuration. Retaining the previous tag keeps code and
+sandbox runtime aligned when the release symlink is rolled back.
+For an operator turn, the durable owner-visible request completion/failure is
+confirmed before the private dispatch ledger becomes terminal. An ambiguous
+persistence response leaves that dispatch open so startup reconciliation can
+derive its terminal state from the request without redispatching the model.
 
 FastAPI exports relevant retained data through the owner-filtered Account
 Export paging boundary. The snapshot covers Setup, Daily Capture, Tasks,
@@ -1306,10 +1366,11 @@ operational state, and other owners. It contains an explanatory catalog,
 relationships, record counts, periods, and helper views. It fails instead of
 truncating beyond 10,000 rows per table, 50,000 rows total, or 8 MiB.
 
-The private local Codex adapter runs in a private empty directory with read-only sandboxing, no approvals,
-ignored user configuration/rules, bounded environment/output/time, and one
-required MCP server. No user MCP, app, plugin, web, shell, sub-agent, filesystem
-mutation, or product-mutation authority reaches the turn. The MCP exposes only:
+Each local/operator Codex turn runs in a private empty directory with read-only
+sandboxing, no approvals, ignored user configuration/rules, bounded
+environment/output/time, and one required MCP server. No user MCP, app, plugin,
+web, shell, sub-agent, filesystem mutation, or product-mutation authority
+reaches the turn. The MCP exposes only:
 
 - catalog/coverage inspection;
 - immutable SQLite `SELECT`/`WITH` with authorizer, progress deadline, and
@@ -1323,9 +1384,9 @@ stored or shown. Snapshot, trace, process workspaces, plots, and other temporary
 files are deleted after completion, failure, timeout, or cancellation. All free
 text and calendar values are untrusted data, never instructions.
 
-The current HTTP boundary is message-only `coach-request-v3`,
-`coach-response-v3`, `coach-capabilities-v3`, `coach-history-v3`, and a
-`started|activity|completed|failed` SSE stream. Persisted V1/V2 responses stay
+The current HTTP boundary is message-only `coach-request-v4`,
+`coach-response-v4`, `coach-capabilities-v5`, `coach-history-v4`, and a
+`started|activity|completed|failed` SSE stream. Persisted V1-V3 responses stay
 readable. The current agent pair is `free-coach-agent-prompt-v5` with
 `personal-snapshot-v3`; P7 erases old free-agent content while retaining
 content-free request/usage identities. The compatible V4 and current V5 prompts
@@ -1339,7 +1400,7 @@ non-streaming route wraps the same service. Old fixed-mode V1/V2
 request and response shapes, context options, and memory-selection endpoints
 remain readable/available for compatibility but current Flutter does not call
 or display them. Their newest paired provenance remains
-`controlled-coach-prompt-v3`/`coach-context-v3`; current V3 uses the free-agent
+`controlled-coach-prompt-v3`/`coach-context-v3`; current V4 uses the free-agent
 prompt and personal snapshot instead. Focused API tests and readable stored
 V1/V2 history still exercise this boundary, so removal requires an explicit
 support-window/data-migration decision rather than inference from current
@@ -1354,11 +1415,17 @@ full snapshot. The current answer has no structured suggestion or visible artifa
 Existing safety checks may bypass or replace the provider, and no response can
 execute an app action.
 
-One owner may have one pending turn and, by default, 20 newly started questions
-per profile-local day. A turn allows at most 12 tools and 180 seconds; SQL and
-local Python have shorter limits. Exact request-id/message replay returns the terminal
-result without another call. History deletion removes message and V3
-evidence/trace detail but retains usage and tombstones, so budget and identity
+One owner may have one pending turn. Non-operator modes allow 20 newly started
+questions per profile-local day; Project Coach allows 5 per UTC day and a
+durable global maximum of 15 dispatches per UTC day. The separate
+`operator_budget_utc_date` cannot be rotated through a profile-timezone change;
+`local_date` remains the profile-local conversation/history fact. A non-safety turn is
+admitted before the stream begins. Busy returns HTTP `429 provider_busy` and
+bounded `Retry-After` without claiming the id or consuming budget. A turn
+allows at most 12 tools and 180 seconds; SQL and Python have shorter limits.
+Exact request-id/message/provider replay returns the terminal result without
+another call. History deletion removes message and V3/V4 evidence/trace detail
+but retains usage, dispatch accounting, and tombstones, so budget and identity
 cannot be reset.
 
 Standard tests use injected providers and deterministic HTTP fakes. The opt-in
@@ -1369,13 +1436,22 @@ production readiness, or evidence about another developer's account.
 Deterministic API/browser tests
 cover persistence and UI behavior separately.
 
+Hosted releases additionally bind `hosted-database-contract-v1` to the exact
+manifest migration prefix: filename, ordered count, and identity digest. The
+service-role-only RPC also returns the full applied history identity and derives
+the prepared-deletion crash guard from the installed function definitions.
+`/ready` fails when the release prefix is missing or divergent even if the
+highest migration filename is unchanged; the loopback-only contract endpoint
+supports the same prefix proof for a compatible DB-ahead rollback.
+
 ### Revisioned Account Controls
 
 The exact boundary is `docs/v1-account-controls-contract.md`. Real authenticated
 accounts use bearer-derived FastAPI routes for revision-checked, retry-safe
 IANA timezone and daily preparation-budget changes,
 an optional bounded account-wide daily preparation rule, a strict bounded
-`account-export-v5` JSON portability export, and permanent deletion.
+  `account-export-v6` JSON portability export, and permanent deletion through
+  `account-deletion-v2` plus `account-deletion-status-v2`.
 Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
@@ -1386,6 +1462,8 @@ confirmation, derives the profile id from the bearer, and persists the paired
 version/backend time through a service-role-only RPC. Exact retries retain the
 first timestamp. Hosted product dependencies fail closed until this pair is
 current, but export and deletion remain available to the authenticated owner.
+The matching `pilot-participation-gate-v1` RLS layer closes direct Data API
+bypass for all other product relations.
 
 Export reads only owner-filtered canonical product tables, including the
 current Study Setup and Personal Learning projections, applies field
@@ -1403,13 +1481,24 @@ completeness test fails when a newly created repo table has no deliberate
 policy. One feature-neutral reader captures every selected table's watermark
 before rows, loads independent sources with bounded concurrency, and returns
 catalog-ordered tables to both Account Export and Coach Snapshot. Flutter
-validates the entire envelope and counts before saving. Full deletion requires
-exact typed
-confirmation and one service-role-only database RPC. The RPC locks the existing
-owner workflows, removes restrict-linked focus history, deletes the Auth user,
-and verifies the profile/product cascade in one transaction. The client then
-clears its local session even if the deleted remote session can no longer be
-signed out normally.
+  validates the entire envelope and counts before saving. Full deletion requires
+exact typed confirmation, recent session-bound authentication, and one stable
+UUIDv4. FastAPI persists a minimal intent, appends the canonical
+`account-deletion-journal-v2` payload through a write-only S3/KMS/Object-Lock
+credential, and only then invokes the owner-locked delete transaction. Once
+append starts, RLS and FastAPI block product access; the reconciler converges
+ambiguous work. Direct V1 service-role deletion is revoked.
+
+Recovery is a separate authority. A protected backup runner lists exact
+versioned journal objects with read/decrypt credentials, rejects delete markers
+or KMS/Object-Lock drift, and binds them to a recovery cutoff. Only the isolated
+`mylifegraph_deletion_replayer` database role can invoke replay. Auth/profile,
+all owner relations, Storage, and a content-bound identifier-free watermark
+must pass before restored access can open. The API/executor cannot read or
+replay this ledger. On PostgreSQL 16+ the role catalog necessarily contains one
+creator ADMIN edge; `SET` and `INHERIT` remain false and every additional or
+reverse membership is rejected. No real off-host restore/replay is claimed
+from source.
 
 ## Personal Learning V1
 
@@ -1464,6 +1553,11 @@ previews for Tasks, Exams, and Assignments carry the immutable evidence
 provenance; that provenance also records when actual allocation had to use a
 Setup window. Habits, commitments, active revisions, and confirmed blocks are
 never changed.
+
+The runtime gate is deliberately limited to development, test, and staging
+verification. FastAPI and Flutter independently force it off for the public
+`pilot` environment, including when the environment variable or Dart define is
+true.
 
 The generic Recommendation generator and its service-role replacement RPC are
 retired. Profile-local terminal Focus and valid V4/V5 sleep evidence continue
@@ -1606,10 +1700,12 @@ independent Sleep Recommendation.
 - OpenAI and Gemini have implemented request-local BYOK adapters behind the
   empty-by-default `COACH_BYOK_PROVIDERS` allowlist. They receive only bounded
   owner-scoped read-tool results, never SQLite or Python execution, and there is
-  no operator key or automatic fallback. `local_codex_oauth` remains disabled
-  by default, development-only, and same-Linux-user. Repository/provider mocks
-  do not establish hosted browser readiness, subscription entitlement, live
-  model access, or a deployed server.
+  no automatic fallback. `local_codex_oauth` remains disabled by default,
+  development-only, and same-Linux-user. The separate
+  `operator_codex_pilot` executor, durable limits, and VPS artifacts are
+  implemented but default off. Repository/provider mocks do not establish
+  hosted browser readiness, subscription entitlement, live model access,
+  target-host permissions, or a deployed server.
 - Daily and weekly snapshot aggregation exists behind an authenticated backend
   endpoint, and daily capture plus task/habit/focus writes trigger daily refresh
   best-effort. The protected scheduled endpoint can prepare profile-local daily

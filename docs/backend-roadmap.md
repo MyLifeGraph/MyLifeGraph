@@ -1,14 +1,18 @@
 # Backend Roadmap
 
-Current Coach delivery adds implemented request-scoped BYOK plumbing for OpenAI
-and Gemini behind an empty-by-default `COACH_BYOK_PROVIDERS` allowlist. It is
-not yet hosted-release-ready because the browser CORS and complete public
-acceptance gates remain open. There is no operator-key or automatic-fallback
-path. The local Codex OAuth provider remains development-only; the proposed
-self-hosted pilot requires a new explicit contract and gate.
-The synchronized public versions are `coach-capabilities-v3`,
-`coach-history-v3`, `coach-response-v3`, and
-`free-coach-agent-prompt-v5`.
+Current Coach delivery implements request-scoped OpenAI/Gemini BYOK and the
+separately gated `operator_codex_pilot` path. Hosted CORS, pre-stream busy
+admission, durable per-user/global budgets, exact release identity, the strict
+Unix-socket executor, and no-fallback Flutter states exist in repository
+source. Gemini's REST boundary uses revision `2026-05-20`, the current `steps`
+timeline, full stateless tool history, and the current structured-text format;
+the removed `outputs` schema is rejected. BYOK batching is cumulatively limited
+before tool execution and provider bodies/history are byte-bounded. The shared mode remains default off and is not hosted-release-ready
+until account/terms, VPS, TLS, live-provider, migration, and public acceptance
+gates pass. The same-user Codex OAuth provider remains development-only.
+The synchronized public versions are `coach-request-v4`,
+`coach-capabilities-v5`, `coach-history-v4`, `coach-response-v4`, and
+`free-coach-agent-prompt-v5`; V1-V3 remain compatibility inputs/history.
 
 This document is the source of truth for the intended backend flow and the next
 implementation sequence. It describes the target product architecture, the
@@ -18,12 +22,13 @@ low enough for multiple users.
 The cross-platform delivery and release sequence is now owned by
 `docs/vps-pilot-release-plan.md`: protected `main`, tagged releases, public
 self-registration, VPS/HTTPS operation, Vercel, signed Android delivery,
-shared-provider safeguards, and professor handoff. That document plans future
-work; it does not alter this roadmap's current implementation claims. The first
+shared-provider safeguards, and professor handoff. That document distinguishes
+implemented repository preparation from external acceptance; it is not itself
+deployment evidence. The first
 configuration foundation is implemented: current Supabase client/backend key
 names, exact staging/pilot ref binding, pilot current-key enforcement, and
 crossover denial. There is still no remote pilot project, key rotation, or
-hosted operator-provider path in this checkout.
+deployed operator-provider path in this checkout.
 
 The next local pilot foundation is also implemented in repository source:
 `pilot-participation-v1` / `pilot-participation-notice-v1` stores a
@@ -34,7 +39,8 @@ account deletion preserve their explicit boundaries. Flutter provides the
 pre-signup notice, post-auth gate, Settings notice link, hosted guest denial,
 and persistent staging identity. This does not prove any remote migration,
 Auth setting, privacy approval, or deployment. The staging scenario generator
-is still absent.
+is implemented with exact-target preview, one-use confirmation, receipt-owned
+cleanup, and pilot-target denial; no confirmed remote generator run is claimed.
 
 The implemented Setup-personalization retirement in
 `docs/setup-personalization-retirement-contract.md` is authoritative wherever
@@ -45,7 +51,7 @@ The 2026-08-14 P7 retirement is authoritative wherever older roadmap history
 below mentions the generic Today Recommendation feed, Recommendation refresh,
 Decision Feedback, or feedback-based ranking. Those routes, Flutter surfaces,
 runtime modules, tables, and scheduler fields are removed. Current contracts
-are `daily-briefing-v2`, `weekly-review-v3`, `account-export-v5`,
+are `daily-briefing-v2`, `weekly-review-v3`, `account-export-v6`,
 `personal-snapshot-v3`, and `free-coach-agent-prompt-v5`. The independent
 Insights Sleep Recommendation, `ai_insights.recommendation`, memory type
 `recommendation`, skillset, and ordinary Coach advice remain.
@@ -399,12 +405,16 @@ Already implemented:
     window creates Planner attention only, never a Task, calendar row,
     notification, or background command.
 - Phase 10 free read-only Coach:
-  - Strict authenticated V3 free-question, response/capability/history,
-    streaming/cancel, and history-delete contracts with guest/mock zero calls.
+  - Strict authenticated V4 free-question, response/capability/history,
+    streaming/cancel, and history-delete contracts with guest/mock zero calls;
+    V1-V3 remain readable/accepted only where the compatibility contract says.
   - Request-scoped OpenAI/Gemini BYOK adapters with inspect/query tools, a
     deterministic fake provider for normal tests, and an opt-in,
     development-only `local_codex_oauth` adapter that requires `gpt-5.5` Fast,
     one required three-tool data MCP, bounded process state, and no fallback.
+    The operator mode uses the same bounded Codex tool contract only inside a
+    distinct peer-UID Unix-socket executor; FastAPI owns neither OAuth nor
+    rootless Docker.
   - A fresh owner-only SQLite snapshot per turn covering retained relevant
     product detail plus catalog/relationships/counts/periods/views. Auth,
     secrets, cross-user, provider, anti-replay, and operational rows are
@@ -412,8 +422,10 @@ Already implemented:
   - Exactly read-only inspection, immutable SQL, and isolated no-network Python
     under tool/query/process limits. Internal plots are ephemeral and invisible.
   - Exact message replay, one pending owner turn, retained local-day question
-    budget, atomic validated completion, deterministic safety, backend-derived
-    evidence/trace/Fast provenance, and no product mutation/suggestion card.
+    budget, operator-only 5-per-owner and 15-global dispatch budgets,
+    pre-stream busy admission, atomic validated completion, deterministic
+    safety, backend-derived evidence/trace/Fast provenance, and no product
+    mutation/suggestion card.
   - A follow-up wrapper gives claim, complete, fail, and history delete one
     owner-first advisory-lock order before existing request/row locks.
   - Conversation deletion removes message/content projections and tombstones
@@ -436,10 +448,10 @@ Not yet implemented:
   Phase 8 implements only bounded observational review navigation and refresh.
 - A production background job queue or worker.
 - Deployed cron wiring for the scheduler-triggered refresh endpoint.
-- A hosted-release-verified operator-funded Coach provider, operator
-  credentials/billing, and provider failover. Request-scoped OpenAI/Gemini BYOK
-  is implemented but still lacks the hosted browser and public acceptance gates;
-  local Codex remains development-only.
+- A scalable production operator API-key/provider, billing, and distributed
+  queue. The subscription-backed operator executor is implemented only as a
+  default-off pilot mode and still lacks target-host/live/public acceptance;
+  BYOK also lacks those live gates. Provider failover is deliberately absent.
 - Memory extraction beyond current direct writes.
 - Autonomous weekly planning.
 - Live calendar-provider OAuth, refresh tokens, URL subscriptions, background
@@ -502,10 +514,11 @@ existing protected endpoint. Phase 8 adds a bounded observational Weekly Review
 without adaptation authority. Phase 9 adds the first optional
 consented integration boundary as a user-selected `.ics` import with no
 provider access or writes. Phase 10 adds the controlled Coach boundary without
-changing that deterministic loop. Deployed cron/job wiring, notification
-delivery, real calendar provider integration, hosted BYOK release acceptance,
-and an operator-funded hosted LLM provider remain unimplemented and must not be
-inferred from the callable endpoints or the development-only local adapter. See
+changing that deterministic loop. Deployed cron/job wiring, production
+notification delivery, real calendar provider integration, hosted BYOK release
+acceptance, and live acceptance of the implemented default-off operator
+executor remain absent and must not be inferred from callable endpoints or
+repository deployment templates. See
 `docs/daily-briefing-implementation-plan.md` for the current product contract
 and phase sequence, and
 `docs/phase-3-executable-actions-contract.md` for the completed action contract.
@@ -822,10 +835,11 @@ Current Flutter does not call them.
 
 Current behavior:
 
-1. Derive the owner from the verified Supabase bearer token and claim a
-   retry-safe V3 identity bound only to request id and exact message. Enforce one
-   pending owner turn and the profile-local daily question budget.
-2. Preserve V1/V2 request/response/history parsing for compatibility, but expose
+1. Derive the owner from the verified Supabase bearer token. For non-safety
+   work, admit the explicitly selected provider before claiming a retry-safe V4
+   identity bound to request id, exact message, and provider. Enforce one
+   pending owner turn and the applicable local/global budgets.
+2. Preserve V1-V3 request/response/history parsing for compatibility, but expose
    no fixed Today, Patterns, Focus, Review, horizon, Focus-session, prompt, or
    memory-selection choice in the current product. The legacy newest pair is
    `controlled-coach-prompt-v3`/`coach-context-v3`.
@@ -838,12 +852,13 @@ Current behavior:
    content-free request/usage identities remain.
    Fail rather than truncate beyond 10,000 rows per table, 50,000 total, or
    8 MiB.
-4. Start the explicitly selected agent only after deliberate send and
-   deterministic pre-safety. OpenAI/Gemini BYOK receives bounded
+4. Start the explicitly selected agent only after deliberate send,
+   deterministic pre-safety, and pre-stream admission. OpenAI/Gemini BYOK receives bounded
    `inspect_data`/immutable-SQL `query_data` results but never SQLite or Python.
-   Private local Codex receives one required stdio MCP with those tools plus
-   no-network, non-root, read-only-container `run_python`. Allow at most 12 tools
-   and 180 seconds; SQL and local Python have shorter limits.
+   Local/operator Codex receives one required stdio MCP with those tools plus
+   no-network, non-root, read-only-container `run_python`; the operator process
+   lives behind a strict one-use Unix-socket reservation. Allow at most 12 tools
+   and 180 seconds; SQL and Python have shorter limits.
 5. Let the model answer directly, combine tools, test a hypothesis, correct a
    premise, state missing information, or ask a concise question. Treat all
    stored free text and calendar content as untrusted data.
@@ -858,7 +873,8 @@ Current behavior:
    user/assistant pair, request state, and usage. No structured suggestion,
    plot, script, prompt, raw CLI stream, or mutation command is stored.
 9. Delete conversation/evidence/trace content while retaining tombstones and
-   append-only usage so deletion cannot reset budget or request identity.
+   append-only usage/dispatch accounting so deletion cannot reset budget or
+   request identity.
 
 The first test provider is deliberately `local_codex_oauth`. When explicitly
 enabled in development, FastAPI invokes the current Linux/WSL user's already
@@ -871,6 +887,16 @@ Every real turn requires `gpt-5.5`, `service_tier="fast"`, and
 `fast_mode=true`. Do not default to Spark, another model, or the standard
 service tier merely because Codex CLI supplies the local OAuth bridge. A
 reported/configured mismatch is an honest failed capability.
+
+The pilot-only `operator_codex_pilot` path is a different composition: one
+Uvicorn worker connects to a separately sandboxed `coach-executor` UID over a
+peer-authenticated Unix socket. One-use reservations, a 240-second lease, a
+durable user-independent UTC-day budget plus owner-linked dispatch ledger,
+startup reconciliation, and exact 5-per-owner/15-global limits prevent queue
+fan-out, account-deletion quota reset, and ambiguous redispatch.
+Busy returns pre-SSE HTTP 429 with bounded `Retry-After`; Flutter retries only
+after an explicit user action. This is not an automatic fallback or a scalable
+production-provider claim.
 
 ## LLM Cost Control
 
@@ -919,7 +945,7 @@ writer, or LLM feature.
 
 Private batch rows are derived orchestration metadata. Existing Deadline
 revisions and blocks remain the user-content projection, so this slice leaves
-`account-export-v5` and `personal-snapshot-v3` exclude that orchestration
+`account-export-v6` and `personal-snapshot-v3` exclude that orchestration
 history as well as the retired Recommendation and Decision Feedback tables.
 
 The current repository builds on completed Phase 0 product integrity,
@@ -934,7 +960,7 @@ Deadline Planner V1, central Planner V1 with Today Overview V2, and Study Setup
 V1's optional focus/recovery and semester projection. The Coach keeps the
 deterministic standalone loop as the source of truth and uses request-scoped
 OpenAI/Gemini BYOK, the development-only local Codex OAuth adapter, and the
-deterministic fake-provider test seam fixed in
+default-off pilot operator executor plus deterministic fake-provider test seam fixed in
 `docs/phase-10-controlled-coach-plan.md`. The next slice must be selected from a
 separately verified product need; do not generalize this checkpoint into a
 production provider or autonomous agent platform by default.
@@ -1287,9 +1313,9 @@ The exact behavior, schema, routes, copy, and verification boundary live in
 
 ### Completed Slice 10: Free Read-Only Coach Data Agent
 
-- Added strict authenticated message-only `coach-request-v3`,
-  `coach-response-v3`, `coach-capabilities-v3`, `coach-history-v3`, and an SSE
-  lifecycle stream while retaining readable V1/V2 response history.
+- Added strict authenticated message-only `coach-request-v4`,
+  `coach-response-v4`, `coach-capabilities-v5`, `coach-history-v4`, and an SSE
+  lifecycle stream while retaining readable V1-V3 response history.
 - Removed current fixed mode, horizon, Focus-session, prompt-starter, selected
   memory, and structured suggestion surfaces. Guest/mock remains zero-call.
 - Added one fresh owner-only SQLite snapshot per turn with retained relevant
@@ -1297,7 +1323,7 @@ The exact behavior, schema, routes, copy, and verification boundary live in
   Auth, credentials, cross-user, anti-replay, and operational rows are excluded;
   50,000 rows/8 MiB fail rather than truncate.
 - Added request-scoped OpenAI/Gemini BYOK with bounded catalog inspection and
-  immutable SQL tool results. The local Codex adapter additionally uses one
+  immutable SQL tool results. Local/operator Codex additionally use one
   required per-turn stdio MCP with those tools and isolated Python. Its Python
   image has no network or secrets, runs non-root with read-only root/snapshot,
   and bounds temp space, CPU, RAM, PIDs, output, and time. Internal plots are
@@ -1309,9 +1335,13 @@ The exact behavior, schema, routes, copy, and verification boundary live in
   provenance.
 - Requires explicit `gpt-5.5` Fast configuration on the local Codex OAuth
   adapter; model/tier mismatch fails with no fallback. Standard tests use a fake.
-- Bounds one pending owner turn, 20 questions per local day by default, 12 tools,
-  180 seconds, SQL/Python sublimits, reply size, replay, cancellation, safety,
-  and global local concurrency.
+- Bounds one pending owner turn, 20 non-operator questions per profile-local
+  day, 5 operator questions per UTC day, 15 global operator dispatches per UTC
+  day, 12 tools, 180 seconds, SQL/Python sublimits, reply size, replay,
+  cancellation, safety, and concurrency.
+- Adds pre-stream admission, exact busy/`Retry-After` behavior, one-use
+  executor reservations, peer-UID framing, durable dispatch reconciliation,
+  and a separate executor/rootless-Docker secret boundary.
 - Persists one atomic user/assistant pair plus backend-derived source
   coverage/trace/provenance, retains request/usage identity across deletion, and
   stores no prompt, script, plot, or raw CLI stream.

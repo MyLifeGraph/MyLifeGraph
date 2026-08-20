@@ -1,0 +1,22 @@
+[Unit]
+Description=MyLifeGraph bounded disk monitor
+
+[Service]
+Type=oneshot
+DynamicUser=true
+ExecStart=/usr/local/libexec/mylifegraph-disk-monitor
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mylifegraph-disk-monitor

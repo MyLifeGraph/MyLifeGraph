@@ -30,20 +30,27 @@ insert into auth.users (
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v7('
-      'uuid,uuid,text,date,text,text,text,text,'
-      'timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v7('
-      'uuid,uuid,text,date,text,text,text,text,'
-      'timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
     'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
@@ -73,7 +80,7 @@ select ok(
     'public.delete_coach_history_v1(uuid,timestamp with time zone)',
     'EXECUTE'
   ),
-  'only the backend role can execute the current Coach claim, completion, and deletion RPCs'
+  'only the backend role can execute the current V8 Coach claim, completion, and deletion RPCs'
 );
 
 select ok(
@@ -149,8 +156,9 @@ select ok(
 );
 
 create temporary table coach_v3_claim on commit drop as
-select public.claim_coach_request_v7(
+select public.claim_coach_request_v8(
   'b3000000-0000-4000-8000-000000000001',
+  'coach-request-v3',
   'b3000000-0000-4000-8000-000000000201',
   encode(
     extensions.digest(
@@ -166,7 +174,8 @@ select public.claim_coach_request_v7(
   'not_applicable',
   '2026-07-29T10:00:00Z',
   '2026-07-29T10:02:00Z',
-  20
+  20,
+  true
 ) as value;
 
 select is(
@@ -206,8 +215,9 @@ select is(
 
 select is(
   (
-    select public.claim_coach_request_v7(
+    select public.claim_coach_request_v8(
       'b3000000-0000-4000-8000-000000000001',
+      'coach-request-v3',
       'b3000000-0000-4000-8000-000000000201',
       encode(
         extensions.digest(
@@ -217,17 +227,18 @@ select is(
         'hex'
       ),
       '2026-07-30',
-      'disabled',
-      'disabled',
+      'fake',
+      'deterministic_test_only',
       null,
       'not_applicable',
       '2026-07-29T10:00:30Z',
       '2026-07-29T10:02:30Z',
-      20
+      20,
+      true
     ) ->> 'state'
   ),
   'in_progress',
-  'an exact message replay ignores changed backend date and provider inputs'
+  'an exact message replay ignores a changed backend date while preserving provider identity'
 );
 
 select is(
@@ -242,8 +253,9 @@ select is(
 
 select throws_ok(
   $$
-    select public.claim_coach_request_v7(
+    select public.claim_coach_request_v8(
       'b3000000-0000-4000-8000-000000000001',
+      'coach-request-v3',
       'b3000000-0000-4000-8000-000000000201',
       repeat('f', 64),
       '2026-07-29',
@@ -253,7 +265,8 @@ select throws_ok(
       'not_applicable',
       '2026-07-29T10:00:40Z',
       '2026-07-29T10:02:40Z',
-      20
+      20,
+      true
     )
   $$,
   'PT409',
@@ -278,8 +291,9 @@ select throws_ok(
 
 select throws_ok(
   $$
-    select public.claim_coach_request_v7(
+    select public.claim_coach_request_v8(
       'b3000000-0000-4000-8000-000000000001',
+      'coach-request-v3',
       'b3000000-0000-4000-8000-000000000299',
       repeat('a', 64),
       '2026-07-29',
@@ -289,7 +303,8 @@ select throws_ok(
       'not_applicable',
       '2026-07-29T10:00:45Z',
       '2026-07-29T10:02:45Z',
-      20
+      20,
+      true
     )
   $$,
   '42501',
@@ -747,18 +762,20 @@ select is(
       result ->> 'remaining_requests'
     )
     from (
-      select public.claim_coach_request_v7(
+      select public.claim_coach_request_v8(
         'b3000000-0000-4000-8000-000000000001',
+        'coach-request-v3',
         'b3000000-0000-4000-8000-000000000201',
         repeat('0', 64),
         '2026-07-30',
-        'disabled',
-        'disabled',
+        'fake',
+        'deterministic_test_only',
         null,
         'not_applicable',
         '2026-07-29T10:03:00Z',
         '2026-07-29T10:05:00Z',
-        20
+        20,
+        true
       ) as result
     ) replay
   ),
@@ -828,8 +845,9 @@ select lives_ok(
         from coach_v3_failure_cases
         order by claimed_at
       loop
-        select public.claim_coach_request_v7(
+        select public.claim_coach_request_v8(
           'b3000000-0000-4000-8000-000000000001',
+          'coach-request-v3',
           failure_case.request_id,
           encode(
             extensions.digest(
@@ -845,7 +863,8 @@ select lives_ok(
           'explicit',
           failure_case.claimed_at,
           failure_case.claimed_at + interval '2 minutes',
-          20
+          20,
+          true
         ) into result;
 
         if result ->> 'state' is distinct from 'pending' then

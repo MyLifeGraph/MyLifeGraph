@@ -1,0 +1,57 @@
+# Disposable restore-rehearsal database only. This project id and its ports are
+# intentionally distinct from the normal `mylifegraph` local stack. The runner
+# copies this file into a private temporary workdir and destroys only this exact
+# project after verification.
+project_id = "mylifegraph-restore-rehearsal"
+
+[api]
+enabled = false
+port = 56321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 56322
+shadow_port = 56320
+health_timeout = "2m"
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 56329
+
+[db.migrations]
+enabled = false
+schema_paths = []
+
+[db.seed]
+enabled = false
+sql_paths = []
+
+[studio]
+enabled = false
+port = 56323
+
+[inbucket]
+enabled = false
+port = 56324
+
+[analytics]
+enabled = false
+port = 56327
+
+[auth]
+enabled = false
+site_url = "http://127.0.0.1:56321"
+additional_redirect_urls = []
+enable_signup = false
+
+[storage]
+enabled = false
+
+[realtime]
+enabled = false
+
+[edge_runtime]
+enabled = false

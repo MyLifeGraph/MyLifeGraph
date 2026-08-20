@@ -4,14 +4,14 @@ publish_to: "none"
 version: 0.1.0+1
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
   connectivity_plus: ">=6.1.5 <7.0.0"
   dio: ^5.7.0
-  # Keep Dart 3.4 resolvable through file_selector 1.0.3; 1.1 needs Dart 3.9.
+  # Keep the validated file-selector behavior pinned across hosted builds.
   file_selector: 1.0.3
   flutter_riverpod: ^2.6.1
   flutter_secure_storage: 10.3.1
@@ -20,12 +20,20 @@ dependencies:
   intl: ^0.20.1
   path_provider: ^2.1.5
   phosphor_flutter: 2.1.0
-  # 10.1.4 supports Dart 3.4/AGP 8.3; 12.x requires AGP 8.12.1.
+  # 10.1.4 supports the current AGP 8.3 lane; 12.x requires AGP 8.12.1.
   share_plus: ">=10.1.4 <11.0.0"
   shared_preferences: ^2.3.3
-  supabase_flutter: ^2.8.2
-  # 0.10.2 requires Dart 3.10; keep the repository's Dart 3.4 floor.
+  # 2.13+ distinguishes opaque publishable API keys from legacy anon JWTs;
+  # 2.15.4 is the repository's validated client version.
+  supabase_flutter: 2.15.4
+  # Keep the repository's validated timezone behavior pinned.
   timezone: 0.10.1
+  # Native hosted Auth renders Cloudflare Turnstile in an isolated WebView.
+  webview_flutter: 4.13.0
+  # Direct import configures Android third-party cookies required by Turnstile.
+  webview_flutter_android: 4.14.0
+  # Browser CAPTCHA uses typed DOM/JS interop instead of dart:html.
+  web: 1.1.1
 
 dev_dependencies:
   flutter_test:

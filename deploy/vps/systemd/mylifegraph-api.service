@@ -1,0 +1,52 @@
+[Unit]
+Description=MyLifeGraph FastAPI service
+After=network-online.target mylifegraph-coach-executor.socket
+Wants=network-online.target mylifegraph-coach-executor.socket
+
+[Service]
+Type=simple
+User=mylifegraph-api
+Group=mylifegraph-api
+SupplementaryGroups=mylifegraph-release
+WorkingDirectory=/srv/mylifegraph/current/services/ai_service
+EnvironmentFile=/etc/mylifegraph/api.env
+# Generated from the verified source manifest during release preparation. It is
+# loaded last so mutable host configuration cannot override source identity.
+EnvironmentFile=-/srv/mylifegraph/current/.mylifegraph-release.env
+ExecStart=/srv/mylifegraph/current/services/ai_service/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1 --no-access-log
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+UMask=0077
+StateDirectory=mylifegraph-api
+StateDirectoryMode=0750
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+TasksMax=256
+LimitNOFILE=4096
+MemoryMax=1G
+ReadOnlyPaths=/srv/mylifegraph
+ReadWritePaths=/var/lib/mylifegraph-api
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mylifegraph-api
+
+[Install]
+WantedBy=multi-user.target

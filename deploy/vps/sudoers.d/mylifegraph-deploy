@@ -1,0 +1,5 @@
+# Validate with visudo -cf before installation. The wildcard supplies only the
+# candidate tag; the root-owned helper rejects extra arguments and environment,
+# verifies the immutable tree, owns the symlink switch, and restarts fixed units.
+Cmnd_Alias MYLIFEGRAPH_PROMOTE = /usr/local/libexec/mylifegraph/promote_release.sh *
+deploy ALL=(root) NOPASSWD:NOSETENV: MYLIFEGRAPH_PROMOTE

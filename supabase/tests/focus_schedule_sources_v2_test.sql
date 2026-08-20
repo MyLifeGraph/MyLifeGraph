@@ -857,6 +857,7 @@ select is(
   true,
   'a directly adjacent half-open interval remains startable'
 );
+reset role;
 select is(
   (
     public.delete_account_v1(

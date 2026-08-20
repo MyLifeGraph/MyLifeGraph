@@ -62,7 +62,7 @@ Postgres process and storage boundary.
 | --- | --- | --- |
 | Ordinary workflow guard | Rejects `RESET_DB=true`; default migration check is read-only. | `scripts/lib/local_supabase_migrations.sh` |
 | Exact target validation | Requires project `mylifegraph`, the expected Supabase-labelled container, a recognized Supabase Postgres image, a running state, and database/user identity `postgres`. | `scripts/lib/local_supabase_database_safety.sh` |
-| Content-bound approval | Hashes project, container, database, Auth/profile counts, database size, latest migration, and WAL position into a short-lived reset token. | `scripts/lib/local_supabase_database_safety.sh` |
+| Content-bound approval | Hashes project, container, database, Auth/profile counts, database size, latest migration, and a logical SHA-256 digest of the protected Auth, private product/ledger, public, Storage, and migration data into a short-lived reset token. PostgreSQL 17's per-dump `\\restrict` transport nonces are removed only as one exact, ordered, matching meta-command pair before hashing. | `scripts/lib/local_supabase_database_safety.sh` |
 | Backup gate | Creates a complete custom-format `pg_dump`, checks required archive entries, restores it in a separate container, and compares Auth/profile counts and latest migration. | `scripts/backup_local_supabase.sh` and the shared safety library |
 | Single reset choke point | Rechecks the fingerprint after backup, then and only then invokes `supabase db reset --local`. | `scripts/reset_local_supabase.sh` and the shared safety library |
 | Physical test isolation | Uses a labelled, read-only-root, RAM-only Postgres container with no normal database volume. | `scripts/lib/goal_removal_migration_harness.sh` and the shared safety library |
@@ -179,10 +179,13 @@ The preview verifies the exact local target and prints:
 - current Auth-user and profile counts;
 - database size;
 - latest applied migration;
-- a confirmation token bound to those facts and the current WAL position.
+- a logical digest of the protected Auth, private product/ledger, public,
+  Storage, and migration data;
+- a confirmation token bound to those facts and that digest.
 
 It does not create a backup, invoke a reset, or change data. If any writer
-changes the database, the fingerprint and token change.
+changes protected logical data, the fingerprint and token change. Internal WAL
+maintenance alone does not invalidate an otherwise unchanged preview.
 
 ### Phase 2: explicit execution
 
@@ -196,9 +199,10 @@ npm run db:reset:local
 
 The executing run refuses an empty, malformed, stale, or wrong token. With a
 matching token it first creates the full restore-verified backup described
-above. It then captures the target facts again. Any write during backup changes
-the token, retains the verified archive, and aborts before reset. Only an
-unchanged target reaches the repository's sole destructive CLI line:
+above. It then captures the target facts and protected logical digest again.
+Any protected-data drift during backup changes the token, retains the verified
+archive, and aborts before reset. Only an unchanged target reaches the
+repository's sole destructive CLI line:
 
 ```text
 supabase db reset --local
@@ -249,7 +253,11 @@ physical-isolation contract. It applies the full immutable chain only inside a
 labeled RAM-only container, loads filled two-owner transition fixtures, proves
 a real concurrent writer produces SQLSTATE `55P03` with a complete rollback,
 then applies the migration successfully and runs both its transition assertions
-and the complete final-state pgTAP suite. The disposable bootstrap mirrors the
+and the complete final-state pgTAP suite on pinned PostgreSQL 15 and 17,
+independent of the normal local major. The PG17 lane uses a separate OID-10 bootstrap
+superuser and a non-superuser `postgres` migration identity with `CREATEROLE`,
+then round-trips the final database through another RAM-only PG17 container and
+executes one restored deletion replay. The disposable bootstrap mirrors the
 normal Supabase session boundary: `service_role` is `BYPASSRLS`, and
 `anon`/`authenticated`/`service_role` have `USAGE` on the `extensions` schema
 because the normal database search path is `"$user", public, extensions`.
@@ -261,7 +269,9 @@ normal local database.
 The shared isolation helper deliberately does not create a second database in
 `supabase_db_mylifegraph`. It starts a separate Docker container with:
 
-- the exact validated running Supabase Postgres image;
+- the exact validated running Supabase Postgres image, except for the dedicated
+  full-chain compatibility lanes' explicit, locally present pinned PG15 and
+  PG17 images;
 - a unique process-scoped name and ownership labels;
 - no bind mount and no normal Supabase volume;
 - a read-only root filesystem;
@@ -273,12 +283,15 @@ The shared isolation helper deliberately does not create a second database in
   directory because pinned Supabase CLI versions may attempt TLS even when a
   loopback URL asks to disable it;
 - host authentication limited to the single validated Docker bridge gateway
-  address (`/32`); and
+  address (`/32`); the PG17 Multi-Exam dblink proof additionally permits only
+  the validated container self-address (`/32`) with SCRAM; and
 - an ownership-label check before forced cleanup.
 
 The disposable server receives no Supabase key, application credential, normal
 database URL, host data volume, or remote-project reference. `pg_net` is
-preloaded only because the current Supabase schema/backup requires it. The
+preloaded only when the isolated bootstrap identity is the image's ordinary
+`postgres` role; PG16+ lanes with a separate bootstrap superuser start without
+that background worker. The
 container is removed on success, test failure, interrupt, and backup failure.
 
 ### Goal-removal transition harness

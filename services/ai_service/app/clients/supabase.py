@@ -70,6 +70,100 @@ class SupabaseRestClient:
             self._http_client = None
             await client.aclose()
 
+    async def readiness_probe(self) -> None:
+        """Bounded, body-free PostgREST reachability check."""
+
+        async with self._request_client() as client:
+            response = await client.head(
+                f"{self._url}/rest/v1/profiles",
+                params={"select": "id", "limit": "1"},
+                headers=self._rest_headers(),
+            )
+        response.raise_for_status()
+
+    async def pilot_participation_gate(self) -> dict[str, Any]:
+        data = await self.rpc(
+            "get_pilot_participation_gate_v1",
+            params={},
+        )
+        if not isinstance(data, dict):
+            raise ValueError("Expected pilot participation gate object.")
+        return data
+
+    async def hosted_database_contract(
+        self,
+        *,
+        through_head: str,
+    ) -> dict[str, Any]:
+        data = await self.rpc(
+            "get_hosted_database_contract_v1",
+            params={"p_through_head": through_head},
+        )
+        if (
+            not isinstance(data, dict)
+            or set(data)
+            != {
+                "contract_version",
+                "migration_head",
+                "migration_count",
+                "migration_identity_sha256",
+                "prefix_head",
+                "prefix_count",
+                "prefix_identity_sha256",
+                "prepared_deletion_pending_guard",
+            }
+            or not isinstance(data.get("migration_head"), str)
+            or type(data.get("migration_count")) is not int
+            or not isinstance(data.get("migration_identity_sha256"), str)
+            or not isinstance(data.get("prefix_head"), str)
+            or type(data.get("prefix_count")) is not int
+            or not isinstance(data.get("prefix_identity_sha256"), str)
+            or type(data.get("prepared_deletion_pending_guard")) is not bool
+        ):
+            raise ValueError("Expected hosted database contract object.")
+        return data
+
+    async def account_deletion_pending(self, *, user_id: str) -> bool:
+        data = await self.rpc(
+            "get_account_deletion_pending_v2",
+            params={"p_user_id": user_id},
+        )
+        if (
+            not isinstance(data, dict)
+            or set(data) != {"contract_version", "pending"}
+            or data.get("contract_version") != "account-deletion-pending-v2"
+            or type(data.get("pending")) is not bool
+        ):
+            raise ValueError("Expected account deletion pending object.")
+        return data["pending"]
+
+    async def account_deletion_recovery_status(self) -> dict[str, Any]:
+        data = await self.rpc(
+            "get_account_deletion_recovery_status_v2",
+            params={},
+        )
+        expected_keys = {
+            "contract_version",
+            "legacy_direct_delete_revoked",
+            "pending_count",
+            "oldest_pending_at",
+        }
+        if (
+            not isinstance(data, dict)
+            or set(data) != expected_keys
+            or data.get("contract_version") != "account-deletion-recovery-v2"
+            or type(data.get("legacy_direct_delete_revoked")) is not bool
+            or type(data.get("pending_count")) is not int
+            or data["pending_count"] < 0
+            or (
+                data.get("oldest_pending_at") is not None
+                and not isinstance(data.get("oldest_pending_at"), str)
+            )
+            or (data["pending_count"] == 0) != (data["oldest_pending_at"] is None)
+        ):
+            raise ValueError("Expected account deletion recovery status object.")
+        return data
+
     @asynccontextmanager
     async def _request_client(self) -> AsyncIterator[httpx.AsyncClient]:
         if self._http_client is not None:
@@ -125,9 +219,7 @@ class SupabaseRestClient:
         response.raise_for_status()
         preference_applied = response.headers.get("Preference-Applied", "")
         applied = {
-            value.strip()
-            for value in preference_applied.split(",")
-            if value.strip()
+            value.strip() for value in preference_applied.split(",") if value.strip()
         }
         if "count=exact" not in applied:
             raise ValueError(
@@ -319,8 +411,13 @@ class SupabaseRestClient:
         return data if isinstance(data, dict) else None
 
     def _rest_headers(self) -> dict[str, str]:
-        return {
+        headers = {
             "apikey": self._service_role_key,
-            "Authorization": f"Bearer {self._service_role_key}",
             "Content-Type": "application/json",
         }
+        if not self._service_role_key.startswith("sb_secret_"):
+            # Legacy service_role keys are JWTs and retain the historical
+            # bearer header during migration. Opaque sb_secret_ keys are API
+            # keys only; sending one as a JWT makes PostgREST reject it.
+            headers["Authorization"] = f"Bearer {self._service_role_key}"
+        return headers

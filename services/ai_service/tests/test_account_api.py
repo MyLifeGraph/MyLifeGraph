@@ -18,6 +18,7 @@ from app.models.account import (
     AccountExportResponse,
     AccountPreparationBudgetResponse,
     AccountProfileResponse,
+    AccountDeleteResponse,
     PilotParticipationResponse,
 )
 from app.services.account_service import (
@@ -35,6 +36,12 @@ from tests.api_test_dependencies import override_dependency
 USER_ID = "account-owner"
 NOW = datetime(2026, 7, 13, 12, tzinfo=UTC)
 REQUEST_ID = "00000000-0000-4000-8000-000000000001"
+DELETION_ID = "00000000-0000-4000-8000-000000000099"
+DELETE_BODY = {
+    "contract_version": "account-deletion-v2",
+    "deletion_id": DELETION_ID,
+    "confirmation": "DELETE",
+}
 
 
 class Verifier:
@@ -146,7 +153,7 @@ class Service:
         data["profiles"] = [{"id": USER_ID, "timezone": "Europe/Berlin"}]
         record_counts = {name: len(rows) for name, rows in data.items()}
         envelope = AccountExportResponse(
-            contract_version="account-export-v5",
+            contract_version="account-export-v6",
             exported_at=NOW,
             data=data,
             record_counts=record_counts,
@@ -165,10 +172,25 @@ class Service:
             content=envelope.model_dump_json().encode("utf-8"),
         )
 
-    async def delete_account(self, *, user_id: str, confirmation: str):
-        self.calls.append(("delete", user_id, confirmation))
+    async def delete_account(self, *, user_id: str, deletion_id, confirmation: str):
+        self.calls.append(("delete", user_id, str(deletion_id), confirmation))
         if self.delete_error is not None:
             raise self.delete_error
+        return AccountDeleteResponse(
+            contract_version="account-deletion-v2",
+            deletion_id=deletion_id,
+            state="completed",
+            accepted_at=NOW,
+            completed_at=NOW,
+            journal_durable=True,
+        )
+
+    async def account_deletion_status(self, *, user_id: str):
+        self.calls.append(("deletion_status", user_id))
+        return {
+            "contract_version": "account-deletion-status-v2",
+            "deletion": None,
+        }
 
 
 async def _request(
@@ -416,7 +438,7 @@ def test_export_returns_download_ready_versioned_json_and_maps_limits() -> None:
     assert response.headers["content-disposition"] == (
         'attachment; filename="mylifegraph-account-export.json"'
     )
-    assert response.json()["contract_version"] == "account-export-v5"
+    assert response.json()["contract_version"] == "account-export-v6"
     assert "goals" not in response.json()["data"]
     assert response.json()["data"]["profiles"][0]["id"] == USER_ID
     assert service.calls == [("export", USER_ID)]
@@ -438,19 +460,22 @@ def test_export_returns_download_ready_versioned_json_and_maps_limits() -> None:
     assert "private" not in failed.text
 
 
-def test_delete_requires_exact_confirmation_and_returns_no_content() -> None:
+def test_delete_requires_exact_v2_identity_and_returns_completion() -> None:
     response, service = asyncio.run(
-        _request("DELETE", "/v1/account", json={"confirmation": "DELETE"}),
+        _request("DELETE", "/v1/account", json=DELETE_BODY),
     )
 
-    assert response.status_code == 204
-    assert response.content == b""
-    assert service.calls == [("delete", USER_ID, "DELETE")]
+    assert response.status_code == 200
+    assert response.json()["state"] == "completed"
+    assert response.json()["journal_durable"] is True
+    assert service.calls == [("delete", USER_ID, DELETION_ID, "DELETE")]
 
     for invalid_body in [
-        {"confirmation": "delete"},
-        {"confirmation": " DELETE "},
-        {"confirmation": "DELETE", "user_id": "other"},
+        {**DELETE_BODY, "confirmation": "delete"},
+        {**DELETE_BODY, "confirmation": " DELETE "},
+        {**DELETE_BODY, "user_id": "other"},
+        {**DELETE_BODY, "contract_version": "account-deletion-v1"},
+        {**DELETE_BODY, "deletion_id": "not-a-uuid"},
         {},
     ]:
         invalid, invalid_service = asyncio.run(
@@ -458,6 +483,17 @@ def test_delete_requires_exact_confirmation_and_returns_no_content() -> None:
         )
         assert invalid.status_code == 422
         assert invalid_service.calls == []
+
+
+def test_deletion_status_is_owner_derived_and_available_before_profile_reads() -> None:
+    response, service = asyncio.run(_request("GET", "/v1/account/deletion"))
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "contract_version": "account-deletion-status-v2",
+        "deletion": None,
+    }
+    assert service.calls == [("deletion_status", USER_ID)]
 
 
 def test_delete_maps_atomic_failure_without_leaking_details() -> None:
@@ -473,7 +509,7 @@ def test_delete_maps_atomic_failure_without_leaking_details() -> None:
             _request(
                 "DELETE",
                 "/v1/account",
-                json={"confirmation": "DELETE"},
+                json=DELETE_BODY,
                 service=service,
             ),
         )
@@ -503,7 +539,7 @@ def test_delete_requires_recent_authentication_before_service_call() -> None:
                     "DELETE",
                     "/v1/account",
                     headers={"Authorization": "Bearer valid-account-token"},
-                    json={"confirmation": "DELETE"},
+                    json=DELETE_BODY,
                 )
 
         response = asyncio.run(request_delete())
@@ -520,20 +556,20 @@ def test_delete_accepts_small_clock_skew_for_recent_authentication() -> None:
         _request(
             "DELETE",
             "/v1/account",
-            json={"confirmation": "DELETE"},
+            json=DELETE_BODY,
             authenticated_at=datetime.now(UTC) + timedelta(seconds=30),
         ),
     )
 
-    assert response.status_code == 204
-    assert service.calls == [("delete", USER_ID, "DELETE")]
+    assert response.status_code == 200
+    assert service.calls == [("delete", USER_ID, DELETION_ID, "DELETE")]
 
 
 def test_account_routes_require_authentication_before_service_calls() -> None:
     requests = [
         ("PATCH", "/v1/account/profile", {"timezone": "UTC"}),
         ("GET", "/v1/account/export", None),
-        ("DELETE", "/v1/account", {"confirmation": "DELETE"}),
+        ("DELETE", "/v1/account", DELETE_BODY),
     ]
     for method, path, body in requests:
         response, service = asyncio.run(

@@ -163,6 +163,76 @@ done
 # creates a verified backup first, checks the fingerprint again, and invokes
 # only the CLI's explicit local target. These are hermetic function tests: no
 # Docker container or database is touched.
+marker_free_dump=$'COPY public.profiles (id) FROM stdin;\n00000000-0000-0000-0000-000000000001\n\\.'
+normalized_marker_free_dump="$(
+  printf '%s' "$marker_free_dump" |
+    local_supabase_normalize_protected_data_dump
+)"
+[[ "$normalized_marker_free_dump" == "$marker_free_dump" ]]
+
+normalized_dump_a="$(
+  printf '%s\n' \
+    '\restrict Alpha123' \
+    'COPY public.profiles (id) FROM stdin;' \
+    '00000000-0000-0000-0000-000000000001' \
+    '\.' \
+    '\unrestrict Alpha123' |
+    local_supabase_normalize_protected_data_dump
+)"
+normalized_dump_b="$(
+  printf '%s\n' \
+    '\restrict Beta456' \
+    'COPY public.profiles (id) FROM stdin;' \
+    '00000000-0000-0000-0000-000000000001' \
+    '\.' \
+    '\unrestrict Beta456' |
+    local_supabase_normalize_protected_data_dump
+)"
+[[ "$normalized_dump_a" == "$normalized_dump_b" ]]
+assert_not_contains <(printf '%s\n' "$normalized_dump_a") '\restrict'
+assert_not_contains <(printf '%s\n' "$normalized_dump_a") '\unrestrict'
+
+declare -a malformed_restrict_cases=(
+  'missing-close'
+  'mismatched-nonce'
+  'reversed-pair'
+  'duplicate-pair'
+  'invalid-nonce'
+  'noncanonical-spacing'
+)
+for malformed_restrict_case in "${malformed_restrict_cases[@]}"; do
+  case "$malformed_restrict_case" in
+    missing-close)
+      malformed_restrict_input=$'\\restrict Alpha123\nSELECT 1;'
+      ;;
+    mismatched-nonce)
+      malformed_restrict_input=$'\\restrict Alpha123\nSELECT 1;\n\\unrestrict Beta456'
+      ;;
+    reversed-pair)
+      malformed_restrict_input=$'\\unrestrict Alpha123\nSELECT 1;\n\\restrict Alpha123'
+      ;;
+    duplicate-pair)
+      malformed_restrict_input=$'\\restrict Alpha123\n\\unrestrict Alpha123\n\\restrict Beta456\n\\unrestrict Beta456'
+      ;;
+    invalid-nonce)
+      malformed_restrict_input=$'\\restrict invalid-token\n\\unrestrict invalid-token'
+      ;;
+    noncanonical-spacing)
+      malformed_restrict_input=$' \\restrict Alpha123\n\\unrestrict Alpha123 '
+      ;;
+  esac
+  set +e
+  printf '%s\n' "$malformed_restrict_input" |
+    local_supabase_normalize_protected_data_dump \
+      >"$TEST_ROOT/malformed-restrict-$malformed_restrict_case.log" 2>&1
+  malformed_restrict_status=$?
+  set -e
+  [[ "$malformed_restrict_status" -eq 65 ]]
+  assert_contains \
+    "$TEST_ROOT/malformed-restrict-$malformed_restrict_case.log" \
+    'malformed pg_dump restrict marker pair'
+done
+
 MOCK_RESET_TOKEN='reset-local-mylifegraph-0123456789abcdef'
 MOCK_RESET_TOKEN_AFTER_BACKUP="$MOCK_RESET_TOKEN"
 
@@ -174,7 +244,7 @@ local_supabase_capture_reset_facts() {
   LOCAL_SUPABASE_RESET_PROFILES='4'
   LOCAL_SUPABASE_RESET_DATABASE_BYTES='123456'
   LOCAL_SUPABASE_RESET_LATEST_MIGRATION='20260804192406'
-  LOCAL_SUPABASE_RESET_WAL_LSN='0/ABCDEF'
+  LOCAL_SUPABASE_RESET_PROTECTED_DATA_SHA256='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
   if [[ "$(wc -l <"$EVENTS_FILE")" -gt 0 ]] &&
     grep -Fq 'verified backup' "$EVENTS_FILE"; then
     LOCAL_SUPABASE_RESET_TOKEN="$MOCK_RESET_TOKEN_AFTER_BACKUP"
@@ -256,7 +326,13 @@ assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   'source "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh"'
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
-  'run_recommendation_retirement_migration_harness "$ROOT_DIR"'
+  'public.ecr.aws/supabase/postgres:15.8.1.085'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'public.ecr.aws/supabase/postgres:17.6.1.113'
+assert_contains "$ROOT_DIR/.github/workflows/ci.yml" \
+  'docker pull public.ecr.aws/supabase/postgres:15.8.1.085'
+assert_contains "$ROOT_DIR/supabase/config.toml" \
+  'major_version = 17'
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   'source "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh"'
 assert_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
@@ -283,6 +359,26 @@ assert_contains \
 assert_contains \
   "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
   'supabase_cli migration up'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  "bootstrap_user='mylifegraph_pg17_bootstrap'"
+assert_contains \
+  "$ROOT_DIR/scripts/lib/exam_plan_health_migration_harness.sh" \
+  "bootstrap_user='mylifegraph_exam_health_bootstrap'"
+assert_contains \
+  "$ROOT_DIR/scripts/lib/exam_plan_health_migration_harness.sh" \
+  'create role postgres login nosuperuser nocreatedb createrole'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/multi_exam_plan_migration_harness.sh" \
+  "bootstrap_user='mylifegraph_multi_exam_bootstrap'"
+assert_contains \
+  "$ROOT_DIR/scripts/lib/multi_exam_plan_migration_harness.sh" \
+  'create role postgres login nosuperuser nocreatedb createrole'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'membership.grantor=10'
+assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  'required local image is absent'
 assert_contains \
   "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
   'SQLSTATE[[:space:]]+55P03'
@@ -321,6 +417,16 @@ assert_contains "$ROOT_DIR/scripts/reset_local_supabase.sh" \
   'local_supabase_execute_guarded_reset'
 assert_contains "$ROOT_DIR/scripts/backup_local_supabase.sh" \
   'local_supabase_create_verified_backup'
+assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  '--schema=auth --schema=private --schema=public --schema=storage'
+assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  '--schema=supabase_migrations'
+assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  'local_supabase_normalize_protected_data_dump'
+assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  'protected_data_sha256='
+assert_not_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  'pg_current_wal_lsn'
 assert_contains "$ROOT_DIR/package.json" \
   '"db:backup:local": "bash scripts/backup_local_supabase.sh"'
 assert_contains "$ROOT_DIR/package.json" \

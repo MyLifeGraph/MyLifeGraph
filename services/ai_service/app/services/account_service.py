@@ -1,11 +1,17 @@
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.account_deletion_journal import (
+    DeletionJournalEnvelope,
+    DeletionJournalError,
+    DeletionJournalWriter,
+    InMemoryDeletionJournalWriter,
+)
 from app.core.lossless_json import lossless_json_text
 from app.models.account import (
     ACCOUNT_EXPORT_CONTRACT_VERSION,
@@ -15,6 +21,9 @@ from app.models.account import (
     ACCOUNT_EXPORT_OMITTED_TABLES,
     ACCOUNT_EXPORT_SANITIZED_TABLES,
     ACCOUNT_EXPORT_TABLE_NAMES,
+    ACCOUNT_DELETION_STATUS_CONTRACT_VERSION,
+    AccountDeleteResponse,
+    AccountDeletionStatusResponse,
     AccountExportLedgerPolicy,
     AccountExportLimits,
     AccountExportResponse,
@@ -42,6 +51,8 @@ from app.repositories.account_repository import (
     AccountProfileUpdateOutcomeUnknownError as AccountPersistenceProfileOutcomeUnknown,
     AccountRepository,
     AccountSettingConflictError as AccountPersistenceConflict,
+    StoredDeletionIntent,
+    StoredDeletionRecoveryStatus,
 )
 from app.services.owner_data_reader import (
     OwnerDataInvalidCursorError,
@@ -58,6 +69,10 @@ from app.services.owner_data_reader import (
 ACCOUNT_EXPORT_PAGE_SIZE = OWNER_DATA_PAGE_SIZE
 ACCOUNT_EXPORT_PAGE_BYTE_CUSHION = OWNER_DATA_PAGE_BYTE_CUSHION
 ACCOUNT_EXPORT_WATERMARK_MAX_BYTES = OWNER_DATA_WATERMARK_MAX_BYTES
+
+
+async def _no_account_deletion_barrier(_user_id: str) -> None:
+    return None
 
 
 class InvalidAccountTimezoneError(ValueError):
@@ -94,6 +109,15 @@ class PreparedAccountExport:
     content: bytes
 
 
+@dataclass(frozen=True)
+class AccountDeletionReconcileResult:
+    examined: int
+    completed: int
+    failures: int
+    pending_count: int | None
+    oldest_pending_at: datetime | None
+
+
 ACCOUNT_EXPORT_LEDGER_POLICY = AccountExportLedgerPolicy(
     sanitized_tables=list(ACCOUNT_EXPORT_SANITIZED_TABLES),
     omitted_tables=dict(ACCOUNT_EXPORT_OMITTED_TABLES),
@@ -106,10 +130,18 @@ class AccountService:
         *,
         repository: AccountRepository,
         now: Callable[[], datetime] | None = None,
+        deletion_journal: DeletionJournalWriter | None = None,
+        before_account_deletion: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._repository = repository
         self._owner_data_reader = OwnerDataReader(repository=repository)
         self._now = now or (lambda: datetime.now(UTC))
+        self._deletion_journal = deletion_journal or InMemoryDeletionJournalWriter(
+            now=self._now,
+        )
+        self._before_account_deletion = (
+            before_account_deletion or _no_account_deletion_barrier
+        )
 
     async def accept_pilot_participation(
         self,
@@ -271,7 +303,7 @@ class AccountService:
             )
         except AccountPersistenceSourceTooLarge as exc:
             raise AccountExportTooLargeError(
-                "Account export exceeds the V3 JSON size bound.",
+                "Account export exceeds the V6 JSON size bound.",
             ) from exc
         except AccountPersistenceError as exc:
             raise AccountUnavailableError(
@@ -295,11 +327,11 @@ class AccountService:
             ) from exc
         except OwnerDataTotalRowsExceededError as exc:
             raise AccountExportTooLargeError(
-                "Account export exceeds the V5 total row bound.",
+                "Account export exceeds the V6 total row bound.",
             ) from exc
         except OwnerDataSerializedBytesExceededError as exc:
             raise AccountExportTooLargeError(
-                "Account export exceeds the V3 JSON size bound.",
+                "Account export exceeds the V6 JSON size bound.",
             ) from exc
 
         data = collection.rows_by_source
@@ -319,7 +351,7 @@ class AccountService:
             or len(content) > ACCOUNT_EXPORT_MAX_JSON_BYTES
         ):
             raise AccountExportTooLargeError(
-                "Account export exceeds the V3 JSON size bound.",
+                "Account export exceeds the V6 JSON size bound.",
             )
         return PreparedAccountExport(envelope=envelope, content=content)
 
@@ -327,13 +359,21 @@ class AccountService:
         self,
         *,
         user_id: str,
+        deletion_id: UUID,
         confirmation: str,
-    ) -> None:
+    ) -> AccountDeleteResponse:
         if confirmation != "DELETE":
             raise ValueError("Exact account deletion confirmation is required.")
         try:
-            await self._repository.delete_account(
+            await self._before_account_deletion(user_id)
+        except Exception as exc:
+            raise AccountUnavailableError(
+                "Account deletion could not stop active processing.",
+            ) from exc
+        try:
+            intent = await self._repository.prepare_account_deletion(
                 user_id=user_id,
+                deletion_id=str(deletion_id),
                 confirmation=confirmation,
             )
         except AccountPersistenceNotFound as exc:
@@ -344,6 +384,158 @@ class AccountService:
             raise AccountUnavailableError(
                 "Account deletion could not be completed.",
             ) from exc
+        if intent is None:
+            raise AccountNotFoundError("Account is unavailable.")
+        return await self._advance_account_deletion(
+            intent=intent,
+            confirmation=confirmation,
+        )
+
+    async def account_deletion_status(
+        self,
+        *,
+        user_id: str,
+    ) -> AccountDeletionStatusResponse:
+        try:
+            intent = await self._repository.get_account_deletion_intent(
+                user_id=user_id,
+            )
+        except AccountPersistenceError as exc:
+            raise AccountUnavailableError(
+                "Account deletion status is unavailable.",
+            ) from exc
+        return AccountDeletionStatusResponse(
+            contract_version=ACCOUNT_DELETION_STATUS_CONTRACT_VERSION,
+            deletion=(
+                _deletion_response(
+                    intent,
+                    journal_durable=intent.state in {"accepted", "completed"},
+                )
+                if intent is not None
+                else None
+            ),
+        )
+
+    async def reconcile_account_deletions(
+        self,
+        *,
+        limit: int = 100,
+    ) -> AccountDeletionReconcileResult:
+        try:
+            intents = await self._repository.list_pending_account_deletions(
+                limit=limit,
+            )
+        except (AccountPersistenceDeletionOutcomeUnknown, AccountPersistenceError):
+            return AccountDeletionReconcileResult(
+                examined=0,
+                completed=0,
+                failures=1,
+                pending_count=None,
+                oldest_pending_at=None,
+            )
+        completed = 0
+        failures = 0
+        for intent in intents:
+            try:
+                response = await self._advance_account_deletion(
+                    intent=intent,
+                    confirmation="DELETE",
+                )
+            except (
+                AccountNotFoundError,
+                AccountOutcomeUnknownError,
+                AccountUnavailableError,
+            ):
+                failures += 1
+                continue
+            if response.state == "completed":
+                completed += 1
+            elif not response.journal_durable:
+                failures += 1
+        try:
+            status: StoredDeletionRecoveryStatus = (
+                await self._repository.account_deletion_recovery_status()
+            )
+        except AccountPersistenceError:
+            failures += 1
+            return AccountDeletionReconcileResult(
+                examined=len(intents),
+                completed=completed,
+                failures=failures,
+                pending_count=None,
+                oldest_pending_at=None,
+            )
+        return AccountDeletionReconcileResult(
+            examined=len(intents),
+            completed=completed,
+            failures=failures,
+            pending_count=status.pending_count,
+            oldest_pending_at=status.oldest_pending_at,
+        )
+
+    async def _advance_account_deletion(
+        self,
+        *,
+        intent: StoredDeletionIntent,
+        confirmation: str,
+    ) -> AccountDeleteResponse:
+        journal_durable = intent.state in {"accepted", "completed"}
+        if intent.state == "prepared":
+            try:
+                intent = await self._repository.mark_account_deletion_appending(
+                    user_id=intent.user_id,
+                    deletion_id=intent.deletion_id,
+                )
+            except (AccountPersistenceDeletionOutcomeUnknown, AccountPersistenceError):
+                return _deletion_response(intent, journal_durable=False)
+        if intent.state == "appending":
+            try:
+                receipt = await self._deletion_journal.append(
+                    DeletionJournalEnvelope(
+                        deletion_id=intent.deletion_id,
+                        user_id=intent.user_id,
+                        accepted_at=intent.accepted_at,
+                    ),
+                )
+                journal_durable = True
+                intent = await self._repository.accept_account_deletion_journal(
+                    user_id=intent.user_id,
+                    deletion_id=intent.deletion_id,
+                    accepted_at=intent.accepted_at,
+                    journal_object_key=receipt.object_key,
+                    journal_payload_sha256=receipt.payload_sha256,
+                    journaled_at=receipt.journaled_at,
+                )
+            except DeletionJournalError:
+                return _deletion_response(intent, journal_durable=False)
+            except (AccountPersistenceDeletionOutcomeUnknown, AccountPersistenceError):
+                return _deletion_response(intent, journal_durable=True)
+        if intent.state == "accepted":
+            try:
+                intent = await self._repository.complete_account_deletion(
+                    user_id=intent.user_id,
+                    deletion_id=intent.deletion_id,
+                    confirmation=confirmation,
+                    completed_at=self._now(),
+                )
+            except (AccountPersistenceDeletionOutcomeUnknown, AccountPersistenceError):
+                return _deletion_response(intent, journal_durable=True)
+        return _deletion_response(intent, journal_durable=journal_durable)
+
+
+def _deletion_response(
+    intent: StoredDeletionIntent,
+    *,
+    journal_durable: bool,
+) -> AccountDeleteResponse:
+    return AccountDeleteResponse(
+        contract_version="account-deletion-v2",
+        deletion_id=UUID(intent.deletion_id),
+        state=("completed" if intent.state == "completed" else "deletion_pending"),
+        accepted_at=intent.accepted_at,
+        completed_at=intent.completed_at,
+        journal_durable=journal_durable or intent.state == "completed",
+    )
 
 
 def _setting_fingerprint(payload: dict[str, object]) -> str:

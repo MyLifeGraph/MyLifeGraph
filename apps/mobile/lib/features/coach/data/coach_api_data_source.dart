@@ -57,7 +57,10 @@ class CoachApiDataSource {
         cancelToken: cancelToken,
       ),
     );
-    yield* _parseSse(body.stream.cast<List<int>>());
+    yield* _parseSse(
+      body.stream.cast<List<int>>(),
+      expectedRequestContractVersion: request.contractVersion,
+    );
   }
 
   Future<CoachHistoryDeleteResult> deleteHistory({
@@ -77,9 +80,17 @@ class CoachApiDataSource {
     CoachProviderName? provider,
     String? apiKey,
   }) {
-    if ((provider == null) != (apiKey == null)) {
+    final operator = provider == CoachProviderName.operatorCodexPilot;
+    final byok = const {
+      CoachProviderName.openai,
+      CoachProviderName.gemini,
+    }.contains(provider);
+    if (provider == null && apiKey != null ||
+        operator && apiKey != null ||
+        byok && (apiKey == null || apiKey.trim().isEmpty) ||
+        provider != null && !operator && !byok) {
       throw const CoachInputException(
-        'Coach provider and API key must be supplied together.',
+        'Coach provider selection and API key do not match.',
       );
     }
     return {
@@ -101,7 +112,10 @@ const _safeCoachActivityMessages = {
   'Working with personal data …',
 };
 
-Stream<CoachStreamEvent> _parseSse(Stream<List<int>> bytes) async* {
+Stream<CoachStreamEvent> _parseSse(
+  Stream<List<int>> bytes, {
+  required String expectedRequestContractVersion,
+}) async* {
   String? event;
   final data = StringBuffer();
   var started = false;
@@ -137,7 +151,7 @@ Stream<CoachStreamEvent> _parseSse(Stream<List<int>> bytes) async* {
             const {'request_id', 'contract_version'},
             'started event',
           );
-          if (payload['contract_version'] != coachRequestContractVersion) {
+          if (payload['contract_version'] != expectedRequestContractVersion) {
             throw const CoachContractException(
               'Coach stream contract is invalid.',
             );
@@ -304,6 +318,7 @@ CoachRemoteException _remoteException(AppException error) {
       retryable: true,
       statusCode: 503,
       timedOut: failure?.isTimeout ?? false,
+      retryAfterSeconds: failure?.retryAfterSeconds,
     );
   }
   final detail = _parseErrorDetail(failure.responseData);
@@ -312,6 +327,7 @@ CoachRemoteException _remoteException(AppException error) {
     message: detail?.message ?? 'Coach request failed.',
     retryable: detail?.retryable ?? false,
     statusCode: failure.statusCode!,
+    retryAfterSeconds: failure.retryAfterSeconds,
   );
 }
 

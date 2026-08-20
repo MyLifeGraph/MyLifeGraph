@@ -16,11 +16,17 @@ run_exam_plan_health_migration_harness() (
 
   local root_dir="$1"
   local database_name='mylifegraph_exam_health_migration_test'
+  local bootstrap_user='postgres'
   local bootstrap_file="$root_dir/supabase/migration_tests/goal_removal/bootstrap.sql"
   local assertions_file="$root_dir/supabase/tests/exam_plan_health_v1_test.sql"
   local migration_file="$root_dir/supabase/migrations/20260813040200_exam_plan_health_v1.sql"
   local harness_root
   local database_container
+  local postgres_image
+  local postgres_image_tag
+  local postgres_major
+  local server_version_number
+  local container_ip
   local test_url
   local normal_history_before
   local normal_history_after
@@ -58,6 +64,17 @@ run_exam_plan_health_migration_harness() (
   done
 
   local_supabase_assert_exact_database_target "$root_dir" || return $?
+  postgres_image="$LOCAL_SUPABASE_SAFETY_IMAGE"
+  postgres_image_tag="${postgres_image##*:}"
+  postgres_major="${postgres_image_tag%%.*}"
+  if [[ ! "$postgres_major" =~ ^[0-9]+$ ]]; then
+    printf 'Exam-health harness rejected image version %q.\n' \
+      "$postgres_image_tag" >&2
+    return 2
+  fi
+  if [[ "$postgres_major" -ge 16 ]]; then
+    bootstrap_user='mylifegraph_exam_health_bootstrap'
+  fi
   normal_history_before="$(
     docker exec "$LOCAL_SUPABASE_SAFETY_CONTAINER" psql \
       -U postgres -d postgres -X -At -v ON_ERROR_STOP=1 \
@@ -81,18 +98,64 @@ run_exam_plan_health_migration_harness() (
   isolated_postgres_start \
     "$root_dir" \
     'exam-health-migration-test' \
-    "$database_name"
+    "$database_name" \
+    "$postgres_image" \
+    "$bootstrap_user"
   database_container="$ISOLATED_POSTGRES_CONTAINER"
   test_url="$ISOLATED_POSTGRES_URL"
 
   printf '%s\n' \
     "Exam-health full-chain target is isolated in ${database_container}."
   if ! docker exec -i "$database_container" psql \
-    -U postgres -d "$database_name" -X -v ON_ERROR_STOP=1 \
+    -U "$bootstrap_user" -d "$database_name" -X -v ON_ERROR_STOP=1 \
     <"$bootstrap_file" >"$harness_root/bootstrap.log" 2>&1; then
     exam_plan_health_harness_sanitize_output \
       <"$harness_root/bootstrap.log" >&2
     return 1
+  fi
+
+  server_version_number="$(docker exec "$database_container" psql \
+    -U "$bootstrap_user" -d "$database_name" -X -At -v ON_ERROR_STOP=1 \
+    -c "select current_setting('server_version_num')")"
+  if [[ ! "$server_version_number" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' \
+      'Exam-health harness could not determine PostgreSQL version.' >&2
+    return 1
+  fi
+  if [[ "$server_version_number" -ge 160000 ]]; then
+    # Match hosted Supabase's PG16+ role boundary: OID 10 remains a bootstrap
+    # superuser while migrations run as a separate non-superuser CREATEROLE
+    # principal named postgres.
+    docker exec "$database_container" psql \
+      -U "$bootstrap_user" -d "$database_name" -X -v ON_ERROR_STOP=1 \
+      -c "create extension if not exists dblink with schema extensions; create role postgres login nosuperuser nocreatedb createrole inherit noreplication bypassrls connection limit -1; alter database ${database_name} owner to postgres; alter schema auth owner to postgres; alter table auth.users owner to postgres; alter function auth.uid() owner to postgres; alter function auth.role() owner to postgres; grant usage on schema extensions to postgres; grant anon, authenticated, service_role to postgres with admin option;" \
+      >"$harness_root/pg16-plus-migration-role.log" 2>&1
+    container_ip="$(docker inspect \
+      --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
+      "$database_container")"
+    if ! awk -F. '
+      NF != 4 { exit 1 }
+      {
+        for (octet = 1; octet <= 4; octet++) {
+          if ($octet !~ /^[0-9]+$/ || $octet < 0 || $octet > 255) {
+            exit 1
+          }
+        }
+      }
+    ' <<<"$container_ip"; then
+      printf 'Exam-health harness rejected container IP %q.\n' \
+        "$container_ip" >&2
+      return 1
+    fi
+    docker exec \
+      --env "MYLIFEGRAPH_CONTAINER_SELF_IP=${container_ip}" \
+      "$database_container" bash -ceu \
+      'printf "host all all %s/32 scram-sha-256\n" "${MYLIFEGRAPH_CONTAINER_SELF_IP}" >>/var/lib/postgresql/data/pg_hba.conf'
+    docker exec "$database_container" psql \
+      -U "$bootstrap_user" -d "$database_name" -X -v ON_ERROR_STOP=1 \
+      -c 'select pg_reload_conf()' \
+      >"$harness_root/pg16-plus-hba-reload.log" 2>&1
+    test_url="postgresql://postgres@127.0.0.1:${ISOLATED_POSTGRES_PORT}/${database_name}?sslmode=disable"
   fi
 
   if ! supabase_cli migration up \

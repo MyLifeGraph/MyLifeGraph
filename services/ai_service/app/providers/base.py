@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
+from uuid import UUID
 
 from app.models.coach import (
     CoachAgentModelOutput,
@@ -61,6 +62,31 @@ class CoachProvider(Protocol):
     async def respond_agent(
         self,
         *,
+        prompt: str,
+        snapshot_path: Path,
+        trace_path: Path,
+        activity_callback: CoachActivityCallback | None = None,
+    ) -> CoachAgentProviderResult:
+        pass
+
+
+@runtime_checkable
+class ReservableCoachProvider(Protocol):
+    """Provider whose separate executor owns scarce turn admission."""
+
+    async def capability(self) -> CoachProviderCapability:
+        pass
+
+    async def reserve(self) -> UUID:
+        pass
+
+    async def release_reservation(self, reservation_id: UUID) -> None:
+        pass
+
+    async def respond_agent_reserved(
+        self,
+        *,
+        reservation_id: UUID,
         prompt: str,
         snapshot_path: Path,
         trace_path: Path,

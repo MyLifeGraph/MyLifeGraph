@@ -86,14 +86,18 @@ test('staging target rejects pilot crossover and conflicting ref aliases', () =>
 test('remote cleanup deletes and verifies only registered exact user ids', async () => {
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
-    calls.push({ url, method: options.method ?? 'GET' });
+    calls.push({
+      url,
+      method: options.method ?? 'GET',
+      headers: options.headers,
+    });
     return new Response(null, {
       status: options.method === 'DELETE' ? 204 : 404,
     });
   };
   const users = new ExactRemoteAuthUsers({
     supabaseUrl: 'https://abcdefghijklmnopqrst.supabase.co',
-    serviceRoleKey: 'service-role-test-value',
+    backendKey: { value: 'sb_secret_test-value', source: 'current' },
     fetchImpl,
   });
   users.userIds.push('11111111-1111-4111-8111-111111111111');
@@ -109,4 +113,20 @@ test('remote cleanup deletes and verifies only registered exact user ids', async
       'GET /auth/v1/admin/users/11111111-1111-4111-8111-111111111111',
     ],
   );
+  for (const call of calls) {
+    assert.equal(call.headers.apikey, 'sb_secret_test-value');
+    assert.equal('Authorization' in call.headers, false);
+  }
+});
+
+test('legacy staging backend JWT retains its required Bearer header', () => {
+  const users = new ExactRemoteAuthUsers({
+    supabaseUrl: 'https://abcdefghijklmnopqrst.supabase.co',
+    backendKey: { value: 'legacy-service-role-jwt', source: 'legacy' },
+  });
+  assert.deepEqual(users.headers(true), {
+    apikey: 'legacy-service-role-jwt',
+    Authorization: 'Bearer legacy-service-role-jwt',
+    'Content-Type': 'application/json',
+  });
 });

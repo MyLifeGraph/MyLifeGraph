@@ -28,9 +28,25 @@ class CoachMemoryRows:
 
 
 class CoachRepository(Protocol):
+    async def probe_agent_terminal_replay(
+        self,
+        *,
+        contract_version: str,
+        user_id: str,
+        request_id: UUID,
+        message_fingerprint: str,
+        provider: str,
+        provider_mode: str,
+        model_requested: str | None,
+        model_source: str,
+        provider_dispatch_required: bool,
+    ) -> CoachClaimResult | None:
+        pass
+
     async def claim_agent_request(
         self,
         *,
+        contract_version: str,
         user_id: str,
         request_id: UUID,
         message_fingerprint: str,
@@ -42,6 +58,7 @@ class CoachRepository(Protocol):
         claimed_at: datetime,
         lease_expires_at: datetime,
         daily_limit: int,
+        provider_dispatch_required: bool,
     ) -> CoachClaimResult:
         pass
 
@@ -138,14 +155,93 @@ class CoachRepository(Protocol):
     async def count_usage(self, *, user_id: str, local_date: date) -> int:
         pass
 
+    async def count_operator_usage(self, *, user_id: str, utc_date: date) -> int:
+        pass
+
+    async def count_operator_dispatches(self, *, utc_date: date) -> int:
+        pass
+
+    async def record_operator_dispatch(
+        self,
+        *,
+        dispatch_id: UUID,
+        request_id: UUID,
+        user_id: str,
+        reservation_id: UUID,
+        dispatched_at: datetime,
+        global_limit: int,
+    ) -> None:
+        pass
+
+    async def finish_operator_dispatch(
+        self,
+        *,
+        dispatch_id: UUID,
+        request_id: UUID,
+        state: str,
+        error_code: str | None,
+        terminal_at: datetime,
+    ) -> None:
+        pass
+
+    async def reconcile_operator_dispatches(self, *, reconciled_at: datetime) -> int:
+        pass
+
 
 class SupabaseCoachRepository:
     def __init__(self, client: SupabaseRestClient) -> None:
         self._client = client
 
+    async def probe_agent_terminal_replay(
+        self,
+        *,
+        contract_version: str,
+        user_id: str,
+        request_id: UUID,
+        message_fingerprint: str,
+        provider: str,
+        provider_mode: str,
+        model_requested: str | None,
+        model_source: str,
+        provider_dispatch_required: bool,
+    ) -> CoachClaimResult | None:
+        result = await self._rpc(
+            "probe_coach_terminal_replay_v1",
+            params={
+                "p_user_id": user_id,
+                "p_contract_version": contract_version,
+                "p_request_id": str(request_id),
+                "p_message_fingerprint": message_fingerprint,
+                "p_provider": provider,
+                "p_provider_mode": provider_mode,
+                "p_model_requested": model_requested,
+                "p_model_source": model_source,
+                "p_provider_dispatch_required": provider_dispatch_required,
+            },
+        )
+        if set(result) != {"state", "response", "error"}:
+            raise ValueError("Coach terminal replay probe returned an invalid envelope.")
+        state = result["state"]
+        if state in {"missing", "active"}:
+            if result["response"] is not None or result["error"] is not None:
+                raise ValueError("Nonterminal Coach replay probe contains terminal data.")
+            return None
+        if state not in {"completed", "failed", "deleted"}:
+            raise ValueError("Coach terminal replay probe returned an invalid state.")
+        return _claim_result(
+            {
+                "state": state,
+                "remaining_requests": 0,
+                "response": result["response"],
+                "error": result["error"],
+            },
+            request_id=request_id,
+        )
+
     async def claim_agent_request(
         self,
         *,
+        contract_version: str,
         user_id: str,
         request_id: UUID,
         message_fingerprint: str,
@@ -157,11 +253,13 @@ class SupabaseCoachRepository:
         claimed_at: datetime,
         lease_expires_at: datetime,
         daily_limit: int,
+        provider_dispatch_required: bool,
     ) -> CoachClaimResult:
         result = await self._rpc(
-            "claim_coach_request_v7",
+            "claim_coach_request_v8",
             params={
                 "p_user_id": user_id,
+                "p_contract_version": contract_version,
                 "p_request_id": str(request_id),
                 "p_message_fingerprint": message_fingerprint,
                 "p_local_date": local_date.isoformat(),
@@ -172,6 +270,7 @@ class SupabaseCoachRepository:
                 "p_claimed_at": claimed_at.isoformat(),
                 "p_lease_expires_at": lease_expires_at.isoformat(),
                 "p_daily_limit": daily_limit,
+                "p_provider_dispatch_required": provider_dispatch_required,
             },
         )
         return _claim_result(result, request_id=request_id)
@@ -186,8 +285,13 @@ class SupabaseCoachRepository:
         usage: dict[str, Any],
         completed_at: datetime,
     ) -> CoachAgentResponse:
+        function = (
+            "complete_coach_request_v3"
+            if response.contract_version == "coach-response-v4"
+            else "complete_coach_request_v2"
+        )
         result = await self._rpc(
-            "complete_coach_request_v2",
+            function,
             params={
                 "p_user_id": user_id,
                 "p_request_id": str(request_id),
@@ -537,6 +641,106 @@ class SupabaseCoachRepository:
         )
         return len(requests)
 
+    async def count_operator_usage(self, *, user_id: str, utc_date: date) -> int:
+        requests = await self._client.select(
+            "coach_requests",
+            params={
+                "select": "request_id",
+                "user_id": f"eq.{user_id}",
+                "operator_budget_utc_date": f"eq.{utc_date.isoformat()}",
+                "provider": "eq.operator_codex_pilot",
+                "provider_dispatch_required": "eq.true",
+                "limit": "6",
+            },
+        )
+        return len(requests)
+
+    async def count_operator_dispatches(self, *, utc_date: date) -> int:
+        rows = await self._client.select(
+            "coach_operator_daily_budgets",
+            params={
+                "select": "dispatch_count",
+                "utc_date": f"eq.{utc_date.isoformat()}",
+                "limit": "1",
+            },
+        )
+        if not rows:
+            return 0
+        if len(rows) != 1 or set(rows[0]) != {"dispatch_count"}:
+            raise ValueError("Coach operator budget query returned an invalid shape.")
+        count = rows[0]["dispatch_count"]
+        if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 15:
+            raise ValueError("Coach operator budget query returned an invalid count.")
+        return count
+
+    async def record_operator_dispatch(
+        self,
+        *,
+        dispatch_id: UUID,
+        request_id: UUID,
+        user_id: str,
+        reservation_id: UUID,
+        dispatched_at: datetime,
+        global_limit: int,
+    ) -> None:
+        result = await self._rpc(
+            "record_coach_operator_dispatch_v1",
+            params={
+                "p_dispatch_id": str(dispatch_id),
+                "p_request_id": str(request_id),
+                "p_user_id": user_id,
+                "p_reservation_id": str(reservation_id),
+                "p_dispatched_at": dispatched_at.isoformat(),
+                "p_global_limit": global_limit,
+            },
+        )
+        if set(result) != {"state"} or result["state"] not in {
+            "dispatched",
+            "existing",
+        }:
+            raise ValueError("Coach operator dispatch RPC returned an invalid state.")
+
+    async def finish_operator_dispatch(
+        self,
+        *,
+        dispatch_id: UUID,
+        request_id: UUID,
+        state: str,
+        error_code: str | None,
+        terminal_at: datetime,
+    ) -> None:
+        result = await self._rpc(
+            "finish_coach_operator_dispatch_v1",
+            params={
+                "p_dispatch_id": str(dispatch_id),
+                "p_request_id": str(request_id),
+                "p_state": state,
+                "p_error_code": error_code,
+                "p_terminal_at": terminal_at.isoformat(),
+            },
+        )
+        if set(result) != {"state"} or result["state"] not in {
+            "completed",
+            "failed",
+            "interrupted",
+            "existing",
+        }:
+            raise ValueError("Coach operator finish RPC returned an invalid state.")
+
+    async def reconcile_operator_dispatches(self, *, reconciled_at: datetime) -> int:
+        result = await self._rpc(
+            "reconcile_expired_coach_operator_dispatches_v1",
+            params={"p_reconciled_at": reconciled_at.isoformat()},
+        )
+        if set(result) != {"state", "reconciled_count"} or result["state"] != (
+            "reconciled"
+        ):
+            raise ValueError("Coach operator reconcile RPC returned an invalid state.")
+        count = result["reconciled_count"]
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("Coach operator reconcile count is invalid.")
+        return count
+
     async def _rpc(self, function: str, *, params: dict[str, Any]) -> dict[str, Any]:
         try:
             result = await self._client.rpc(function, params=params)
@@ -587,7 +791,8 @@ def _claim_result(
             raise ValueError("Coach claim RPC returned an invalid response.")
         response = (
             CoachAgentResponse.model_validate(raw_response)
-            if raw_response.get("contract_version") == "coach-response-v2"
+            if raw_response.get("contract_version")
+            in {"coach-response-v2", "coach-response-v3", "coach-response-v4"}
             else CoachResponse.model_validate(raw_response)
         )
         if response.request_id != request_id:

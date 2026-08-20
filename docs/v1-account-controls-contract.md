@@ -18,12 +18,12 @@ deployment claim of this account-control contract.
 The pilot is restricted to adults. The implemented shared contracts are
 `pilot-participation-v1` and `pilot-participation-notice-v1`. Flutter shows the
 notice and an explicit `I confirm that I am 18 or older` checkbox before
-account creation or Google OAuth. A matching choice is retained only for the
-current short-lived auth flow; after authentication the bearer-derived backend
-command records the backend timestamp before Setup or product access. A user
-who reaches an authenticated session without that matching pending choice is
-sent to a dedicated confirmation gate. The notice remains reachable from
-Settings.
+account creation or Google OAuth. That pre-auth choice is never persisted: a
+failed signup, abandoned OAuth flow, later login, or different account cannot
+inherit it. An immediately authenticated email signup records acceptance in
+that same verified session; confirmation-link and Google returns use the
+dedicated post-auth confirmation gate before Setup or product access. The
+notice remains reachable from Settings.
 
 `POST /v1/account/pilot-participation` accepts exactly:
 
@@ -45,6 +45,13 @@ product dependencies require the current persisted pair in exact `staging` and
 `pilot`; development is unchanged. Export and permanent deletion use the raw
 verified principal so a blocked account retains those controls. Repository
 source does not prove the migration is applied remotely.
+
+The separate database switch is `pilot-participation-gate-v1`. It is disabled
+by default for local development and, when bound to the exact hosted project,
+adds restrictive authenticated RLS to every product table. Missing/corrupt gate
+state fails closed. This prevents a public publishable-key client from
+bypassing the Flutter or FastAPI gate; only profile discovery, acceptance,
+export, and deletion retain their deliberately narrower pre-acceptance paths.
 
 ## Trust Boundary
 
@@ -151,7 +158,7 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v5` JSON envelope. It removes Goals, generic Recommendations,
+`account-export-v6` JSON envelope. It removes Goals, generic Recommendations,
 and Decision Feedback from the former bounded
 owner product set and includes: `profiles`, `notification_preferences`,
 `learning_preferences`, `daily_logs`,
@@ -181,14 +188,18 @@ identity and fingerprint remain excluded. The global `calendar_request_identitie
 `daily_capture_request_identities`, and
 `account_setting_request_identities`, and
 `assignment_series_request_identities` anti-replay ledgers are deliberately
-omitted and named in that policy. Deadline
+omitted and named in that policy. The operator-only
+`coach_operator_daily_budgets` aggregate and `coach_operator_dispatches`
+reservation ledger are omitted for the same backend-only reason; owner-visible provider outcome/accounting remains
+in the already exported sanitized `coach_requests` and `coach_usage_events`, so
+V6 is not widened. Deadline
 plan, revision, block, and Assignment Series content rows remain bounded owner
 product data; their opaque request fingerprints are not part of the export.
 Private `multi-exam-plan-v1` batch/revision/item/link/request rows are derived
 orchestration metadata rather than public owner-content tables and are omitted
-from `account-export-v5`. The actual affected Exam content is already present
+from `account-export-v6`. The actual affected Exam content is already present
 as Deadline plan/revision/block rows. Adding balance history would require a new
-export contract version; V5 is not widened with a second shape.
+export contract version; V6 is not widened with a second shape.
 Study Setup exports the
 current owner projection only; transient preparation-checklist decisions and
 local recovery countdown state do not exist in the export. Personal Learning
@@ -200,7 +211,7 @@ decision, omission decision, and separate Coach Snapshot participation are
 derived from the typed FastAPI owner-data catalog. Every repo-owned public
 table, including an operational ledger that participates in neither output,
 must have exactly one catalog entry. The export response contract uses the
-exact 41-table V5 shape above; Recommendation and Feedback are absent while the
+exact 41-table V6 shape above; Recommendation and Feedback are absent while the
 Assignment Series disclosure remains limited to the three
 owner-content Assignment Series projections and does not include its request
 ledger. Flutter's strict export allowlist uses the same catalog
@@ -212,7 +223,7 @@ verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant
 on `lifestyle_entries`; Flutter and anonymous callers gain no new table
 authority.
 
-The V5 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
+The V6 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
 JSON.
 Exceeding a bound is an explicit `413`, never a silently truncated export.
 Supabase pages are stream-bounded before JSON materialization, and cumulative
@@ -269,11 +280,19 @@ or raw contract detail even though Supabase remains the technical token owner.
 `DELETE /v1/account` accepts only the exact body:
 
 ```json
-{"confirmation":"DELETE"}
+{
+  "contract_version": "account-deletion-v2",
+  "deletion_id": "11111111-1111-4111-8111-111111111111",
+  "confirmation": "DELETE"
+}
 ```
 
-Flutter requires the same typed confirmation. FastAPI calls only the
-service-role-only `delete_account_v1` RPC. Before that RPC is called, the
+Flutter requires the same typed confirmation and persists one stable UUIDv4
+retry identity before sending. The response uses `account-deletion-v2`, returns
+that identity, `deletion_pending|completed`, UTC acceptance/completion times,
+and `journal_durable`; pending recovery is queried through
+`GET /v1/account/deletion` with `account-deletion-status-v2`. Before work starts,
+the
 same verified Supabase bearer JWT must contain a valid `session_id` and a
 recognized, non-refresh Authentication Methods Reference (`amr`) timestamp no
 more than 15 minutes old. The JWT is accepted by Supabase Auth before these
@@ -284,45 +303,42 @@ satisfy the guard, and a token refresh does not replace the original session
 authentication timestamp. Flutter keeps the session open and asks the user to
 sign out, sign in again, and return to the deletion control.
 
-The RPC validates the owner and confirmation, takes the existing owner workflow
-advisory locks in fixed order, locks Calendar request identities before their
-connection rows, serializes Deadline Planner requests under the same owner lock,
-locks the Auth and profile rows, and write-blocks every mapped
-CamelCase legacy table before cleanup. It removes the two Phase 3
-`ON DELETE RESTRICT` focus links and all provably owner-mapped legacy rows before
-deleting `auth.users`. The existing `auth.users -> profiles -> owned product
-rows` foreign-key cascade removes deadline plans, immutable revisions/blocks,
-and their retry ledger in the same database transaction, and both canonical and
-legacy postconditions are checked before the exact typed result is returned.
+Migration `20260820170000_account_deletion_recovery_v2.sql` first writes a
+minimal forced-RLS intent, then the hosted API appends one canonical
+`account-deletion-journal-v2` object through a write-only S3 credential with
+SSE-KMS, versioning, and 45-day Compliance Object Lock. The object contains
+only deletion UUID, owner UUID, UTC acceptance time, and contract version.
+Email and product content never enter the journal. Only after the immutable
+object/hash receipt is accepted does the owner-locked V1 implementation delete
+the account and canonical/legacy data. Direct `service_role` execution of V1 is
+revoked, so a rolled-back old API fails closed instead of bypassing the journal.
 
-An exact `deleted` or idempotent `not_found` RPC result returns `204` without a
-separate fallible profile read. After a transport, retryable `5xx`, JSON, or
-shape-ambiguous outcome, FastAPI replays the same retry-safe RPC once. Its locks
-serialize that replay behind any still-running first transaction. If the replay
-is also unresolved, FastAPI returns explicit outcome-unknown `502` rather than
-claiming either success or failure from an MVCC profile read.
+Once append begins, restrictive database policies and FastAPI dependencies
+block product access. Ambiguous append/database outcomes remain
+`deletion_pending`; the bounded reconciler retries them and readiness becomes
+unhealthy when pending work is stale. A reload or second device can resolve
+status from the verified bearer before profile loading, so it never falls into
+guest/demo data. Flutter cancels active Coach response processing, clears BYOK
+credentials before the irreversible request, retains the stable deletion ID
+across restart, and signs out only after durable acceptance/completion.
 
 Normal task/habit deletion semantics remain unchanged. Only this full-account
 RPC may remove focus history before deleting its targets. After a confirmed
 backend deletion, Flutter clears local auth state even if a remote sign-out can
 no longer find the deleted user.
 
-Migration `20260802111518_privileged_function_lint_cleanup.sql` redefines the
-same service-role-only Account Delete RPC without its redundant declared loop
-index. The three integer `FOR` loops still use their identical automatically
-scoped index, and confirmation, locks, dynamic legacy validation/deletion,
-canonical/Auth cascade, result, fixed search path, signature, and grants remain
-unchanged.
-
-Current V1 creates no backup-independent deletion receipt. Therefore a restore
-from an older logical backup could otherwise resurrect an account deleted after
-that backup. The hosted-pilot plan makes this an explicit No-Go until a new
-versioned flow durably records an encrypted off-host deletion intent before the
-database delete, represents an accepted-but-not-finished deletion as
-`deletion_pending`, blocks product use while it converges, and replays all such
-intents against an isolated restore before access. That future change requires
-the additive service-role-only schema/contract and verification synchronization
-defined in `docs/vps-pilot-release-plan.md`; it is not implemented V1 behavior.
+Backup recovery lists every retained journal object version through a separate
+read/decrypt identity, rejects delete markers, version ambiguity, wrong KMS or
+retention, and binds an exact recovery cutoff. The isolated replay tool alone
+uses the non-login `mylifegraph_deletion_replayer` role; the API `service_role`
+cannot execute replay. It re-applies each receipt, verifies absence from Auth,
+profiles, every owner relation and Storage, then emits a content-bound,
+identifier-free watermark before a restored target may open. Repository tests
+exercise these contracts on PostgreSQL 15 and 17. PostgreSQL 16+ retains only
+the unavoidable creator-to-role ADMIN membership with `SET` and `INHERIT`
+disabled; every other incident membership is drift. No real pilot bucket,
+remote deletion, or
+encrypted snapshot restore/replay has yet produced release evidence.
 
 The account-deletion migration also revokes application-role mutation of all
 known CamelCase tables. Those tables have no canonical profile FK, so this

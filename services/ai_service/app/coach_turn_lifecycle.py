@@ -45,6 +45,7 @@ class CoachServiceError(RuntimeError):
         *,
         retryable: bool,
         status_code: int,
+        response_headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.detail = CoachErrorDetail(
@@ -53,6 +54,7 @@ class CoachServiceError(RuntimeError):
             retryable=retryable,
         )
         self.status_code = status_code
+        self.response_headers = dict(response_headers or {})
 
 
 @dataclass(frozen=True)

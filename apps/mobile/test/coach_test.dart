@@ -4,14 +4,14 @@ import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'support/coach_fixtures.dart';
 
 void main() {
-  test('V3 request contains only identity and free question', () {
+  test('V4 request contains only identity and free question', () {
     final request = CoachRequest(
       requestId: coachRequestId,
       message: '  Compare all available Focus history.  ',
     );
 
     expect(request.toJson(), {
-      'contract_version': 'coach-request-v3',
+      'contract_version': 'coach-request-v4',
       'request_id': coachRequestId,
       'message': 'Compare all available Focus history.',
     });

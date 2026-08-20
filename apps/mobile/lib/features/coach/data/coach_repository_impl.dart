@@ -39,6 +39,7 @@ class CoachRepositoryImpl implements CoachRepository {
     if (_isLocalDemo) return CoachCapabilities.localDemo();
     _requireRemote();
     final credentials = _credentials();
+    _requireHostedSelection(credentials);
     return _api.getCapabilities(
       accessToken: await _requireToken(),
       provider: credentials?.provider,
@@ -62,15 +63,15 @@ class CoachRepositoryImpl implements CoachRepository {
     if (!isClientUuid(requestId)) {
       throw const CoachInputException('Coach request id is invalid.');
     }
-    final request = CoachRequest(requestId: requestId, message: message);
     final credentials = _credentials();
-    final environment = _config.environment.trim().toLowerCase();
-    if (credentials == null &&
-        const {'staging', 'production'}.contains(environment)) {
-      throw const CoachAccessException(
-        'Choose a Coach provider and test its API key in Settings first.',
-      );
-    }
+    _requireHostedSelection(credentials);
+    final request = CoachRequest(
+      requestId: requestId,
+      message: message,
+      contractVersion: credentials == null
+          ? 'coach-request-v3'
+          : coachRequestContractVersion,
+    );
     if (_activeResponseCancellation != null) {
       throw const CoachAccessException(
         'Another Coach response is already in progress.',
@@ -148,7 +149,7 @@ class CoachRepositoryImpl implements CoachRepository {
     final credentials = _credentialsProvider();
     if (credentials == null) return null;
     final environment = _config.environment.trim().toLowerCase();
-    if (const {'staging', 'production'}.contains(environment)) {
+    if (const {'staging', 'pilot', 'production'}.contains(environment)) {
       final uri = Uri.tryParse(_config.aiServiceBaseUrl);
       if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
         throw const CoachAccessException(
@@ -157,6 +158,16 @@ class CoachRepositoryImpl implements CoachRepository {
       }
     }
     return credentials;
+  }
+
+  void _requireHostedSelection(CoachProviderCredentials? credentials) {
+    final environment = _config.environment.trim().toLowerCase();
+    if (credentials == null &&
+        const {'staging', 'pilot', 'production'}.contains(environment)) {
+      throw const CoachAccessException(
+        'Choose Project Coach or a personal API-key provider in Settings first.',
+      );
+    }
   }
 
   Future<String> _requireToken() async {
@@ -176,7 +187,7 @@ class CoachRepositoryImpl implements CoachRepository {
 }
 
 int _statusForError(String code) {
-  if (code == 'account_limit') return 429;
+  if (code == 'account_limit' || code == 'provider_limit') return 429;
   if (code == 'in_progress' || code == 'request_conflict') return 409;
   if (code == 'history_deleted') return 410;
   return 503;

@@ -1,0 +1,55 @@
+[Unit]
+Description=MyLifeGraph isolated Coach executor
+Requires=mylifegraph-coach-executor.socket
+After=network-online.target mylifegraph-coach-executor.socket
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=coach-executor
+Group=coach-executor
+SupplementaryGroups=mylifegraph-release
+WorkingDirectory=/srv/mylifegraph/current/services/ai_service
+EnvironmentFile=/etc/mylifegraph/executor.env
+# Generated from the release's path-independent image revision. It is loaded
+# last so mutable host configuration cannot redirect a rollback to another tag.
+EnvironmentFile=-/srv/mylifegraph/current/.mylifegraph-executor-release.env
+ExecStart=/srv/mylifegraph/current/services/ai_service/.venv/bin/python -m app.coach_executor
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+UMask=0077
+StateDirectory=mylifegraph-coach
+StateDirectoryMode=0700
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+# Rootless Docker exposes its Unix socket below /run/user/<uid>. Keep that
+# hierarchy visible but read-only while hiding actual login homes entirely.
+ProtectHome=read-only
+InaccessiblePaths=/home /root
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+TasksMax=256
+LimitNOFILE=4096
+MemoryMax=2G
+ReadOnlyPaths=/srv/mylifegraph
+ReadWritePaths=/var/lib/mylifegraph-coach
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mylifegraph-coach-executor
+
+[Install]
+WantedBy=multi-user.target

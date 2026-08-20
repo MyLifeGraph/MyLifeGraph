@@ -47,6 +47,40 @@ void main() {
     );
   });
 
+  test('Retry-After accepts the exact hosted admission range only', () async {
+    final oneSecond = await _requestFailure(
+      DioExceptionType.badResponse,
+      statusCode: 429,
+      retryAfter: '1',
+    );
+    final sixtySeconds = await _requestFailure(
+      DioExceptionType.badResponse,
+      statusCode: 429,
+      retryAfter: '60',
+    );
+    final zero = await _requestFailure(
+      DioExceptionType.badResponse,
+      statusCode: 429,
+      retryAfter: '0',
+    );
+    final overBound = await _requestFailure(
+      DioExceptionType.badResponse,
+      statusCode: 429,
+      retryAfter: '61',
+    );
+    final httpDate = await _requestFailure(
+      DioExceptionType.badResponse,
+      statusCode: 429,
+      retryAfter: 'Wed, 21 Oct 2030 07:28:00 GMT',
+    );
+
+    expect(oneSecond.retryAfterSeconds, 1);
+    expect(sixtySeconds.retryAfterSeconds, 60);
+    expect(zero.retryAfterSeconds, isNull);
+    expect(overBound.retryAfterSeconds, isNull);
+    expect(httpDate.retryAfterSeconds, isNull);
+  });
+
   test('authorization and server outcomes remain queryable without Dio', () {
     const unauthorized = ApiFailure(
       kind: ApiFailureKind.response,
@@ -97,6 +131,7 @@ Future<ApiFailure> _requestFailure(
   DioExceptionType type, {
   int? statusCode,
   Object? responseData,
+  String? retryAfter,
 }) async {
   final dio = Dio(BaseOptions(baseUrl: 'https://api.test'));
   dio.interceptors.add(
@@ -112,6 +147,11 @@ Future<ApiFailure> _requestFailure(
                     requestOptions: options,
                     statusCode: statusCode,
                     data: responseData,
+                    headers: retryAfter == null
+                        ? null
+                        : Headers.fromMap({
+                            'retry-after': [retryAfter],
+                          }),
                   ),
           ),
         );

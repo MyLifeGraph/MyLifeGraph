@@ -17,11 +17,13 @@ class ApiFailure {
     required this.kind,
     this.statusCode,
     this.responseData,
+    this.retryAfterSeconds,
   });
 
   final ApiFailureKind kind;
   final int? statusCode;
   final Object? responseData;
+  final int? retryAfterSeconds;
 
   bool get isTimeout => kind == ApiFailureKind.timeout;
   bool get isConnectionFailure => kind == ApiFailureKind.connection;

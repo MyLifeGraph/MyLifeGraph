@@ -13,10 +13,14 @@ const validEnvironment = {
   APP_ENV: 'staging',
   USE_MOCK_DATA: 'false',
   COACH_SURFACE_ENABLED: 'true',
+  APP_BUILD_SHA: 'a'.repeat(40),
+  APP_RELEASE_TAG: 'v0.1.0-pilot.1-rc.1',
   STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
   SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co/',
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
   PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
+  APP_PUBLIC_ORIGIN: 'https://app-staging.example.test/',
+  TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
   AI_SERVICE_BASE_URL: 'https://coach-staging.example.test/',
 };
 
@@ -25,12 +29,16 @@ test('hosted defines require complete fail-closed staging configuration', () => 
     APP_ENV: 'staging',
     USE_MOCK_DATA: 'false',
     COACH_SURFACE_ENABLED: 'true',
+    APP_BUILD_SHA: 'a'.repeat(40),
+    APP_RELEASE_TAG: 'v0.1.0-pilot.1-rc.1',
     STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
     PILOT_SUPABASE_PROJECT_REF: '',
     SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co',
     SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
     SUPABASE_ANON_KEY: '',
     PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
+    APP_PUBLIC_ORIGIN: 'https://app-staging.example.test',
+    TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
     AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
   });
 
@@ -40,7 +48,11 @@ test('hosted defines require complete fail-closed staging configuration', () => 
     'SUPABASE_URL',
     'SUPABASE_PUBLISHABLE_KEY',
     'PILOT_CONTACT_EMAIL',
+    'APP_PUBLIC_ORIGIN',
+    'TURNSTILE_SITE_KEY',
     'AI_SERVICE_BASE_URL',
+    'APP_BUILD_SHA',
+    'APP_RELEASE_TAG',
   ]) {
     assert.throws(
       () => hostedFlutterDefines({ ...validEnvironment, [name]: '' }),
@@ -145,12 +157,16 @@ test('hosted defines are written with owner-only permissions', () => {
       APP_ENV: 'staging',
       USE_MOCK_DATA: 'false',
       COACH_SURFACE_ENABLED: 'true',
+      APP_BUILD_SHA: 'a'.repeat(40),
+      APP_RELEASE_TAG: 'v0.1.0-pilot.1-rc.1',
       STAGING_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
       PILOT_SUPABASE_PROJECT_REF: '',
       SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co',
       SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
       SUPABASE_ANON_KEY: '',
       PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
+      APP_PUBLIC_ORIGIN: 'https://app-staging.example.test',
+      TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
       AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
     });
   } finally {

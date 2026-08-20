@@ -2,14 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/features/auth/data/pilot_participation_api_data_source.dart';
-import 'package:my_life_graph/features/auth/data/pilot_participation_pending_store.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/domain/pilot_participation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   test('participation response is strict and requires a UTC backend time', () {
     final acceptance = PilotParticipationAcceptance.fromJson({
       'contract_version': pilotParticipationContractVersion,
@@ -46,44 +42,6 @@ void main() {
       'confirmed_18_or_older': true,
     });
     expect(client.body, isNot(contains('birth_date')));
-  });
-
-  test('pending choice is short-lived and bound to its exact auth flow',
-      () async {
-    const store = PilotParticipationPendingStore();
-    final now = DateTime.utc(2026, 8, 19, 12);
-    await store.record(
-      noticeVersion: pilotParticipationNoticeVersion,
-      flow: PilotParticipationFlow.email,
-      identity: 'Person@Example.test',
-      now: now,
-    );
-
-    expect(
-      await store.matches(
-        noticeVersion: pilotParticipationNoticeVersion,
-        flow: PilotParticipationFlow.email,
-        identity: 'person@example.test',
-        now: now.add(const Duration(minutes: 29)),
-      ),
-      isTrue,
-    );
-
-    await store.record(
-      noticeVersion: pilotParticipationNoticeVersion,
-      flow: PilotParticipationFlow.google,
-      identity: '',
-      now: now,
-    );
-    expect(
-      await store.matches(
-        noticeVersion: pilotParticipationNoticeVersion,
-        flow: PilotParticipationFlow.email,
-        identity: '',
-        now: now,
-      ),
-      isFalse,
-    );
   });
 
   test('profile eligibility comes only from the persisted current pair', () {

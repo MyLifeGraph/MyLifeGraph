@@ -6,10 +6,12 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/composition/coach_credentials_providers.dart';
+import 'package:my_life_graph/composition/coach_response_cancellation.dart';
 import '../../application/coach_controller.dart';
 import '../../application/coach_turn_notice.dart';
 import '../../data/coach_api_data_source.dart';
 import '../../data/coach_repository_impl.dart';
+import '../../domain/coach.dart';
 import '../../domain/coach_repository.dart';
 
 final coachApiDataSourceProvider = Provider<CoachApiDataSource>(
@@ -30,7 +32,7 @@ final coachRepositoryProvider = Provider<CoachRepository>((ref) {
       (value) => value.canAccessCoachBackend,
     ),
   );
-  return CoachRepositoryImpl(
+  final repository = CoachRepositoryImpl(
     config: ref.watch(appConfigProvider),
     apiDataSource: ref.watch(coachApiDataSourceProvider),
     accessTokenProvider: ref.watch(coachAccessTokenProvider),
@@ -38,16 +40,27 @@ final coachRepositoryProvider = Provider<CoachRepository>((ref) {
     canAccessCoachBackend: canAccessCoachBackend,
     credentialsProvider: () {
       final credentials = ref.read(coachCredentialsProvider);
+      final provider = credentials.provider;
       final key = credentials.activeKey;
-      if (credentials.profileId == null || key == null || key.isEmpty) {
+      if (credentials.profileId == null || provider == null) {
         return null;
       }
+      if (provider == CoachProviderName.operatorCodexPilot) {
+        return const CoachProviderCredentials(
+          provider: CoachProviderName.operatorCodexPilot,
+        );
+      }
+      if (key == null || key.isEmpty) return null;
       return CoachProviderCredentials(
-        provider: credentials.provider,
+        provider: provider,
         apiKey: key,
       );
     },
   );
+  final cancellation = ref.read(coachResponseCancellationAuthorityProvider);
+  final registration = cancellation.register(repository.cancelActiveResponse);
+  ref.onDispose(() => cancellation.unregister(registration));
+  return repository;
 });
 
 final coachActiveProfileIdProvider = Provider<String?>((ref) {

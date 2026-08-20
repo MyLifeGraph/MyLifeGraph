@@ -1,11 +1,9 @@
-FROM python:3.12.10-slim-bookworm
+FROM python:3.12.10-slim-bookworm@sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5d1805692d11588db
 
-RUN pip install --no-cache-dir \
-      matplotlib==3.10.3 \
-      numpy==2.2.6 \
-      pandas==2.2.3 \
-      scipy==1.15.3 \
-      statsmodels==0.14.4 \
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --only-binary=:all: --require-hashes \
+      -r /tmp/requirements.txt \
+    && rm -f /tmp/requirements.txt \
     && useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin coach
 
 COPY runner.py /opt/coach-analysis/runner.py

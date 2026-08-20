@@ -37,10 +37,18 @@ test('@account-controls exports and permanently deletes through Settings', async
   );
   const exportBytes = await exportResponse.body();
   const exported = JSON.parse(exportBytes.toString('utf8'));
-  expect(exported.contract_version).toBe('account-export-v5');
+  expect(exported.contract_version).toBe('account-export-v6');
   expect(Object.keys(exported.data ?? {})).toHaveLength(41);
   expect(exported.data).not.toHaveProperty('recommendations');
   expect(exported.data).not.toHaveProperty('decision_feedback');
+  expect(exported.data).not.toHaveProperty('coach_operator_daily_budgets');
+  expect(exported.data).not.toHaveProperty('coach_operator_dispatches');
+  expect(exported.data).not.toHaveProperty('account_deletion_intents');
+  expect(exported.ledger_policy?.omitted_tables).toMatchObject({
+    coach_operator_daily_budgets: 'backend_only_anti_replay_ledger',
+    coach_operator_dispatches: 'backend_only_anti_replay_ledger',
+    account_deletion_intents: 'backend_only_restore_safe_deletion_ledger',
+  });
   expect(exported.data?.profiles?.[0]?.id).toBe(
     e2e.identity.user.id,
   );
@@ -67,11 +75,21 @@ test('@account-controls exports and permanently deletes through Settings', async
   );
   await clickFlutterText(page, 'Delete account', { match: 'last' });
   const deleteResponse = await deleteResponsePromise;
-  expect(deleteResponse.status()).toBe(204);
-  expect(deleteResponse.request().postDataJSON()).toEqual({
+  expect(deleteResponse.status()).toBe(200);
+  const deleteRequest = deleteResponse.request().postDataJSON();
+  expect(deleteRequest).toEqual({
+    contract_version: 'account-deletion-v2',
+    deletion_id: expect.stringMatching(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    ),
     confirmation: 'DELETE',
   });
-  expect((await deleteResponse.body()).length).toBe(0);
+  expect(await deleteResponse.json()).toMatchObject({
+    contract_version: 'account-deletion-v2',
+    deletion_id: deleteRequest.deletion_id,
+    state: 'completed',
+    journal_durable: true,
+  });
   await page.waitForURL('**/#/auth**', { timeout: 45000 });
   await expectFlutterText(page, 'Account and saved synced data deleted.');
   expect((await e2e.admin.getUser(e2e.identity.user.id)).status).toBe(404);

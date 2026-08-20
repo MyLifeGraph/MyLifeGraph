@@ -3,15 +3,20 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/contracts/account_deletion.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/settings/data/account_api_data_source.dart';
+import 'package:my_life_graph/features/settings/data/account_deletion_coordinator.dart';
+import 'package:my_life_graph/features/settings/data/account_deletion_pending_store.dart';
 import 'package:my_life_graph/features/settings/data/account_settings_repository_impl.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings.dart';
 
 void main() {
+  const deletionId = 'a1000000-0000-4000-8000-000000000001';
   const config = AppConfig(
     environment: 'test',
     supabaseUrl: 'http://127.0.0.1:54321',
@@ -19,6 +24,8 @@ void main() {
     aiServiceBaseUrl: 'http://127.0.0.1:8000',
     useMockData: false,
   );
+
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test('export contract includes Focus provenance and Planner content', () {
     expect(accountExportTableNames, hasLength(41));
@@ -78,10 +85,19 @@ void main() {
         ],
       ),
     );
+    final dataSource = AccountApiDataSource(client);
     final repository = AccountSettingsRepositoryImpl(
       config: config,
-      apiDataSource: AccountApiDataSource(client),
+      apiDataSource: dataSource,
+      deletionCoordinator: AccountDeletionCoordinator(
+        apiDataSource: dataSource,
+        pendingStore: const AccountDeletionPendingStore(),
+      ),
       accessTokenProvider: () => ' account-token ',
+      authSnapshotProvider: () => const AccountAuthSnapshot(
+        userId: 'account-id',
+        accessToken: 'account-token',
+      ),
       canUseSyncedAccount: true,
     );
 
@@ -90,11 +106,11 @@ void main() {
       expectedRevision: 4,
     );
     final export = await repository.exportAccount();
-    await repository.deleteAccount();
+    await repository.deleteAccount(expectedUserId: 'account-id');
 
     expect(write.timezone, 'Europe/London');
     expect(write.revision, 5);
-    expect(export.contractVersion, 'account-export-v5');
+    expect(export.contractVersion, 'account-export-v6');
     expect(export.recordCounts['profiles'], 1);
     expect(client.patchCalls, ['/v1/account/profile']);
     expect(client.getCalls, ['/v1/account/export']);
@@ -115,7 +131,11 @@ void main() {
         ),
       ),
     );
-    expect(client.bodyByPath['/v1/account'], {'confirmation': 'DELETE'});
+    expect(client.bodyByPath['/v1/account'], {
+      'contract_version': accountDeletionContractVersion,
+      'deletion_id': isA<String>(),
+      'confirmation': 'DELETE',
+    });
     for (final headers in client.headersByPath.values) {
       expect(headers, {'Authorization': 'Bearer account-token'});
     }
@@ -244,7 +264,7 @@ void main() {
     expect(export.fileBytes, expected);
   });
 
-  test('delete requires exact empty 204 and classifies ambiguous outcomes',
+  test('delete requires exact V2 result and classifies ambiguous outcomes',
       () async {
     await expectLater(
       AccountApiDataSource(
@@ -254,18 +274,18 @@ void main() {
             body: '',
           ),
         ),
-      ).deleteAccount(accessToken: 'token'),
+      ).deleteAccount(accessToken: 'token', deletionId: deletionId),
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(
           deleteResponse: const ApiMutationResponse(
-            statusCode: 204,
+            statusCode: 202,
             body: 'unexpected',
           ),
         ),
-      ).deleteAccount(accessToken: 'token'),
+      ).deleteAccount(accessToken: 'token', deletionId: deletionId),
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
 
@@ -276,7 +296,7 @@ void main() {
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(deleteError: unknownResponse),
-      ).deleteAccount(accessToken: 'token'),
+      ).deleteAccount(accessToken: 'token', deletionId: deletionId),
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
 
@@ -284,7 +304,7 @@ void main() {
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(deleteError: transportLoss),
-      ).deleteAccount(accessToken: 'token'),
+      ).deleteAccount(accessToken: 'token', deletionId: deletionId),
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
 
@@ -295,7 +315,7 @@ void main() {
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(deleteError: gatewayTimeout),
-      ).deleteAccount(accessToken: 'token'),
+      ).deleteAccount(accessToken: 'token', deletionId: deletionId),
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
   });
@@ -309,8 +329,107 @@ void main() {
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(deleteError: recentAuthenticationRequired),
-      ).deleteAccount(accessToken: 'token'),
+      ).deleteAccount(accessToken: 'token', deletionId: deletionId),
       throwsA(isA<AccountRecentAuthenticationRequiredException>()),
+    );
+  });
+
+  test('deletion parser rejects naive times and status adopts server identity',
+      () async {
+    final naive = jsonEncode({
+      'contract_version': accountDeletionContractVersion,
+      'deletion_id': deletionId,
+      'state': 'deletion_pending',
+      'accepted_at': '2026-08-20T12:00:00',
+      'completed_at': null,
+      'journal_durable': false,
+    });
+    await expectLater(
+      AccountApiDataSource(
+        _TrackingApiClient(
+          deleteResponse: ApiMutationResponse(statusCode: 202, body: naive),
+        ),
+      ).deleteAccount(accessToken: 'token', deletionId: deletionId),
+      throwsA(isA<AccountDeletionOutcomeUnknownException>()),
+    );
+
+    const serverDeletionId = 'a1000000-0000-4000-8000-000000000099';
+    final client = _TrackingApiClient(
+      getResponse: const {
+        'contract_version': 'account-deletion-status-v2',
+        'deletion': {
+          'contract_version': accountDeletionContractVersion,
+          'deletion_id': serverDeletionId,
+          'state': 'deletion_pending',
+          'accepted_at': '2026-08-20T12:00:00Z',
+          'completed_at': null,
+          'journal_durable': true,
+        },
+      },
+      deleteError: const ApiFailure(
+        kind: ApiFailureKind.response,
+        statusCode: 503,
+      ),
+    );
+    final store = const AccountDeletionPendingStore();
+    final recovery = await AccountDeletionCoordinator(
+      apiDataSource: AccountApiDataSource(client),
+      pendingStore: store,
+    ).resume(userId: 'account-id', accessToken: 'token');
+
+    expect(recovery?.deletionId, serverDeletionId);
+    expect(recovery?.journalDurable, isTrue);
+    expect(await store.read(userId: 'account-id'), serverDeletionId);
+    expect(client.bodyByPath['/v1/account']?['deletion_id'], serverDeletionId);
+  });
+
+  test('pending deletion store serializes concurrent identity creation',
+      () async {
+    final store = const AccountDeletionPendingStore();
+    final identities = await Future.wait([
+      store.getOrCreate(userId: 'account-id'),
+      store.getOrCreate(userId: 'account-id'),
+      store.getOrCreate(userId: 'account-id'),
+    ]);
+
+    final identitySet = identities.toSet();
+    expect(identitySet, hasLength(1));
+    expect(await store.read(userId: 'account-id'), identitySet.single);
+  });
+
+  test('delete aborts before transport when the authenticated owner changes',
+      () async {
+    final client = _TrackingApiClient();
+    final dataSource = AccountApiDataSource(client);
+    var reads = 0;
+    AccountAuthSnapshot? authSnapshot() {
+      reads += 1;
+      return AccountAuthSnapshot(
+        userId: reads < 3 ? 'account-id' : 'other-account-id',
+        accessToken: reads < 3 ? 'token-a' : 'token-b',
+      );
+    }
+
+    final repository = AccountSettingsRepositoryImpl(
+      config: config,
+      apiDataSource: dataSource,
+      deletionCoordinator: AccountDeletionCoordinator(
+        apiDataSource: dataSource,
+        pendingStore: const AccountDeletionPendingStore(),
+      ),
+      accessTokenProvider: () => 'token-a',
+      authSnapshotProvider: authSnapshot,
+      canUseSyncedAccount: true,
+    );
+
+    await expectLater(
+      repository.deleteAccount(expectedUserId: 'account-id'),
+      throwsA(isA<AccountSettingsAccessException>()),
+    );
+    expect(client.deleteCalls, isEmpty);
+    expect(
+      await const AccountDeletionPendingStore().read(userId: 'account-id'),
+      isNull,
     );
   });
 
@@ -531,7 +650,7 @@ void main() {
         throwsA(isA<AccountSettingsAccessException>()),
       );
       await expectLater(
-        repository.deleteAccount(),
+        repository.deleteAccount(expectedUserId: 'account-id'),
         throwsA(isA<AccountSettingsAccessException>()),
       );
     }
@@ -542,10 +661,7 @@ class _TrackingApiClient extends ApiClient {
   _TrackingApiClient({
     this.patchResponse = const <String, dynamic>{},
     this.getResponse = const <String, dynamic>{},
-    this.deleteResponse = const ApiMutationResponse(
-      statusCode: 204,
-      body: null,
-    ),
+    this.deleteResponse,
     this.patchError,
     this.getError,
     this.deleteError,
@@ -555,7 +671,7 @@ class _TrackingApiClient extends ApiClient {
 
   final Map<String, dynamic> patchResponse;
   final Map<String, dynamic> getResponse;
-  final ApiMutationResponse deleteResponse;
+  final ApiMutationResponse? deleteResponse;
   final ApiFailure? patchError;
   final ApiFailure? getError;
   final ApiFailure? deleteError;
@@ -636,7 +752,18 @@ class _TrackingApiClient extends ApiClient {
     if (error != null) {
       throw AppException('Network request failed', cause: error);
     }
-    return deleteResponse;
+    return deleteResponse ??
+        ApiMutationResponse(
+          statusCode: 200,
+          body: jsonEncode({
+            'contract_version': accountDeletionContractVersion,
+            'deletion_id': body['deletion_id'],
+            'state': 'completed',
+            'accepted_at': '2026-08-20T12:00:00Z',
+            'completed_at': '2026-08-20T12:00:01Z',
+            'journal_durable': true,
+          }),
+        );
   }
 }
 
@@ -649,7 +776,7 @@ Map<String, dynamic> _validExportJson({
   };
   data['profiles'] = profileRows;
   return {
-    'contract_version': 'account-export-v5',
+    'contract_version': 'account-export-v6',
     'exported_at': '2026-07-13T12:00:00Z',
     'data': data,
     'record_counts': <String, int>{

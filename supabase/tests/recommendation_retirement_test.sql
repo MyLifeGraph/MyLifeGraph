@@ -29,31 +29,31 @@ select ok(
 );
 select ok(
   to_regprocedure(
-    'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)'
+    'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)'
   ) is not null
     and to_regprocedure(
       'public.persist_weekly_review_v3(uuid,text,timestamp with time zone,jsonb)'
     ) is not null,
-  'Coach V7 and Weekly V3 are the installed writer contracts'
+  'Coach V8 and Weekly V3 are the installed writer contracts'
 );
 
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
     and not has_function_privilege(
       'authenticated',
-      'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+      'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)',
       'EXECUTE'
     )
     and not has_function_privilege(
       'anon',
-      'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+      'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)',
       'EXECUTE'
     ),
-  'Coach V7 is service-role-only'
+  'Coach V8 is service-role-only'
 );
 select is_empty(
   $$
@@ -61,7 +61,9 @@ select is_empty(
     from unnest(array[
       'public.claim_coach_request_v3(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
       'public.claim_coach_request_v4(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
-      'public.claim_coach_request_v5(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)'
+      'public.claim_coach_request_v5(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+      'public.claim_coach_request_v6(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+      'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)'
     ]) as signature
     where has_function_privilege('service_role', signature, 'EXECUTE')
   $$,
@@ -135,10 +137,10 @@ select is(
     select proconfig
     from pg_proc
     where oid =
-      'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)'::regprocedure
+      'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)'::regprocedure
   ),
   array['search_path=pg_catalog, pg_temp']::text[],
-  'Coach V7 fixes its SECURITY DEFINER search path'
+  'Coach V8 fixes its SECURITY DEFINER search path'
 );
 select is(
   (

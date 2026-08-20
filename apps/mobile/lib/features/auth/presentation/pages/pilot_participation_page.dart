@@ -78,7 +78,7 @@ class _PilotParticipationPageState
                     controlAffinity: ListTileControlAffinity.leading,
                     title: const Text('I confirm that I am 18 or older'),
                     subtitle: const Text(
-                      'The backend stores only the current notice version and acceptance time. No birth date is collected.',
+                      'Only the current notice version and acceptance time are saved. No birth date is collected.',
                     ),
                   ),
                 ],

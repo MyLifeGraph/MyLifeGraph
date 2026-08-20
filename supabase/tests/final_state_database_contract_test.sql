@@ -103,12 +103,14 @@ select is_empty(
   $$
     select rpc::text
     from unnest(array[
-      'public.delete_account_v1(uuid,text)'::regprocedure,
+      'public.prepare_account_deletion_v2(uuid,uuid,text)'::regprocedure,
+      'public.complete_account_deletion_v2('
+        'uuid,uuid,text,timestamp with time zone)'::regprocedure,
       'public.apply_notification_action_v1('
         'uuid,uuid,uuid,text,timestamp with time zone)'::regprocedure,
-      'public.claim_coach_request_v7('
-        'uuid,uuid,text,date,text,text,text,text,timestamp with time zone,'
-        'timestamp with time zone,integer)'::regprocedure,
+      'public.claim_coach_request_v8('
+        'uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,'
+        'timestamp with time zone,integer,boolean)'::regprocedure,
       'public.persist_weekly_review_v3('
         'uuid,text,timestamp with time zone,jsonb)'::regprocedure,
       'public.accept_pilot_participation_v1(uuid,text)'::regprocedure,
@@ -121,37 +123,45 @@ select is_empty(
   'critical owner-mutating RPCs retain service-role execution authority'
 );
 
-select set_eq(
+select ok(
+  not has_function_privilege(
+    'service_role', 'public.delete_account_v1(uuid,text)', 'EXECUTE'
+  ),
+  'the superseded direct V1 Account Delete path fails closed after V2'
+);
+
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+    'EXECUTE'
+  ),
+  'the superseded V7 Coach claim is no longer executable'
+);
+
+select is_empty(
   $$
-    select policyname::text
-    from pg_policies
-    where schemaname = 'public'
-      and tablename in (
-        'profiles',
-        'behavioral_events',
-        'daily_logs',
-        'focus_sessions',
-        'habit_logs',
-        'habits',
-        'lifestyle_entries',
-        'notification_preferences',
-        'schedule_items',
-        'tasks'
+    select expected.policyname
+    from unnest(array[
+      'profiles_own_or_admin_all',
+      'behavioral_events_own_or_admin_all',
+      'daily_logs_own_or_admin_all',
+      'focus_sessions_own_or_admin_all',
+      'habit_logs_own_or_admin_all',
+      'habits_own_or_admin_all',
+      'lifestyle_entries_own_or_admin_all',
+      'notification_preferences_own_or_admin_all',
+      'schedule_items_own_or_admin_all',
+      'tasks_own_or_admin_all'
+    ]::text[]) as expected(policyname)
+    where not exists (
+      select 1
+      from pg_policies as policy
+      where policy.schemaname = 'public'
+        and policy.policyname = expected.policyname
       )
   $$,
-  array[
-    'profiles_own_or_admin_all',
-    'behavioral_events_own_or_admin_all',
-    'daily_logs_own_or_admin_all',
-    'focus_sessions_own_or_admin_all',
-    'habit_logs_own_or_admin_all',
-    'habits_own_or_admin_all',
-    'lifestyle_entries_own_or_admin_all',
-    'notification_preferences_own_or_admin_all',
-    'schedule_items_own_or_admin_all',
-    'tasks_own_or_admin_all'
-  ]::text[],
-  'the optimized canonical owner/admin policy set is installed'
+  'the optimized canonical owner/admin policies remain installed alongside restrictive gates'
 );
 
 select is_empty(

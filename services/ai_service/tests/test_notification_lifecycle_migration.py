@@ -124,6 +124,11 @@ def test_account_export_truthfully_names_the_omitted_notification_ledger() -> No
         "assignment_series_request_identities": "backend_only_anti_replay_ledger",
         "planner_request_identities": "backend_only_anti_replay_ledger",
         "learning_request_identities": "backend_only_anti_replay_ledger",
+        "coach_operator_daily_budgets": "backend_only_anti_replay_ledger",
+        "coach_operator_dispatches": "backend_only_anti_replay_ledger",
+        "account_deletion_intents": (
+            "backend_only_restore_safe_deletion_ledger"
+        ),
     }
     assert re.search(
         r"foreign key \(notification_id, user_id\).*?on delete cascade",

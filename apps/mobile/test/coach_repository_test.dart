@@ -21,6 +21,16 @@ void main() {
     aiServiceBaseUrl: 'http://127.0.0.1:8000',
     useMockData: false,
   );
+  const pilotConfig = AppConfig(
+    environment: 'pilot',
+    supabaseUrl: 'https://bcdefghijklmnopqrstu.supabase.co',
+    supabasePublishableKey: 'sb_publishable_test-value',
+    stagingSupabaseProjectRef: 'abcdefghijklmnopqrst',
+    pilotSupabaseProjectRef: 'bcdefghijklmnopqrstu',
+    pilotContactEmail: 'pilot@example.test',
+    aiServiceBaseUrl: 'https://coach.example.test',
+    useMockData: false,
+  );
 
   test('reads and streams exact V3 request without a mode', () async {
     final client = _TrackingApiClient(
@@ -94,6 +104,44 @@ void main() {
     );
   });
 
+  test('SSE global Project Coach limit remains a typed 429', () async {
+    final client = _TrackingApiClient(
+      responseSse: _sse([
+        (
+          'started',
+          {
+            'request_id': coachRequestId,
+            'contract_version': 'coach-request-v3',
+          },
+        ),
+        (
+          'failed',
+          {
+            'error': {
+              'code': 'provider_limit',
+              'message': 'Shared provider limit reached.',
+              'retryable': true,
+            },
+          },
+        ),
+      ]),
+    );
+    final repository = _repository(client, config: config);
+
+    await expectLater(
+      repository.respond(requestId: coachRequestId, message: 'Hello'),
+      emitsInOrder([
+        isA<CoachStartedEvent>(),
+        emitsError(
+          isA<CoachRemoteException>()
+              .having((value) => value.code, 'code', 'provider_limit')
+              .having((value) => value.statusCode, 'statusCode', 429)
+              .having((value) => value.isRateLimited, 'rate limited', isTrue),
+        ),
+      ]),
+    );
+  });
+
   test('transport timeout becomes a typed replay-safe remote outcome',
       () async {
     final repository = _repository(
@@ -120,6 +168,59 @@ void main() {
       ),
     );
   });
+
+  for (final admission in const [
+    (code: 'route_busy', retryAfter: 1),
+    (code: 'route_rate_limited', retryAfter: 60),
+  ]) {
+    test('HTTP ${admission.code} remains a typed transient admission outcome',
+        () async {
+      final repository = _repository(
+        _TrackingApiClient(
+          requestError: AppException(
+            'Network request failed',
+            cause: ApiFailure(
+              kind: ApiFailureKind.response,
+              statusCode: 429,
+              responseData: {
+                'detail': {
+                  'code': admission.code,
+                  'message': 'The public service is temporarily rate limited.',
+                  'retryable': true,
+                },
+              },
+              retryAfterSeconds: admission.retryAfter,
+            ),
+          ),
+        ),
+        config: config,
+      );
+
+      await expectLater(
+        repository.getCapabilities(),
+        throwsA(
+          isA<CoachRemoteException>()
+              .having((value) => value.code, 'code', admission.code)
+              .having(
+                (value) => value.retryAfterSeconds,
+                'retryAfterSeconds',
+                admission.retryAfter,
+              )
+              .having(
+                (value) => value.isTransientAdmission,
+                'isTransientAdmission',
+                isTrue,
+              )
+              .having((value) => value.isRateLimited, 'isRateLimited', isFalse)
+              .having(
+                (value) => value.preservesRequestIdentity,
+                'preservesRequestIdentity',
+                isTrue,
+              ),
+        ),
+      );
+    });
+  }
 
   test('guest uses local read truth and never calls HTTP', () async {
     final client = _TrackingApiClient(throwOnRequest: true);
@@ -214,6 +315,76 @@ void main() {
       emitsError(isA<CoachContractException>()),
     );
   });
+
+  test('hosted Project Coach sends V4 provider header without any key',
+      () async {
+    final client = _TrackingApiClient(
+      getResponses: {
+        '/v1/coach/capabilities': coachCapabilitiesJson(
+          provider: 'operator_codex_pilot',
+          providerMode: 'operator_subscription_pilot',
+          modelRequested: 'gpt-5.5',
+          modelSource: 'explicit',
+          serviceTier: 'fast',
+          fastMode: true,
+          requestsPerLocalDay: 5,
+          remainingRequests: 5,
+          globalRequestsPerUtcDay: 15,
+          globalRemainingRequests: 15,
+        ),
+      },
+      responseSse: _successfulSse(
+        requestContractVersion: 'coach-request-v4',
+      ),
+    );
+    final repository = _repository(
+      client,
+      config: pilotConfig,
+      credentials: const CoachProviderCredentials(
+        provider: CoachProviderName.operatorCodexPilot,
+      ),
+    );
+
+    final capability = await repository.getCapabilities();
+    final events = await repository
+        .respond(requestId: coachRequestId, message: 'Compare my data.')
+        .toList();
+
+    expect(capability.provider, CoachProviderName.operatorCodexPilot);
+    expect(
+      client.lastGetHeaders?['X-MyLifeGraph-Coach-Provider'],
+      'operator_codex_pilot',
+    );
+    expect(
+      client.lastGetHeaders,
+      isNot(contains('X-MyLifeGraph-Coach-Api-Key')),
+    );
+    expect(
+      client.streamHeaders?['X-MyLifeGraph-Coach-Provider'],
+      'operator_codex_pilot',
+    );
+    expect(
+      client.streamHeaders,
+      isNot(contains('X-MyLifeGraph-Coach-Api-Key')),
+    );
+    expect(client.requestBody?['contract_version'], 'coach-request-v4');
+    expect(events.whereType<CoachCompletedEvent>(), hasLength(1));
+  });
+
+  test('hosted Coach refuses sending before an explicit selection', () async {
+    final client = _TrackingApiClient(throwOnRequest: true);
+    final repository = _repository(client, config: pilotConfig);
+
+    await expectLater(
+      repository.getCapabilities(),
+      throwsA(isA<CoachAccessException>()),
+    );
+    await expectLater(
+      repository.respond(requestId: coachRequestId, message: 'Hello'),
+      emitsError(isA<CoachAccessException>()),
+    );
+    expect(client.totalCalls, 0);
+  });
 }
 
 CoachRepositoryImpl _repository(
@@ -222,6 +393,7 @@ CoachRepositoryImpl _repository(
   bool isLocalDemo = false,
   bool canAccessCoachBackend = true,
   String? token = ' account-token ',
+  CoachProviderCredentials? credentials,
 }) =>
     CoachRepositoryImpl(
       config: config,
@@ -229,14 +401,19 @@ CoachRepositoryImpl _repository(
       accessTokenProvider: () => token,
       isLocalDemo: isLocalDemo,
       canAccessCoachBackend: canAccessCoachBackend,
+      credentialsProvider: () => credentials,
     );
 
-String _successfulSse({String responseRequestId = coachRequestId}) => _sse([
+String _successfulSse({
+  String responseRequestId = coachRequestId,
+  String requestContractVersion = 'coach-request-v3',
+}) =>
+    _sse([
       (
         'started',
         {
           'request_id': coachRequestId,
-          'contract_version': 'coach-request-v3',
+          'contract_version': requestContractVersion,
         },
       ),
       (
@@ -270,6 +447,7 @@ class _TrackingApiClient extends ApiClient {
   final bool throwOnRequest;
   final Object? requestError;
   final List<String> getCalls = [];
+  Map<String, String>? lastGetHeaders;
   String? streamPath;
   Map<String, dynamic>? requestBody;
   Map<String, String>? streamHeaders;
@@ -284,6 +462,7 @@ class _TrackingApiClient extends ApiClient {
   }) async {
     _guard();
     getCalls.add(path);
+    lastGetHeaders = headers;
     return getResponses[path] ?? <String, dynamic>{};
   }
 

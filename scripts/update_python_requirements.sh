@@ -48,3 +48,7 @@ cd "$SERVICE_DIR"
   --extra=test \
   --output-file=requirements-dev.txt \
   pyproject.toml
+"$PYTHON_BIN" -m piptools compile \
+  "${compile_args[@]}" \
+  --output-file=coach_analysis/requirements.txt \
+  coach_analysis/requirements.in

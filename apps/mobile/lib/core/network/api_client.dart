@@ -258,8 +258,17 @@ AppException _networkRequestException(DioException error) {
       kind: kind,
       statusCode: response?.statusCode,
       responseData: response?.data,
+      retryAfterSeconds: _retryAfterSeconds(
+        response?.headers.value('retry-after'),
+      ),
     ),
   );
+}
+
+int? _retryAfterSeconds(String? value) {
+  final seconds = int.tryParse(value ?? '');
+  if (seconds == null || seconds < 1 || seconds > 60) return null;
+  return seconds;
 }
 
 class ApiResponseTooLargeException implements Exception {

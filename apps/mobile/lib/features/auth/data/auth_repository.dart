@@ -3,19 +3,21 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/contracts/account_deletion.dart';
 import '../../../core/supabase/supabase_tables.dart';
 import 'guest_setup_data_source.dart';
 import 'pilot_participation_api_data_source.dart';
-import 'pilot_participation_pending_store.dart';
 import '../domain/app_session.dart';
+import '../domain/auth_captcha.dart';
 import '../domain/auth_failure.dart';
 import '../domain/intake_response.dart';
-import '../domain/pilot_participation.dart';
 
 const localDeviceTimezoneMarker = 'device-local';
 
 typedef GoogleOAuthLauncher = Future<bool> Function(String redirectTo);
 typedef GuestCheckInMigrator = Future<void> Function(String userId);
+typedef PendingAccountDeletionResolver = Future<AccountDeletionRecovery?>
+    Function({required String userId, required String accessToken});
 
 class AuthRepository {
   AuthRepository(
@@ -25,18 +27,17 @@ class AuthRepository {
     GoogleOAuthLauncher? googleOAuthLauncher,
     GuestCheckInMigrator? guestCheckInMigrator,
     PilotParticipationGateway? pilotParticipationGateway,
-    PilotParticipationPendingStore pilotParticipationPendingStore =
-        const PilotParticipationPendingStore(),
+    PendingAccountDeletionResolver? pendingAccountDeletionResolver,
     bool requiresPilotParticipation = false,
-    DateTime Function()? now,
+    bool requiresAuthCaptcha = false,
   })  : _useMockData = useMockData,
         _guestSetupDataSource = guestSetupDataSource,
         _googleOAuthLauncher = googleOAuthLauncher,
         _guestCheckInMigrator = guestCheckInMigrator,
         _pilotParticipationGateway = pilotParticipationGateway,
-        _pilotParticipationPendingStore = pilotParticipationPendingStore,
+        _pendingAccountDeletionResolver = pendingAccountDeletionResolver,
         _requiresPilotParticipation = requiresPilotParticipation,
-        _now = now ?? DateTime.now;
+        _requiresAuthCaptcha = requiresAuthCaptcha;
 
   final SupabaseClient _client;
   final bool _useMockData;
@@ -44,9 +45,9 @@ class AuthRepository {
   final GoogleOAuthLauncher? _googleOAuthLauncher;
   final GuestCheckInMigrator? _guestCheckInMigrator;
   final PilotParticipationGateway? _pilotParticipationGateway;
-  final PilotParticipationPendingStore _pilotParticipationPendingStore;
+  final PendingAccountDeletionResolver? _pendingAccountDeletionResolver;
   final bool _requiresPilotParticipation;
-  final DateTime Function() _now;
+  final bool _requiresAuthCaptcha;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -55,7 +56,24 @@ class AuthRepository {
   Future<AppSession?> currentSession() async {
     final user = _client.auth.currentUser;
     if (user != null) {
+      final deletionRecovery = await _pendingDeletionRecovery(user);
+      if (deletionRecovery != null) {
+        if (_client.auth.currentUser?.id != user.id) {
+          _cachedSession = null;
+          return null;
+        }
+        final session = AppSession.deletionRecovery(
+          _deletionRecoveryProfile(user),
+          deletionRecovery,
+        );
+        _cachedSession = session;
+        return session;
+      }
       final profile = await _resolveAuthenticatedProfile(user);
+      if (_client.auth.currentUser?.id != user.id) {
+        _cachedSession = null;
+        return null;
+      }
       _cachedSession = AppSession.authenticated(profile);
       return _cachedSession;
     }
@@ -89,16 +107,37 @@ class AuthRepository {
   Future<AppSession> signInWithEmail({
     required String email,
     required String password,
+    String? captchaToken,
   }) async {
+    final verifiedCaptchaToken = validateAuthCaptchaToken(
+      requiredForEnvironment: _requiresAuthCaptcha,
+      token: captchaToken,
+    );
     final response = await _client.auth.signInWithPassword(
       email: email,
       password: password,
+      captchaToken: verifiedCaptchaToken,
     );
     final user = response.user ?? _client.auth.currentUser;
     if (user == null) {
       throw const AuthException('Login did not return a user session.');
     }
+    final deletionRecovery = await _pendingDeletionRecovery(user);
+    if (deletionRecovery != null) {
+      if (_client.auth.currentUser?.id != user.id) {
+        throw const AuthException('Account session changed during sign-in.');
+      }
+      final session = AppSession.deletionRecovery(
+        _deletionRecoveryProfile(user),
+        deletionRecovery,
+      );
+      _cachedSession = session;
+      return session;
+    }
     final profile = await _resolveAuthenticatedProfile(user);
+    if (_client.auth.currentUser?.id != user.id) {
+      throw const AuthException('Account session changed during sign-in.');
+    }
     await _clearGuestActiveFlag();
     final session = AppSession.authenticated(profile);
     _cachedSession = session;
@@ -110,12 +149,9 @@ class AuthRepository {
     required String password,
     String? name,
     bool confirmed18OrOlder = false,
+    String? captchaToken,
   }) async {
-    await _preparePilotParticipation(
-      confirmed18OrOlder: confirmed18OrOlder,
-      flow: PilotParticipationFlow.email,
-      identity: email,
-    );
+    _requirePilotParticipationConfirmation(confirmed18OrOlder);
     final response = await _client.auth.signUp(
       email: email,
       password: password,
@@ -123,16 +159,24 @@ class AuthRepository {
       data: {
         if (name != null && name.trim().isNotEmpty) 'display_name': name.trim(),
       },
+      captchaToken: validateAuthCaptchaToken(
+        requiredForEnvironment: _requiresAuthCaptcha,
+        token: captchaToken,
+      ),
     );
     final user = response.user;
     if (user == null || response.session == null) {
       return null;
     }
 
-    final profile = await _resolveAuthenticatedProfile(
+    var profile = await _resolveAuthenticatedProfile(
       user,
       preferredName: name,
     );
+    if (_requiresPilotParticipation) {
+      profile = await _recordCurrentPilotParticipation(profile);
+      profile = await _finishAuthenticatedProfile(profile);
+    }
     await _clearGuestActiveFlag();
     final session = AppSession.authenticated(profile);
     _cachedSession = session;
@@ -140,11 +184,7 @@ class AuthRepository {
   }
 
   Future<void> signInWithGoogle({bool confirmed18OrOlder = false}) async {
-    await _preparePilotParticipation(
-      confirmed18OrOlder: confirmed18OrOlder,
-      flow: PilotParticipationFlow.google,
-      identity: '',
-    );
+    _requirePilotParticipationConfirmation(confirmed18OrOlder);
     final redirectTo = authRedirectUrl();
     final opened = await (_googleOAuthLauncher?.call(redirectTo) ??
         _client.auth.signInWithOAuth(
@@ -156,18 +196,32 @@ class AuthRepository {
     }
   }
 
-  Future<void> requestPasswordReset({required String email}) async {
+  Future<void> requestPasswordReset({
+    required String email,
+    String? captchaToken,
+  }) async {
     await _client.auth.resetPasswordForEmail(
       email.trim(),
       redirectTo: authRedirectUrl(),
+      captchaToken: validateAuthCaptchaToken(
+        requiredForEnvironment: _requiresAuthCaptcha,
+        token: captchaToken,
+      ),
     );
   }
 
-  Future<void> resendSignupConfirmation({required String email}) async {
+  Future<void> resendSignupConfirmation({
+    required String email,
+    String? captchaToken,
+  }) async {
     await _client.auth.resend(
       type: OtpType.signup,
       email: email.trim(),
       emailRedirectTo: authRedirectUrl(),
+      captchaToken: validateAuthCaptchaToken(
+        requiredForEnvironment: _requiresAuthCaptcha,
+        token: captchaToken,
+      ),
     );
   }
 
@@ -179,7 +233,6 @@ class AuthRepository {
     if (_requiresPilotParticipation) {
       throw const PilotParticipationUnavailableException();
     }
-    await _pilotParticipationPendingStore.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_Prefs.guestActive, true);
     final session = AppSession.guest(
@@ -200,7 +253,6 @@ class AuthRepository {
   Future<void> signOut() async {
     await _client.auth.signOut();
     await _clearGuestActiveFlag();
-    await _pilotParticipationPendingStore.clear();
     _cachedSession = null;
   }
 
@@ -209,7 +261,6 @@ class AuthRepository {
       await _client.auth.signOut();
     } finally {
       await _clearGuestActiveFlag();
-      await _pilotParticipationPendingStore.clear();
       _cachedSession = null;
     }
   }
@@ -289,15 +340,10 @@ class AuthRepository {
       }
     }
     final profile = await requireProfileForAuthUser(user);
-    final participatingProfile = await _maybeCommitPendingPilotParticipation(
-      user: user,
-      profile: profile,
-    );
-    if (_requiresPilotParticipation &&
-        !participatingProfile.hasCurrentPilotParticipation) {
-      return participatingProfile;
+    if (_requiresPilotParticipation && !profile.hasCurrentPilotParticipation) {
+      return profile;
     }
-    return _finishAuthenticatedProfile(participatingProfile);
+    return _finishAuthenticatedProfile(profile);
   }
 
   Future<AppProfile> _finishAuthenticatedProfile(AppProfile profile) async {
@@ -318,49 +364,10 @@ class AuthRepository {
     }
   }
 
-  Future<void> _preparePilotParticipation({
-    required bool confirmed18OrOlder,
-    required PilotParticipationFlow flow,
-    required String identity,
-  }) async {
+  void _requirePilotParticipationConfirmation(bool confirmed18OrOlder) {
     if (!_requiresPilotParticipation) return;
     if (!confirmed18OrOlder) {
       throw const PilotParticipationConfirmationRequiredException();
-    }
-    await _pilotParticipationPendingStore.record(
-      noticeVersion: pilotParticipationNoticeVersion,
-      flow: flow,
-      identity: identity,
-      now: _now(),
-    );
-  }
-
-  Future<AppProfile> _maybeCommitPendingPilotParticipation({
-    required User user,
-    required AppProfile profile,
-  }) async {
-    if (!_requiresPilotParticipation) return profile;
-    if (profile.hasCurrentPilotParticipation) {
-      await _pilotParticipationPendingStore.clear();
-      return profile;
-    }
-    final provider = user.appMetadata['provider']?.toString() ?? 'email';
-    final flow = provider == 'google'
-        ? PilotParticipationFlow.google
-        : PilotParticipationFlow.email;
-    final identity =
-        flow == PilotParticipationFlow.email ? user.email ?? '' : '';
-    final matches = await _pilotParticipationPendingStore.matches(
-      noticeVersion: pilotParticipationNoticeVersion,
-      flow: flow,
-      identity: identity,
-      now: _now(),
-    );
-    if (!matches) return profile;
-    try {
-      return await _recordCurrentPilotParticipation(profile);
-    } catch (_) {
-      return profile;
     }
   }
 
@@ -391,7 +398,6 @@ class AuthRepository {
     final accepted = await gateway.accept(
       accessToken: currentSession.accessToken,
     );
-    await _pilotParticipationPendingStore.clear();
     return profile.copyWith(
       pilotParticipationNoticeVersion: accepted.noticeVersion,
       pilotParticipationAcceptedAt: accepted.acceptedAt,
@@ -410,7 +416,29 @@ class AuthRepository {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_Prefs.guestActive, false);
   }
+
+  Future<AccountDeletionRecovery?> _pendingDeletionRecovery(User user) async {
+    final resolver = _pendingAccountDeletionResolver;
+    final session = _client.auth.currentSession;
+    if (resolver == null ||
+        session == null ||
+        session.user.id != user.id ||
+        session.accessToken.isEmpty) {
+      return null;
+    }
+    return resolver(userId: user.id, accessToken: session.accessToken);
+  }
 }
+
+AppProfile _deletionRecoveryProfile(User user) => AppProfile(
+      id: user.id,
+      email: user.email ?? '',
+      name: 'Account deletion',
+      timezone: 'UTC',
+      role: AppRole.user,
+      onboardingDone: true,
+      authProvider: user.appMetadata['provider']?.toString() ?? 'email',
+    );
 
 const nativeAuthCallbackUrl = 'com.mylifegraph.app://login-callback/';
 

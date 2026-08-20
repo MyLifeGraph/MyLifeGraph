@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../../core/contracts/account_deletion.dart';
 import '../../../core/contracts/strict_contract.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
@@ -217,18 +219,31 @@ class AccountApiDataSource {
     return AccountExportEnvelope.fromJsonBytes(bytes);
   }
 
-  Future<void> deleteAccount({required String accessToken}) async {
+  Future<AccountDeletionResult> deleteAccount({
+    required String accessToken,
+    required String deletionId,
+  }) async {
     try {
       final response = await _client.deleteWithBodyResponse(
         '/v1/account',
         headers: _headers(accessToken),
-        body: const {'confirmation': 'DELETE'},
+        body: {
+          'contract_version': accountDeletionContractVersion,
+          'deletion_id': deletionId,
+          'confirmation': 'DELETE',
+        },
       );
-      if (response.statusCode != 204 || response.hasBody) {
+      if ((response.statusCode != 200 && response.statusCode != 202) ||
+          !response.hasBody) {
         throw const AccountDeletionOutcomeUnknownException(
-          'Account deletion did not return the required empty response.',
+          'Account deletion did not return the required V2 response.',
         );
       }
+      return _parseDeletionResponse(
+        response.body!,
+        statusCode: response.statusCode,
+        expectedDeletionId: deletionId,
+      );
     } on AppException catch (error) {
       final failure = apiFailureFrom(error);
       if (failure?.statusCode == 403) {
@@ -245,7 +260,119 @@ class AccountApiDataSource {
     }
   }
 
+  Future<AccountDeletionResult?> getAccountDeletionStatus({
+    required String accessToken,
+  }) async {
+    final json = await _client.getJson(
+      '/v1/account/deletion',
+      headers: _headers(accessToken),
+    );
+    Never invalid() => throw const AccountDeletionOutcomeUnknownException(
+          'Account deletion status returned an invalid V2 result.',
+        );
+    requireStrictKeys(
+      json,
+      requiredKeys: const {'contract_version', 'deletion'},
+      onFailure: invalid,
+    );
+    if (json['contract_version'] != accountDeletionStatusContractVersion) {
+      invalid();
+    }
+    final deletion = json['deletion'];
+    if (deletion == null) return null;
+    if (deletion is! Map<String, dynamic> ||
+        deletion['deletion_id'] is! String ||
+        !isClientUuid(deletion['deletion_id'] as String)) {
+      invalid();
+    }
+    return _parseDeletionJson(
+      deletion,
+      statusCode: deletion['state'] == 'completed' ? 200 : 202,
+      expectedDeletionId: deletion['deletion_id'] as String,
+    );
+  }
+
+  AccountDeletionResult _parseDeletionResponse(
+    String body, {
+    required int statusCode,
+    required String expectedDeletionId,
+  }) {
+    Never invalid() => throw const AccountDeletionOutcomeUnknownException(
+          'Account deletion returned an invalid V2 result.',
+        );
+    late final Object? decoded;
+    try {
+      decoded = jsonDecode(body);
+    } on FormatException {
+      invalid();
+    }
+    if (decoded is! Map<String, dynamic>) invalid();
+    return _parseDeletionJson(
+      decoded,
+      statusCode: statusCode,
+      expectedDeletionId: expectedDeletionId,
+    );
+  }
+
+  AccountDeletionResult _parseDeletionJson(
+    Map<String, dynamic> json, {
+    required int statusCode,
+    required String expectedDeletionId,
+  }) {
+    Never invalid() => throw const AccountDeletionOutcomeUnknownException(
+          'Account deletion returned an invalid V2 result.',
+        );
+    requireStrictKeys(
+      json,
+      requiredKeys: const {
+        'contract_version',
+        'deletion_id',
+        'state',
+        'accepted_at',
+        'completed_at',
+        'journal_durable',
+      },
+      onFailure: invalid,
+    );
+    final stateValue = json['state'];
+    final state =
+        stateValue is String ? AccountDeletionState.fromWire(stateValue) : null;
+    final acceptedValue = json['accepted_at'];
+    final completedValue = json['completed_at'];
+    final acceptedAt = _parseAwareUtc(acceptedValue);
+    final completedAt = _parseAwareUtc(completedValue);
+    final journalDurable = json['journal_durable'];
+    if (json['contract_version'] != accountDeletionContractVersion ||
+        json['deletion_id'] != expectedDeletionId ||
+        state == null ||
+        acceptedAt == null ||
+        journalDurable is! bool ||
+        (completedValue != null && completedAt == null) ||
+        (state == AccountDeletionState.completed &&
+            (statusCode != 200 || completedAt == null || !journalDurable)) ||
+        (state == AccountDeletionState.deletionPending &&
+            (statusCode != 202 || completedValue != null)) ||
+        (completedAt != null && completedAt.isBefore(acceptedAt))) {
+      invalid();
+    }
+    return AccountDeletionResult(
+      deletionId: expectedDeletionId,
+      state: state,
+      acceptedAt: acceptedAt,
+      completedAt: completedAt,
+      journalDurable: journalDurable,
+    );
+  }
+
   Map<String, String> _headers(String accessToken) => {
         'Authorization': 'Bearer $accessToken',
       };
+}
+
+DateTime? _parseAwareUtc(Object? value) {
+  if (value is! String ||
+      !RegExp(r'(?:Z|[+-][0-9]{2}:[0-9]{2})$').hasMatch(value)) {
+    return null;
+  }
+  return DateTime.tryParse(value)?.toUtc();
 }

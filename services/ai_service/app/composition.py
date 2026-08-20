@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 
+from app.account_deletion_journal import deletion_journal_from_settings
 from app.clients.supabase import SupabaseRestClient
 from app.coach_turn_lifecycle import CoachTurnLifecycle, utc_now
 from app.core.config import Settings
@@ -8,6 +9,7 @@ from app.providers.base import CoachProvider
 from app.providers.disabled import DisabledCoachProvider
 from app.providers.fake import FakeCoachProvider
 from app.providers.local_codex import LocalCodexCoachProvider
+from app.providers.operator_executor import OperatorExecutorCoachProvider
 from app.repositories.account_repository import SupabaseAccountRepository
 from app.repositories.assignment_series_repository import (
     SupabaseAssignmentSeriesRepository,
@@ -150,10 +152,7 @@ class ApplicationComposition:
         learned_timing = LearnedTimingResolver(
             learning=learning_service,
             patterns=personal_patterns_service,
-            pilot_enabled=(
-                settings.learned_focus_planning_pilot_enabled
-                and settings.app_env != "production"
-            ),
+            pilot_enabled=settings.learned_focus_planning_runtime_enabled,
         )
         deadline_plan_repository = SupabaseDeadlinePlanRepository(supabase_client)
         deadline_plan_service = DeadlinePlanService(
@@ -190,6 +189,11 @@ class ApplicationComposition:
             weekly_review_reader=weekly_review_service,
         )
         coach_provider = _coach_provider(settings)
+        operator_provider = (
+            OperatorExecutorCoachProvider(settings)
+            if settings.operator_codex_pilot_enabled
+            else None
+        )
         coach_semaphore = asyncio.Semaphore(
             settings.local_codex_global_concurrency,
         )
@@ -223,6 +227,7 @@ class ApplicationComposition:
                 provider=coach_provider,
                 global_semaphore=coach_semaphore,
                 lifecycle=coach_lifecycle,
+                operator_provider=operator_provider,
             ),
             legacy=CoachService(
                 settings=settings,
@@ -242,7 +247,13 @@ class ApplicationComposition:
 
         return cls(
             supabase_client=supabase_client,
-            account_service=AccountService(repository=account_repository),
+            account_service=AccountService(
+                repository=account_repository,
+                deletion_journal=deletion_journal_from_settings(settings),
+                before_account_deletion=lambda user_id: (
+                    coach_services.current.block_user_and_cancel(user_id=user_id)
+                ),
+            ),
             assignment_series_service=assignment_series_service,
             briefing_service=briefing_service,
             calendar_integration_service=CalendarIntegrationService(

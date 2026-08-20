@@ -17,6 +17,7 @@ def coach_service_problem(error: CoachServiceError) -> HTTPException:
     return HTTPException(
         status_code=error.status_code,
         detail=error.detail.model_dump(mode="json"),
+        headers=error.response_headers or None,
     )
 
 

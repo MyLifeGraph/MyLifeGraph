@@ -1,11 +1,12 @@
 import '../../../core/contracts/strict_contract.dart';
 
-const coachRequestContractVersion = 'coach-request-v3';
-const coachResponseContractVersion = 'coach-response-v3';
-const _previousCoachResponseContractVersion = 'coach-response-v2';
+const coachRequestContractVersion = 'coach-request-v4';
+const coachResponseContractVersion = 'coach-response-v4';
+const _previousCoachResponseContractVersion = 'coach-response-v3';
+const _legacyCoachResponseV2ContractVersion = 'coach-response-v2';
 const _legacyCoachResponseContractVersion = 'coach-response-v1';
-const coachCapabilitiesContractVersion = 'coach-capabilities-v3';
-const coachHistoryContractVersion = 'coach-history-v3';
+const coachCapabilitiesContractVersion = 'coach-capabilities-v5';
+const coachHistoryContractVersion = 'coach-history-v4';
 const coachAgentPromptVersion = 'free-coach-agent-prompt-v5';
 const _acceptedCoachAgentPromptVersions = {
   'free-coach-agent-prompt-v4',
@@ -36,7 +37,8 @@ enum CoachProviderName {
   localCodexOauth('local_codex_oauth'),
   fake('fake'),
   openai('openai'),
-  gemini('gemini');
+  gemini('gemini'),
+  operatorCodexPilot('operator_codex_pilot');
 
   const CoachProviderName(this.code);
   final String code;
@@ -47,6 +49,7 @@ enum CoachProviderName {
         'fake' => fake,
         'openai' => openai,
         'gemini' => gemini,
+        'operator_codex_pilot' => operatorCodexPilot,
         _ => null,
       };
 }
@@ -56,7 +59,10 @@ class CoachAgentLimits {
     required this.messageCodepoints,
     required this.replyCodepoints,
     required this.requestsPerLocalDay,
+    required this.requestPeriod,
     required this.remainingRequests,
+    this.globalRequestsPerUtcDay,
+    this.globalRemainingRequests,
     required this.maxToolCalls,
     required this.turnTimeoutSeconds,
     required this.sqlTimeoutSeconds,
@@ -72,7 +78,10 @@ class CoachAgentLimits {
         'message_codepoints',
         'reply_codepoints',
         'requests_per_local_day',
+        'request_period',
         'remaining_requests',
+        'global_requests_per_utc_day',
+        'global_remaining_requests',
         'max_tool_calls',
         'turn_timeout_seconds',
         'sql_timeout_seconds',
@@ -86,7 +95,14 @@ class CoachAgentLimits {
       messageCodepoints: _int(json['message_codepoints']),
       replyCodepoints: _int(json['reply_codepoints']),
       requestsPerLocalDay: _int(json['requests_per_local_day']),
+      requestPeriod: _text(json['request_period'], 32),
       remainingRequests: _int(json['remaining_requests']),
+      globalRequestsPerUtcDay: _optionalInt(
+        json['global_requests_per_utc_day'],
+      ),
+      globalRemainingRequests: _optionalInt(
+        json['global_remaining_requests'],
+      ),
       maxToolCalls: _int(json['max_tool_calls']),
       turnTimeoutSeconds: _int(json['turn_timeout_seconds']),
       sqlTimeoutSeconds: _int(json['sql_timeout_seconds']),
@@ -96,9 +112,16 @@ class CoachAgentLimits {
     );
     if (value.messageCodepoints != 2000 ||
         value.replyCodepoints != 4000 ||
-        value.requestsPerLocalDay != 20 ||
+        !const {5, 20}.contains(value.requestsPerLocalDay) ||
+        !const {'profile_local_day', 'utc_day'}.contains(value.requestPeriod) ||
         value.remainingRequests < 0 ||
         value.remainingRequests > value.requestsPerLocalDay ||
+        (value.globalRequestsPerUtcDay == null) !=
+            (value.globalRemainingRequests == null) ||
+        value.globalRequestsPerUtcDay != null &&
+            (value.globalRequestsPerUtcDay != 15 ||
+                value.globalRemainingRequests! < 0 ||
+                value.globalRemainingRequests! > 15) ||
         value.maxToolCalls != 12 ||
         value.turnTimeoutSeconds != 180 ||
         value.sqlTimeoutSeconds != 5 ||
@@ -113,7 +136,10 @@ class CoachAgentLimits {
   final int messageCodepoints;
   final int replyCodepoints;
   final int requestsPerLocalDay;
+  final String requestPeriod;
   final int remainingRequests;
+  final int? globalRequestsPerUtcDay;
+  final int? globalRemainingRequests;
   final int maxToolCalls;
   final int turnTimeoutSeconds;
   final int sqlTimeoutSeconds;
@@ -150,7 +176,10 @@ class CoachCapabilities {
           messageCodepoints: 2000,
           replyCodepoints: 4000,
           requestsPerLocalDay: 20,
+          requestPeriod: 'profile_local_day',
           remainingRequests: 0,
+          globalRequestsPerUtcDay: null,
+          globalRemainingRequests: null,
           maxToolCalls: 12,
           turnTimeoutSeconds: 180,
           sqlTimeoutSeconds: 5,
@@ -238,6 +267,24 @@ class CoachCapabilities {
             'Cloud Coach capabilities are invalid.',
           );
         }
+      case CoachProviderName.operatorCodexPilot:
+        if (result.providerMode != 'operator_subscription_pilot' ||
+            result.modelRequested != 'gpt-5.5' ||
+            result.modelSource != 'explicit' ||
+            result.serviceTier != 'fast' ||
+            !result.fastMode ||
+            !_sameStrings(
+              result.tools,
+              const ['inspect_data', 'query_data', 'run_python'],
+            ) ||
+            result.limits.requestsPerLocalDay != 5 ||
+            result.limits.requestPeriod != 'utc_day' ||
+            result.limits.globalRequestsPerUtcDay != 15 ||
+            result.limits.globalRemainingRequests == null) {
+          throw const CoachContractException(
+            'Project Coach capabilities are invalid.',
+          );
+        }
       case CoachProviderName.disabled:
         if (result.providerMode != 'disabled' ||
             result.modelRequested != null ||
@@ -257,6 +304,15 @@ class CoachCapabilities {
         'Coach capability state and provider are inconsistent.',
       );
     }
+    if (provider != CoachProviderName.operatorCodexPilot &&
+        (result.limits.requestsPerLocalDay != 20 ||
+            result.limits.requestPeriod != 'profile_local_day' ||
+            result.limits.globalRequestsPerUtcDay != null ||
+            result.limits.globalRemainingRequests != null)) {
+      throw const CoachContractException(
+        'Coach provider limits are invalid.',
+      );
+    }
     return result;
   }
 
@@ -272,12 +328,22 @@ class CoachCapabilities {
   final CoachAgentLimits limits;
 
   bool get canRespond =>
-      state == CoachCapabilityState.ready && limits.remainingRequests > 0;
+      state == CoachCapabilityState.ready &&
+      limits.remainingRequests > 0 &&
+      (limits.globalRemainingRequests == null ||
+          limits.globalRemainingRequests! > 0);
 }
 
 class CoachRequest {
-  CoachRequest({required this.requestId, required String message})
-      : message = message.trim() {
+  CoachRequest({
+    required this.requestId,
+    required String message,
+    this.contractVersion = coachRequestContractVersion,
+  }) : message = message.trim() {
+    if (!const {'coach-request-v3', coachRequestContractVersion}
+        .contains(contractVersion)) {
+      throw const CoachInputException('Coach request contract is invalid.');
+    }
     if (!isStrictUuid(
       requestId,
       lowercaseOnly: false,
@@ -295,9 +361,10 @@ class CoachRequest {
 
   final String requestId;
   final String message;
+  final String contractVersion;
 
   Map<String, dynamic> toJson() => {
-        'contract_version': coachRequestContractVersion,
+        'contract_version': contractVersion,
         'request_id': requestId,
         'message': message,
       };
@@ -594,6 +661,18 @@ class CoachProvenance {
             'Cloud Coach provenance is invalid.',
           );
         }
+      case CoachProviderName.operatorCodexPilot:
+        if (result.providerMode != 'operator_subscription_pilot' ||
+            result.modelRequested != 'gpt-5.5' ||
+            result.modelReported != null && result.modelReported != 'gpt-5.5' ||
+            result.modelSource != 'explicit' ||
+            result.serviceTier != 'fast' ||
+            result.serviceTierStatus != 'configured' ||
+            !result.fastMode) {
+          throw const CoachContractException(
+            'Project Coach provenance is invalid.',
+          );
+        }
       case CoachProviderName.disabled:
         if (result.providerMode != 'disabled' ||
             result.modelRequested != null ||
@@ -704,6 +783,7 @@ class CoachResponse {
     if (!const {
           coachResponseContractVersion,
           _previousCoachResponseContractVersion,
+          _legacyCoachResponseV2ContractVersion,
         }.contains(json['contract_version']) ||
         json['evidence'] is! List ||
         (json['evidence'] as List).length > 100) {
@@ -1029,6 +1109,8 @@ int _int(Object? value) {
     ),
   );
 }
+
+int? _optionalInt(Object? value) => value == null ? null : _int(value);
 
 DateTime _dateTime(Object? value) {
   return requireStrictAwareDateTime(

@@ -92,19 +92,17 @@ select is(
 reset request.jwt.claim.sub;
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'service_role', 'public.delete_account_v1(uuid,text)', 'EXECUTE'
-  )
-  and not has_function_privilege(
+  ) and not has_function_privilege(
     'authenticated', 'public.delete_account_v1(uuid,text)', 'EXECUTE'
   )
   and not has_function_privilege(
     'anon', 'public.delete_account_v1(uuid,text)', 'EXECUTE'
   ),
-  'Account Delete V1 retains its service-role-only execution boundary'
+  'Account Delete V1 is no longer directly executable after recovery V2'
 );
 
-set local role service_role;
 select is(
   (
     public.delete_account_v1(
@@ -114,7 +112,6 @@ select is(
   true,
   'the lint-only Account Delete redefinition preserves full deletion behavior'
 );
-reset role;
 
 select ok(
   not exists (
@@ -131,13 +128,20 @@ select ok(
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v7('
-      'uuid,uuid,text,date,text,text,text,text,'
-      'timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
+    'public.claim_coach_request_v8('
+      'uuid,text,uuid,text,date,text,text,text,text,'
+      'timestamp with time zone,timestamp with time zone,integer,boolean)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
     'public.claim_coach_request_v7('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
@@ -147,19 +151,20 @@ select ok(
     select proconfig = array['search_path=pg_catalog, pg_temp']
     from pg_proc
     where oid = (
-      'public.claim_coach_request_v7('
-        'uuid,uuid,text,date,text,text,text,text,'
-        'timestamp with time zone,timestamp with time zone,integer)'
+      'public.claim_coach_request_v8('
+        'uuid,text,uuid,text,date,text,text,text,text,'
+        'timestamp with time zone,timestamp with time zone,integer,boolean)'
     )::regprocedure
   ),
-  'Coach V7 claim is backend-only with a hardened fixed search path'
+  'Coach V8 claim is backend-only with a hardened fixed search path and V7 is retired'
 );
 
 set local role service_role;
 select is(
   (
-    public.claim_coach_request_v7(
+    public.claim_coach_request_v8(
       'c5000000-0000-4000-8000-000000000004',
+      'coach-request-v3',
       'c5000000-0000-4000-8000-000000000104',
       repeat('4', 64),
       '2026-08-02',
@@ -169,18 +174,20 @@ select is(
       'not_applicable',
       '2026-08-02T10:00:00Z',
       '2026-08-02T10:01:00Z',
-      20
+      20,
+      true
     ) ->> 'state'
   ),
   'pending',
-  'Coach V7 creates a pending current-contract request'
+  'Coach V8 creates a pending compatibility-contract request'
 );
 
 select is(
   concat_ws(
     '|',
-    public.claim_coach_request_v7(
+    public.claim_coach_request_v8(
       'c5000000-0000-4000-8000-000000000004',
+      'coach-request-v3',
       'c5000000-0000-4000-8000-000000000104',
       repeat('4', 64),
       '2026-08-02',
@@ -190,10 +197,12 @@ select is(
       'not_applicable',
       '2026-08-02T10:02:00Z',
       '2026-08-02T10:03:00Z',
-      20
+      20,
+      true
     ) ->> 'state',
-    public.claim_coach_request_v7(
+    public.claim_coach_request_v8(
       'c5000000-0000-4000-8000-000000000004',
+      'coach-request-v3',
       'c5000000-0000-4000-8000-000000000104',
       repeat('4', 64),
       '2026-08-02',
@@ -203,11 +212,12 @@ select is(
       'not_applicable',
       '2026-08-02T10:02:00Z',
       '2026-08-02T10:03:00Z',
-      20
+      20,
+      true
     ) #>> '{error,code}'
   ),
   'failed|interrupted',
-  'an expired Coach V7 replay still atomically records and returns interruption'
+  'an expired Coach V8 replay still atomically records and returns interruption'
 );
 reset role;
 

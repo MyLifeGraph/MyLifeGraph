@@ -11,6 +11,8 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_brand_mark.dart';
 import '../../../../core/widgets/app_surface.dart';
 import '../../domain/auth_failure.dart';
+import '../../domain/auth_captcha.dart';
+import '../captcha/auth_captcha_challenge.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
@@ -276,23 +278,32 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       _showMessage('Enter an email and a password with at least 6 characters.');
       return;
     }
+    if (_registrationMode &&
+        ref.read(appConfigProvider).requiresPilotParticipation &&
+        !_adultPilotConfirmed) {
+      _showMessage(
+        'Confirm that you are 18 or older before creating an account.',
+      );
+      return;
+    }
 
     setState(() => _submitting = true);
     try {
-      if (_registrationMode) {
-        if (ref.read(appConfigProvider).requiresPilotParticipation &&
-            !_adultPilotConfirmed) {
-          _showMessage(
-            'Confirm that you are 18 or older before creating an account.',
+      final captchaToken = await ref.read(authCaptchaChallengeProvider).acquire(
+            context,
+            action: _registrationMode
+                ? AuthCaptchaAction.signUp
+                : AuthCaptchaAction.signIn,
           );
-          return;
-        }
+      if (!mounted) return;
+      if (_registrationMode) {
         final created =
             await ref.read(authControllerProvider.notifier).registerWithEmail(
                   email: email,
                   password: password,
                   name: _nameController.text.trim(),
                   confirmed18OrOlder: _adultPilotConfirmed,
+                  captchaToken: captchaToken,
                 );
         if (!created && mounted) {
           final registrationState = ref.read(authControllerProvider);
@@ -309,8 +320,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         await ref.read(authControllerProvider.notifier).signInWithEmail(
               email: email,
               password: password,
+              captchaToken: captchaToken,
             );
       }
+    } on AuthCaptchaException catch (error) {
+      if (mounted) _showMessage(error.message);
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -379,9 +393,16 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       return;
     }
     await _runAccountHelp(
-      () => ref
-          .read(authControllerProvider.notifier)
-          .requestPasswordReset(email: email),
+      () async {
+        final captchaToken = await ref
+            .read(authCaptchaChallengeProvider)
+            .acquire(context, action: AuthCaptchaAction.passwordReset);
+        if (!mounted) return;
+        await ref.read(authControllerProvider.notifier).requestPasswordReset(
+              email: email,
+              captchaToken: captchaToken,
+            );
+      },
       success:
           'If that account exists, a password-reset link has been sent. Open it on this device to choose a new password.',
       failure:
@@ -400,9 +421,18 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       return;
     }
     await _runAccountHelp(
-      () => ref
-          .read(authControllerProvider.notifier)
-          .resendSignupConfirmation(email: email),
+      () async {
+        final captchaToken = await ref
+            .read(authCaptchaChallengeProvider)
+            .acquire(context, action: AuthCaptchaAction.signupResend);
+        if (!mounted) return;
+        await ref
+            .read(authControllerProvider.notifier)
+            .resendSignupConfirmation(
+              email: email,
+              captchaToken: captchaToken,
+            );
+      },
       success: 'If confirmation is still pending, a new email has been sent.',
       failure:
           'The confirmation email could not be resent. Check your connection and try again.',

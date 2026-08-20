@@ -22,6 +22,8 @@ from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
     AccountExportTable,
     StoredPilotParticipation,
+    StoredDeletionIntent,
+    StoredDeletionRecoveryStatus,
     StoredPreparationBudget,
     StoredTimezone,
 )
@@ -71,6 +73,11 @@ class Repository:
         self.rows: dict[str, list[dict[str, object]]] = {}
         self.oversized_source_table: str | None = None
         self.delete_calls: list[tuple[str, str]] = []
+        self.deletion_prepare_calls: list[dict[str, object]] = []
+        self.deletion_accept_calls: list[dict[str, object]] = []
+        self.deletion_mark_calls: list[dict[str, object]] = []
+        self.deletion_complete_calls: list[dict[str, object]] = []
+        self.pending_deletions: list[StoredDeletionIntent] = []
 
     async def update_timezone(self, **kwargs):
         self.update_calls.append(kwargs)
@@ -128,6 +135,81 @@ class Repository:
 
     async def delete_account(self, *, user_id: str, confirmation: str):
         self.delete_calls.append((user_id, confirmation))
+
+    async def prepare_account_deletion(self, **kwargs):
+        self.deletion_prepare_calls.append(kwargs)
+        return StoredDeletionIntent(
+            deletion_id=str(kwargs["deletion_id"]),
+            user_id=str(kwargs["user_id"]),
+            state="prepared",
+            accepted_at=NOW,
+            journal_object_key=None,
+            journal_payload_sha256=None,
+            completed_at=None,
+            replayed=False,
+        )
+
+    async def accept_account_deletion_journal(self, **kwargs):
+        self.deletion_accept_calls.append(kwargs)
+        return StoredDeletionIntent(
+            deletion_id=str(kwargs["deletion_id"]),
+            user_id=str(kwargs["user_id"]),
+            state="accepted",
+            accepted_at=kwargs["accepted_at"],
+            journal_object_key=str(kwargs["journal_object_key"]),
+            journal_payload_sha256=str(kwargs["journal_payload_sha256"]),
+            completed_at=None,
+            replayed=False,
+        )
+
+    async def mark_account_deletion_appending(self, **kwargs):
+        self.deletion_mark_calls.append(kwargs)
+        return StoredDeletionIntent(
+            deletion_id=str(kwargs["deletion_id"]),
+            user_id=str(kwargs["user_id"]),
+            state="appending",
+            accepted_at=NOW,
+            journal_object_key=None,
+            journal_payload_sha256=None,
+            completed_at=None,
+            replayed=False,
+        )
+
+    async def complete_account_deletion(self, **kwargs):
+        self.deletion_complete_calls.append(kwargs)
+        accepted = self.deletion_accept_calls[-1] if self.deletion_accept_calls else None
+        return StoredDeletionIntent(
+            deletion_id=str(kwargs["deletion_id"]),
+            user_id=str(kwargs["user_id"]),
+            state="completed",
+            accepted_at=(accepted["accepted_at"] if accepted else NOW),
+            journal_object_key=(
+                str(accepted["journal_object_key"]) if accepted else "existing"
+            ),
+            journal_payload_sha256=(
+                str(accepted["journal_payload_sha256"])
+                if accepted
+                else "a" * 64
+            ),
+            completed_at=kwargs["completed_at"],
+            replayed=False,
+        )
+
+    async def list_pending_account_deletions(self, *, limit: int):
+        return self.pending_deletions[:limit]
+
+    async def account_deletion_recovery_status(self):
+        pending = [
+            intent
+            for intent in self.pending_deletions
+            if intent.state in {"appending", "accepted"}
+        ]
+        return StoredDeletionRecoveryStatus(
+            pending_count=len(pending),
+            oldest_pending_at=(
+                min(intent.accepted_at for intent in pending) if pending else None
+            ),
+        )
 
 
 def test_timezone_update_validates_iana_name_and_derives_owner() -> None:
@@ -269,7 +351,7 @@ def test_export_is_owner_scoped_versioned_complete_and_sanitizes_ledgers() -> No
     prepared = asyncio.run(service.export_account(user_id="owner-1"))
     result = prepared.envelope
 
-    assert result.contract_version == "account-export-v5"
+    assert result.contract_version == "account-export-v6"
     assert "goals" not in result.data
     assert len(result.data) == 41
     assert result.exported_at == NOW
@@ -417,21 +499,21 @@ def test_export_models_reject_non_v5_tables_policy_and_limits() -> None:
         max_json_bytes=ACCOUNT_EXPORT_MAX_JSON_BYTES,
     )
 
-    with pytest.raises(ValidationError, match="exact V5 export table set"):
+    with pytest.raises(ValidationError, match="exact V6 export table set"):
         AccountExportResponse(
-            contract_version="account-export-v5",
+            contract_version="account-export-v6",
             exported_at=NOW,
             data={"profiles": []},
             record_counts={"profiles": 0},
             ledger_policy=policy,
             limits=limits,
         )
-    with pytest.raises(ValidationError, match="V5 ledger policy"):
+    with pytest.raises(ValidationError, match="V6 ledger policy"):
         AccountExportLedgerPolicy(
             sanitized_tables=["coach_requests"],
             omitted_tables=dict(ACCOUNT_EXPORT_OMITTED_TABLES),
         )
-    with pytest.raises(ValidationError, match="account-export-v5"):
+    with pytest.raises(ValidationError, match="account-export-v6"):
         AccountExportLimits(
             max_rows_per_table=1,
             max_total_rows=2,
@@ -439,7 +521,7 @@ def test_export_models_reject_non_v5_tables_policy_and_limits() -> None:
         )
 
     valid = AccountExportResponse(
-        contract_version="account-export-v5",
+        contract_version="account-export-v6",
         exported_at=NOW,
         data=data,
         record_counts=counts,
@@ -541,17 +623,64 @@ def test_export_service_rejects_drifted_limit_configuration(monkeypatch) -> None
     assert repository.export_calls == []
 
 
-def test_delete_requires_exact_confirmation_and_calls_atomic_repository() -> None:
+def test_delete_requires_exact_identity_journals_then_completes() -> None:
     repository = Repository()
-    service = AccountService(repository=repository)
+    service = AccountService(repository=repository, now=lambda: NOW)
 
-    asyncio.run(
-        service.delete_account(user_id="owner-1", confirmation="DELETE"),
+    result = asyncio.run(
+        service.delete_account(
+            user_id="owner-1",
+            deletion_id=REQUEST_ID,
+            confirmation="DELETE",
+        ),
     )
-    assert repository.delete_calls == [("owner-1", "DELETE")]
+    assert result.state == "completed"
+    assert result.journal_durable is True
+    assert repository.delete_calls == []
+    assert repository.deletion_prepare_calls == [
+        {
+            "user_id": "owner-1",
+            "deletion_id": str(REQUEST_ID),
+            "confirmation": "DELETE",
+        },
+    ]
+    assert len(repository.deletion_accept_calls) == 1
+    assert repository.deletion_mark_calls == [
+        {"user_id": "owner-1", "deletion_id": str(REQUEST_ID)},
+    ]
+    assert len(repository.deletion_complete_calls) == 1
 
     with pytest.raises(ValueError, match="Exact"):
         asyncio.run(
-            service.delete_account(user_id="owner-1", confirmation="delete"),
+            service.delete_account(
+                user_id="owner-1",
+                deletion_id=REQUEST_ID,
+                confirmation="delete",
+            ),
         )
-    assert repository.delete_calls == [("owner-1", "DELETE")]
+    assert len(repository.deletion_prepare_calls) == 1
+
+
+def test_delete_blocks_active_processing_before_persisting_intent() -> None:
+    repository = Repository()
+    events: list[str] = []
+
+    async def barrier(user_id: str) -> None:
+        events.append(f"blocked:{user_id}")
+
+    service = AccountService(
+        repository=repository,
+        now=lambda: NOW,
+        before_account_deletion=barrier,
+    )
+
+    asyncio.run(
+        service.delete_account(
+            user_id="owner-1",
+            deletion_id=REQUEST_ID,
+            confirmation="DELETE",
+        ),
+    )
+
+    assert events == ["blocked:owner-1"]
+    assert len(repository.deletion_prepare_calls) == 1

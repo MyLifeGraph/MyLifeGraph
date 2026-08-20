@@ -79,6 +79,30 @@ export function resolveCompatibleKey({
   };
 }
 
+export function supabaseBackendHeaders(
+  key,
+  { json = false, prefer = '' } = {},
+) {
+  if (
+    !key ||
+    typeof key.value !== 'string' ||
+    !key.value ||
+    !['current', 'legacy'].includes(key.source) ||
+    (key.source === 'current' && !key.value.startsWith('sb_secret_')) ||
+    (key.source === 'legacy' && key.value.startsWith('sb_secret_'))
+  ) {
+    throw new Error('Supabase backend key material is invalid.');
+  }
+  return {
+    apikey: key.value,
+    ...(key.source === 'legacy'
+      ? { Authorization: `Bearer ${key.value}` }
+      : {}),
+    ...(json ? { 'Content-Type': 'application/json' } : {}),
+    ...(prefer ? { Prefer: prefer } : {}),
+  };
+}
+
 export function requireContactEmail(name, value) {
   const configured = configuredValue(name, value);
   if (

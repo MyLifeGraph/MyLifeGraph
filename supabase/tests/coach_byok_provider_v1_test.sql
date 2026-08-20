@@ -4,29 +4,29 @@ select plan(7);
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
-    'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v8(uuid,text,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer,boolean)',
     'EXECUTE'
   ),
-  'Coach V7 is service-role-only'
+  'Coach V8 is service-role-only'
 );
 
 select ok(
   not has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v6(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
+    'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   ),
-  'superseded Coach V6 has no execution grant'
+  'superseded Coach V7 has no execution grant'
 );
 
 select ok(

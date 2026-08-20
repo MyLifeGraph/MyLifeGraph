@@ -52,7 +52,12 @@ local_supabase_prepare_migration_state \
 run_goal_removal_migration_harness "$ROOT_DIR"
 run_exam_plan_health_migration_harness "$ROOT_DIR"
 run_multi_exam_plan_migration_harness "$ROOT_DIR"
-run_recommendation_retirement_migration_harness "$ROOT_DIR"
+run_recommendation_retirement_migration_harness \
+  "$ROOT_DIR" \
+  'public.ecr.aws/supabase/postgres:15.8.1.085'
+run_recommendation_retirement_migration_harness \
+  "$ROOT_DIR" \
+  'public.ecr.aws/supabase/postgres:17.6.1.113'
 
 echo "Running the complete local pgTAP suite."
 supabase_cli test db

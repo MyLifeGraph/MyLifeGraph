@@ -1,3 +1,4 @@
+import '../../../core/contracts/account_deletion.dart';
 import 'account_settings.dart';
 
 abstract interface class AccountSettingsRepository {
@@ -13,5 +14,5 @@ abstract interface class AccountSettingsRepository {
 
   Future<AccountExportEnvelope> exportAccount();
 
-  Future<void> deleteAccount();
+  Future<AccountDeletionResult> deleteAccount({required String expectedUserId});
 }

@@ -30,6 +30,7 @@ import '../../features/quick_action/presentation/pages/morning_calibration_page.
 import '../../features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import '../../features/quick_action/presentation/pages/quick_action_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/settings/presentation/pages/account_deletion_recovery_page.dart';
 import '../../features/shell/presentation/main_shell.dart';
 import '../../features/weekly_review/presentation/pages/weekly_review_page.dart';
 import 'app_routes.dart';
@@ -75,6 +76,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isPasswordRecoveryRoute = path == AppRoutes.passwordRecovery;
       final isPilotPrivacyRoute = path == AppRoutes.pilotPrivacyNotice;
       final isPilotParticipationRoute = path == AppRoutes.pilotParticipation;
+      final isAccountDeletionRecoveryRoute =
+          path == AppRoutes.accountDeletionRecovery;
 
       if (passwordRecoveryActive) {
         return isPasswordRecoveryRoute ? null : AppRoutes.passwordRecovery;
@@ -102,6 +105,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (isPilotPrivacyRoute) return null;
+
+      if (session.isDeletionRecovery) {
+        return isAccountDeletionRecoveryRoute
+            ? null
+            : AppRoutes.accountDeletionRecovery;
+      }
+      if (isAccountDeletionRecoveryRoute) return AppRoutes.dashboard;
 
       final participationRequired =
           ref.read(appConfigProvider).requiresPilotParticipation &&
@@ -158,6 +168,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.pilotParticipation,
         builder: (context, state) => const PilotParticipationPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.accountDeletionRecovery,
+        builder: (context, state) => const AccountDeletionRecoveryPage(),
       ),
       GoRoute(
         path: AppRoutes.onboarding,

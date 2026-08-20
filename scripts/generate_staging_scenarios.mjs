@@ -15,6 +15,7 @@ import {
   requireHttpsBaseUrl,
   requireProjectRef,
   resolveCompatibleKey,
+  supabaseBackendHeaders,
 } from './lib/supabase_deployment.mjs';
 import {
   STAGING_SCENARIO_ALLOWED_PROJECT_REFS,
@@ -249,7 +250,7 @@ function scenarioBackendKey(environment) {
     legacyName: 'STAGING_SUPABASE_SERVICE_ROLE_KEY',
     currentPrefix: 'sb_secret_',
     context: 'confirmed staging scenario generation',
-  }).value;
+  });
 }
 
 class StagingScenarioRemote {
@@ -260,12 +261,7 @@ class StagingScenarioRemote {
   }
 
   headers({ json = true, prefer = '' } = {}) {
-    return {
-      apikey: this.backendKey,
-      Authorization: `Bearer ${this.backendKey}`,
-      ...(json ? { 'Content-Type': 'application/json' } : {}),
-      ...(prefer ? { Prefer: prefer } : {}),
-    };
+    return supabaseBackendHeaders(this.backendKey, { json, prefer });
   }
 
   async request(path, { method = 'GET', body, prefer = '' } = {}, context) {

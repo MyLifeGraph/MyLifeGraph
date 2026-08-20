@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_failure.dart';
@@ -24,6 +26,7 @@ class CoachState {
     required this.exactRetryMessage,
     required this.latestResponse,
     required this.latestMessage,
+    this.busyRetrySeconds = 0,
   });
 
   factory CoachState.loading() => CoachState(
@@ -43,6 +46,7 @@ class CoachState {
         exactRetryMessage: null,
         latestResponse: null,
         latestMessage: null,
+        busyRetrySeconds: 0,
       );
 
   final bool isLoading;
@@ -61,6 +65,7 @@ class CoachState {
   final String? exactRetryMessage;
   final CoachResponse? latestResponse;
   final String? latestMessage;
+  final int busyRetrySeconds;
 
   int get draftCodepoints => draft.trim().runes.length;
   bool get draftIsValid =>
@@ -70,13 +75,18 @@ class CoachState {
           capabilities?.limits.remainingRequests == 0 ||
       sendError is CoachRemoteException &&
           (sendError as CoachRemoteException).isRateLimited;
+  bool get canRetryExact =>
+      exactRetryMessage != null &&
+      draft.trim() == exactRetryMessage &&
+      draftIsValid &&
+      busyRetrySeconds == 0;
   bool get canSend =>
-      capabilities?.canRespond == true &&
+      (canRetryExact || capabilities?.canRespond == true && !isRateLimited) &&
       draftIsValid &&
       !isLoading &&
       !isSending &&
       !isDeletingHistory &&
-      !isRateLimited;
+      busyRetrySeconds == 0;
 
   CoachState copyWith({
     bool? isLoading,
@@ -95,6 +105,7 @@ class CoachState {
     Object? exactRetryMessage = _unset,
     Object? latestResponse = _unset,
     Object? latestMessage = _unset,
+    int? busyRetrySeconds,
   }) =>
       CoachState(
         isLoading: isLoading ?? this.isLoading,
@@ -128,6 +139,7 @@ class CoachState {
         latestMessage: identical(latestMessage, _unset)
             ? this.latestMessage
             : latestMessage as String?,
+        busyRetrySeconds: busyRetrySeconds ?? this.busyRetrySeconds,
       );
 }
 
@@ -149,9 +161,13 @@ class CoachController extends StateNotifier<CoachState> {
   bool _disposed = false;
   bool _cancelRequested = false;
   bool _operationInProgress = false;
+  Timer? _busyRetryTimer;
 
   Future<void> load() async {
-    if (_operationInProgress || state.isSending || state.isDeletingHistory) {
+    if (_operationInProgress ||
+        state.isSending ||
+        state.isDeletingHistory ||
+        state.busyRetrySeconds > 0) {
       return;
     }
     _operationInProgress = true;
@@ -233,7 +249,8 @@ class CoachController extends StateNotifier<CoachState> {
       );
       return false;
     }
-    if (capability?.canRespond != true) {
+    final exactRetry = state.exactRetryMessage == message;
+    if (!exactRetry && capability?.canRespond != true) {
       state = state.copyWith(
         sendError: const CoachAccessException(
           'Coach is not ready to respond.',
@@ -290,6 +307,7 @@ class CoachController extends StateNotifier<CoachState> {
           sendError: null,
           latestResponse: completed,
           latestMessage: message,
+          busyRetrySeconds: 0,
         );
         _publishNotice(
           requestId,
@@ -315,6 +333,11 @@ class CoachController extends StateNotifier<CoachState> {
           return false;
         }
         final preserve = coachFailurePreservesRequestIdentity(error);
+        final busySeconds =
+            error is CoachRemoteException && error.isTransientAdmission
+                ? (error.retryAfterSeconds ?? error.fallbackRetryAfterSeconds)
+                    .clamp(1, 60)
+                : 0;
         state = state.copyWith(
           isLoading: true,
           isSending: false,
@@ -325,7 +348,9 @@ class CoachController extends StateNotifier<CoachState> {
           sendError: error,
           requestId: preserve ? requestId : newClientUuid(),
           exactRetryMessage: preserve ? message : null,
+          busyRetrySeconds: busySeconds,
         );
+        if (busySeconds > 0) _startBusyRetryCountdown(busySeconds);
         _publishNotice(
           requestId,
           status: CoachTurnNoticeStatus.failed,
@@ -346,6 +371,22 @@ class CoachController extends StateNotifier<CoachState> {
       activityMessage: 'Cancelling analysis …',
     );
     _repository.cancelActiveResponse();
+  }
+
+  void _startBusyRetryCountdown(int seconds) {
+    _busyRetryTimer?.cancel();
+    var remaining = seconds;
+    _busyRetryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_disposed) {
+        timer.cancel();
+        return;
+      }
+      remaining -= 1;
+      state = state.copyWith(
+        busyRetrySeconds: remaining.clamp(0, 60),
+      );
+      if (remaining <= 0) timer.cancel();
+    });
   }
 
   void _publishNotice(
@@ -415,6 +456,7 @@ class CoachController extends StateNotifier<CoachState> {
   @override
   void dispose() {
     _disposed = true;
+    _busyRetryTimer?.cancel();
     _repository.cancelActiveResponse();
     super.dispose();
   }
@@ -433,6 +475,16 @@ bool coachFailurePreservesRequestIdentity(Object error) {
 
 String coachErrorMessage(Object? error) {
   if (error is CoachRemoteException) {
+    if (error.isProviderBusy) {
+      return 'Project Coach is busy. Retry manually when the countdown ends.';
+    }
+    if (error.code == 'route_busy') {
+      return 'Coach service is busy. Retry manually when the countdown ends.';
+    }
+    if (error.code == 'route_rate_limited') {
+      return 'Coach service is temporarily rate limited. '
+          'Retry manually when the countdown ends.';
+    }
     if (error.timedOut) {
       return 'Coach timed out. Retry the exact message.';
     }

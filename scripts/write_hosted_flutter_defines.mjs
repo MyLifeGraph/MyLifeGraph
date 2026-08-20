@@ -27,14 +27,37 @@ export function hostedFlutterDefines(environment = process.env) {
     requireCurrent: target.appEnvironment === 'pilot',
     context: `${target.appEnvironment} Flutter build`,
   });
+  const buildSha = requiredReleaseValue(
+    'APP_BUILD_SHA',
+    environment.APP_BUILD_SHA,
+    /^[0-9a-f]{40}$/,
+  );
+  const releaseTag = requiredReleaseValue(
+    'APP_RELEASE_TAG',
+    environment.APP_RELEASE_TAG,
+    /^v[0-9]+\.[0-9]+\.[0-9]+-pilot\.[0-9]+(?:-rc\.[0-9]+)?$/,
+  );
+  const appPublicOrigin = requireHttpsBaseUrl(
+    'APP_PUBLIC_ORIGIN',
+    environment.APP_PUBLIC_ORIGIN,
+  );
+  const turnstileSiteKey = requiredReleaseValue(
+    'TURNSTILE_SITE_KEY',
+    environment.TURNSTILE_SITE_KEY,
+    /^[A-Za-z0-9_-]{20,128}$/,
+  );
 
   return {
     APP_ENV: target.appEnvironment,
     USE_MOCK_DATA: 'false',
     COACH_SURFACE_ENABLED: 'true',
+    APP_BUILD_SHA: buildSha,
+    APP_RELEASE_TAG: releaseTag,
     STAGING_SUPABASE_PROJECT_REF: target.stagingProjectRef,
     PILOT_SUPABASE_PROJECT_REF: target.pilotProjectRef,
     PILOT_CONTACT_EMAIL: target.pilotContactEmail,
+    APP_PUBLIC_ORIGIN: appPublicOrigin,
+    TURNSTILE_SITE_KEY: turnstileSiteKey,
     SUPABASE_URL: target.supabaseUrl,
     SUPABASE_PUBLISHABLE_KEY:
       publishableKey.source === 'current' ? publishableKey.value : '',
@@ -45,6 +68,13 @@ export function hostedFlutterDefines(environment = process.env) {
       environment.AI_SERVICE_BASE_URL,
     ),
   };
+}
+
+function requiredReleaseValue(name, value, pattern) {
+  if (typeof value !== 'string' || value.trim() !== value || !pattern.test(value)) {
+    throw new Error(`${name} is missing or invalid.`);
+  }
+  return value;
 }
 
 export function writeHostedFlutterDefines(outputPath, environment) {

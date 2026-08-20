@@ -88,7 +88,7 @@ class Runner:
 
     async def __call__(self, argv, **kwargs):
         self.calls.append((list(argv), kwargs))
-        if argv[1:2] == ["version"]:
+        if argv[1:2] in (["version"], ["--version"]):
             return ProcessResult(0, b"27.0.0", b"")
         if argv[1:3] == ["image", "inspect"]:
             revision = _expected_analysis_revision()

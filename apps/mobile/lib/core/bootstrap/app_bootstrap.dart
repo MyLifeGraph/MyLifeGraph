@@ -7,18 +7,23 @@ class AppBootstrap {
   const AppBootstrap._();
 
   static Future<void> initialize(AppConfig config) async {
-    initializeProfileTimeZones();
+    config.validateEnvironmentConfiguration();
+    config.validateAiServiceConfiguration();
     config.validateSupabaseConfiguration();
     config.validatePilotParticipationConfiguration();
+    config.validateAuthProtectionConfiguration();
+    config.validateReleaseIdentityConfiguration();
+    initializeProfileTimeZones();
     if (!config.isSupabaseConfigured) {
       return;
     }
 
     await Supabase.initialize(
       url: config.supabaseUrl,
-      // supabase_flutter 2.x keeps the historical parameter name while
-      // accepting both current publishable keys and legacy anon JWTs.
-      anonKey: config.supabaseClientKey,
+      // Current SDKs keep opaque API keys in `apikey`; user session JWTs alone
+      // belong in Authorization. The value may still be a legacy anon JWT
+      // during the bounded staging transition.
+      publishableKey: config.supabaseClientKey,
     );
   }
 }

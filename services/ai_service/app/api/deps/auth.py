@@ -12,6 +12,7 @@ from app.api.deps.supabase import get_supabase_client
 from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
 from app.core.config import get_settings
 from app.models.account import PILOT_PARTICIPATION_NOTICE_VERSION
+from app.public_admission import PublicAdmissionController, PublicAdmissionRejected
 
 
 class Principal(BaseModel):
@@ -160,6 +161,7 @@ async def get_token_verifier(request: Request) -> TokenVerifier:
 
 
 async def get_verified_principal(
+    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
     verifier: TokenVerifier = Depends(get_token_verifier),
 ) -> Principal:
@@ -167,6 +169,24 @@ async def get_verified_principal(
     principal = await verifier.verify(token)
     if principal is None:
         raise _unauthorized()
+    admission = getattr(request.app.state, "public_admission", None)
+    if isinstance(admission, PublicAdmissionController):
+        try:
+            await admission.admit_verified_owner(
+                method=request.method,
+                path=request.url.path,
+                user_id=principal.user_id,
+            )
+        except PublicAdmissionRejected as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "code": exc.code,
+                    "message": "The account request rate is temporarily limited.",
+                    "retryable": True,
+                },
+                headers={"Retry-After": str(exc.retry_after)},
+            ) from None
     return principal
 
 
@@ -174,8 +194,27 @@ async def get_current_principal(
     request: Request,
     principal: Principal = Depends(get_verified_principal),
 ) -> Principal:
-    if not get_settings().requires_pilot_participation:
+    settings = get_settings()
+    if not settings.requires_pilot_participation:
         return principal
+    try:
+        deletion_pending = await get_supabase_client(
+            request,
+        ).account_deletion_pending(user_id=principal.user_id)
+    except (SupabaseConfigurationError, httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account deletion state is unavailable.",
+        ) from exc
+    if deletion_pending:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail={
+                "code": "account_deletion_pending",
+                "message": "Account deletion is pending and product access is locked.",
+                "retryable": False,
+            },
+        )
     try:
         rows = await get_supabase_client(request).select(
             "profiles",

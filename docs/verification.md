@@ -1,12 +1,13 @@
 # Verification And Agent Automation
 
-Coach BYOK changes require mocked provider contract tests (including
+Coach V4 changes require mocked provider contract tests (including
 `store:false`, tool replay, invalid credentials/output, rate limits, timeout,
-no fallback, and parallel key isolation), Flutter credential lifecycle tests,
+no fallback, parallel key isolation, pre-stream admission, durable global
+budget races, and strict executor framing), Flutter credential lifecycle tests,
 the local Supabase migration/pgTAP gate, and the normal affected selector. A
-provider live turn, remote migration, OAuth dashboard change, hosted staging
-smoke, and installed-device smoke are separate evidence and must not be
-inferred from repository tests.
+provider live turn, remote migration, target-host permissions, OAuth dashboard
+change, hosted staging smoke, and installed-device smoke are separate evidence
+and must not be inferred from repository tests.
 The checked current prompt is `free-coach-agent-prompt-v5`.
 
 This is the current runbook for choosing and running repository verification,
@@ -28,44 +29,85 @@ tooling, and versioned 18-or-older acceptance. The local configuration and
 hosted-build guards now cover the first two: pilot current-key enforcement,
 exact URL/ref binding, and staging crossover denial have focused tests. Remote
 key state, a confirmed remote scenario run, VPS deployment, and the hosted
-shared Codex provider remain open. The `staging-scenarios-v1` generator has
+shared Codex provider remain open. Repository source now contains the
+default-off operator provider/executor, tagged deployment/rollback package,
+signed-APK workflow, and encrypted-backup runner; none is live evidence. The
+`staging-scenarios-v1` generator has
 source/unit/preview coverage only. `pilot-participation-v1` /
 `pilot-participation-notice-v1` adult acceptance and persistent staging
-identity now exist in the working tree with focused unit/widget/source tests; their pending
-normal-database, complete affected, browser, and remote gates are not current
-baseline evidence.
+identity now exist in the working tree with focused unit/widget/source tests;
+their normal-database and complete captured-base gates now pass as well. The hosted
+participation browser flow and remote gates are not current baseline evidence.
+The additive `pilot-participation-gate-v1` restrictive-RLS contract and its
+operator check/enable tool pass source plus isolated/current local database
+tests; exact enablement and attestation against the hosted project remain open.
+The `hosted-database-contract-v1` source gate binds hosted readiness and VPS
+promotion to the release's ordered migration-prefix head/count/digest and
+derives the prepared-deletion guard from installed function definitions. Its
+local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
-The hosted Supabase identity/configuration working tree was verified locally on
-2026-08-19 against task base
-`afcc9f7e667e2daed8faf233746279c186463a75`. The affected selector chose the
-Full lane. Documentation consistency passed for 92 Markdown files and 78
-FastAPI routes; the Visual contract, Flutter analysis, all 1,058 Flutter tests,
-the Flutter web build, Ruff, Python compilation, and `1561 passed, 2 skipped`
-FastAPI tests passed. The isolated migration chains and both the isolated and
-normal final states passed 375 assertions across 16 pgTAP files. All eight
-independent browser journeys passed and removed their temporary Auth
-identities. The current run did not build an APK; Android JVM/lint, the debug
-APK, and the local Codex smoke remain the preceding baseline because their
-implementation source did not change in this configuration slice. No reset,
-hosted deployment, OpenAI/Gemini live turn, remote project mutation, or
-installed-device check occurred during this local gate. A separate dated
-staging migration audit is recorded below.
+The current broad VPS-pilot working tree is based on
+`afcc9f7e667e2daed8faf233746279c186463a75`. Its captured-base selector chooses
+the Full lane. The complete captured-base Full selector passed on 2026-08-20:
+Flutter analysis passed with 1,098 tests, FastAPI Ruff passed with 1,681 tests
+and 2 intentional skips, and the debug web bundle built successfully. The
+source group in the same Fast run passed the documentation, visual, E2E-split,
+VPS, backup, Vercel, Android, Turnstile, staging, participation-operator, and
+local-safety gates. The explicitly authorized guarded local reset first created
+and restore-verified a new full archive, then rebuilt the normal database on
+the CLI-resolved PostgreSQL 17 image through all 69 migrations. The source
+archive retained the four pre-reset local Auth/profile identities; the fresh
+database intentionally had no seed, and the browser gate removed every exact
+run-owned identity, leaving zero Auth users and profiles. The Database gate
+passed against that normal PG17 state and pinned isolated PG15/PG17 full
+chains. Full selector browser run `20260820T133016Z-3151532` passed all eight
+independent UI journeys with exact run-owned Auth cleanup. This is a pass over
+the accumulated task tree selected from the captured base, not a tagged or
+deployed release identity.
+The former
+2026-08-19 counts belong to the pre-Coach-V4/pre-hosting predecessor and are
+retained only in
+[Verification History](verification-history.md); they do not prove this tree.
 
-The latest recorded lane evidence for this checkout is:
+Current 2026-08-20 repository evidence includes 15 VPS tests, 15 backup tests,
+3 Vercel-release tests, 2 Android-release tests plus the static Android guard,
+documentation consistency across 96 Markdown files and 82 FastAPI routes, the
+complete Fast suites above, and the debug web build containing the Turnstile
+assets. The normal local PostgreSQL 17 database and pinned, physically separate
+RAM-only PostgreSQL 15 and 17 runs apply the complete 69-file repository chain.
+The Recommendation transition suite passed 53 assertions on both pinned
+majors, the real multi-session Coach harness passed global 15-of-16 dispatch
+admission, 5-of-6 per-owner UTC admission, exact replay, and reconcile/delete
+interleavings, and an intentionally compromised pre-existing
+deletion-replayer role was refused before its first grant. After trusted
+isolated cleanup, PG15 created the exact role without membership while PG17
+created only its bootstrap-granted, ADMIN-only creator edge with `SET` and
+`INHERIT` disabled. The complete final-state pgTAP corpus passed 475 assertions
+in 23 files on pinned PG15, pinned PG17, and the normal PG17 database. The PG17
+lane additionally passed a full owner/ACL-preserving dump/restore into a second
+RAM-only target and a restored deletion replay. This is local
+migration/concurrency/recovery evidence, not remote migration state.
+
+A separate pre-migration rehearsal used the confirmed Staging PostgreSQL 17.6
+source at its 59-migration
+`20260815082606_coach_byok_completion_dispatch_v1.sql` boundary. It restored the
+captured application plus managed Auth/Storage schema into a disposable PG17.6
+target, applied the ten recovery migrations to the 69-file head, and matched
+raw DDL plus ACLs against an independently migration-built PG17 reference. The
+role guard and required deletion-replay transition also passed. This local,
+ignored plaintext rehearsal set is pre-migration safety evidence only: it is
+not an encrypted off-host Restic snapshot, contains no Management-API Auth
+configuration inventory, and did not exercise an off-host deletion journal.
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Docs, visual, Flutter, FastAPI, and web | On 2026-08-19, the hosted Supabase identity/configuration working tree passed Docs, Visual, Flutter analysis, all 1,058 Flutter tests, the web build, Ruff/compile, and `1561 passed, 2 skipped` FastAPI tests. | Local task-base working tree only. |
-| Representative browser smoke | On 2026-08-11, all four profile-mode Setup, Auth/Capture/Today, Planner-confirmation, and fake-Coach journeys passed and removed their temporary Auth identities. | Deterministic local browser integration only. |
-| Database transition/final state | On 2026-08-19, the isolated Goal, Exam Health, Multi-Exam, and Recommendation-retirement chains passed, followed by all 375 final-state assertions in isolated and normal local databases. | Physically isolated RAM-only transition targets plus the exact normal local database; no reset or remote state. |
-| Full browser | On 2026-08-19, the full eight-journey profile-mode suite passed and removed every temporary Auth identity. | Deterministic local browser integration against the hosted-configuration working tree only. |
-| Android source/build | On 2026-08-15, Android JVM/lint and a debug APK build passed. | Debug signing only; no current installed-device or OEM behavior claim. |
-| Local database safety | On 2026-08-05, a full archive restore-verification and the reset preview passed; destructive reset execution was not run. | The ignored local archive and exact local database only. |
-| Demo seed | On 2026-08-04, the four local demo identities were recreated and the enriched Student fixture passed its focused verification. | Not a remote seed or full-product gate. |
-| Real local Coach provider | On 2026-08-15, the explicit local `local_codex_oauth` multi-tool smoke passed once. | Exact machine, CLI, image, login, account, and date only; not a production provider. |
-| Remote Supabase staging | On 2026-08-15, the approved project `oscrunlndfrecjilojja` was backed up locally, its whitespace-identical remote-only migration timestamp was repaired, all 59 canonical migrations were applied, and MCP verified the `20260815082606` boundary, 63/63 forced-RLS public tables, 100 policies, BYOK constraints, and service-role-only V7 claim RPC. | Database migration/audit only; the backup was structurally checked but not restore-rehearsed, and hosted two-user, OAuth, Render/Vercel, provider-live, and production checks remain open. |
+| Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-20: VPS 15, backup 15, Vercel 3, Android 2 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. | Templates/unit checks only; no VPS, cloud, signing-key, or device execution. |
+| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,098 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260820T133016Z-3151532` passed 8/8 journeys with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
+| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-20; PG17 also passed full owner/ACL restore and deletion replay. | No hosted migration or encrypted off-host restore/replay evidence. |
+| Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
+| Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
 
 Product lanes above remain lane-specific evidence; they are not permission to
 claim remote migration state, deployment, installed-device behavior,
@@ -116,7 +158,7 @@ Use the lowest level that covers the complete change.
 | Affected | `npm run verify:affected -- --base-ref <task-base-ref>` | Classifies every task path and runs the required gates. | Depends on selected gates; never grants reset authority. |
 | Fast | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:fast` | Docs/visual/source checks, complete Flutter analysis/tests, complete FastAPI checks, and diff hygiene. | No |
 | Web | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:web` | Builds the Flutter debug web bundle. | No |
-| Database | `npm run verify:db` | Requires matching local migration history, runs the isolated transition harness, then the complete pgTAP suite. | No |
+| Database | `npm run verify:db` | Requires matching local migration history, runs the isolated transition harnesses including the pinned PG17 migration/restore/replay lane, then the complete normal-local pgTAP suite. | No |
 | Reviewed migration apply | `APPLY_MIGRATIONS=true npm run verify:db` | Applies reviewed pending local SQL, rechecks history, then runs database verification. | May change or delete local rows. |
 | Full | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:full` | Runs Fast, Database, Web, and all browser journeys. | No reset; browser tests create and remove exact local users. |
 | Browser smoke | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run e2e:web:smoke` | Runs four representative independent UI journeys. | No reset; removes exact test users. |
@@ -219,7 +261,7 @@ projection is not compatibility behavior; Today at a glance remains unchanged.
 
 The generic Today Recommendation and Decision Feedback retirement is verified
 across FastAPI route composition, strict scheduler input, Briefing V2, Weekly
-Review V3, Account Export V5, Personal Snapshot V3, Coach prompt V4/context V3,
+Review V3, Account Export V6, Personal Snapshot V3, Coach prompt V4/context V3,
 Flutter provider/surface absence, notification source parsing, and preserved
 Sleep Recommendation/Skillset/Insight/Memory/controlled-Coach concepts. The
 isolated migration proof uses two owners, a real concurrent lock timeout with
@@ -235,12 +277,16 @@ boundary explicitly owns verification requirements:
 
 | Boundary | Current version |
 | --- | --- |
-| Account export | `account-export-v5` |
+| Account export | `account-export-v6` |
 | Assignment series | `assignment-series-v1` |
 | Calendar import | `calendar-import-v2` |
 | Calendar consent | `calendar-import-consent-v1` |
 | Coach snapshot | `personal-snapshot-v3` |
 | Coach prompt | `free-coach-agent-prompt-v5` |
+| Coach request | `coach-request-v4` |
+| Coach response | `coach-response-v4` |
+| Coach capabilities | `coach-capabilities-v5` |
+| Coach history | `coach-history-v4` |
 | Daily briefing | `daily-briefing-v2` |
 | Daily Capture | `daily-capture-v5` |
 | Daily State | `explainable-daily-state-v3` |
@@ -398,8 +444,20 @@ concurrent-writer `55P03` timeout and verifies full rollback/no helper residue,
 then succeeds and runs 53
 transition assertions plus the complete final-state pgTAP suite. Its disposable
 bootstrap mirrors normal Supabase `service_role BYPASSRLS` and
-`"$user", public, extensions` session semantics. The proof never applies the
-erase migration to the normal local database and grants no remote authority.
+`"$user", public, extensions` session semantics. The gate runs the complete
+chain on pinned `public.ecr.aws/supabase/postgres:15.8.1.085` and
+`public.ecr.aws/supabase/postgres:17.6.1.113`, independent of the normal local
+major. PG16+ full-chain harnesses keep bootstrap superuser OID 10 separate from
+a non-superuser `postgres` migration identity with `CREATEROLE`. The PG17 lane
+verifies the automatic ADMIN-only creator edge, runs the complete 23-file pgTAP
+corpus, then full-dumps the final database, restores it with owners/ACLs into a
+second RAM-only PG17 target, and executes one restored deletion replay before
+cleanup. The proof never applies the erase migration to the normal local
+database and grants no remote authority.
+
+The local harness refuses to download either compatibility image implicitly.
+Fresh database CI obtains PG17 through the configured normal Supabase start and
+explicitly pulls the pinned PG15 tag before invoking the same gate.
 
 Read `docs/supabase-current-state.md` and
 `docs/local-database-safety.md` before database work. Inspect installed CLI
@@ -592,12 +650,24 @@ not set `RESET_DB=true` and cannot call the guarded reset execution path. A loca
 run is evidence only for the local checkout; do not report a hosted pull-request
 gate until that hosted job succeeds.
 
+The staging-APK, signed-pilot-APK, and pilot-backup workflows pin every
+third-party Action to an immutable full commit SHA while retaining the reviewed
+major version as an inline comment. Updating one of those SHAs is a separate
+supply-chain review; a moving major tag is not accepted in these
+credential-bearing workflows.
+
 ## Current Automation Gaps
 
 - Hosted CI evidence must come from GitHub; repository source or a local run
   proves only that the workflow is defined.
-- The VPS/HTTPS/tagged-release and signed-Android acceptance gates in
-  `docs/vps-pilot-release-plan.md` have no current deployment evidence.
+- VPS/HTTPS/tagged-release, rollback, permission, monitoring, and signed-Android
+  artifacts have static/unit rehearsal coverage only. Their target-host,
+  certificate, signed-secret, physical-device, and promotion gates have no
+  current deployment evidence. Static rehearsal binds each release to a
+  deterministic analysis-image tag, seals the complete prepared tree, rejects
+  post-seal mutation before promotion, and restores the prior tag on symlink
+  rollback; actual root ownership and retained-image availability still require
+  VPS evidence.
 - There is no deployed scheduler/cron or production background worker.
 - Notification Delivery has no Android/system, push, browser, email, or
   background-mobile channel; physical foreground acceptance remains useful.
@@ -608,13 +678,17 @@ gate until that hosted job succeeds.
   refresh/revocation, URL fetch, live sync, provider writes, or native picker
   behavior.
 - OpenAI/Gemini BYOK adapters are covered by deterministic HTTP mocks but have
-  no live-key turn. The local Codex provider remains development-only; hosted
-  backend isolation and autonomous answer-quality evaluation are not yet
-  established. The current same-UID local adapter is not evidence for the
-  planned separate `coach-executor` Unix-socket/permission boundary.
-- Public hosted signup CAPTCHA, release-day Google OAuth/redirect settings,
-  shared-provider global admission/budget behavior, and invalid-BYOK
-  no-fallback behavior through the public origins remain unverified.
+  no live-key turn. The local Codex provider remains development-only. The
+  separate `coach-executor` protocol, admission, permission templates, and
+  deterministic failure paths are implemented, but no target-host UID/socket/
+  rootless-Docker/login smoke or autonomous answer-quality evaluation exists.
+- Hosted Turnstile acquisition/reset/cancel/error source now covers each
+  protected email Auth operation on web and Android, but the real widget,
+  domain, Supabase provider/secret, browser, accessibility, and physical-device
+  acceptance remain unverified. Release-day Google OAuth/redirect settings are
+  also external gates. Shared-provider global admission/budget and invalid-BYOK
+  no-fallback have deterministic repository coverage but remain unverified
+  through public origins.
 - No separate real-data pilot Supabase project or remote current-key rotation is
   repository-proven. Local code now supports publishable/secret keys and exact
   staging/pilot crossover guards plus source-level visible staging identity,
@@ -622,16 +696,22 @@ gate until that hosted job succeeds.
   generator. Normal local migration evidence, confirmed remote fixture
   creation/cleanup, remote migration, and public-origin acceptance remain
   absent.
-- The current stream commits HTTP 200/`started` before provider concurrency is
-  acquired; pre-stream HTTP 429 admission, same-id retry without claim/budget,
-  executor reservation cleanup, and race/disconnect behavior are not yet
-  implemented or verified.
-- No executable off-host Supabase backup/restore job, RPO/RTO evidence, external
-  API/TLS monitor, backup heartbeat, or tested incident alert currently exists
-  in repository evidence.
-- Current Account Delete has no backup-independent encrypted intent ledger or
-  restore replay tool; an older backup must not be opened as if post-backup
-  deletions were already preserved.
+- Pre-stream HTTP 429 admission, same-id retry without claim/budget, executor
+  reservation cleanup, and race/disconnect behavior are implemented and
+  deterministically tested. The global UTC-day aggregate is tested to survive
+  owner/account deletion while personal dispatch linkage cascades; public/VPS
+  acceptance remains open.
+- An inert protected GitHub workflow can create encrypted checksum-verified
+  Restic snapshots, enforce empty Storage, retain 7 daily/4 weekly, and call an
+  off-host heartbeat. No storage account/credentials, real backup snapshot,
+  isolated database restore, deletion replay, API/TLS monitor, or tested alert
+  exists yet.
+- `account-deletion-v2`, `account-deletion-status-v2`, the
+  `account-deletion-journal-v2` writer/exporter, dedicated-role replay, and
+  watermark checks exist in source. No real object-locked journal, encrypted
+  snapshot, isolated database restore/replay, or recovery cutoff has passed;
+  an older backup must not be opened as if post-backup deletions were already
+  preserved.
 - The manual student usability study and longitudinal product-outcome evidence
   remain unrun.
 

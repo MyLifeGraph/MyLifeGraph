@@ -13,16 +13,24 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/domain/auth_failure.dart';
+import 'package:my_life_graph/features/auth/domain/auth_captcha.dart';
+import 'package:my_life_graph/features/auth/presentation/captcha/auth_captcha_challenge.dart';
 import 'package:my_life_graph/features/auth/presentation/pages/auth_page.dart';
 import 'package:my_life_graph/features/auth/presentation/pages/password_recovery_page.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
+import 'package:my_life_graph/composition/coach_credential_store_provider.dart';
+import 'package:my_life_graph/features/coach/data/coach_credential_store.dart';
+import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'package:my_life_graph/features/settings/presentation/pages/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  late PlatformCoachCredentialStore credentialStore;
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    credentialStore = PlatformCoachCredentialStore(web: true);
   });
 
   testWidgets('auth uses a focused two-column layout on wide screens',
@@ -97,6 +105,7 @@ void main() {
         overrides: [
           appConfigProvider.overrideWithValue(_testAppConfig),
           authRepositoryProvider.overrideWithValue(repository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
         ],
         child: const MaterialApp(home: AuthPage()),
       ),
@@ -219,6 +228,60 @@ void main() {
     );
   });
 
+  testWidgets('hosted email actions acquire and forward a fresh CAPTCHA token',
+      (tester) async {
+    final repository = _FakeAuthRepository();
+    final captcha = _RecordingCaptchaChallenge();
+    const hostedConfig = AppConfig(
+      environment: 'staging',
+      supabaseUrl: 'https://abcdefghijklmnopqrst.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+      stagingSupabaseProjectRef: 'abcdefghijklmnopqrst',
+      pilotContactEmail: 'pilot-contact@example.test',
+      appPublicOrigin: 'https://app.example.test',
+      turnstileSiteKey: '1x00000000000000000000AA',
+      aiServiceBaseUrl: 'https://coach.example.test',
+      useMockData: false,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(hostedConfig),
+          authRepositoryProvider.overrideWithValue(repository),
+          authCaptchaChallengeProvider.overrideWithValue(captcha),
+        ],
+        child: const MaterialApp(home: AuthPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'person@example.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'password',
+    );
+    final signIn = find.widgetWithText(FilledButton, 'Sign in');
+    await tester.ensureVisible(signIn);
+    await tester.tap(signIn);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Forgot password?'));
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+
+    expect(captcha.actions, [
+      AuthCaptchaAction.signIn,
+      AuthCaptchaAction.passwordReset,
+    ]);
+    expect(repository.signInCaptchaTokens, ['captcha-signin-1']);
+    expect(repository.passwordResetCaptchaTokens, [
+      'captcha-password_reset-2',
+    ]);
+  });
+
   testWidgets('missing synced profile fails closed and offers sign-out',
       (tester) async {
     final repository = _FakeAuthRepository(
@@ -229,6 +292,7 @@ void main() {
         overrides: [
           appConfigProvider.overrideWithValue(_testAppConfig),
           authRepositoryProvider.overrideWithValue(repository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
         ],
         child: const MaterialApp(home: AuthPage()),
       ),
@@ -378,7 +442,10 @@ void main() {
       () async {
     final repository = _FakeAuthRepository();
     final container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        coachCredentialStoreProvider.overrideWithValue(credentialStore),
+      ],
     );
     addTearDown(container.dispose);
     container.read(authControllerProvider);
@@ -400,7 +467,10 @@ void main() {
       () async {
     final repository = _FakeAuthRepository();
     final container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        coachCredentialStoreProvider.overrideWithValue(credentialStore),
+      ],
     );
     addTearDown(container.dispose);
 
@@ -448,7 +518,10 @@ void main() {
       failDeletedAccountSignOut: true,
     );
     final container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        coachCredentialStoreProvider.overrideWithValue(credentialStore),
+      ],
     );
     addTearDown(container.dispose);
     container.read(authControllerProvider);
@@ -472,7 +545,10 @@ void main() {
       failSignOut: true,
     );
     final container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        coachCredentialStoreProvider.overrideWithValue(credentialStore),
+      ],
     );
     addTearDown(container.dispose);
     container.read(authControllerProvider);
@@ -486,6 +562,168 @@ void main() {
     expect(container.read(authControllerProvider).valueOrNull, isNull);
     expect(container.read(authControllerProvider).isLoading, isFalse);
     expect(repository.signOutCalls, 1);
+  });
+
+  test(
+      'provider-wired sign-out deletes BYOK credentials before remote sign-out',
+      () async {
+    final repository = _FakeAuthRepository(
+      current: AppSession.authenticated(_profile()),
+    );
+    await credentialStore.write(
+      _profile().id,
+      CoachProviderName.openai,
+      'device-secret',
+    );
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        coachCredentialStoreProvider.overrideWithValue(credentialStore),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(authControllerProvider);
+    await Future<void>.delayed(Duration.zero);
+
+    await container.read(authControllerProvider.notifier).signOut();
+
+    expect(
+      await credentialStore.read(_profile().id, CoachProviderName.openai),
+      isNull,
+    );
+    expect(repository.signOutCalls, 1);
+  });
+
+  test('credential cleanup failure blocks sign-out and preserves the session',
+      () async {
+    final repository = _FakeAuthRepository(
+      current: AppSession.authenticated(_profile()),
+    );
+    final controller = AuthController(
+      repository,
+      clearCoachCredentials: () async {
+        throw StateError('secure storage cleanup failed');
+      },
+    );
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+
+    await expectLater(controller.signOut(), throwsStateError);
+
+    expect(controller.state.valueOrNull, isNotNull);
+    expect(repository.signOutCalls, 0);
+  });
+
+  test('sign-out waits for credential cleanup before calling Supabase',
+      () async {
+    final repository = _FakeAuthRepository(
+      current: AppSession.authenticated(_profile()),
+    );
+    final cleanup = Completer<void>();
+    final controller = AuthController(
+      repository,
+      clearCoachCredentials: () => cleanup.future,
+    );
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+
+    final signOut = controller.signOut();
+    await Future<void>.delayed(Duration.zero);
+    expect(repository.signOutCalls, 0);
+    cleanup.complete();
+    await signOut;
+
+    expect(repository.signOutCalls, 1);
+    expect(controller.state.valueOrNull, isNull);
+  });
+
+  test('a delayed pre-logout profile load cannot resurrect the session',
+      () async {
+    final repository = _FakeAuthRepository(
+      current: AppSession.authenticated(_profile()),
+    );
+    final controller = AuthController(repository);
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.state.valueOrNull, isNotNull);
+
+    final delayed = Completer<AppSession?>();
+    repository.delayedCurrentSession = delayed;
+    final staleRefresh = controller.refresh();
+    await Future<void>.delayed(Duration.zero);
+    await controller.signOut();
+    delayed.complete(AppSession.authenticated(_profile()));
+    await staleRefresh;
+
+    expect(controller.state.valueOrNull, isNull);
+    expect(repository.signOutCalls, 1);
+  });
+
+  test('a delayed pre-deletion profile load cannot resurrect the session',
+      () async {
+    final repository = _FakeAuthRepository(
+      current: AppSession.authenticated(_profile()),
+    );
+    final controller = AuthController(repository);
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+
+    final delayed = Completer<AppSession?>();
+    repository.delayedCurrentSession = delayed;
+    final staleRefresh = controller.refresh();
+    await Future<void>.delayed(Duration.zero);
+    await controller.finalizeDeletedAccount(
+      coachCredentialsAlreadyCleared: true,
+    );
+    delayed.complete(AppSession.authenticated(_profile()));
+    await staleRefresh;
+
+    expect(controller.state.valueOrNull, isNull);
+    expect(repository.deletedAccountSignOutCalls, 1);
+  });
+
+  test('account deletion preparation fails closed on credential cleanup error',
+      () async {
+    final repository = _FakeAuthRepository(
+      current: AppSession.authenticated(_profile()),
+    );
+    final controller = AuthController(
+      repository,
+      clearCoachCredentials: () async {
+        throw StateError('secure storage cleanup failed');
+      },
+    );
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+
+    await expectLater(controller.prepareAccountDeletion(), throwsStateError);
+
+    expect(controller.state.valueOrNull, isNotNull);
+    expect(repository.deletedAccountSignOutCalls, 0);
+  });
+
+  test('deleted-account finalization can reuse an already completed cleanup',
+      () async {
+    final repository = _FakeAuthRepository(
+      current: AppSession.authenticated(_profile()),
+    );
+    var cleanupCalls = 0;
+    final controller = AuthController(
+      repository,
+      clearCoachCredentials: () async {
+        cleanupCalls += 1;
+      },
+    );
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.finalizeDeletedAccount(
+      coachCredentialsAlreadyCleared: true,
+    );
+
+    expect(cleanupCalls, 0);
+    expect(repository.deletedAccountSignOutCalls, 1);
+    expect(controller.state.valueOrNull, isNull);
   });
 
   testWidgets('recovery page validates and completes a new password',
@@ -697,9 +935,12 @@ class _FakeAuthRepository extends AuthRepository {
   final Object? signInError;
   final Completer<void>? googleSignInCompleter;
   final Object? googleSignInError;
+  Completer<AppSession?>? delayedCurrentSession;
   final _authStates = StreamController<AuthState>.broadcast();
   final List<String> passwordResetEmails = [];
+  final List<String?> passwordResetCaptchaTokens = [];
   final List<String> confirmationEmails = [];
+  final List<String?> signInCaptchaTokens = [];
   final List<String> updatedPasswords = [];
   int signOutCalls = 0;
   int deletedAccountSignOutCalls = 0;
@@ -709,20 +950,33 @@ class _FakeAuthRepository extends AuthRepository {
   Stream<AuthState> get authStateChanges => _authStates.stream;
 
   @override
-  Future<AppSession?> currentSession() async => current;
+  Future<AppSession?> currentSession() async {
+    final delayed = delayedCurrentSession;
+    if (delayed != null) {
+      delayedCurrentSession = null;
+      return delayed.future;
+    }
+    return current;
+  }
 
   @override
-  Future<void> requestPasswordReset({required String email}) async {
+  Future<void> requestPasswordReset({
+    required String email,
+    String? captchaToken,
+  }) async {
     passwordResetEmails.add(email);
+    passwordResetCaptchaTokens.add(captchaToken);
   }
 
   @override
   Future<AppSession> signInWithEmail({
     required String email,
     required String password,
+    String? captchaToken,
   }) async {
     final error = signInError;
     if (error != null) throw error;
+    signInCaptchaTokens.add(captchaToken);
     return AppSession.authenticated(_profile());
   }
 
@@ -732,6 +986,7 @@ class _FakeAuthRepository extends AuthRepository {
     required String password,
     String? name,
     bool confirmed18OrOlder = false,
+    String? captchaToken,
   }) async {
     if (failRegistration) {
       throw const AuthException('registration failed');
@@ -740,7 +995,10 @@ class _FakeAuthRepository extends AuthRepository {
   }
 
   @override
-  Future<void> resendSignupConfirmation({required String email}) async {
+  Future<void> resendSignupConfirmation({
+    required String email,
+    String? captchaToken,
+  }) async {
     confirmationEmails.add(email);
   }
 
@@ -776,6 +1034,19 @@ class _FakeAuthRepository extends AuthRepository {
 
   void emitPasswordRecovery() {
     _authStates.add(const AuthState(AuthChangeEvent.passwordRecovery, null));
+  }
+}
+
+class _RecordingCaptchaChallenge implements AuthCaptchaChallenge {
+  final List<AuthCaptchaAction> actions = [];
+
+  @override
+  Future<String?> acquire(
+    BuildContext context, {
+    required AuthCaptchaAction action,
+  }) async {
+    actions.add(action);
+    return 'captcha-${action.wireValue}-${actions.length}';
   }
 }
 

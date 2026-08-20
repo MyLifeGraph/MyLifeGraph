@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
@@ -20,6 +22,11 @@ void main() {
           .read('profile-a', CoachProviderName.openai),
       isNull,
     );
+    await tab.deleteAllCoachCredentials();
+    expect(
+      await tab.read('profile-a', CoachProviderName.openai),
+      isNull,
+    );
   });
 
   test('replacement becomes active only after a ready capability test',
@@ -32,6 +39,7 @@ void main() {
       accessToken: () async => 'access-token',
     );
     await controller.setProfile('profile-a');
+    controller.select(CoachProviderName.openai);
 
     expect(
       await controller.testAndSave(CoachProviderName.openai, 'bad-secret'),
@@ -66,6 +74,46 @@ void main() {
     expect(controller.state.keys, isEmpty);
     await switching;
     expect(store.values.keys, isNot(contains(startsWith('profile-a:'))));
+    expect(store.deleteAllCalls, 1);
+  });
+
+  test('profile switch fails closed when secure storage cannot be cleared',
+      () async {
+    final store = _Store()..values['profile-a:openai'] = 'secret-a';
+    final controller = CoachCredentialsController(
+      store: store,
+      api: _Api(),
+      accessToken: () async => 'access-token',
+    );
+    await controller.setProfile('profile-a');
+    store.failDeleteAll = true;
+
+    await controller.setProfile('profile-b');
+
+    expect(controller.state.profileId, isNull);
+    expect(controller.state.keys, isEmpty);
+    expect(controller.state.error, isNotNull);
+  });
+
+  test('a stale profile load cannot overwrite a newer profile', () async {
+    final firstRead = Completer<void>();
+    final store = _Store()
+      ..values['profile-a:openai'] = 'stale-secret'
+      ..readBarriers['profile-a:openai'] = firstRead;
+    final controller = CoachCredentialsController(
+      store: store,
+      api: _Api(),
+      accessToken: () async => 'access-token',
+    );
+
+    final staleLoad = controller.setProfile('profile-a');
+    await Future<void>.delayed(Duration.zero);
+    final currentLoad = controller.setProfile('profile-b');
+    firstRead.complete();
+    await Future.wait([staleLoad, currentLoad]);
+
+    expect(controller.state.profileId, 'profile-b');
+    expect(controller.state.keys, isEmpty);
   });
 
   test('secure-storage write failure keeps the prior active key', () async {
@@ -85,18 +133,79 @@ void main() {
     );
     expect(controller.state.activeKey, 'previous-secret');
   });
+
+  test('an in-flight key test cannot write after sign-out', () async {
+    final capability = Completer<void>();
+    final store = _Store();
+    final api = _Api()
+      ..ready = true
+      ..capabilityBarrier = capability;
+    final controller = CoachCredentialsController(
+      store: store,
+      api: api,
+      accessToken: () async => 'access-token',
+    );
+    await controller.setProfile('profile-a');
+
+    final save = controller.testAndSave(
+      CoachProviderName.openai,
+      'new-secret',
+    );
+    await Future<void>.delayed(Duration.zero);
+    await controller.setProfile(null);
+    capability.complete();
+
+    expect(await save, isFalse);
+    expect(store.values, isEmpty);
+    expect(controller.state.profileId, isNull);
+  });
+
+  test('Project Coach selection never reads or stores an API key', () async {
+    final store = _Store();
+    final api = _Api();
+    final controller = CoachCredentialsController(
+      store: store,
+      api: api,
+      accessToken: () async => 'access-token',
+    );
+    await controller.setProfile('profile-a');
+
+    controller.select(CoachProviderName.operatorCodexPilot);
+
+    expect(controller.state.usesProjectCoach, isTrue);
+    expect(controller.state.activeKey, isNull);
+    expect(api.keys, isEmpty);
+    expect(
+      store.values.keys,
+      everyElement(isNot(contains('operator_codex_pilot'))),
+    );
+    await expectLater(
+      PlatformCoachCredentialStore(web: true).write(
+        'profile-a',
+        CoachProviderName.operatorCodexPilot,
+        'must-not-be-stored',
+      ),
+      throwsArgumentError,
+    );
+  });
 }
 
 class _Store implements CoachCredentialStore {
   final Map<String, String> values = {};
+  final Map<String, Completer<void>> readBarriers = {};
   bool failWrites = false;
+  bool failDeleteAll = false;
+  int deleteAllCalls = 0;
 
   String _key(String profile, CoachProviderName provider) =>
       '$profile:${provider.code}';
 
   @override
-  Future<String?> read(String profileId, CoachProviderName provider) async =>
-      values[_key(profileId, provider)];
+  Future<String?> read(String profileId, CoachProviderName provider) async {
+    final key = _key(profileId, provider);
+    await readBarriers[key]?.future;
+    return values[key];
+  }
 
   @override
   Future<void> write(
@@ -117,12 +226,20 @@ class _Store implements CoachCredentialStore {
   Future<void> deleteProfile(String profileId) async {
     values.removeWhere((key, _) => key.startsWith('$profileId:'));
   }
+
+  @override
+  Future<void> deleteAllCoachCredentials() async {
+    deleteAllCalls += 1;
+    if (failDeleteAll) throw StateError('secure storage delete failed');
+    values.clear();
+  }
 }
 
 class _Api extends CoachApiDataSource {
   _Api() : super(ApiClient(Dio()));
 
   bool ready = true;
+  Completer<void>? capabilityBarrier;
   final List<String> keys = [];
 
   @override
@@ -132,6 +249,7 @@ class _Api extends CoachApiDataSource {
     String? apiKey,
   }) async {
     keys.add(apiKey!);
+    await capabilityBarrier?.future;
     final model = provider == CoachProviderName.openai
         ? 'gpt-5.6-terra'
         : 'gemini-3.6-flash';
@@ -150,7 +268,10 @@ class _Api extends CoachApiDataSource {
         'message_codepoints': 2000,
         'reply_codepoints': 4000,
         'requests_per_local_day': 20,
+        'request_period': 'profile_local_day',
         'remaining_requests': 20,
+        'global_requests_per_utc_day': null,
+        'global_remaining_requests': null,
         'max_tool_calls': 12,
         'turn_timeout_seconds': 180,
         'sql_timeout_seconds': 5,

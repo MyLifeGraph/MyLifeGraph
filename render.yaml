@@ -4,14 +4,22 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    branch: new_backend_gh
+    branch: main
     rootDir: services/ai_service
     buildCommand: pip install --require-hashes -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /v1/health
+    startCommand: APP_BUILD_SHA="$RENDER_GIT_COMMIT" uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/ready
     envVars:
       - key: APP_ENV
         value: staging
+      - key: APP_RELEASE_TAG
+        value: v0.1.0-pilot.0-rc.0
+      - key: APP_MIGRATION_HEAD
+        sync: false
+      - key: APP_MIGRATION_COUNT
+        sync: false
+      - key: APP_MIGRATION_IDENTITY_SHA256
+        sync: false
       - key: PYTHON_VERSION
         value: 3.12.3
       - key: USE_MOCK_DATA
@@ -25,6 +33,16 @@ services:
       - key: STAGING_SUPABASE_PROJECT_REF
         value: oscrunlndfrecjilojja
       - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: ACCOUNT_DELETION_JOURNAL_S3_URL
+        sync: false
+      - key: ACCOUNT_DELETION_JOURNAL_S3_REGION
+        sync: false
+      - key: ACCOUNT_DELETION_JOURNAL_S3_ACCESS_KEY_ID
+        sync: false
+      - key: ACCOUNT_DELETION_JOURNAL_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: ACCOUNT_DELETION_JOURNAL_S3_KMS_KEY_ARN
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false

@@ -8,9 +8,10 @@ Contract-Dokumente.
 Die beschlossene Zielsequenz für einen öffentlich registrierbaren, auf dem
 Handy nutzbaren ersten VPS-Piloten steht getrennt im
 [VPS Pilot Release Plan](vps-pilot-release-plan.md). Sie ändert den hier
-beschriebenen Ist-Zustand noch nicht: Insbesondere ist der Codex-OAuth-Provider
-weiterhin development-only und ein geteilter Betreiber-Provider noch nicht
-implementiert oder deployt.
+beschriebenen Repository-Ist-Zustand: Der gleiche-User-Codex-OAuth-Provider
+bleibt development-only; der getrennte `operator_codex_pilot`-Executor ist
+lokal implementiert und standardmäßig aus, aber noch nicht auf dem VPS
+installiert, live abgenommen oder öffentlich deployt.
 
 Die Oberfläche ist in V1 vollständig englisch. Deshalb stehen die sichtbaren
 englischen Namen in diesem Dokument in Klammern. Eine deutsche Lokalisierung ist
@@ -46,8 +47,9 @@ ehrlichen Tagesüberblick und vorsichtige regelbasierte Unterstützung übersetz
 
 Der Großteil des Produkts ist bewusst regelbasiert und verwendet **kein LLM**.
 Der Coach ist die einzige Oberfläche, die ein echtes Sprachmodell aufrufen
-kann: mit einem expliziten nutzereigenen OpenAI-/Gemini-Key oder, nur in lokaler
-Entwicklung, über den angemeldeten Codex-CLI-Nutzer.
+kann: mit einem expliziten nutzereigenen OpenAI-/Gemini-Key, nur in lokaler
+Entwicklung über den angemeldeten gleichen Codex-CLI-Nutzer oder im
+standardmäßig ausgeschalteten Pilotmodus über den getrennten Projekt-Executor.
 
 ## Das beabsichtigte Produktmodell
 
@@ -92,8 +94,9 @@ Quelle verwendet werden. Es gibt keinen Live-Sync und keinen Calendar-Write.
 | Local guest/demo | Check-ins und ausgewählte Beispieldaten lokal auf dem Gerät | Grundnavigation, Morning/Evening, ehrliche Demo- oder Leerzustände | Keine synchronisierten Tasks, Habits, Focus sessions, Planner-Pläne, Reviews, Kalenderimporte oder Preparation Plans |
 | Synced account | Supabase Auth und die eigenen, per RLS geschützten Supabase-Daten; abgeleitete Workflows über FastAPI | Der vollständige aktuelle Produktumfang | Fehler werden angezeigt und niemals durch personalisiert wirkende Mock-Daten ersetzt |
 | Coach mit `fake` provider | Wie ein synced account, aber Coach-Antworten sind feste Testantworten | Freie Frage, Stream, History, Evidence/Trace, Limits und UI lassen sich testen | Das ist kein aktives LLM und führt keine Analyse aus |
-| Coach mit OpenAI-/Gemini-BYOK | Synced account; Android speichert den Key verschlüsselt und Web nur im aktuellen Tab | Ein echter nutzerfinanzierter Provider-Turn mit Read-only Snapshot, Inspection und SQL | Implementiert, aber der gehostete Browserpfad ist bis zum CORS- und vollständigen Release-Gate nicht abgenommen; ein Fehler fällt nie auf einen anderen Provider zurück |
+| Coach mit OpenAI-/Gemini-BYOK | Synced account; Android speichert den Key verschlüsselt und Web nur im aktuellen Tab | Ein nutzerfinanzierter Provider-Turn mit Read-only Snapshot, Inspection und SQL nach separatem Live-Gate | CORS und das aktuelle Gemini-`steps`-Schema sind implementiert, aber Browser-/Provider-/Public-Release-Abnahme bleibt offen; ein Fehler fällt nie auf einen anderen Provider zurück |
 | Coach mit `local_codex_oauth` | Synced account plus explizit aktivierter Codex-CLI-Zugang und lokales Analyse-Image | Ein echter `gpt-5.5`-Fast-Turn mit drei Read-only-Werkzeugen | Nur lokale Entwicklung; nicht in Release/Produktion verfügbar |
+| `Project Coach` / `operator_codex_pilot` | Synced account; FastAPI besitzt weder Key noch OAuth, der getrennte Executor besitzt den Pilot-Login | Expliziter `gpt-5.5`-Fast-Turn mit Inspect, SQL und isoliertem Python | Default-off Repository-Implementierung; 5 Turns je lokalem Nutzertag, 15 Dispatches je UTC-Tag global, keine Warteschlange oder Ausweichroute; VPS-/Terms-/Live-Gates offen |
 
 Ein neu registrierter echter Account erhält seine Auth-Identität und sein
 kanonisches Profil in Supabase. In exaktem `staging` oder `pilot` zeigt die App
@@ -123,8 +126,8 @@ Eingaben befüllt.
 
 ## Navigation: Was befindet sich wo?
 
-Mit aktiviertem Coach hat die Hauptnavigation genau fünf Ziele. In `staging`
-und `production` erscheint Coach nur bei exakt
+Mit aktiviertem Coach hat die Hauptnavigation genau fünf Ziele. In `staging`,
+`pilot` und `production` erscheint Coach nur bei exakt
 `COACH_SURFACE_ENABLED=true`; ohne dieses Gate entfällt `Coach` vollständig.
 `Settings` wird nicht als redundanter Ersatz eingeblendet.
 
@@ -134,7 +137,7 @@ und `production` erscheint Coach nur bei exakt
 | **Insights** | Entwicklungen untersuchen | Für echte Accounts die unabhängigen Backend-Karten `Personal study pattern` und `Sleep recommendation` mit Stichprobe und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung und keine erfundene Schlafempfehlung. |
 | **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
 | **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, endliche wöchentliche Assignment-Serie und Fixed commitment anlegen; Exam/Assignment bleiben nach dem gewählten Add-new-Button fest; Vorschauen bestätigen; sieben Tage, quellengenaue Konflikte, alle aktiven Habits, ausschließlich unplatzierte offene Tasks und laufende Preparation verwalten (`planner-overview-v2`) |
-| **Coach** | Eine freie Frage zu den eigenen Daten stellen | Provider-gesteuerte Oberfläche mit frischem persönlichen Snapshot, Read-only-Analyse, sichtbarer Evidence/Provenance und validierter englischer Textantwort; BYOK ist implementiert, lokaler Codex bleibt Development |
+| **Coach** | Eine freie Frage zu den eigenen Daten stellen | Explizite Wahl zwischen Project Coach und eigenem OpenAI-/Gemini-Key, frischer persönlicher Snapshot, Read-only-Analyse, sichtbare Evidence/Provenance und validierte englische Textantwort; kein Provider-Fallback |
 
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
@@ -343,7 +346,7 @@ Budget-, Calendar-, Plan- oder Belegungsdaten muss neu geprüft werden.
 | **Insights** | `personal-patterns-v1` liefert die persönliche Musterkarte und Korrelationen; `sleep-recommendation-v1` liefert unabhängig Fortschritt, Unstable-Grund oder drei robuste Ready-Fenster; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung und ruft die Schlafroute nicht auf | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; für Schlafempfehlung mindestens 30 geeignete Tage; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage, kein Apply und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Focus-Previews |
 | **Inbox lifecycle** | fällige gespeicherte Hinweise lesen, unread/read setzen oder dismissen | owner-scoped `notifications` | Lifecycle-Zeitstempel plus Retry-Ledger; kein LLM |
 | **In-app reminders** | nach separater Einwilligung werden höchstens zwei Kandidaten mit fixer Copy regelbasiert erzeugt und bei offener App höchstens einmal als Banner gezeigt | aktueller Recovery-/Briefing-Zustand oder aktuelles Weekly Review, Kategorien, Quiet Hours und Tageslimit | `notification_preferences`, `notifications` und Delivery-Provenance; kein Push, kein Background und kein LLM |
-| **Coach** | freie Frage, bei Bedarf Read-only-Inspektion/SQL und beim lokalen Codex zusätzlich isoliertes Python, Safety-Prüfung und validierte englische Textantwort | frischer owner-only SQLite-Snapshot über den verfügbaren relevanten Produktzeitraum, inklusive Detailtexten und Datenkatalog | `coach_requests`, `coach_messages`, Usage sowie backend-erzeugte Evidence/Trace/Provider-Provenance; klar deutsche Provider-Ausgabe wird vor Assistant-Persistenz verworfen; kein Plot und keine Produktmutation; nur dieser Pfad kann ein LLM verwenden |
+| **Coach** | freie Frage mit expliziter Wahl: Project Coach oder eigener OpenAI-/Gemini-Key; Read-only-Inspektion/SQL und bei Codex-Modi zusätzlich isoliertes Python, Safety-Prüfung und validierte englische Textantwort | frischer owner-only SQLite-Snapshot über den verfügbaren relevanten Produktzeitraum, inklusive Detailtexten und Datenkatalog | `coach_requests`, `coach_messages`, Usage und beim Project Coach append-only Dispatch-Budget sowie backend-erzeugte Evidence/Trace/Provider-Provenance; klar deutsche Provider-Ausgabe wird vor Assistant-Persistenz verworfen; kein Plot, Provider-Fallback oder Produktmutation; nur dieser Pfad kann ein LLM verwenden |
 | **Account controls** | Zeitzone, JSON-Export, Passwort-Recovery und permanente Löschung | Profil und owner-scoped Produktdaten | kontrollierte FastAPI/RPC-Operationen; kein LLM |
 
 Ein einzelnes Abgabeto-do ohne eigenen Vorbereitungsplan wird als Task erfasst.
@@ -621,7 +624,7 @@ kann sie nicht ausführen.
 - keine Embeddings und keine Vector Search;
 - keine automatische Memory-Extraktion aus Check-ins oder Coach-Chats;
 - kein autonomer Hintergrund-Agent; Coach-Werkzeuge sind providerabhängig auf
-  Inspect/SQL und beim privaten lokalen Codex zusätzlich Python begrenzt; kein
+  Inspect/SQL und bei lokalem/operator Codex zusätzlich Python begrenzt; kein
   Provider besitzt Shell-, Web- oder Schreibwerkzeuge;
 - keine versteckten Änderungen an Tasks, Habits, Schedule oder Plänen;
 - keine automatische Kalender-Synchronisation;
@@ -633,27 +636,34 @@ kann sie nicht ausführen.
 
 Der Screen heißt `Coach` und beginnt mit `Ask anything`.
 
-- In `staging` und `production` ist er nur bei exakt
+- In `staging` und `pilot` ist er nur bei exakt
   `COACH_SURFACE_ENABLED=true` sichtbar; die sichtbare Route beweist noch keine
-  Provider-Verfügbarkeit.
+  Provider-Verfügbarkeit. `APP_ENV=production` ist noch kein gültiger
+  Runtime-Vertrag und wird fail-closed abgelehnt.
 - Mit `provider=fake` zeigt er feste Testantworten. Die UI sagt dann ausdrücklich
   dass es Testdaten und kein Live-Assistant sind.
-- Mit einem getesteten nutzereigenen OpenAI- oder Gemini-Key kann der aktuelle
+- Nach dem separaten Live-Gate kann der aktuelle Pfad mit einem nutzereigenen
+  OpenAI- oder Gemini-Key
   BYOK-Pfad einen echten Provider pro Request aufrufen. Android hält den Key
   verschlüsselt gerätelokal, Web nur im aktuellen Tab; FastAPI persistiert ihn
-  nicht. Der gehostete Browserpfad ist vor dem geplanten CORS- und Release-Gate
-  noch nicht abgenommen.
+  nicht. Die benötigten CORS-Header sind implementiert; Browser- und
+  Public-Release-Abnahme bleiben offen.
 - Mit explizit aktiviertem `local_codex_oauth` kann FastAPI lokal die bereits
   angemeldete Codex CLI desselben Linux/WSL-Nutzers aufrufen. Jeder Turn
   verlangt exakt `gpt-5.5`, `service_tier="fast"` und aktivierten Fast Mode.
+- Mit explizit ausgewähltem `Project Coach` sendet Flutter keinen Key. FastAPI
+  reserviert vor Streambeginn genau einen Slot im getrennten
+  `coach-executor`; nur dieser UID besitzt den Codex-Login und rootless Docker.
+  Busy liefert `Retry-After` und erfordert manuellen Retry. 5 Turns pro
+  Profil-Lokaltag und 15 Dispatches pro UTC-Tag sind sichtbar begrenzt.
 - Fehlen Modell, Fast-Unterstützung, Login, Docker oder Analyse-Image, ist der
   lokale Provider ehrlich nicht verfügbar. Es gibt keinen Modell-/Tier- oder
-  providerübergreifenden Fallback. BYOK ist implementiert; ein abgenommener
-  gehosteter Betreiber-Provider existiert noch nicht.
+  providerübergreifenden Fallback. Der Betreiberpfad ist implementiert, aber
+  vor VPS-, Terms- und Live-Abnahme nicht freigegeben.
 
 ### Was er lesen darf
 
-Für jede bewusst gesendete V3-Frage baut FastAPI eine neue, private
+Für jede bewusst gesendete V4-Frage baut FastAPI eine neue, private
 `personal-snapshot-v3`-SQLite-Datei ausschließlich aus Daten des angemeldeten
 Owners. Sie darf den gesamten verfügbaren Zeitraum der relevanten Quellen
 enthalten:
@@ -678,14 +688,14 @@ Jeder aktuelle reale Provider kann ausschließlich:
 - `query_data` für begrenzte read-only `SELECT`-/`WITH`-Abfragen.
 
 OpenAI/Gemini BYOK erhalten nur die begrenzten Tool-Ergebnisse, nie die
-SQLite-Datei oder Python. Nur der private lokale Codex-Adapter erhält zusätzlich
-`run_python` in einem separaten Docker-Container ohne Netzwerk oder Secrets,
-als Non-root mit read-only Root und ausschließlich read-only gemountetem
-Snapshot.
+SQLite-Datei oder Python. Der private lokale Codex-Adapter und der getrennte
+Project-Coach-Executor erhalten zusätzlich `run_python` in einem separaten
+Docker-Container ohne Netzwerk oder Secrets, als Non-root mit read-only Root
+und ausschließlich read-only gemountetem Snapshot.
 
-Für diesen lokalen Python-Pfad sind Pandas, NumPy, SciPy, Statsmodels und
-Matplotlib vorhanden. Ein interner Plot kann dem lokalen Modell bei der Analyse
-helfen, wird aber weder gespeichert noch in Flutter dargestellt.
+Für diesen Codex-Python-Pfad sind Pandas, NumPy, SciPy, Statsmodels und
+Matplotlib vorhanden. Ein interner Plot kann dem Modell bei der Analyse helfen,
+wird aber weder gespeichert noch in Flutter dargestellt.
 
 ### Was er nicht lesen darf
 
@@ -709,8 +719,9 @@ vertrauenswürdige Inhalte und niemals als Anweisung.
   Action/Suggestion;
 - einen aufklappbaren Bereich mit tatsächlich verwendeten Datenquellen,
   Zeiträumen, Counts, den tatsächlich verfügbaren Inspect-/SQL-/Python-Schritten,
-  Einschränkungen und Provider-/Modell-/Tier-Provenance. Nur lokale Codex-Turns
-  tragen die genaue Anzeige `gpt-5.5 · Fast configured`.
+  Einschränkungen und Provider-/Modell-/Tier-Provenance. Lokale und
+  Project-Coach-Codex-Turns tragen die genaue Anzeige
+  `gpt-5.5 · Fast configured`.
 
 Die sichtbare Antwort trennt beobachtete Daten, unsichere Interpretation,
 fehlende Information und allgemeines Modellwissen. Sie darf einer falschen
@@ -763,13 +774,14 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 | Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans, Planner workload, Today Full week, Focus-Fortschritt |
 | Zentrale Planung | `planner_preferences`, Action Plans/Revisionen, Task Blocks, Habit Slots, Planner Commitments und technische Request-Identitäten | Planner, Today V2 und gemeinsame Availability |
 | Hinweise | `notifications`, `notification_preferences`, Action-Request-Ledger | Inbox und foreground banners |
-| Coach | `coach_requests`, `coach_usage_events`, `coach_messages`; `coach_memory_selections` nur Legacy-Kompatibilität | Availability, V3 Evidence/Trace/Fast-Provenance, gemischte History und Budget |
+| Coach | `coach_requests`, `coach_usage_events`, `coach_messages`, backend-only `coach_operator_daily_budgets` und `coach_operator_dispatches`; `coach_memory_selections` nur Legacy-Kompatibilität | Availability, V4 Evidence/Trace/Fast-Provenance, gemischte History sowie lokale/globale Budgets |
 | Weitere Projektionen | `ai_insights`, `skillset_profiles` | gespeicherte Notes bzw. ausschließlich gekennzeichnete lokale Demo-Skillset-Anzeige |
 | Gerätelokal | Guest-Check-ins und Theme-Präferenz | Gastmodus bzw. Appearance |
 
 Technische Request- und Usage-Ledger sind keine sichtbaren Features. Sie sorgen
 dafür, dass ein Retry dieselbe Operation nicht doppelt ausführt und dass
-gelöschte Coach-History kein Budget zurücksetzt. Supabase RLS begrenzt Reads auf
+gelöschte Coach-History oder ein gelöschter Account kein bereits verbrauchtes
+globales Project-Coach-Budget zurücksetzt. Supabase RLS begrenzt Reads auf
 den Eigentümer; besonders sensible oder abgeleitete Writes laufen nur über
 FastAPI und service-role-only RPCs.
 
@@ -823,7 +835,7 @@ Bis zu einer späteren Informationsarchitektur kann man die App so lesen:
 | Was passierte letzte Woche? | `Today → Weekly review` |
 | Welche Zusammenhänge sehe ich über mehrere Tage? | `Insights` |
 | Welche Hinweise warten auf mich? | `Settings → Inbox` |
-| Kann mir ein Modell den Zustand erklären? | `Coach` in der Hauptnavigation bei explizitem Surface-Gate; OpenAI/Gemini BYOK ist implementiert, lokaler Codex bleibt Development-only |
+| Kann mir ein Modell den Zustand erklären? | `Coach` in der Hauptnavigation bei explizitem Surface-Gate; Project Coach oder eigener OpenAI-/Gemini-Key, ohne Fallback; lokaler gleicher-User-Codex bleibt Development-only |
 
 Setup-owned Habit-/Commitment-Definitionen bleiben bewusst unter Settings
 Setup; Planner darf aktive Setup-Habits zeitlich einplanen und zeigt
@@ -916,8 +928,9 @@ Es ist kein Befehl für eine Remote-Datenbank.
 - deutsche Lokalisierung;
 - Goals in Schema, Export, Setup, Oberfläche oder Auswertung sowie eine
   allgemeine Memory-Verwaltungsseite;
-- abgenommener gehosteter Betreiber-Provider und vollständige öffentliche
-  BYOK-Releasefreigabe;
+- abgenommener/deployter gehosteter Betreiber-Provider und vollständige
+  öffentliche BYOK-Releasefreigabe; die default-off Implementierung allein ist
+  kein Live-Nachweis;
 - ein persönliches trainiertes Modell oder Vector Memory;
 - autonomer Hintergrund-Coach, zusätzliche Tools oder model-gesteuerte
   Schreibaktionen;

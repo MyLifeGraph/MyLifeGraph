@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
+import '../core/contracts/account_deletion.dart';
 import '../core/network/api_client.dart';
 import '../core/supabase/supabase_providers.dart';
 import '../features/auth/data/auth_repository.dart';
@@ -14,6 +15,12 @@ import '../features/auth/data/pilot_participation_api_data_source.dart';
 import '../features/auth/domain/app_session.dart';
 import '../features/quick_action/data/guest_quick_check_in_data_source.dart';
 import '../features/quick_action/data/quick_check_in_supabase_data_source.dart';
+import 'coach_credential_store_provider.dart';
+import 'coach_response_cancellation.dart';
+import 'account_deletion_providers.dart';
+
+Future<void> _noSecretCleanup() async {}
+void _noCoachCancellation() {}
 
 final intakeApiDataSourceProvider = Provider<IntakeApiDataSource>(
   (ref) => IntakeApiDataSource(ref.watch(apiClientProvider)),
@@ -32,6 +39,15 @@ final authRepositoryProvider = Provider<AuthRepository?>((ref) {
           ),
           requiresPilotParticipation:
               ref.watch(appConfigProvider).requiresPilotParticipation,
+          requiresAuthCaptcha: ref.watch(appConfigProvider).requiresAuthCaptcha,
+          pendingAccountDeletionResolver: ({
+            required userId,
+            required accessToken,
+          }) =>
+              ref.read(accountDeletionCoordinatorProvider).resume(
+                    userId: userId,
+                    accessToken: accessToken,
+                  ),
           guestCheckInMigrator: (userId) async {
             final local = GuestQuickCheckInDataSource();
             final entries = await local.readAll();
@@ -71,6 +87,10 @@ final authControllerProvider =
   final repository = ref.watch(authRepositoryProvider);
   return AuthController(
     repository,
+    clearCoachCredentials: () =>
+        ref.read(coachCredentialStoreProvider).deleteAllCoachCredentials(),
+    cancelCoachResponse: () =>
+        ref.read(coachResponseCancellationAuthorityProvider).cancel(),
     onPasswordRecoveryStateChanged: (active) {
       ref.read(passwordRecoveryActiveProvider.notifier).state = active;
     },
@@ -81,18 +101,26 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
   AuthController(
     this._repository, {
     void Function(bool active)? onPasswordRecoveryStateChanged,
+    Future<void> Function()? clearCoachCredentials,
+    void Function()? cancelCoachResponse,
   })  : _onPasswordRecoveryStateChanged = onPasswordRecoveryStateChanged,
+        _clearCoachCredentials = clearCoachCredentials ?? _noSecretCleanup,
+        _cancelCoachResponse = cancelCoachResponse ?? _noCoachCancellation,
         super(const AsyncValue.loading()) {
-    _load();
+    unawaited(_load());
     _subscription = _repository?.authStateChanges.listen(_handleAuthChange);
   }
 
   final AuthRepository? _repository;
   final void Function(bool active)? _onPasswordRecoveryStateChanged;
+  final Future<void> Function() _clearCoachCredentials;
+  final void Function() _cancelCoachResponse;
   StreamSubscription<dynamic>? _subscription;
   Future<void> _recoveryWriteTail = Future<void>.value();
   bool _recoveryStateRestored = false;
   bool _recoveryChangedDuringRestore = false;
+  int _authGeneration = 0;
+  int? _terminalTransitionGeneration;
 
   void _handleAuthChange(AuthState change) {
     if (change.event == AuthChangeEvent.passwordRecovery) {
@@ -100,22 +128,29 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
       _onPasswordRecoveryStateChanged?.call(true);
       unawaited(_persistPasswordRecoveryActive(true));
     }
-    unawaited(refresh());
+    if (_terminalTransitionGeneration == null) {
+      unawaited(refresh());
+    }
   }
 
   Future<void> _load() async {
+    final generation = ++_authGeneration;
     if (!_recoveryStateRestored) {
       await _restorePasswordRecoveryState();
       _recoveryStateRestored = true;
     }
     if (_repository == null) {
-      state = AsyncValue.data(await _localGuestSession());
+      final session = await _localGuestSession();
+      if (_canCommit(generation)) state = AsyncValue.data(session);
       return;
     }
     try {
-      state = AsyncValue.data(await _repository.currentSession());
+      final session = await _repository.currentSession();
+      if (_canCommit(generation)) state = AsyncValue.data(session);
     } catch (error, stackTrace) {
-      state = AsyncValue.error(error, stackTrace);
+      if (_canCommit(generation)) {
+        state = AsyncValue.error(error, stackTrace);
+      }
     }
   }
 
@@ -124,14 +159,18 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
   Future<void> signInWithEmail({
     required String email,
     required String password,
+    String? captchaToken,
   }) async {
+    final generation = ++_authGeneration;
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
       () => _requireRepository().signInWithEmail(
         email: email,
         password: password,
+        captchaToken: captchaToken,
       ),
     );
+    if (_canCommit(generation)) state = result;
   }
 
   Future<bool> registerWithEmail({
@@ -139,7 +178,9 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     required String password,
     String? name,
     bool confirmed18OrOlder = false,
+    String? captchaToken,
   }) async {
+    final generation = ++_authGeneration;
     state = const AsyncValue.loading();
     final result = await AsyncValue.guard(
       () => _requireRepository().registerWithEmail(
@@ -147,13 +188,16 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
         password: password,
         name: name,
         confirmed18OrOlder: confirmed18OrOlder,
+        captchaToken: captchaToken,
       ),
     );
+    if (!_canCommit(generation)) return false;
     state = result;
     return result.valueOrNull != null;
   }
 
   Future<void> signInWithGoogle({bool confirmed18OrOlder = false}) async {
+    _authGeneration += 1;
     final repository = _requireRepository();
     await repository.signInWithGoogle(
       confirmed18OrOlder: confirmed18OrOlder,
@@ -165,23 +209,42 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     if (session == null || session.isGuestSession) {
       throw StateError('A synced account session is required.');
     }
+    final generation = ++_authGeneration;
     final profile =
         await _requireRepository().acceptCurrentPilotParticipation();
-    state = AsyncValue.data(AppSession.authenticated(profile));
+    if (_canCommit(generation)) {
+      state = AsyncValue.data(AppSession.authenticated(profile));
+    }
   }
 
-  Future<void> requestPasswordReset({required String email}) {
-    return _requireRepository().requestPasswordReset(email: email);
+  Future<void> requestPasswordReset({
+    required String email,
+    String? captchaToken,
+  }) {
+    return _requireRepository().requestPasswordReset(
+      email: email,
+      captchaToken: captchaToken,
+    );
   }
 
-  Future<void> resendSignupConfirmation({required String email}) {
-    return _requireRepository().resendSignupConfirmation(email: email);
+  Future<void> resendSignupConfirmation({
+    required String email,
+    String? captchaToken,
+  }) {
+    return _requireRepository().resendSignupConfirmation(
+      email: email,
+      captchaToken: captchaToken,
+    );
   }
 
   Future<PasswordRecoveryCompletion> completePasswordRecovery({
     required String password,
   }) async {
+    final generation = ++_authGeneration;
     await _requireRepository().updatePassword(password: password);
+    if (!_canCommit(generation)) {
+      return PasswordRecoveryCompletion.updatedSessionUnavailable;
+    }
     await refresh();
     return !state.hasError
         ? PasswordRecoveryCompletion.updated
@@ -191,11 +254,13 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
   Future<bool> finalizePasswordRecovery() => _setPasswordRecoveryActive(false);
 
   Future<void> continueAsGuest() async {
+    final generation = ++_authGeneration;
     state = const AsyncValue.loading();
     final repository = _repository;
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
       repository == null ? _continueAsLocalGuest : repository.continueAsGuest,
     );
+    if (_canCommit(generation)) state = result;
   }
 
   void markOnboardingComplete({String? displayName}) {
@@ -208,6 +273,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
       name: cleanName?.isNotEmpty == true ? cleanName : null,
       onboardingDone: true,
     );
+    _authGeneration += 1;
     state = AsyncValue.data(
       session.isGuestSession
           ? AppSession.guest(profile)
@@ -220,6 +286,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     if (session == null || session.isGuestSession) {
       throw StateError('A synced account session is required.');
     }
+    _authGeneration += 1;
     state = AsyncValue.data(
       AppSession.authenticated(
         session.profile.copyWith(
@@ -235,6 +302,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     if (session == null || session.isGuestSession) {
       throw StateError('A synced account session is required.');
     }
+    _authGeneration += 1;
     state = AsyncValue.data(
       AppSession.authenticated(
         session.profile.withDailyPreparationBudget(
@@ -246,7 +314,19 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
   }
 
   Future<void> signOut() async {
+    final generation = ++_authGeneration;
+    _terminalTransitionGeneration = generation;
+    final previous = state;
     state = const AsyncValue.loading();
+    try {
+      await _clearCurrentCoachCredentials(previous.valueOrNull);
+    } catch (_) {
+      if (_canCommit(generation)) state = previous;
+      if (_terminalTransitionGeneration == generation) {
+        _terminalTransitionGeneration = null;
+      }
+      rethrow;
+    }
     try {
       final repository = _repository;
       if (repository == null) {
@@ -255,13 +335,32 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
         await repository.signOut();
       }
     } finally {
-      state = const AsyncValue.data(null);
+      if (_canCommit(generation)) state = const AsyncValue.data(null);
+      if (_terminalTransitionGeneration == generation) {
+        _terminalTransitionGeneration = null;
+      }
       await _setPasswordRecoveryActive(false);
     }
   }
 
-  Future<void> finalizeDeletedAccount() async {
+  Future<void> finalizeDeletedAccount({
+    bool coachCredentialsAlreadyCleared = false,
+  }) async {
+    final generation = ++_authGeneration;
+    _terminalTransitionGeneration = generation;
+    final previous = state;
     state = const AsyncValue.loading();
+    try {
+      if (!coachCredentialsAlreadyCleared) {
+        await _clearCurrentCoachCredentials(previous.valueOrNull);
+      }
+    } catch (_) {
+      if (_canCommit(generation)) state = previous;
+      if (_terminalTransitionGeneration == generation) {
+        _terminalTransitionGeneration = null;
+      }
+      rethrow;
+    }
     try {
       final repository = _repository;
       if (repository == null) {
@@ -270,10 +369,49 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
         await repository.signOutAfterAccountDeletion();
       }
     } finally {
-      state = const AsyncValue.data(null);
+      if (_canCommit(generation)) state = const AsyncValue.data(null);
+      if (_terminalTransitionGeneration == generation) {
+        _terminalTransitionGeneration = null;
+      }
       await _setPasswordRecoveryActive(false);
     }
   }
+
+  Future<void> prepareAccountDeletion() async {
+    final session = state.valueOrNull;
+    if (session == null || session.isGuestSession) return;
+    _cancelCoachResponse();
+    await _clearCurrentCoachCredentials(session);
+  }
+
+  void enterAccountDeletionRecovery(AccountDeletionResult result) {
+    final session = state.valueOrNull;
+    if (session == null || session.isGuestSession) {
+      throw StateError('A synced account session is required.');
+    }
+    _authGeneration += 1;
+    state = AsyncValue.data(
+      AppSession.deletionRecovery(
+        session.profile,
+        AccountDeletionRecovery(
+          deletionId: result.deletionId,
+          result: result,
+        ),
+      ),
+    );
+  }
+
+  Future<AccountDeletionRecovery?> retryAccountDeletion() async {
+    await refresh();
+    return state.valueOrNull?.deletionRecovery;
+  }
+
+  Future<void> _clearCurrentCoachCredentials(AppSession? session) async {
+    if (session == null || session.isGuestSession) return;
+    await _clearCoachCredentials();
+  }
+
+  bool _canCommit(int generation) => mounted && generation == _authGeneration;
 
   Future<void> _restorePasswordRecoveryState() async {
     try {
@@ -362,6 +500,8 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
 
   @override
   void dispose() {
+    _authGeneration += 1;
+    _terminalTransitionGeneration = null;
     _subscription?.cancel();
     super.dispose();
   }

@@ -16,6 +16,10 @@ class AppConfig {
     this.stagingSupabaseProjectRef = '',
     this.pilotSupabaseProjectRef = '',
     this.pilotContactEmail = '',
+    this.appPublicOrigin = '',
+    this.turnstileSiteKey = '',
+    this.appBuildSha = '',
+    this.appReleaseTag = '',
     this.coachSurfaceEnabled = false,
     this.learnedFocusPlanningPilotEnabled = false,
   });
@@ -45,6 +49,22 @@ class AppConfig {
       'PILOT_CONTACT_EMAIL',
       defaultValue: '',
     );
+    const appPublicOrigin = String.fromEnvironment(
+      'APP_PUBLIC_ORIGIN',
+      defaultValue: '',
+    );
+    const turnstileSiteKey = String.fromEnvironment(
+      'TURNSTILE_SITE_KEY',
+      defaultValue: '',
+    );
+    const appBuildSha = String.fromEnvironment(
+      'APP_BUILD_SHA',
+      defaultValue: '',
+    );
+    const appReleaseTag = String.fromEnvironment(
+      'APP_RELEASE_TAG',
+      defaultValue: '',
+    );
     const aiServiceBaseUrl = String.fromEnvironment(
       'AI_SERVICE_BASE_URL',
       defaultValue: 'http://localhost:8000',
@@ -70,6 +90,10 @@ class AppConfig {
       stagingSupabaseProjectRef: stagingSupabaseProjectRef,
       pilotSupabaseProjectRef: pilotSupabaseProjectRef,
       pilotContactEmail: pilotContactEmail,
+      appPublicOrigin: appPublicOrigin,
+      turnstileSiteKey: turnstileSiteKey,
+      appBuildSha: appBuildSha,
+      appReleaseTag: appReleaseTag,
       aiServiceBaseUrl: aiServiceBaseUrl,
       useMockData: const bool.fromEnvironment(
         'USE_MOCK_DATA',
@@ -97,13 +121,28 @@ class AppConfig {
   final String stagingSupabaseProjectRef;
   final String pilotSupabaseProjectRef;
   final String pilotContactEmail;
+  final String appPublicOrigin;
+  final String turnstileSiteKey;
+  final String appBuildSha;
+  final String appReleaseTag;
   final String aiServiceBaseUrl;
   final bool useMockData;
   final bool coachSurfaceEnabled;
   final bool learnedFocusPlanningPilotEnabled;
 
+  void validateEnvironmentConfiguration() {
+    validateAppEnvironment(environment);
+  }
+
   bool get requiresPilotParticipation =>
-      {'staging', 'pilot'}.contains(environment.trim().toLowerCase());
+      {'staging', 'pilot'}.contains(environment);
+
+  bool get requiresAuthCaptcha => requiresPilotParticipation;
+
+  Uri get turnstileChallengeUrl {
+    validateAuthProtectionConfiguration();
+    return Uri.parse('$appPublicOrigin/turnstile.html');
+  }
 
   String get supabaseClientKey => resolveSupabaseClientKey(
         environment: environment,
@@ -112,9 +151,8 @@ class AppConfig {
       );
 
   String get supabaseProjectRef {
-    final normalized = environment.trim().toLowerCase();
-    if (normalized == 'staging') return stagingSupabaseProjectRef;
-    if (normalized == 'pilot') return pilotSupabaseProjectRef;
+    if (environment == 'staging') return stagingSupabaseProjectRef;
+    if (environment == 'pilot') return pilotSupabaseProjectRef;
     return '';
   }
 
@@ -124,11 +162,10 @@ class AppConfig {
   }
 
   void validateSupabaseConfiguration() {
+    validateEnvironmentConfiguration();
     final key = supabaseClientKey;
     final hasUrl = supabaseUrl.isNotEmpty;
-    final normalizedEnvironment = environment.trim().toLowerCase();
-    if ((normalizedEnvironment == 'staging' ||
-            normalizedEnvironment == 'pilot') &&
+    if ((environment == 'staging' || environment == 'pilot') &&
         (!hasUrl || key.isEmpty)) {
       throw StateError(
         'Hosted builds require SUPABASE_URL and a Supabase client key.',
@@ -150,6 +187,7 @@ class AppConfig {
   }
 
   void validatePilotParticipationConfiguration() {
+    validateEnvironmentConfiguration();
     if (!requiresPilotParticipation) return;
     _rejectSurroundingWhitespace('PILOT_CONTACT_EMAIL', pilotContactEmail);
     if (pilotContactEmail.length > 254 ||
@@ -159,6 +197,100 @@ class AppConfig {
       );
     }
   }
+
+  void validateAuthProtectionConfiguration() {
+    validateEnvironmentConfiguration();
+    if (!requiresAuthCaptcha) return;
+    _rejectSurroundingWhitespace('APP_PUBLIC_ORIGIN', appPublicOrigin);
+    _rejectSurroundingWhitespace('TURNSTILE_SITE_KEY', turnstileSiteKey);
+    final uri = Uri.tryParse(appPublicOrigin);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        !uri.hasAuthority ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasPort ||
+        uri.path.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        !_isCanonicalDnsHostname(uri.host) ||
+        appPublicOrigin != 'https://${uri.host}') {
+      throw StateError(
+        'APP_PUBLIC_ORIGIN must be one canonical credential-free HTTPS origin.',
+      );
+    }
+    if (!RegExp(r'^[A-Za-z0-9_-]{20,128}$').hasMatch(turnstileSiteKey)) {
+      throw StateError(
+        'TURNSTILE_SITE_KEY must be a valid public Cloudflare Turnstile site key.',
+      );
+    }
+  }
+
+  void validateReleaseIdentityConfiguration() {
+    validateEnvironmentConfiguration();
+    if (!requiresPilotParticipation) return;
+    _rejectSurroundingWhitespace('APP_BUILD_SHA', appBuildSha);
+    _rejectSurroundingWhitespace('APP_RELEASE_TAG', appReleaseTag);
+    if (!RegExp(r'^[0-9a-f]{40}$').hasMatch(appBuildSha)) {
+      throw StateError(
+        'APP_BUILD_SHA must be an exact lowercase 40-character SHA.',
+      );
+    }
+    if (!RegExp(
+      r'^v[0-9]+\.[0-9]+\.[0-9]+-pilot\.[0-9]+(?:-rc\.[0-9]+)?$',
+    ).hasMatch(appReleaseTag)) {
+      throw StateError('APP_RELEASE_TAG must be an exact pilot release tag.');
+    }
+  }
+
+  void validateAiServiceConfiguration() {
+    validateEnvironmentConfiguration();
+    _rejectSurroundingWhitespace(
+      'AI_SERVICE_BASE_URL',
+      aiServiceBaseUrl,
+    );
+    final uri = Uri.tryParse(aiServiceBaseUrl);
+    if (uri == null ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.path.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw StateError(
+        'AI_SERVICE_BASE_URL must be one credential-free HTTP(S) origin.',
+      );
+    }
+    final hosted = requiresPilotParticipation;
+    if (hosted) {
+      final hostname = uri.host;
+      final canonical = 'https://$hostname';
+      if (uri.scheme != 'https' ||
+          uri.hasPort ||
+          aiServiceBaseUrl != canonical ||
+          !_isCanonicalDnsHostname(hostname)) {
+        throw StateError(
+          'Hosted AI_SERVICE_BASE_URL must be one canonical HTTPS hostname origin.',
+        );
+      }
+      return;
+    }
+    if (uri.scheme == 'https') return;
+    const localHttpHosts = {'localhost', '127.0.0.1', '::1', '10.0.2.2'};
+    if (uri.scheme != 'http' || !localHttpHosts.contains(uri.host)) {
+      throw StateError(
+        'Development HTTP AI_SERVICE_BASE_URL must use a known loopback host.',
+      );
+    }
+  }
+}
+
+void validateAppEnvironment(String environment) {
+  if (!const {'development', 'test', 'staging', 'pilot'}
+      .contains(environment)) {
+    throw StateError(
+      'APP_ENV must be exactly development, test, staging, or pilot.',
+    );
+  }
 }
 
 String resolveSupabaseClientKey({
@@ -166,6 +298,7 @@ String resolveSupabaseClientKey({
   String publishableKey = '',
   String legacyAnonKey = '',
 }) {
+  validateAppEnvironment(environment);
   _rejectSurroundingWhitespace(
     'SUPABASE_PUBLISHABLE_KEY',
     publishableKey,
@@ -177,7 +310,7 @@ String resolveSupabaseClientKey({
       'SUPABASE_PUBLISHABLE_KEY must use the current sb_publishable_ format.',
     );
   }
-  if (environment.trim().toLowerCase() == 'pilot' && publishableKey.isEmpty) {
+  if (environment == 'pilot' && publishableKey.isEmpty) {
     throw StateError('SUPABASE_PUBLISHABLE_KEY is required for pilot builds.');
   }
   return publishableKey.isNotEmpty ? publishableKey : legacyAnonKey;
@@ -189,7 +322,8 @@ void validateHostedSupabaseTarget({
   String stagingProjectRef = '',
   String pilotProjectRef = '',
 }) {
-  final normalized = environment.trim().toLowerCase();
+  validateAppEnvironment(environment);
+  final normalized = environment;
   if (normalized != 'staging' && normalized != 'pilot') return;
 
   final stagingRef = _validatedProjectRef(
@@ -241,15 +375,27 @@ void _rejectSurroundingWhitespace(String name, String value) {
   }
 }
 
+bool _isCanonicalDnsHostname(String value) {
+  if (value != value.toLowerCase() ||
+      value == 'localhost' ||
+      value.length > 253 ||
+      !value.contains('.')) {
+    return false;
+  }
+  final labels = value.split('.');
+  final label = RegExp(r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$');
+  return labels.every(label.hasMatch) &&
+      RegExp(r'^(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})$').hasMatch(labels.last);
+}
+
 bool resolveCoachSurfaceEnabled({
   required String environment,
   required bool releaseMode,
   String explicitValue = '',
 }) {
-  final normalized = environment.trim().toLowerCase();
-  if (normalized == 'staging' ||
-      normalized == 'pilot' ||
-      normalized == 'production') {
+  validateAppEnvironment(environment);
+  final normalized = environment;
+  if (normalized == 'staging' || normalized == 'pilot') {
     return explicitValue == 'true';
   }
   if (normalized != 'development') return false;

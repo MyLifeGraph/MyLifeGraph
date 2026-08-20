@@ -23,6 +23,11 @@ COACH_HISTORY_V2_CONTRACT_VERSION = "coach-history-v2"
 COACH_RESPONSE_V3_CONTRACT_VERSION = "coach-response-v3"
 COACH_CAPABILITIES_V3_CONTRACT_VERSION = "coach-capabilities-v3"
 COACH_HISTORY_V3_CONTRACT_VERSION = "coach-history-v3"
+COACH_REQUEST_V4_CONTRACT_VERSION = "coach-request-v4"
+COACH_RESPONSE_V4_CONTRACT_VERSION = "coach-response-v4"
+COACH_CAPABILITIES_V4_CONTRACT_VERSION = "coach-capabilities-v4"
+COACH_CAPABILITIES_V5_CONTRACT_VERSION = "coach-capabilities-v5"
+COACH_HISTORY_V4_CONTRACT_VERSION = "coach-history-v4"
 COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v5"
 COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v3"
 
@@ -34,15 +39,25 @@ COACH_MAX_HISTORY_TURNS = 6
 COACH_AGENT_MAX_TOOL_CALLS = 12
 COACH_AGENT_TIMEOUT_SECONDS = 180
 COACH_AGENT_REQUESTS_PER_LOCAL_DAY = 20
+COACH_OPERATOR_REQUESTS_PER_LOCAL_DAY = 5
+COACH_OPERATOR_REQUESTS_PER_UTC_DAY = 15
 COACH_SNAPSHOT_MAX_ROWS = 50_000
 COACH_SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024
 
-CoachProviderName = Literal["disabled", "local_codex_oauth", "fake", "openai", "gemini"]
+CoachProviderName = Literal[
+    "disabled",
+    "local_codex_oauth",
+    "fake",
+    "openai",
+    "gemini",
+    "operator_codex_pilot",
+]
 CoachProviderMode = Literal[
     "disabled",
     "local_development_only",
     "deterministic_test_only",
     "user_supplied_key",
+    "operator_subscription_pilot",
 ]
 CoachModelSource = Literal["explicit", "cli_default", "not_applicable"]
 CoachCapabilityState = Literal["disabled", "unavailable", "ready"]
@@ -451,7 +466,7 @@ class CoachAgentRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    contract_version: Literal["coach-request-v3"]
+    contract_version: Literal["coach-request-v3", "coach-request-v4"]
     request_id: UUID = Field(strict=False)
     message: str
 
@@ -469,11 +484,11 @@ class CoachAgentLimits(BaseModel):
 
     message_codepoints: Literal[2000]
     reply_codepoints: Literal[4000]
-    requests_per_local_day: Literal[20]
-    remaining_requests: int = Field(
-        ge=0,
-        le=COACH_AGENT_REQUESTS_PER_LOCAL_DAY,
-    )
+    requests_per_local_day: int = Field(ge=1, le=COACH_AGENT_REQUESTS_PER_LOCAL_DAY)
+    request_period: Literal["profile_local_day", "utc_day"]
+    remaining_requests: int = Field(ge=0, le=COACH_AGENT_REQUESTS_PER_LOCAL_DAY)
+    global_requests_per_utc_day: int | None = Field(default=None, ge=1, le=100)
+    global_remaining_requests: int | None = Field(default=None, ge=0, le=100)
     max_tool_calls: Literal[12]
     turn_timeout_seconds: Literal[180]
     sql_timeout_seconds: Literal[5]
@@ -481,11 +496,30 @@ class CoachAgentLimits(BaseModel):
     snapshot_max_rows: Literal[50000]
     snapshot_max_bytes: Literal[8388608]
 
+    @model_validator(mode="after")
+    def validate_remaining_limits(self) -> Self:
+        if self.remaining_requests > self.requests_per_local_day:
+            raise ValueError("remaining Coach requests exceed the period limit")
+        if (self.global_requests_per_utc_day is None) != (
+            self.global_remaining_requests is None
+        ):
+            raise ValueError("global Coach limits must be paired")
+        if (
+            self.global_requests_per_utc_day is not None
+            and self.global_remaining_requests > self.global_requests_per_utc_day
+        ):
+            raise ValueError("remaining Coach requests exceed the global limit")
+        return self
+
 
 class CoachAgentCapabilitiesResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["coach-capabilities-v3"]
+    contract_version: Literal[
+        "coach-capabilities-v3",
+        "coach-capabilities-v4",
+        "coach-capabilities-v5",
+    ]
     state: CoachCapabilityState
     provider: CoachProviderName
     provider_mode: CoachProviderMode
@@ -509,6 +543,17 @@ class CoachAgentCapabilitiesResponse(BaseModel):
                 raise ValueError("local Coach capabilities require Fast mode")
             if self.state == "ready" and self.model_requested != "gpt-5.5":
                 raise ValueError("a ready local Coach requires GPT-5.5")
+        elif self.provider == "operator_codex_pilot":
+            if (
+                self.contract_version != COACH_CAPABILITIES_V5_CONTRACT_VERSION
+                or self.provider_mode != "operator_subscription_pilot"
+                or self.model_requested != "gpt-5.5"
+                or self.model_source != "explicit"
+                or self.service_tier != "fast"
+                or not self.fast_mode
+                or self.tools != ["inspect_data", "query_data", "run_python"]
+            ):
+                raise ValueError("operator Coach capability identity is invalid")
         elif self.provider in {"openai", "gemini"}:
             expected_model = (
                 "gpt-5.6-terra" if self.provider == "openai" else "gemini-3.6-flash"
@@ -543,6 +588,26 @@ class CoachAgentCapabilitiesResponse(BaseModel):
             self.state == "disabled" and self.provider != "disabled"
         ):
             raise ValueError("Coach capability state and provider are inconsistent")
+        operator = self.provider == "operator_codex_pilot"
+        if operator:
+            if (
+                self.limits.requests_per_local_day
+                != COACH_OPERATOR_REQUESTS_PER_LOCAL_DAY
+                or self.limits.request_period != "utc_day"
+                or self.limits.global_requests_per_utc_day
+                != COACH_OPERATOR_REQUESTS_PER_UTC_DAY
+                or self.limits.global_remaining_requests is None
+                or self.limits.global_remaining_requests
+                > COACH_OPERATOR_REQUESTS_PER_UTC_DAY
+            ):
+                raise ValueError("operator Coach limits are invalid")
+        elif (
+            self.limits.requests_per_local_day != COACH_AGENT_REQUESTS_PER_LOCAL_DAY
+            or self.limits.request_period != "profile_local_day"
+            or self.limits.global_requests_per_utc_day is not None
+            or self.limits.global_remaining_requests is not None
+        ):
+            raise ValueError("non-operator Coach limits are invalid")
         return self
 
 
@@ -636,6 +701,17 @@ class CoachAgentProvenance(BaseModel):
                 or self.model_source != "explicit"
             ):
                 raise ValueError("local Codex agent must use configured Fast GPT-5.5")
+        elif self.provider == "operator_codex_pilot":
+            if (
+                self.provider_mode != "operator_subscription_pilot"
+                or self.service_tier != "fast"
+                or self.service_tier_status != "configured"
+                or not self.fast_mode
+                or self.model_requested != "gpt-5.5"
+                or self.model_reported not in {None, "gpt-5.5"}
+                or self.model_source != "explicit"
+            ):
+                raise ValueError("operator Codex provenance is invalid")
         elif self.provider in {"openai", "gemini"}:
             expected_model = (
                 "gpt-5.6-terra" if self.provider == "openai" else "gemini-3.6-flash"
@@ -692,7 +768,11 @@ class CoachAgentModelOutput(BaseModel):
 class CoachAgentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["coach-response-v2", "coach-response-v3"]
+    contract_version: Literal[
+        "coach-response-v2",
+        "coach-response-v3",
+        "coach-response-v4",
+    ]
     request_id: UUID = Field(strict=False)
     reply: str = Field(min_length=1, max_length=COACH_REPLY_CODEPOINTS)
     uncertainty: CoachUncertainty
@@ -737,7 +817,7 @@ class CoachAgentHistoryTurn(BaseModel):
 class CoachAgentHistoryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["coach-history-v3"]
+    contract_version: Literal["coach-history-v3", "coach-history-v4"]
     turns: list[CoachAgentHistoryTurn]
 
 

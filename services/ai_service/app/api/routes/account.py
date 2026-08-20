@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 from app.api.deps.auth import (
     Principal,
@@ -22,6 +24,8 @@ from app.api.problems.account import (
 )
 from app.models.account import (
     AccountDeleteRequest,
+    AccountDeleteResponse,
+    AccountDeletionStatusResponse,
     AccountExportResponse,
     AccountPreparationBudgetResponse,
     AccountPreparationBudgetUpdateRequest,
@@ -149,18 +153,44 @@ async def export_account(
     )
 
 
-@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "",
+    response_model=AccountDeleteResponse,
+    responses={status.HTTP_202_ACCEPTED: {"model": AccountDeleteResponse}},
+)
 async def delete_account(
     body: AccountDeleteRequest,
     principal: Principal = Depends(get_verified_principal),
     service: AccountService = Depends(get_account_service),
-) -> Response:
+) -> JSONResponse:
     _require_recent_authentication(principal, now=datetime.now(UTC))
     try:
-        await service.delete_account(
+        result = await service.delete_account(
             user_id=principal.user_id,
+            deletion_id=body.deletion_id,
             confirmation=body.confirmation,
         )
     except ACCOUNT_DELETE_ERRORS as exc:
         raise account_delete_problem(exc) from exc
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return JSONResponse(
+        status_code=(
+            status.HTTP_200_OK
+            if result.state == "completed"
+            else status.HTTP_202_ACCEPTED
+        ),
+        content=jsonable_encoder(result),
+    )
+
+
+@router.get(
+    "/deletion",
+    response_model=AccountDeletionStatusResponse,
+)
+async def get_account_deletion_status(
+    principal: Principal = Depends(get_verified_principal),
+    service: AccountService = Depends(get_account_service),
+) -> AccountDeletionStatusResponse:
+    try:
+        return await service.account_deletion_status(user_id=principal.user_id)
+    except ACCOUNT_DELETE_ERRORS as exc:
+        raise account_delete_problem(exc) from exc

@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request
+from starlette.background import BackgroundTask
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
@@ -30,7 +31,7 @@ from app.models.coach import (
     CoachRequest,
     CoachResponse,
 )
-from app.services.coach_agent_service import CoachAgentService
+from app.services.coach_agent_service import CoachAgentService, PreparedCoachTurn
 from app.services.coach_service import CoachServiceError
 
 
@@ -58,7 +59,12 @@ async def get_coach_capabilities(
     api_key: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Api-Key"),
 ) -> CoachAgentCapabilitiesResponse | CoachCapabilitiesResponse:
     try:
-        service = _request_service(services.current, provider_name, api_key)
+        service = _request_service(
+            services.current,
+            provider_name,
+            api_key,
+            require_explicit=services.current.requires_explicit_provider,
+        )
         return await service.capabilities(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise coach_service_problem(exc) from exc
@@ -81,9 +87,14 @@ async def respond_to_coach(
 ) -> CoachAgentResponse | CoachResponse:
     raw = await _read_json_object(http_request)
     try:
-        if raw.get("contract_version") == "coach-request-v3":
+        if raw.get("contract_version") in {"coach-request-v3", "coach-request-v4"}:
             request = CoachAgentRequest.model_validate(raw)
-            service = _request_service(services.current, provider_name, api_key)
+            service = _request_service(
+                services.current,
+                provider_name,
+                api_key,
+                require_explicit=request.contract_version == "coach-request-v4",
+            )
             return await service.respond(
                 user_id=principal.user_id,
                 request=request,
@@ -114,23 +125,40 @@ async def stream_coach_response(
     raw = await _read_json_object(http_request)
     try:
         request = CoachAgentRequest.model_validate(raw)
-        service = _request_service(services.current, provider_name, api_key)
+        service = _request_service(
+            services.current,
+            provider_name,
+            api_key,
+            require_explicit=request.contract_version == "coach-request-v4",
+        )
+        prepared = await service.prepare_turn(
+            user_id=principal.user_id,
+            request=request,
+        )
     except ValidationError as exc:
         raise invalid_coach_request_problem() from exc
     except CoachServiceError as exc:
         raise coach_service_problem(exc) from exc
-    return StreamingResponse(
-        _stream_turn(
-            service=service,
-            user_id=principal.user_id,
-            request=request,
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-store",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    except Exception as exc:
+        raise coach_unavailable_problem() from exc
+    try:
+        return StreamingResponse(
+            _stream_turn(
+                service=service,
+                user_id=principal.user_id,
+                request=request,
+                prepared=prepared,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-store",
+                "X-Accel-Buffering": "no",
+            },
+            background=BackgroundTask(_release_prepared, prepared),
+        )
+    except Exception:
+        await prepared.release()
+        raise
 
 
 @router.get(
@@ -247,6 +275,7 @@ async def _stream_turn(
     service: CoachAgentService,
     user_id: str,
     request: CoachAgentRequest,
+    prepared: PreparedCoachTurn,
 ) -> AsyncIterator[bytes]:
     queue: asyncio.Queue[tuple[str, dict[str, object]]] = asyncio.Queue(maxsize=16)
 
@@ -258,9 +287,10 @@ async def _stream_turn(
 
     async def run() -> None:
         try:
-            response = await service.respond(
+            response = await service.respond_prepared(
                 user_id=user_id,
                 request=request,
+                prepared=prepared,
                 activity_callback=activity,
             )
             await queue.put(
@@ -316,6 +346,10 @@ async def _stream_turn(
         await asyncio.gather(task, return_exceptions=True)
 
 
+async def _release_prepared(prepared: PreparedCoachTurn) -> None:
+    await prepared.release()
+
+
 def _sse(event: str, data: dict[str, object]) -> bytes:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
@@ -325,9 +359,27 @@ def _request_service(
     service: CoachAgentService,
     provider_name: str | None,
     api_key: str | None,
+    *,
+    require_explicit: bool = False,
 ) -> CoachAgentService:
     if provider_name is None and api_key is None:
+        if require_explicit:
+            raise CoachServiceError(
+                "provider_selection_required",
+                "Choose a Coach provider before sending this request.",
+                retryable=False,
+                status_code=422,
+            )
         return service
+    if provider_name == "operator_codex_pilot" and api_key is None:
+        if not require_explicit:
+            raise CoachServiceError(
+                "invalid_provider_credentials",
+                "The selected provider does not match this Coach contract.",
+                retryable=False,
+                status_code=422,
+            )
+        return service.for_operator_request()
     return service.for_byok_request(provider_name=provider_name, api_key=api_key)
 
 

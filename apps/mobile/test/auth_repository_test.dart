@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/data/guest_setup_data_source.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
+import 'package:my_life_graph/features/auth/domain/auth_captcha.dart';
 import 'package:my_life_graph/features/auth/domain/auth_failure.dart';
 import 'package:my_life_graph/features/auth/domain/intake_response.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -196,6 +199,127 @@ void main() {
     );
 
     expect(overlaid.onboardingDone, isFalse);
+  });
+
+  test('hosted email auth fails closed and forwards a fresh CAPTCHA token',
+      () async {
+    final requests = <http.Request>[];
+    final client = SupabaseClient(
+      'http://localhost:54321',
+      'test-anon-key',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          '{"message":"stop after request capture"}',
+          400,
+          request: request,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+      authOptions: const AuthClientOptions(
+        autoRefreshToken: false,
+        authFlowType: AuthFlowType.implicit,
+      ),
+    );
+    addTearDown(client.dispose);
+    final repository = AuthRepository(
+      client,
+      useMockData: false,
+      requiresAuthCaptcha: true,
+    );
+
+    await expectLater(
+      repository.requestPasswordReset(email: 'person@example.test'),
+      throwsA(isA<AuthCaptchaException>()),
+    );
+    expect(requests, isEmpty);
+
+    final operations = <Future<void> Function(String)>[
+      (token) async {
+        await repository.signInWithEmail(
+          email: 'person@example.test',
+          password: 'password',
+          captchaToken: token,
+        );
+      },
+      (token) async {
+        await repository.registerWithEmail(
+          email: 'person@example.test',
+          password: 'password',
+          captchaToken: token,
+        );
+      },
+      (token) => repository.requestPasswordReset(
+            email: 'person@example.test',
+            captchaToken: token,
+          ),
+      (token) => repository.resendSignupConfirmation(
+            email: 'person@example.test',
+            captchaToken: token,
+          ),
+    ];
+
+    for (var index = 0; index < operations.length; index += 1) {
+      final token = 'fresh-turnstile-token-$index';
+      await expectLater(
+        operations[index](token),
+        throwsA(isA<AuthException>()),
+      );
+      final body = jsonDecode(requests[index].body) as Map<String, dynamic>;
+      expect(
+        (body['gotrue_meta_security'] as Map<String, dynamic>)['captcha_token'],
+        token,
+      );
+    }
+  });
+
+  test('failed signup and abandoned OAuth retain no participation consent',
+      () async {
+    final requests = <http.Request>[];
+    final client = SupabaseClient(
+      'http://localhost:54321',
+      'test-anon-key',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          '{"message":"signup rejected"}',
+          400,
+          request: request,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+      authOptions: const AuthClientOptions(
+        autoRefreshToken: false,
+        authFlowType: AuthFlowType.implicit,
+      ),
+    );
+    addTearDown(client.dispose);
+    final repository = AuthRepository(
+      client,
+      useMockData: false,
+      requiresPilotParticipation: true,
+      googleOAuthLauncher: (_) async => false,
+    );
+
+    await expectLater(
+      repository.registerWithEmail(
+        email: 'person@example.test',
+        password: 'password',
+        confirmed18OrOlder: true,
+      ),
+      throwsA(isA<AuthException>()),
+    );
+    await expectLater(
+      repository.signInWithGoogle(confirmed18OrOlder: true),
+      throwsA(isA<AuthException>()),
+    );
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(
+      preferences.getKeys().where((key) => key.contains('participation')),
+      isEmpty,
+    );
+    expect(requests, hasLength(1));
   });
 }
 

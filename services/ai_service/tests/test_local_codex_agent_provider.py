@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import app.providers.local_codex as local_codex_module
+from app.analysis_image import analysis_image_revision
 from app.core.config import Settings
 from app.core.private_files import PrivateFileCleanupError
 from app.providers.base import CoachProviderError
@@ -46,6 +47,25 @@ collab stable false
 """
 
 
+def test_analysis_image_revision_is_path_independent_and_content_bound(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "nested" / "second"
+    for root in (first, second):
+        root.mkdir(parents=True)
+        (root / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+        (root / "requirements.txt").write_text(
+            "example==1 --hash=sha256:" + "a" * 64 + "\n",
+            encoding="utf-8",
+        )
+        (root / "runner.py").write_text("print('ok')\n", encoding="utf-8")
+
+    assert analysis_image_revision(first) == analysis_image_revision(second)
+    (second / "runner.py").write_text("print('changed')\n", encoding="utf-8")
+    assert analysis_image_revision(first) != analysis_image_revision(second)
+
+
 def _settings(**overrides) -> Settings:
     values = {
         "APP_ENV": "development",
@@ -83,10 +103,12 @@ class AgentRunner:
 
     async def __call__(self, argv, **kwargs) -> ProcessResult:
         self.calls.append((list(argv), kwargs))
-        if argv[1:2] == ["version"]:
+        if argv[1:2] in (["version"], ["--version"]):
             return ProcessResult(
                 0 if self.docker_available else 1,
-                b"27.0.0" if self.docker_available else b"",
+                (b"codex-cli 0.147.0" if argv[1:2] == ["--version"] else b"27.0.0")
+                if self.docker_available
+                else b"",
                 b"",
             )
         if argv[1:3] == ["image", "inspect"]:
@@ -192,36 +214,23 @@ def test_agent_invocation_requires_gpt55_fast_and_only_personal_data_mcp(
 
     argv, options = runner.calls[-1]
     assert argv[argv.index("--model") + 1] == "gpt-5.5"
-    configs = [
-        argv[index + 1]
-        for index, value in enumerate(argv)
-        if value == "-c"
-    ]
+    configs = [argv[index + 1] for index, value in enumerate(argv) if value == "-c"]
     assert 'service_tier="fast"' in configs
     assert "features.fast_mode=true" in configs
     assert "mcp_servers.coach_data.required=true" in configs
     assert (
-        'mcp_servers.coach_data.enabled_tools='
+        "mcp_servers.coach_data.enabled_tools="
         '["inspect_data","query_data","run_python"]'
     ) in configs
-    assert (
-        'mcp_servers.coach_data.default_tools_approval_mode="approve"'
-        in configs
-    )
+    assert 'mcp_servers.coach_data.default_tools_approval_mode="approve"' in configs
+    assert any(value.startswith("mcp_servers.coach_data.command=") for value in configs)
     assert any(
-        value.startswith("mcp_servers.coach_data.command=")
+        value
+        == "mcp_servers.coach_data.env.COACH_SNAPSHOT_PATH=" + json.dumps(str(snapshot))
         for value in configs
     )
     assert any(
-        value
-        == "mcp_servers.coach_data.env.COACH_SNAPSHOT_PATH="
-        + json.dumps(str(snapshot))
-        for value in configs
-    )
-    assert any(
-        value
-        == "mcp_servers.coach_data.env.COACH_TRACE_PATH="
-        + json.dumps(str(trace))
+        value == "mcp_servers.coach_data.env.COACH_TRACE_PATH=" + json.dumps(str(trace))
         for value in configs
     )
     mcp_home_values = [
@@ -234,8 +243,7 @@ def test_agent_invocation_requires_gpt55_fast_and_only_personal_data_mcp(
     assert Path(mcp_home_values[0]).name == "mcp-home"
     assert not Path(mcp_home_values[0]).exists()
     assert (
-        "mcp_servers.coach_data.env.CODEX_HOME="
-        + json.dumps(mcp_home_values[0])
+        "mcp_servers.coach_data.env.CODEX_HOME=" + json.dumps(mcp_home_values[0])
     ) in configs
     container_state = trace.with_name("coach-analysis-container.name")
     assert (
@@ -248,9 +256,7 @@ def test_agent_invocation_requires_gpt55_fast_and_only_personal_data_mcp(
         for value in configs
     )
     disabled = {
-        argv[index + 1]
-        for index, value in enumerate(argv)
-        if value == "--disable"
+        argv[index + 1] for index, value in enumerate(argv) if value == "--disable"
     }
     assert disabled == {
         "apps",
@@ -346,16 +352,13 @@ def test_agent_cancellation_force_removes_and_verifies_turn_container(
             if "--output-last-message" in argv:
                 self.calls.append((list(argv), kwargs))
                 configs = [
-                    argv[index + 1]
-                    for index, value in enumerate(argv)
-                    if value == "-c"
+                    argv[index + 1] for index, value in enumerate(argv) if value == "-c"
                 ]
                 state_setting = next(
                     value
                     for value in configs
                     if value.startswith(
-                        "mcp_servers.coach_data.env."
-                        "COACH_CONTAINER_STATE_PATH=",
+                        "mcp_servers.coach_data.env.COACH_CONTAINER_STATE_PATH=",
                     )
                 )
                 self.container_state_path = Path(
@@ -469,15 +472,118 @@ def test_agent_fails_honestly_when_private_workdir_cannot_be_removed(
         assert caught.value.code == "provider_failure"
         assert "securely remove private turn files" in str(caught.value)
         agent_call = next(
-            options
-            for argv, options in runner.calls
-            if "--output-last-message" in argv
+            options for argv, options in runner.calls if "--output-last-message" in argv
         )
         agent_workdir = Path(str(agent_call["cwd"]))
         assert agent_workdir.exists()
     finally:
         if agent_workdir is not None:
             shutil.rmtree(agent_workdir, ignore_errors=True)
+
+
+def test_operator_executor_mode_needs_no_supabase_secret_and_filters_children(
+    tmp_path: Path,
+) -> None:
+    runner = AgentRunner()
+    settings = Settings(
+        _env_file=None,
+        APP_ENV="staging",
+        USE_MOCK_DATA=False,
+        OPERATOR_CODEX_PILOT_ENABLED=True,
+        LOCAL_CODEX_BIN="codex",
+        LOCAL_CODEX_EXPECTED_VERSION="0.147.0",
+        COACH_ANALYSIS_DOCKER_BIN="/usr/bin/docker",
+        COACH_ANALYSIS_DOCKER_HOST="unix:///run/user/1234/docker.sock",
+        COACH_ANALYSIS_IMAGE="mylifegraph-coach-analysis:1",
+    )
+    provider = LocalCodexCoachProvider(
+        settings,
+        runner=runner,
+        environ={
+            "CODEX_HOME": "/executor/codex",
+            "HOME": "/executor",
+            "PATH": "/usr/bin",
+            "XDG_RUNTIME_DIR": "/run/user/1234",
+            "SUPABASE_SECRET_KEY": "must-not-reach-a-child",
+            "SCHEDULED_REFRESH_TOKEN": "must-not-reach-a-child",
+        },
+        executable_resolver=lambda _: "/usr/bin/codex",
+        operator_executor=True,
+    )
+
+    capability = asyncio.run(provider.capability())
+    snapshot = tmp_path / "operator.sqlite"
+    snapshot.write_bytes(b"operator snapshot")
+    asyncio.run(
+        provider.respond_agent(
+            prompt="Answer the bounded operator question.",
+            snapshot_path=snapshot,
+            trace_path=tmp_path / "operator-trace.jsonl",
+        ),
+    )
+
+    assert capability.state == "ready"
+    assert capability.model_requested == "gpt-5.5"
+    assert runner.calls
+    assert all(
+        "SUPABASE_SECRET_KEY" not in options["env"]
+        and "SCHEDULED_REFRESH_TOKEN" not in options["env"]
+        for _, options in runner.calls
+    )
+    codex_calls = [
+        (argv, options)
+        for argv, options in runner.calls
+        if argv[0] == "/usr/bin/codex"
+    ]
+    assert codex_calls
+    assert all("DOCKER_HOST" not in options["env"] for _, options in codex_calls)
+    assert all("XDG_RUNTIME_DIR" not in options["env"] for _, options in codex_calls)
+    agent_argv = next(
+        argv for argv, _ in codex_calls if "--output-last-message" in argv
+    )
+    configs = [
+        agent_argv[index + 1]
+        for index, value in enumerate(agent_argv)
+        if value == "-c"
+    ]
+    assert (
+        "mcp_servers.coach_data.env.DOCKER_HOST="
+        + json.dumps("unix:///run/user/1234/docker.sock")
+    ) in configs
+    docker_calls = [
+        options for argv, options in runner.calls if argv[0] == "/usr/bin/docker"
+    ]
+    assert docker_calls
+    assert all(
+        options["env"].get("DOCKER_HOST")
+        == "unix:///run/user/1234/docker.sock"
+        for options in docker_calls
+    )
+
+
+def test_operator_executor_rejects_unpinned_cli_version() -> None:
+    runner = AgentRunner()
+    provider = LocalCodexCoachProvider(
+        Settings(
+            _env_file=None,
+            APP_ENV="staging",
+            USE_MOCK_DATA=False,
+            OPERATOR_CODEX_PILOT_ENABLED=True,
+            LOCAL_CODEX_BIN="codex",
+            LOCAL_CODEX_EXPECTED_VERSION="0.146.0",
+            COACH_ANALYSIS_DOCKER_BIN="/usr/bin/docker",
+            COACH_ANALYSIS_IMAGE="mylifegraph-coach-analysis:1",
+        ),
+        runner=runner,
+        executable_resolver=lambda _: "/usr/bin/codex",
+        operator_executor=True,
+    )
+
+    capability = asyncio.run(provider.capability())
+
+    assert capability.state == "unavailable"
+    assert capability.reason_code == "unsupported_cli"
+    assert runner.calls[0][0] == ["/usr/bin/codex", "--version"]
 
 
 def test_agent_rejects_model_fallback_or_mismatched_report(tmp_path: Path) -> None:

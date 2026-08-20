@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
+import 'package:my_life_graph/core/contracts/account_deletion.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
+import 'package:my_life_graph/composition/coach_credential_store_provider.dart';
+import 'package:my_life_graph/features/coach/data/coach_credential_store.dart';
+import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'package:my_life_graph/features/settings/application/account_export_saver.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings_repository.dart';
@@ -16,8 +20,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  late _SettingsCredentialStore credentialStore;
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    credentialStore = _SettingsCredentialStore();
   });
 
   testWidgets(
@@ -36,6 +43,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -225,6 +233,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -279,6 +288,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -355,6 +365,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -419,6 +430,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -477,6 +489,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -552,6 +565,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -599,9 +613,10 @@ void main() {
     );
   });
 
-  testWidgets('ambiguous deletion closes the local session without retrying',
+  testWidgets('ambiguous deletion enters stable recovery without signing out',
       (tester) async {
-    final authRepository = _SettingsAuthRepository();
+    final authRepository = _SettingsAuthRepository()
+      ..deletionRecoveryAfterInitialLoad = true;
     final accountRepository = _FakeAccountSettingsRepository()
       ..deleteError = const AccountDeletionOutcomeUnknownException(
         'outcome unknown',
@@ -610,6 +625,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -647,11 +663,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(accountRepository.deleteCalls, 1);
-    expect(authRepository.deletedAccountSignOutCalls, 1);
-    expect(container.read(authControllerProvider).valueOrNull, isNull);
+    expect(authRepository.deletedAccountSignOutCalls, 0);
+    expect(
+      container.read(authControllerProvider).valueOrNull?.isDeletionRecovery,
+      isTrue,
+    );
     expect(
       container.read(authNoticeProvider)?.message,
-      'Deletion could not be confirmed. Sign in again; if the account remains, retry deletion.',
+      'Deletion could not yet be confirmed. Retry the same request from the recovery screen.',
     );
     expect(container.read(authNoticeProvider)?.isError, isTrue);
   });
@@ -668,6 +687,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -743,6 +763,7 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -850,16 +871,67 @@ class _SettingsAuthRepository extends AuthRepository {
     ),
   );
   int deletedAccountSignOutCalls = 0;
+  int currentSessionCalls = 0;
+  bool deletionRecoveryAfterInitialLoad = false;
 
   @override
   Stream<AuthState> get authStateChanges => const Stream.empty();
 
   @override
-  Future<AppSession?> currentSession() async => _session;
+  Future<AppSession?> currentSession() async {
+    currentSessionCalls += 1;
+    if (deletionRecoveryAfterInitialLoad && currentSessionCalls > 1) {
+      return AppSession.deletionRecovery(
+        _session.profile,
+        const AccountDeletionRecovery(
+          deletionId: 'a1000000-0000-4000-8000-000000000001',
+          result: null,
+        ),
+      );
+    }
+    return _session;
+  }
 
   @override
   Future<void> signOutAfterAccountDeletion() async {
     deletedAccountSignOutCalls += 1;
+  }
+}
+
+class _SettingsCredentialStore implements CoachCredentialStore {
+  final Map<String, String> values = {};
+  int deleteAllCalls = 0;
+
+  String _key(String profileId, CoachProviderName provider) =>
+      '$profileId:${provider.code}';
+
+  @override
+  Future<String?> read(String profileId, CoachProviderName provider) async =>
+      values[_key(profileId, provider)];
+
+  @override
+  Future<void> write(
+    String profileId,
+    CoachProviderName provider,
+    String key,
+  ) async {
+    values[_key(profileId, provider)] = key;
+  }
+
+  @override
+  Future<void> delete(String profileId, CoachProviderName provider) async {
+    values.remove(_key(profileId, provider));
+  }
+
+  @override
+  Future<void> deleteProfile(String profileId) async {
+    values.removeWhere((key, _) => key.startsWith('$profileId:'));
+  }
+
+  @override
+  Future<void> deleteAllCoachCredentials() async {
+    deleteAllCalls += 1;
+    values.clear();
   }
 }
 
@@ -923,7 +995,7 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
         table: <Map<String, dynamic>>[],
     };
     return AccountExportEnvelope.fromJson({
-      'contract_version': 'account-export-v5',
+      'contract_version': 'account-export-v6',
       'exported_at': '2026-07-13T12:00:00Z',
       'data': data,
       'record_counts': <String, int>{
@@ -942,12 +1014,20 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
   }
 
   @override
-  Future<void> deleteAccount() async {
+  Future<AccountDeletionResult> deleteAccount({required String expectedUserId}) async {
+    expect(expectedUserId, 'account-id');
     deleteCalls += 1;
     final completer = deleteCompleter;
     if (completer != null) await completer.future;
     final error = deleteError;
     if (error != null) throw error;
+    return AccountDeletionResult(
+      deletionId: 'a1000000-0000-4000-8000-000000000001',
+      state: AccountDeletionState.completed,
+      acceptedAt: DateTime.utc(2026, 8, 20, 12),
+      completedAt: DateTime.utc(2026, 8, 20, 12, 0, 1),
+      journalDurable: true,
+    );
   }
 }
 
@@ -962,7 +1042,7 @@ class _FakeExportSaver implements AccountExportSaver {
   }) async {
     calls += 1;
     expect(suggestedName, startsWith('mylifegraph-export-'));
-    expect(export.contractVersion, 'account-export-v5');
+    expect(export.contractVersion, 'account-export-v6');
     return AccountExportSaveResult.saved;
   }
 }

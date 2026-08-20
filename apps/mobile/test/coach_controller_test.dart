@@ -223,6 +223,38 @@ void main() {
     controller.dispose();
   });
 
+  test('lost final-quota response can replay the exact request', () async {
+    final repository = _FakeCoachRepository(
+      error: const CoachRemoteException(
+        code: 'network_error',
+        message: 'Connection lost after completion.',
+        retryable: true,
+        statusCode: 503,
+      ),
+      remainingRequests: const [1, 0, 0],
+    );
+    final controller = CoachController(repository: repository);
+    await _settle();
+    controller.updateDraft('Use the final available turn');
+    final requestId = controller.state.requestId;
+
+    expect(await controller.send(), isFalse);
+    expect(controller.state.capabilities?.limits.remainingRequests, 0);
+    expect(controller.state.isRateLimited, isTrue);
+    expect(controller.state.canRetryExact, isTrue);
+    expect(controller.state.canSend, isTrue);
+    expect(controller.state.requestId, requestId);
+
+    repository.error = null;
+    expect(await controller.send(), isTrue);
+    expect(repository.requestIds, [requestId, requestId]);
+    expect(repository.messages, [
+      'Use the final available turn',
+      'Use the final available turn',
+    ]);
+    controller.dispose();
+  });
+
   test('typed timeout keeps exact retry copy without exposing Dio', () {
     const error = CoachRemoteException(
       code: 'network_error',
@@ -238,6 +270,81 @@ void main() {
     );
     expect(coachFailurePreservesRequestIdentity(error), isTrue);
   });
+
+  test('provider busy preserves exact retry and starts no automatic retry',
+      () async {
+    final repository = _FakeCoachRepository(
+      error: const CoachRemoteException(
+        code: 'provider_busy',
+        message: 'The selected Coach provider is busy.',
+        retryable: true,
+        statusCode: 429,
+        retryAfterSeconds: 9,
+      ),
+    );
+    final controller = CoachController(repository: repository);
+    await _settle();
+    controller.updateDraft('Keep this exact question');
+    final requestId = controller.state.requestId;
+
+    expect(await controller.send(), isFalse);
+
+    expect(controller.state.busyRetrySeconds, 9);
+    expect(controller.state.exactRetryMessage, 'Keep this exact question');
+    expect(controller.state.requestId, requestId);
+    expect(controller.state.canSend, isFalse);
+    expect(repository.messages, ['Keep this exact question']);
+    await _settle();
+    expect(repository.messages, hasLength(1));
+    await controller.load();
+    expect(controller.state.busyRetrySeconds, greaterThan(0));
+    expect(repository.messages, hasLength(1));
+    expect(
+      coachErrorMessage(controller.state.sendError),
+      contains('Retry manually'),
+    );
+    controller.dispose();
+  });
+
+  for (final admission in const [
+    (code: 'route_busy', retryAfter: 1),
+    (code: 'route_rate_limited', retryAfter: 60),
+  ]) {
+    test(
+        '${admission.code} preserves the exact request and uses its countdown',
+        () async {
+      final repository = _FakeCoachRepository(
+        error: CoachRemoteException(
+          code: admission.code,
+          message: 'The public service is temporarily rate limited.',
+          retryable: true,
+          statusCode: 429,
+          retryAfterSeconds: admission.retryAfter,
+        ),
+      );
+      final controller = CoachController(repository: repository);
+      await _settle();
+      controller.updateDraft('Keep this admission retry unchanged');
+      final requestId = controller.state.requestId;
+
+      expect(await controller.send(), isFalse);
+
+      expect(controller.state.isRateLimited, isFalse);
+      expect(controller.state.busyRetrySeconds, admission.retryAfter);
+      expect(
+        controller.state.exactRetryMessage,
+        'Keep this admission retry unchanged',
+      );
+      expect(controller.state.requestId, requestId);
+      expect(controller.state.canSend, isFalse);
+      expect(repository.messages, ['Keep this admission retry unchanged']);
+      expect(
+        coachErrorMessage(controller.state.sendError),
+        contains('Retry manually'),
+      );
+      controller.dispose();
+    });
+  }
 
   test('contract failure preserves the exact request identity for retry',
       () async {
@@ -374,7 +481,7 @@ class _FakeCoachRepository implements CoachRepository {
     this.remainingRequests = const [19],
   }) : assert(remainingRequests.isNotEmpty);
 
-  final Object? error;
+  Object? error;
   final bool block;
   final Completer<void>? refreshGate;
   final Object? capabilityErrorAfterInitial;
@@ -383,6 +490,7 @@ class _FakeCoachRepository implements CoachRepository {
   final List<int> remainingRequests;
   Completer<void>? responseGate;
   final List<String> messages = [];
+  final List<String> requestIds = [];
   final StreamController<CoachStreamEvent> _blocking =
       StreamController<CoachStreamEvent>();
   int capabilityCalls = 0;
@@ -425,6 +533,7 @@ class _FakeCoachRepository implements CoachRepository {
     required String requestId,
     required String message,
   }) async* {
+    requestIds.add(requestId);
     messages.add(message);
     yield CoachStartedEvent(requestId);
     yield const CoachActivityEvent('Checking relevant history …');

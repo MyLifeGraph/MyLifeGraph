@@ -2,27 +2,35 @@
 
 Flutter client for the AI Personal Coach / MyLifeGraph product.
 
-Coach BYOK V3 is the current public surface. `coach-capabilities-v3`,
-`coach-response-v3`, and `coach-history-v3` use
-`free-coach-agent-prompt-v5`; stored V1/V2 responses remain readable. OpenAI
-and Gemini keys are profile-scoped: Android uses encrypted device storage,
-while web keeps keys only in tab memory. Capabilities tests a replacement
-before it becomes active. Staging and production expose Coach only with exact
-`COACH_SURFACE_ENABLED=true` and send keys only to a configured HTTPS AI URL.
+Coach V4 is the current public surface. `coach-request-v4`,
+`coach-capabilities-v5`, `coach-response-v4`, and `coach-history-v4` use
+`free-coach-agent-prompt-v5`; stored V1-V3 responses remain readable. Hosted
+users deliberately choose Project Coach or one personal OpenAI/Gemini key;
+there is no provider fallback. Android keeps BYOK keys in encrypted device
+storage, while web keeps them only in tab memory. Android cloud backup and
+device-to-device transfer are explicitly disabled so encrypted preferences or
+provider keys are never restored without their device keystore. Capabilities
+tests a replacement before it becomes active. Staging and pilot expose
+Coach only with exact `COACH_SURFACE_ENABLED=true` and send keys only to a
+configured HTTPS AI URL.
 
-The public-signup VPS pilot, explicit shared operator-provider proposal,
-tagged-release flow, and signed-device acceptance are owned by
-`../../docs/vps-pilot-release-plan.md`; most remain future work. The current
-Flutter repository now accepts current Supabase publishable keys, binds hosted
+The public-signup VPS pilot, explicit shared operator provider, tagged-release
+flow, and signed-device acceptance are owned by
+`../../docs/vps-pilot-release-plan.md`. Their repository implementation exists,
+but live infrastructure acceptance remains future work. Flutter accepts
+current Supabase publishable keys, binds hosted
 builds to distinct exact staging/pilot project refs, rejects a pilot build
 using a legacy key or staging URL, displays persistent `Staging · Test data`
 identity in staging, and implements the versioned adult-participation flow.
 Hosted auth shows the privacy notice and explicit 18-or-older checkbox before
-account creation/Google OAuth; a short-lived choice may be committed only by
-the authenticated backend, and an unaccepted synced account is routed to the
-post-auth gate before Setup or product access. Guest mode is unavailable in
-hosted builds. No separate remote real-data project or remote acceptance state
-is implied by this source.
+account creation/Google OAuth. It stores no pre-auth consent: only an
+immediately authenticated email signup can commit in the same verified
+session; confirmation-link and OAuth returns use the post-auth gate. Hosted
+email sign-in/signup/reset/resend acquire a fresh, one-use Cloudflare Turnstile
+token from the exact public origin and pass it only to the matching Supabase
+operation. Guest mode is unavailable in hosted builds. No separate remote
+real-data project, Turnstile widget, or remote acceptance state is implied by
+this source.
 
 Feature code keeps its data and presentation internals private. Riverpod
 factories or widgets that deliberately wire multiple features live under
@@ -35,6 +43,9 @@ GoRouter routes remain explicit. This is direct Riverpod composition, not a DI
 framework or barrel API.
 
 ## Recommended Local Run
+
+Use Flutter 3.44 or newer with Dart 3.12 or newer; these are the declared
+minimums and match the pinned CI and hosted-build toolchain.
 
 From the repository root:
 
@@ -99,6 +110,8 @@ The app reads configuration from Dart defines in
 | Define | Default | Purpose |
 | --- | --- | --- |
 | `APP_ENV` | `development` | `development` is local; hosted builds accept exact `staging` or `pilot`. |
+| `APP_BUILD_SHA` | empty locally | Hosted builds require the exact lowercase 40-character source SHA; Settings diagnostics display its short form. |
+| `APP_RELEASE_TAG` | empty locally | Hosted builds require an exact `vX.Y.Z-pilot.N[-rc.N]` tag and display it with the build identity. |
 | `USE_MOCK_DATA` | `false` in code, `true` in scripts | Enables mock repository paths. |
 | `SUPABASE_URL` | empty | Enables Supabase when paired with one compatible client key. |
 | `SUPABASE_PUBLISHABLE_KEY` | empty | Current public `sb_publishable_` key for the Supabase client; required by pilot builds. |
@@ -106,6 +119,8 @@ The app reads configuration from Dart defines in
 | `STAGING_SUPABASE_PROJECT_REF` | empty | Exact non-secret staging ref; required by hosted staging and pilot builds. |
 | `PILOT_SUPABASE_PROJECT_REF` | empty | Exact non-secret pilot ref; required by pilot builds and distinct from staging. |
 | `PILOT_CONTACT_EMAIL` | empty | Required hosted project/incident contact rendered in the adult/privacy notice. |
+| `APP_PUBLIC_ORIGIN` | empty | Required hosted canonical HTTPS web origin; binds Turnstile popup messaging and release CSP. |
+| `TURNSTILE_SITE_KEY` | empty | Required hosted public Cloudflare Turnstile widget key; the corresponding secret remains only in Supabase. |
 | `AI_SERVICE_BASE_URL` | `http://localhost:8000` | FastAPI service base URL. |
 | `COACH_SURFACE_ENABLED` | unset/fail-closed in release and production | Exact `true` explicitly exposes Coach; backend capability still controls sending. |
 | `LEARNED_FOCUS_PLANNING_PILOT_ENABLED` | `false` | Exact `true` enables the development-only learned-timing Planner pilot; the backend must use the same flag. Production builds stay fail-closed. |
@@ -325,7 +340,12 @@ confirmed.
   `pilot-participation-v1` / `pilot-participation-notice-v1` before Setup or any
   synced product route. Eligibility comes only from the backend-owned profile
   version/time pair, never editable Auth metadata; no birth date is collected.
-- Email/password auth requires Supabase configuration.
+- Email/password auth requires Supabase configuration. Hosted sign-in,
+  sign-up, reset, and confirmation resend each acquire a fresh Turnstile token;
+  timeout, cancellation, popup/WebView failure, missing token, or token reuse
+  fails that operation without a fallback request. Android enables only the
+  WebView storage/cookie behavior Turnstile requires and still confines
+  navigation and message origin to the canonical challenge page.
 - Google auth requires Supabase configuration and redirect allowlist entries for
   `http://127.0.0.1:7357`, `http://localhost:7357`, and installed Android builds
   additionally require `com.mylifegraph.app://login-callback/`. Signup,
@@ -539,7 +559,7 @@ it does not prove Supabase or FastAPI reachability. Synced writes are not queued
 Guest/demo local persistence continues on the current device while offline.
 
 The synced-account JSON export is bounded and is not a backup, restore format,
-or transaction-wide snapshot. Its strict `account-export-v5` client allowlist
+or transaction-wide snapshot. Its strict `account-export-v6` client allowlist
 matches the complete 41-table backend contract after Recommendation and
 Decision Feedback retirement, including scheduled Focus and finite Assignment
 Series provenance. Web downloads
@@ -551,6 +571,13 @@ branch, but this repository has no iOS runner or installed-iOS acceptance claim.
 Permanent deletion requires typed confirmation and session-bound Supabase
 sign-in evidence no more than 15 minutes old. A stale or refresh-only session
 stays signed in and receives an explicit sign-out/sign-in instruction.
+The request/response use `account-deletion-v2`; a stable device-local UUIDv4
+survives retry/restart, and `account-deletion-status-v2` restores a pending
+surface even before profile loading. Once journal append begins the client
+cancels active Coach work, clears device BYOK material, blocks normal product
+navigation, and waits for durable `deletion_pending` or `completed` truth.
+Only completion/durable acceptance permits final auth teardown; transport or
+contract ambiguity never becomes a success claim.
 
 Insights shows the Skill profile only in explicitly local/demo mode and labels
 it as example data. Real accounts neither load nor render `skillset_profiles`
@@ -573,17 +600,22 @@ every contributing Supabase source with a hard explicit row ceiling; it neither
 labels a silently truncated result as all-time nor allocates unbounded history.
 
 Phase 10 is a typed authenticated free-question FastAPI Coach. Flutter never
-handles the developer's Codex OAuth login, snapshot, SQL, Python container, or
-model credential. It loads capability and mixed legacy/current history without
-generating. The Coach page has `Ask anything`, one free question field, Send,
-explicit history deletion, and Cancel only while analysis is running. It has no
+handles a Codex OAuth login, snapshot, SQL, Python container, or operator
+credential. It loads capability and mixed legacy/current history without
+generating. Hosted Settings requires one explicit `Project Coach`, `Use my
+OpenAI key`, or `Use my Gemini key` choice; Project Coach never reads or stores
+a key, and an error never changes the selection. The Coach page has `Ask
+anything`, one free question field, Send, explicit history deletion, and Cancel
+only while analysis is running. It has no
 Today/Patterns/Focus/Review, horizon, Focus-session, prompt-starter,
 memory-selection, or structured suggestion controls.
 
-A deliberate send streams strict `coach-request-v3` through SSE. The controller
+A deliberate hosted send streams strict `coach-request-v4` through SSE. The controller
 accepts only `started`, safe `activity`, `completed`, or `failed`; cancellation
-closes the stream. Timeout-aware retry preserves the exact request id and
-message, while editing rotates identity. Double submit is disabled. The
+closes the stream. Timeout/busy-aware retry preserves the exact request id,
+message, and provider, while editing rotates identity. `provider_busy` shows a
+bounded countdown from `Retry-After` and never retries automatically. Double
+submit is disabled. The
 profile-bound controller is app-scoped: draft, request identity, and a running
 stream survive main-page navigation, while logout, profile switch, Coach-gate
 loss, and app teardown clear/cancel them.
@@ -594,7 +626,7 @@ or marking it read. Success is acknowledged only when the end of the newest
 reply and uncertainty is visible in the Coach viewport; failures are
 acknowledged at the error/retry end marker or when a subsequent retry starts.
 
-Each current `coach-response-v3` shows answer text and uncertainty. Flutter
+Each current `coach-response-v4` shows answer text and uncertainty. Flutter
 validates
 the safety field and its consistency with provenance without rendering the raw
 classification. An expandable `Data and analysis details` section renders
@@ -602,7 +634,7 @@ backend-owned `Snapshot source coverage`, conservative source periods/counts,
 actual inspect/SQL/Python step summaries, limitations, and provider/model/tier
 provenance. It does not present coverage as exact query-result or answer-support
 rows, and it never renders plots, scripts, hidden reasoning, or an executable
-action. Persisted `coach-response-v1|v2` turns remain readable. Guest/mock
+action. Persisted V1-V3 turns remain readable. Guest/mock
 remains zero-call. See `../../docs/phase-10-controlled-coach-plan.md`.
 
 ## Verify
@@ -625,7 +657,7 @@ merge, persistence, retry, and readback; source-aware Dashboard and Full Week
 states; route capability gates; durable Settings Setup entry; and strict
 notification action routing. Focused domain tests now cover strict action-target
 parsing, task validation/undo, all Habit V1 cadence/outcome calculations, and
-focus lifecycle invariants. Coach tests cover strict V3/V2/capability/history/
+focus lifecycle invariants. Coach tests cover strict V4/V3/V2 capability/history/
 SSE parsing, authenticated requests, guest/mock zero HTTP, retry/cancellation,
 capability/error/rate-limit states, mixed legacy history, visible evidence/
 trace/Fast detail, absence of fixed-mode/memory/suggestion/plot UI, and history
@@ -661,7 +693,13 @@ Android builds require Android Studio or Android SDK command-line tools. Debug
 builds use debug signing. A distributable release intentionally fails until an
 ignored `android/key.properties` supplies `storePassword`, `keyPassword`,
 `keyAlias`, and `storeFile` for a private release keystore; release never falls
-back to the debug key.
+back to the debug key. CI may instead supply the complete `ANDROID_KEY*`
+environment set. `.github/workflows/pilot-release-apk.yml` accepts only an
+annotated pilot RC tag contained in `main`, derives deterministic Android
+version values, checks the expected signing-certificate fingerprint, emits APK
+checksums/metadata, and uploads a held candidate without deploying it. Exact
+setup and recovery boundaries live in `android/RELEASE_SIGNING.md`; repository
+source is not positive signing or installed-device evidence.
 
 ## Visual presentation
 

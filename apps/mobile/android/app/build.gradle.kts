@@ -10,15 +10,38 @@ plugins {
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-val hasReleaseSigning = keystorePropertiesFile.exists()
-if (hasReleaseSigning) {
+if (keystorePropertiesFile.exists()) {
     FileInputStream(keystorePropertiesFile).use(keystoreProperties::load)
-    listOf("keyAlias", "keyPassword", "storeFile", "storePassword").forEach { key ->
-        if (keystoreProperties.getProperty(key).isNullOrBlank()) {
-            throw GradleException("android/key.properties is missing required value: $key")
-        }
-    }
 }
+val signingKeys = listOf("keyAlias", "keyPassword", "storeFile", "storePassword")
+val signingEnvironmentNames = mapOf(
+    "keyAlias" to "ANDROID_KEY_ALIAS",
+    "keyPassword" to "ANDROID_KEY_PASSWORD",
+    "storeFile" to "ANDROID_KEYSTORE_PATH",
+    "storePassword" to "ANDROID_KEYSTORE_PASSWORD",
+)
+val environmentSigning = signingKeys.associateWith { key ->
+    System.getenv(signingEnvironmentNames.getValue(key))?.takeIf { it.isNotBlank() }
+}
+val propertySigning = signingKeys.associateWith { key ->
+    keystoreProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+}
+val hasAnyEnvironmentSigning = environmentSigning.values.any { it != null }
+val hasAllEnvironmentSigning = environmentSigning.values.all { it != null }
+val hasAnyPropertySigning = propertySigning.values.any { it != null }
+val hasAllPropertySigning = propertySigning.values.all { it != null }
+if (hasAnyEnvironmentSigning && !hasAllEnvironmentSigning) {
+    throw GradleException("Android release-signing environment is incomplete.")
+}
+if (hasAnyPropertySigning && !hasAllPropertySigning) {
+    throw GradleException("android/key.properties is missing a required value.")
+}
+val signingValues = when {
+    hasAllEnvironmentSigning -> environmentSigning.mapValues { it.value!! }
+    hasAllPropertySigning -> propertySigning.mapValues { it.value!! }
+    else -> emptyMap()
+}
+val hasReleaseSigning = signingValues.isNotEmpty()
 val releaseBuildRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
@@ -55,10 +78,10 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = signingValues.getValue("keyAlias")
+                keyPassword = signingValues.getValue("keyPassword")
+                storeFile = file(signingValues.getValue("storeFile"))
+                storePassword = signingValues.getValue("storePassword")
             }
         }
     }

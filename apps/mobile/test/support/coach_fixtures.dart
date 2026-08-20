@@ -2,6 +2,7 @@ const coachRequestId = '11111111-1111-4111-8111-111111111111';
 const coachSecondRequestId = '22222222-2222-4222-8222-222222222222';
 
 Map<String, dynamic> coachCapabilitiesJson({
+  String contractVersion = 'coach-capabilities-v5',
   String state = 'ready',
   String provider = 'fake',
   String providerMode = 'deterministic_test_only',
@@ -11,9 +12,13 @@ Map<String, dynamic> coachCapabilitiesJson({
   bool fastMode = false,
   String reasonCode = 'ready',
   int remainingRequests = 19,
+  int requestsPerLocalDay = 20,
+  String? requestPeriod,
+  int? globalRequestsPerUtcDay,
+  int? globalRemainingRequests,
 }) =>
     {
-      'contract_version': 'coach-capabilities-v3',
+      'contract_version': contractVersion,
       'state': state,
       'provider': provider,
       'provider_mode': providerMode,
@@ -26,8 +31,14 @@ Map<String, dynamic> coachCapabilitiesJson({
       'limits': {
         'message_codepoints': 2000,
         'reply_codepoints': 4000,
-        'requests_per_local_day': 20,
+        'requests_per_local_day': requestsPerLocalDay,
+        'request_period': requestPeriod ??
+            (provider == 'operator_codex_pilot'
+                ? 'utc_day'
+                : 'profile_local_day'),
         'remaining_requests': remainingRequests,
+        'global_requests_per_utc_day': globalRequestsPerUtcDay,
+        'global_remaining_requests': globalRemainingRequests,
         'max_tool_calls': 12,
         'turn_timeout_seconds': 180,
         'sql_timeout_seconds': 5,
@@ -47,6 +58,7 @@ Map<String, dynamic> localCodexCapabilitiesJson() => coachCapabilitiesJson(
     );
 
 Map<String, dynamic> coachResponseJson({
+  String contractVersion = 'coach-response-v4',
   String requestId = coachRequestId,
   String reply = 'Your median Focus duration was 42 minutes.',
   String uncertaintyLevel = 'low',
@@ -66,7 +78,7 @@ Map<String, dynamic> coachResponseJson({
         },
       ];
   return {
-    'contract_version': 'coach-response-v3',
+    'contract_version': contractVersion,
     'request_id': requestId,
     'reply': reply,
     'uncertainty': {
@@ -111,10 +123,11 @@ Map<String, dynamic> coachResponseJson({
 }
 
 Map<String, dynamic> coachHistoryJson({
+  String contractVersion = 'coach-history-v4',
   List<Map<String, dynamic>>? turns,
 }) =>
     {
-      'contract_version': 'coach-history-v3',
+      'contract_version': contractVersion,
       'turns': turns ??
           [
             {

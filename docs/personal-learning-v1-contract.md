@@ -313,6 +313,11 @@ Learned timing has two independent gates:
 1. the account preference `learned_focus_planning_enabled`; and
 2. the deployment feature flag for the pilot.
 
+The deployment flag is available only for development, test, and staging
+verification. Both FastAPI and Flutter force it off in the public `pilot`
+environment even when configured true; the account preference alone can never
+enable learned timing there.
+
 When both gates are on and the current evidence is Planner-ready, shared
 availability softly orders free starts in this sequence:
 

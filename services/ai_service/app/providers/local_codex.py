@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import os
 import re
@@ -15,6 +14,7 @@ from typing import Any
 
 
 from app.core.config import Settings
+from app.analysis_image import analysis_image_revision
 from app.core.private_files import (
     PrivateFileCleanupError,
     await_despite_cancellation,
@@ -101,12 +101,14 @@ class LocalCodexCoachProvider:
         environ: Mapping[str, str] | None = None,
         executable_resolver: Callable[[str], str | None] = shutil.which,
         monotonic: Callable[[], float] = time.monotonic,
+        operator_executor: bool = False,
     ) -> None:
         self._settings = settings
         self._runner = runner
         self._environ = environ if environ is not None else os.environ
         self._executable_resolver = executable_resolver
         self._monotonic = monotonic
+        self._operator_executor = operator_executor
         self._resolved_bin: str | None = None
         self._disabled_features: tuple[str, ...] | None = None
         self._capability_cache: _CapabilityCacheEntry | None = None
@@ -163,6 +165,19 @@ class LocalCodexCoachProvider:
         model = self._configured_model()
 
         try:
+            expected_version = self._settings.local_codex_expected_version
+            if expected_version:
+                version_result = await self._preflight([resolved, "--version"])
+                expected_output = f"codex-cli {expected_version}".encode("ascii")
+                if (
+                    version_result.returncode != 0
+                    or version_result.stdout.strip() != expected_output
+                ):
+                    return self._cache_capability(
+                        cache_key=cache_key,
+                        state="unavailable",
+                        reason_code="unsupported_cli",
+                    )
             help_result = await self._preflight([resolved, "--help"])
             exec_help = await self._preflight([resolved, "exec", "--help"])
             if help_result.returncode != 0 or exec_help.returncode != 0:
@@ -550,6 +565,7 @@ class LocalCodexCoachProvider:
             resolved,
             executable_fingerprint,
             self._configured_model(),
+            self._settings.local_codex_expected_version,
             child_environment.get("CODEX_HOME"),
             child_environment.get("HOME"),
             child_environment.get("PATH"),
@@ -559,15 +575,24 @@ class LocalCodexCoachProvider:
         )
 
     def _configuration_reason(self) -> str | None:
-        if self._settings.app_env != "development":
+        if self._operator_executor:
+            if (
+                self._settings.normalized_app_env not in {"staging", "pilot"}
+                or not self._settings.operator_codex_pilot_enabled
+            ):
+                return "provider_not_enabled"
+        elif self._settings.app_env != "development":
             return "development_only"
         if self._settings.use_mock_data:
             return "mock_data_enabled"
-        if self._settings.coach_provider != "local_codex_oauth":
+        if (
+            not self._operator_executor
+            and self._settings.coach_provider != "local_codex_oauth"
+        ):
             return "provider_not_enabled"
-        if not self._settings.local_codex_enabled:
+        if not self._operator_executor and not self._settings.local_codex_enabled:
             return "provider_not_enabled"
-        if not (
+        if not self._operator_executor and not (
             self._settings.supabase_url.strip()
             and self._settings.supabase_backend_configuration()[1].strip()
         ):
@@ -731,6 +756,16 @@ class LocalCodexCoachProvider:
                 + json.dumps(self._settings.coach_analysis_image)
             ),
         ]
+        if self._settings.coach_analysis_docker_host:
+            argv.extend(
+                [
+                    "-c",
+                    (
+                        f"{server}.env.DOCKER_HOST="
+                        + json.dumps(self._settings.coach_analysis_docker_host)
+                    ),
+                ],
+            )
         for feature in self._disabled_features:
             if feature != "fast_mode":
                 argv.extend(["--disable", feature])
@@ -754,7 +789,11 @@ class LocalCodexCoachProvider:
         return argv
 
     def _configured_model(self) -> str | None:
-        model = self._settings.local_codex_model.strip()
+        model = (
+            self._settings.coach_operator_model
+            if self._operator_executor
+            else self._settings.local_codex_model
+        ).strip()
         return model or None
 
     def _child_environment(self) -> dict[str, str]:
@@ -769,6 +808,11 @@ class LocalCodexCoachProvider:
         path = self._environ.get("PATH")
         if path is not None:
             environment["PATH"] = path
+        runtime_dir = self._environ.get("XDG_RUNTIME_DIR")
+        if runtime_dir is not None:
+            environment["XDG_RUNTIME_DIR"] = runtime_dir
+        if self._settings.coach_analysis_docker_host:
+            environment["DOCKER_HOST"] = self._settings.coach_analysis_docker_host
         return environment
 
     async def _cleanup_turn_container(
@@ -940,18 +984,10 @@ def _analysis_source_fingerprint() -> str | None:
 
 
 def _expected_analysis_revision() -> str | None:
-    inputs = [
-        _COACH_ANALYSIS_CONTEXT_PATH / "Dockerfile",
-        _COACH_ANALYSIS_CONTEXT_PATH / "runner.py",
-    ]
-    sha256sum_output = bytearray()
     try:
-        for path in inputs:
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            sha256sum_output.extend(f"{digest}  {path}\n".encode("utf-8"))
-    except OSError:
+        return analysis_image_revision(_COACH_ANALYSIS_CONTEXT_PATH)
+    except (OSError, ValueError):
         return None
-    return hashlib.sha256(sha256sum_output).hexdigest()
 
 
 def _supports_hardened_argv(help_stdout: bytes, exec_help_stdout: bytes) -> bool:

@@ -33,6 +33,8 @@ class Verifier:
 
 
 class Service:
+    requires_explicit_provider = False
+
     def __init__(self) -> None:
         self.calls = []
 

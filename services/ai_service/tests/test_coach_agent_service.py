@@ -2,6 +2,7 @@ import asyncio
 import json
 import shutil
 import tempfile
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -22,9 +23,14 @@ from app.providers.base import (
     CoachActivityCallback,
     CoachAgentProviderResult,
     CoachProviderCapability,
+    CoachProviderError,
 )
 from app.repositories.coach_context_repository import CoachProfileContext
 from app.repositories.coach_repository import CoachClaimResult
+from app.coach_turn_lifecycle import (
+    CoachPersistenceConflict,
+    CoachPersistenceRateLimited,
+)
 from app.services import coach_agent_service as coach_agent_service_module
 from app.services.coach_agent_service import CoachAgentService
 from app.services.coach_service import CoachServiceError
@@ -60,29 +66,79 @@ class AgentRepository:
             response=None,
             error=None,
         )
+        self.probe_result: CoachClaimResult | None = None
+        self.probe_error: Exception | None = None
+        self.probe_calls: list[dict[str, object]] = []
         self.usage_count = 3
         self.claim_calls: list[dict[str, object]] = []
         self.completion_calls: list[dict[str, object]] = []
         self.failure_calls: list[dict[str, object]] = []
         self.history_rows: list[dict[str, object]] = []
         self.delete_calls = 0
+        self.operator_usage_count = 0
+        self.expected_operator_utc_date = date(2026, 7, 28)
+        self.operator_dispatch_count = 0
+        self.operator_dispatch_calls: list[dict[str, object]] = []
+        self.operator_finish_calls: list[dict[str, object]] = []
+        self.operator_dispatch_error: Exception | None = None
+        self.operator_finish_error: Exception | None = None
+        self.completion_error: Exception | None = None
+        self.failure_error: Exception | None = None
+        self.events: list[str] = []
 
     async def claim_agent_request(self, **kwargs) -> CoachClaimResult:
         self.claim_calls.append(kwargs)
         return self.claim_result
 
+    async def probe_agent_terminal_replay(self, **kwargs) -> CoachClaimResult | None:
+        self.probe_calls.append(kwargs)
+        if self.probe_error is not None:
+            raise self.probe_error
+        return self.probe_result
+
     async def complete_agent_request(self, **kwargs) -> CoachAgentResponse:
         self.completion_calls.append(kwargs)
+        self.events.append("complete_request")
+        if self.completion_error is not None:
+            raise self.completion_error
         return kwargs["response"]
 
     async def fail_request(self, **kwargs) -> CoachErrorDetail:
         self.failure_calls.append(kwargs)
+        self.events.append("fail_request")
+        if self.failure_error is not None:
+            raise self.failure_error
         return kwargs["error"]
 
     async def count_usage(self, *, user_id: str, local_date: date) -> int:
         assert user_id == "owner-1"
         assert local_date == date(2026, 7, 28)
         return self.usage_count
+
+    async def count_operator_usage(self, *, user_id: str, utc_date: date) -> int:
+        assert user_id == "owner-1"
+        assert utc_date == self.expected_operator_utc_date
+        return self.operator_usage_count
+
+    async def count_operator_dispatches(self, *, utc_date: date) -> int:
+        assert utc_date == date(2026, 7, 28)
+        return self.operator_dispatch_count
+
+    async def record_operator_dispatch(self, **kwargs) -> None:
+        self.operator_dispatch_calls.append(kwargs)
+        self.events.append("record_dispatch")
+        if self.operator_dispatch_error is not None:
+            raise self.operator_dispatch_error
+
+    async def finish_operator_dispatch(self, **kwargs) -> None:
+        self.operator_finish_calls.append(kwargs)
+        self.events.append("finish_dispatch")
+        if self.operator_finish_error is not None:
+            raise self.operator_finish_error
+
+    async def reconcile_operator_dispatches(self, *, reconciled_at: datetime) -> int:
+        assert reconciled_at == NOW
+        return 0
 
     async def list_agent_history(
         self,
@@ -161,10 +217,12 @@ class AgentProvider:
             reason_code="ready",
         )
         self.capability_error: Exception | None = None
+        self.response_error: Exception | None = None
         self.capability_started = asyncio.Event()
         self.capability_block: asyncio.Event | None = None
         self.started = asyncio.Event()
         self.block: asyncio.Event | None = None
+        self.model_reported: str | None = "gpt-5.5"
         self.output = CoachAgentModelOutput(
             reply=(
                 "The recorded days show lower stress later in the sample, "
@@ -201,6 +259,8 @@ class AgentProvider:
         self.started.set()
         if self.block is not None:
             await self.block.wait()
+        if self.response_error is not None:
+            raise self.response_error
         if self.with_trace or self.trace_rows is not None:
             trace_rows = (
                 self.trace_rows
@@ -253,7 +313,53 @@ class AgentProvider:
             await activity_callback("Preparing a direct answer …")
         return CoachAgentProviderResult(
             output=self.output,
-            model_reported="gpt-5.5",
+            model_reported=self.model_reported,
+        )
+
+
+class OperatorProvider(AgentProvider):
+    def __init__(self) -> None:
+        super().__init__(with_trace=True)
+        self.capability_result = CoachProviderCapability(
+            state="ready",
+            provider="operator_codex_pilot",
+            provider_mode="operator_subscription_pilot",
+            model_requested="gpt-5.5",
+            model_source="explicit",
+            reason_code="ready",
+        )
+        self.reservation_id = UUID("aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa")
+        self.reserve_calls = 0
+        self.release_calls: list[UUID] = []
+        self.reserve_error: CoachProviderError | None = None
+        self.reserve_block: asyncio.Event | None = None
+
+    async def reserve(self) -> UUID:
+        self.reserve_calls += 1
+        if self.reserve_block is not None:
+            await self.reserve_block.wait()
+        if self.reserve_error is not None:
+            raise self.reserve_error
+        return self.reservation_id
+
+    async def release_reservation(self, reservation_id: UUID) -> None:
+        self.release_calls.append(reservation_id)
+
+    async def respond_agent_reserved(
+        self,
+        *,
+        reservation_id: UUID,
+        prompt: str,
+        snapshot_path: Path,
+        trace_path: Path,
+        activity_callback: CoachActivityCallback | None = None,
+    ) -> CoachAgentProviderResult:
+        assert reservation_id == self.reservation_id
+        return await super().respond_agent(
+            prompt=prompt,
+            snapshot_path=snapshot_path,
+            trace_path=trace_path,
+            activity_callback=activity_callback,
         )
 
 
@@ -285,6 +391,8 @@ def _service(
     provider: AgentProvider,
     settings: Settings | None = None,
     global_semaphore: asyncio.Semaphore | None = None,
+    operator_provider: OperatorProvider | None = None,
+    now_provider: Callable[[], datetime] | None = None,
 ) -> CoachAgentService:
     return CoachAgentService(
         settings=settings or _settings(),
@@ -293,7 +401,17 @@ def _service(
         snapshot_service=snapshot,
         provider=provider,
         global_semaphore=global_semaphore or asyncio.Semaphore(1),
-        now_provider=lambda: NOW,
+        now_provider=now_provider or (lambda: NOW),
+        operator_provider=operator_provider,
+    )
+
+
+def _operator_settings() -> Settings:
+    return Settings(
+        _env_file=None,
+        APP_ENV="staging",
+        USE_MOCK_DATA=False,
+        OPERATOR_CODEX_PILOT_ENABLED=True,
     )
 
 
@@ -307,7 +425,7 @@ def test_capabilities_publish_fixed_agent_limits_and_fast_configuration() -> Non
 
     result = asyncio.run(service.capabilities(user_id="owner-1"))
 
-    assert result.contract_version == "coach-capabilities-v3"
+    assert result.contract_version == "coach-capabilities-v5"
     assert result.state == "ready"
     assert result.model_requested == "gpt-5.5"
     assert result.service_tier == "fast"
@@ -318,6 +436,33 @@ def test_capabilities_publish_fixed_agent_limits_and_fast_configuration() -> Non
     assert result.limits.turn_timeout_seconds == 180
     assert result.limits.snapshot_max_rows == 50_000
     assert result.limits.snapshot_max_bytes == 8 * 1024 * 1024
+
+
+def test_account_deletion_cancels_active_turn_and_blocks_new_turns() -> None:
+    async def scenario() -> None:
+        repository = AgentRepository()
+        provider = AgentProvider()
+        provider.block = asyncio.Event()
+        service = _service(
+            repository=repository,
+            snapshot=SnapshotService(),
+            provider=provider,
+        )
+        active = asyncio.create_task(
+            service.respond(user_id="owner-1", request=_request()),
+        )
+        await provider.started.wait()
+
+        await service.block_user_and_cancel(user_id="owner-1")
+
+        with pytest.raises(asyncio.CancelledError):
+            await active
+        with pytest.raises(CoachServiceError) as blocked:
+            await service.prepare_turn(user_id="owner-1", request=_request())
+        assert blocked.value.detail.code == "account_deletion_pending"
+        assert provider.calls == 1
+
+    asyncio.run(scenario())
 
 
 def test_capabilities_report_configured_usage_when_provider_probe_fails() -> None:
@@ -393,6 +538,7 @@ def test_ready_capabilities_and_evidence_reject_inconsistent_truth() -> None:
         message_codepoints=2_000,
         reply_codepoints=4_000,
         requests_per_local_day=20,
+        request_period="profile_local_day",
         remaining_requests=19,
         max_tool_calls=12,
         turn_timeout_seconds=180,
@@ -733,6 +879,26 @@ def test_direct_safety_response_bypasses_snapshot_and_provider() -> None:
     assert repository.completion_calls[0]["usage"]["prompt_bytes"] == 0
 
 
+def test_direct_safety_response_bypasses_busy_provider_admission() -> None:
+    repository = AgentRepository()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        global_semaphore=asyncio.Semaphore(0),
+    )
+
+    result = asyncio.run(
+        service.respond(
+            user_id="owner-1",
+            request=_request("I plan to kill myself."),
+        ),
+    )
+
+    assert result.provenance.source == "deterministic_safety"
+    assert len(repository.claim_calls) == 1
+
+
 def test_v3_direct_safety_response_is_english_for_german_input() -> None:
     repository = AgentRepository()
     snapshot = SnapshotService()
@@ -1050,6 +1216,407 @@ def test_global_turn_slot_also_serializes_snapshot_creation() -> None:
     assert snapshot.calls == 2
 
 
+def test_busy_turn_is_rejected_before_claim_or_snapshot(monkeypatch) -> None:
+    monkeypatch.setattr(
+        coach_agent_service_module,
+        "_TURN_ADMISSION_TIMEOUT_SECONDS",
+        0.01,
+    )
+    repository = AgentRepository()
+    snapshot = SnapshotService()
+    provider = AgentProvider()
+    service = _service(
+        repository=repository,
+        snapshot=snapshot,
+        provider=provider,
+        global_semaphore=asyncio.Semaphore(0),
+    )
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(service.respond(user_id="owner-1", request=_request()))
+
+    assert caught.value.status_code == 429
+    assert caught.value.detail.code == "provider_busy"
+    assert caught.value.response_headers == {"Retry-After": "15"}
+    assert repository.claim_calls == []
+    assert snapshot.calls == 0
+    assert provider.capability_calls == 0
+    assert provider.calls == 0
+
+
+def test_operator_turn_reserves_records_dispatch_and_releases() -> None:
+    repository = AgentRepository()
+    provider = OperatorProvider()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+    request = CoachAgentRequest(
+        contract_version="coach-request-v4",
+        request_id=uuid4(),
+        message="Compare my recorded patterns.",
+    )
+
+    result = asyncio.run(service.respond(user_id="owner-1", request=request))
+
+    assert result.contract_version == "coach-response-v4"
+    assert result.provenance.provider == "operator_codex_pilot"
+    assert result.provenance.provider_mode == "operator_subscription_pilot"
+    assert result.provenance.fast_mode is True
+    assert provider.reserve_calls == 1
+    assert provider.calls == 1
+    assert provider.release_calls == [provider.reservation_id]
+    assert repository.claim_calls[0]["contract_version"] == "coach-request-v4"
+    assert repository.claim_calls[0]["daily_limit"] == 5
+    assert repository.claim_calls[0]["provider_dispatch_required"] is True
+    assert len(repository.operator_dispatch_calls) == 1
+    assert repository.operator_dispatch_calls[0]["reservation_id"] == (
+        provider.reservation_id
+    )
+    assert repository.operator_finish_calls[0]["state"] == "completed"
+    assert repository.events == [
+        "record_dispatch",
+        "complete_request",
+        "finish_dispatch",
+    ]
+
+
+def test_operator_turn_preserves_missing_cli_model_provenance() -> None:
+    repository = AgentRepository()
+    provider = OperatorProvider()
+    provider.model_reported = None
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    result = asyncio.run(
+        service.respond(
+            user_id="owner-1",
+            request=CoachAgentRequest(
+                contract_version="coach-request-v4",
+                request_id=uuid4(),
+                message="Compare my recorded patterns.",
+            ),
+        ),
+    )
+
+    assert result.provenance.model_requested == "gpt-5.5"
+    assert result.provenance.model_reported is None
+    assert repository.completion_calls[0]["response"].provenance.model_reported is None
+
+
+def test_operator_terminal_request_survives_deferred_private_ledger_finish() -> None:
+    repository = AgentRepository()
+    repository.operator_finish_error = RuntimeError("simulated ledger outage")
+    provider = OperatorProvider()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    result = asyncio.run(
+        service.respond(
+            user_id="owner-1",
+            request=CoachAgentRequest(
+                contract_version="coach-request-v4",
+                request_id=uuid4(),
+                message="Compare my recorded patterns.",
+            ),
+        ),
+    )
+
+    assert result.contract_version == "coach-response-v4"
+    assert len(repository.completion_calls) == 1
+    assert repository.failure_calls == []
+    assert repository.operator_finish_calls[0]["state"] == "completed"
+    assert provider.calls == 1
+
+
+def test_operator_ambiguous_completion_stays_dispatched_for_reconciliation() -> None:
+    repository = AgentRepository()
+    repository.completion_error = RuntimeError("simulated lost completion response")
+    provider = OperatorProvider()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=CoachAgentRequest(
+                    contract_version="coach-request-v4",
+                    request_id=uuid4(),
+                    message="Compare my recorded patterns.",
+                ),
+            ),
+        )
+
+    assert caught.value.detail.code == "in_progress"
+    assert repository.events == ["record_dispatch", "complete_request"]
+    assert repository.operator_finish_calls == []
+    assert repository.failure_calls == []
+
+
+def test_operator_failure_terminalizes_dispatch_after_request_failure() -> None:
+    repository = AgentRepository()
+    provider = OperatorProvider()
+    provider.response_error = CoachProviderError(
+        "provider_failure",
+        "simulated executor failure",
+        retryable=True,
+    )
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=CoachAgentRequest(
+                    contract_version="coach-request-v4",
+                    request_id=uuid4(),
+                    message="Compare my recorded patterns.",
+                ),
+            ),
+        )
+
+    assert caught.value.detail.code == "provider_failure"
+    assert repository.operator_finish_calls[0]["state"] == "failed"
+    assert repository.events == [
+        "record_dispatch",
+        "fail_request",
+        "finish_dispatch",
+    ]
+
+
+def test_operator_capabilities_publish_separate_user_and_global_limits() -> None:
+    repository = AgentRepository()
+    repository.operator_usage_count = 2
+    repository.operator_dispatch_count = 7
+    provider = OperatorProvider()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    result = asyncio.run(service.capabilities(user_id="owner-1"))
+
+    assert result.contract_version == "coach-capabilities-v5"
+    assert result.provider == "operator_codex_pilot"
+    assert result.state == "ready"
+    assert result.limits.requests_per_local_day == 5
+    assert result.limits.request_period == "utc_day"
+    assert result.limits.remaining_requests == 3
+    assert result.limits.global_requests_per_utc_day == 15
+    assert result.limits.global_remaining_requests == 8
+
+
+def test_operator_capabilities_use_utc_when_profile_local_day_is_ahead() -> None:
+    repository = AgentRepository()
+    near_midnight = datetime(2026, 7, 28, 23, 30, tzinfo=UTC)
+    provider = OperatorProvider()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+        now_provider=lambda: near_midnight,
+    ).for_operator_request()
+
+    result = asyncio.run(service.capabilities(user_id="owner-1"))
+
+    assert result.limits.request_period == "utc_day"
+    assert result.limits.remaining_requests == 5
+
+
+def test_operator_safety_bypass_consumes_no_reservation_or_dispatch() -> None:
+    repository = AgentRepository()
+    provider = OperatorProvider()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+    request = CoachAgentRequest(
+        contract_version="coach-request-v4",
+        request_id=uuid4(),
+        message="I plan to kill myself.",
+    )
+
+    result = asyncio.run(service.respond(user_id="owner-1", request=request))
+
+    assert result.provenance.source == "deterministic_safety"
+    assert result.provenance.provider == "operator_codex_pilot"
+    assert result.provenance.provider_called is False
+    assert provider.reserve_calls == 0
+    assert repository.claim_calls[0]["provider_dispatch_required"] is False
+    assert repository.operator_dispatch_calls == []
+    assert repository.operator_finish_calls == []
+
+
+def test_operator_global_limit_rejects_before_executor_reservation_or_claim() -> None:
+    repository = AgentRepository()
+    repository.operator_dispatch_count = 15
+    provider = OperatorProvider()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=CoachAgentRequest(
+                    contract_version="coach-request-v4",
+                    request_id=uuid4(),
+                    message="Compare my recorded patterns.",
+                ),
+            ),
+        )
+
+    assert caught.value.status_code == 429
+    assert caught.value.detail.code == "provider_limit"
+    assert provider.reserve_calls == 0
+    assert repository.claim_calls == []
+
+
+def test_operator_global_limit_race_fails_without_provider_dispatch() -> None:
+    repository = AgentRepository()
+    repository.operator_dispatch_error = CoachPersistenceRateLimited(
+        "durable global limit won a race",
+    )
+    provider = OperatorProvider()
+    snapshot = SnapshotService()
+    service = _service(
+        repository=repository,
+        snapshot=snapshot,
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=CoachAgentRequest(
+                    contract_version="coach-request-v4",
+                    request_id=uuid4(),
+                    message="Compare my recorded patterns.",
+                ),
+            ),
+        )
+
+    assert caught.value.status_code == 429
+    assert caught.value.detail.code == "provider_limit"
+    assert provider.calls == 0
+    assert provider.release_calls == [provider.reservation_id]
+    assert repository.operator_finish_calls == []
+    assert repository.failure_calls[0]["usage"]["provider_called"] is False
+    assert not snapshot.snapshots[0].working_directory.exists()
+
+
+def test_operator_busy_rejects_before_claim_with_retry_after() -> None:
+    repository = AgentRepository()
+    provider = OperatorProvider()
+    provider.reserve_error = CoachProviderError(
+        "provider_busy",
+        "private executor detail",
+        retryable=True,
+    )
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=CoachAgentRequest(
+                    contract_version="coach-request-v4",
+                    request_id=uuid4(),
+                    message="Compare my recorded patterns.",
+                ),
+            ),
+        )
+
+    assert caught.value.detail.code == "provider_busy"
+    assert caught.value.response_headers == {"Retry-After": "15"}
+    assert repository.claim_calls == []
+
+
+def test_operator_admission_timeout_rejects_before_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        coach_agent_service_module,
+        "_TURN_ADMISSION_TIMEOUT_SECONDS",
+        0.01,
+    )
+    repository = AgentRepository()
+    provider = OperatorProvider()
+    provider.reserve_block = asyncio.Event()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=_operator_settings(),
+        operator_provider=provider,
+    ).for_operator_request()
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=CoachAgentRequest(
+                    contract_version="coach-request-v4",
+                    request_id=uuid4(),
+                    message="Compare my recorded patterns.",
+                ),
+            ),
+        )
+
+    assert caught.value.detail.code == "provider_busy"
+    assert caught.value.response_headers == {"Retry-After": "15"}
+    assert provider.reserve_calls == 1
+    assert repository.claim_calls == []
+    assert repository.operator_dispatch_calls == []
+
+
 def test_completed_request_replays_without_new_snapshot_or_provider_call() -> None:
     first_repository = AgentRepository()
     first_snapshot = SnapshotService()
@@ -1065,7 +1632,7 @@ def test_completed_request_replays_without_new_snapshot_or_provider_call() -> No
     )
 
     repository = AgentRepository()
-    repository.claim_result = CoachClaimResult(
+    repository.probe_result = CoachClaimResult(
         state="completed",
         remaining_requests=19,
         response=persisted,
@@ -1078,13 +1645,157 @@ def test_completed_request_replays_without_new_snapshot_or_provider_call() -> No
             repository=repository,
             snapshot=snapshot,
             provider=provider,
+            global_semaphore=asyncio.Semaphore(0),
         ).respond(user_id="owner-1", request=request),
     )
 
     assert replayed == persisted
     assert snapshot.calls == 0
     assert provider.calls == 0
+    assert repository.claim_calls == []
     assert repository.completion_calls == []
+
+
+def test_operator_terminal_replay_bypasses_kill_switch_budget_and_busy() -> None:
+    request = CoachAgentRequest(
+        contract_version="coach-request-v4",
+        request_id=uuid4(),
+        message="Compare my recorded patterns.",
+    )
+    first_repository = AgentRepository()
+    first_provider = OperatorProvider()
+    persisted = asyncio.run(
+        _service(
+            repository=first_repository,
+            snapshot=SnapshotService(),
+            provider=AgentProvider(),
+            settings=_operator_settings(),
+            operator_provider=first_provider,
+        )
+        .for_operator_request()
+        .respond(user_id="owner-1", request=request),
+    )
+
+    for disabled in [True, False]:
+        repository = AgentRepository()
+        repository.probe_result = CoachClaimResult(
+            state="completed",
+            remaining_requests=0,
+            response=persisted,
+            error=None,
+        )
+        repository.operator_dispatch_count = 15
+        operator = OperatorProvider()
+        operator.reserve_error = CoachProviderError(
+            "provider_busy",
+            "private busy detail",
+            retryable=True,
+        )
+        settings = (
+            Settings(_env_file=None, APP_ENV="staging", USE_MOCK_DATA=False)
+            if disabled
+            else _operator_settings()
+        )
+        replayed = asyncio.run(
+            _service(
+                repository=repository,
+                snapshot=SnapshotService(),
+                provider=AgentProvider(),
+                settings=settings,
+                operator_provider=None if disabled else operator,
+            )
+            .for_operator_request()
+            .respond(user_id="owner-1", request=request),
+        )
+        assert replayed == persisted
+        assert repository.claim_calls == []
+        assert operator.reserve_calls == 0
+        assert repository.operator_dispatch_calls == []
+
+
+def test_terminal_failure_and_conflict_resolve_before_operator_admission() -> None:
+    request = CoachAgentRequest(
+        contract_version="coach-request-v4",
+        request_id=uuid4(),
+        message="Compare my recorded patterns.",
+    )
+    terminal = AgentRepository()
+    terminal.probe_result = CoachClaimResult(
+        state="failed",
+        remaining_requests=0,
+        response=None,
+        error=CoachErrorDetail(
+            code="provider_timeout",
+            message="The original provider turn timed out.",
+            retryable=True,
+        ),
+    )
+    with pytest.raises(CoachServiceError) as failed:
+        asyncio.run(
+            _service(
+                repository=terminal,
+                snapshot=SnapshotService(),
+                provider=AgentProvider(),
+                settings=Settings(
+                    _env_file=None,
+                    APP_ENV="staging",
+                    USE_MOCK_DATA=False,
+                ),
+            )
+            .for_operator_request()
+            .respond(user_id="owner-1", request=request),
+        )
+    assert failed.value.detail.code == "provider_timeout"
+    assert terminal.claim_calls == []
+
+    conflict = AgentRepository()
+    conflict.probe_error = CoachPersistenceConflict("changed input")
+    operator = OperatorProvider()
+    with pytest.raises(CoachServiceError) as rejected:
+        asyncio.run(
+            _service(
+                repository=conflict,
+                snapshot=SnapshotService(),
+                provider=AgentProvider(),
+                settings=_operator_settings(),
+                operator_provider=operator,
+            )
+            .for_operator_request()
+            .respond(user_id="owner-1", request=request),
+        )
+    assert rejected.value.detail.code == "request_conflict"
+    assert operator.reserve_calls == 0
+    assert conflict.claim_calls == []
+
+
+def test_missing_operator_request_still_obeys_kill_switch_after_probe() -> None:
+    repository = AgentRepository()
+    service = _service(
+        repository=repository,
+        snapshot=SnapshotService(),
+        provider=AgentProvider(),
+        settings=Settings(
+            _env_file=None,
+            APP_ENV="staging",
+            USE_MOCK_DATA=False,
+        ),
+    ).for_operator_request()
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=CoachAgentRequest(
+                    contract_version="coach-request-v4",
+                    request_id=uuid4(),
+                    message="Compare my recorded patterns.",
+                ),
+            )
+        )
+
+    assert caught.value.detail.code == "provider_disabled"
+    assert len(repository.probe_calls) == 1
+    assert repository.claim_calls == []
 
 
 def test_snapshot_overflow_is_recorded_without_provider_call() -> None:
@@ -1189,7 +1900,7 @@ def test_history_accepts_stored_v2_turns_and_delete_keeps_usage_boundary() -> No
     history = asyncio.run(service.history(user_id="owner-1"))
     deleted = asyncio.run(service.delete_history(user_id="owner-1"))
 
-    assert history.contract_version == "coach-history-v3"
+    assert history.contract_version == "coach-history-v4"
     assert history.turns[0].response == response
     assert deleted.deleted is True
     assert repository.delete_calls == 1

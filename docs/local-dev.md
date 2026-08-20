@@ -3,9 +3,10 @@
 This remains the authority for supported workstation and loopback workflows.
 The intended Vercel + hosted Supabase + VPS FastAPI/Coach pilot, including
 public signup, HTTPS, `systemd`, release tags, and signed Android delivery, is
-owned by `docs/vps-pilot-release-plan.md` and remains mostly unimplemented by
-the commands below. The environment/key guards and adult-participation source
-are local repository foundations only. Do not use `APP_ENV=development`,
+owned by `docs/vps-pilot-release-plan.md`. Repository-side provider, VPS,
+release, signing, backup, environment/key, and adult-participation artifacts
+exist, but the commands below are still workstation-only and prove no live
+infrastructure. Do not use `APP_ENV=development`,
 `--reload`, `tmux`, or the local Codex start command as an Internet-facing
 deployment shortcut.
 
@@ -28,15 +29,22 @@ non-secret topology; hosted Supabase backend-key values remain platform
 secrets. The staging debug APK workflow reads GitHub Environment `staging`
 secrets into a mode-0600 temporary define file.
 
-The staging Render Blueprint pins the tested Python 3.12.3 runtime and the
-immutable Frankfurt service region; do not create the service from an older
-Blueprint that would fall back to Render's current defaults.
+Hosted Flutter sends the current `coach-request-v4`; local same-user Codex may
+retain the message-only V3 compatibility path. Both require exact provider
+selection semantics and never fall back.
+
+The staging Render Blueprint follows `main`, pins the tested Python 3.12.3
+runtime and immutable Frankfurt service region, derives `APP_BUILD_SHA` from
+Render's exact deployed commit, keeps every Coach provider disabled except
+request-scoped BYOK, and checks `/v1/ready`. It is a portability/staging path,
+not the subscription-backed VPS executor.
 
 Hosted Flutter builds use `scripts/write_hosted_flutter_defines.mjs` and fail
 before compiling unless `APP_ENV` is exactly `staging` or `pilot`,
 `USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, a compatible Supabase
 client key is present, and Supabase/FastAPI URLs are credential-free HTTPS
-roots. `PILOT_CONTACT_EMAIL` is also required and is rendered in the hosted
+roots. Exact `APP_BUILD_SHA`, `APP_RELEASE_TAG`, and `PILOT_CONTACT_EMAIL` are
+also required; Settings renders the identity/contact without exposing secrets.
 privacy notice. Staging binds to `STAGING_SUPABASE_PROJECT_REF` and may temporarily use
 the legacy anon key; pilot additionally requires a distinct
 `PILOT_SUPABASE_PROJECT_REF` and a current `sb_publishable_` key. Neither the
@@ -143,7 +151,8 @@ does not assume any user-local Codex skills.
 
 ## Prerequisites
 
-- Flutter SDK. Confirm with `flutter --version`.
+- Flutter 3.44 or newer with Dart 3.12 or newer. Confirm with
+  `flutter --version`.
 - Python 3.12+ for the AI service and static web fallback.
 - Node.js 20+ and npm for browser E2E. Confirm with `node --version` and
   `npm --version` in the Ubuntu shell.
@@ -333,9 +342,9 @@ independent send gate.
 `LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` must be supplied to both FastAPI
 and Flutter for the optional learned-timing control to become actionable.
 `scripts/start_frontend.sh` forwards it as a Dart define. The backend reads the
-same environment name. Flutter also forces the gate off for pilot and
-production builds,
-and the account preference remains off by default. A convenient local
+same environment name. FastAPI and Flutter both force the gate off for pilot;
+Flutter also rejects the reserved production label. The account preference
+remains off by default. A convenient local
 full-stack invocation is:
 
 ```bash
@@ -366,7 +375,10 @@ uvicorn app.main:app --reload --port 8000
 
 `pyproject.toml` owns direct compatibility ranges. `requirements.txt` is the
 hashed runtime lock, while local development and CI use the hashed
-`requirements-dev.txt` lock so pytest and Ruff are installed explicitly.
+`requirements-dev.txt` lock so pytest and Ruff are installed explicitly. The
+isolated analysis image separately owns exact direct inputs in
+`coach_analysis/requirements.in` and a complete hashed
+`coach_analysis/requirements.txt` lock.
 Installations use `--require-hashes` and therefore fail closed if an artifact
 does not match the reviewed lock. The canonical lock-update procedure is in
 `services/ai_service/README.md`; it requires Python 3.12, pinned
@@ -935,8 +947,9 @@ and date. It does not exercise FastAPI persistence or Flutter; deterministic
 API/browser tests cover those paths separately.
 
 This adapter is suitable for development, demo, and low local concurrency. It
-is not a production provider or mobile-to-Codex bridge and remains unavailable
-under `APP_ENV=production`.
+is not a hosted provider or mobile-to-Codex bridge and remains unavailable in
+exact `staging`/`pilot`; `APP_ENV=production` is itself invalid and fails
+startup.
 
 All Coach endpoints require the normal Supabase bearer token. Capability and
 history are read-only:
@@ -978,8 +991,9 @@ turn may be pending for an owner, and by default at most 20 new questions start
 per profile-local day. Tool calls do not consume extra question budget.
 
 `DELETE /v1/coach/history` remains body-free. It deletes conversation content
-and V3 evidence/trace detail while retaining usage and request tombstones, so it
-does not restore the daily budget. Legacy V1/V2 request/history,
+and V3/V4 evidence/trace detail while retaining usage, operator dispatch
+accounting, and request tombstones, so it does not restore either budget.
+Legacy V1-V3 request/history,
 context-options, and memory-selection endpoints remain only for older clients;
 the current Flutter Coach does not call or display them.
 
@@ -1084,7 +1098,8 @@ timezone revision read before import. Only an import with
 
 Debug builds use the normal Android debug signing path. Distributable release
 builds deliberately fail unless ignored `apps/mobile/android/key.properties`
-contains all four values below and `storeFile` resolves to a private keystore:
+contains all four values below and `storeFile` resolves to a private keystore,
+or CI supplies the complete `ANDROID_KEY*` environment set:
 
 ```properties
 storePassword=<secret>
@@ -1094,8 +1109,12 @@ storeFile=<path-to-keystore>
 ```
 
 Neither file belongs in Git. The repository never falls back to the debug key
-for a release. Installing a release also requires the remote Supabase redirect
-allowlist entry described above.
+for a release. `.github/workflows/pilot-release-apk.yml` builds only from an
+annotated pilot RC tag contained in `main`, verifies the signing certificate,
+and uploads a held checksummed candidate. It does not publish/install it and
+cannot run positively without the protected keystore secrets. See
+`apps/mobile/android/RELEASE_SIGNING.md`. Installing a release also requires
+the remote Supabase redirect allowlist entry described above.
 
 ## Supabase
 
@@ -1127,6 +1146,31 @@ Passing it neither applies pending
 SQL to the normal database nor authorizes a reset, remote mutation, or deploy.
 Inspect installed Supabase CLI help before any surrounding CLI command; use the
 repository harness as written rather than reconstructing flags.
+
+The Recommendation-retirement harness runs the complete chain on pinned
+Supabase PostgreSQL `15.8.1.085` and `17.6.1.113`, regardless of the normal
+local major. The PG17 lane models OID 10 as a separate bootstrap superuser and
+runs migrations as a non-superuser `postgres` role with `CREATEROLE`. It
+verifies PostgreSQL 16+'s automatic ADMIN-only role-creator membership, the
+complete pgTAP corpus, a full owner/ACL-preserving restore into a second PG17
+RAM-only target, and one deletion replay. Both images must already exist
+locally; verification does not silently install or upgrade Postgres. Fresh
+database CI obtains PG17 through the normal Supabase start and explicitly pulls
+the pinned PG15 tag before running this gate.
+
+The release backup workflow is intentionally narrower than this cross-version
+development proof: both disposable restore/reference templates pin PostgreSQL
+major 17 to match the hosted pilot generation, and restore verification rejects
+a source/target major mismatch. A future hosted-major change is separate
+compatibility work and requires a new real restore rehearsal.
+The encrypted payload includes the complete hosted `auth,storage` managed
+schema as well as the official custom-schema diff. Only the disposable restore
+workflow may replace its empty managed schemas from that capture. It clears the
+base image's transient creator defaults before application objects are created,
+then verifies effective ACL/RLS/RPC authority from catalogs. The independent
+schema-reference digest also compares ACL statements and remains strict, with only reviewed optional
+legacy removal and associative-parenthesis normalization for named legacy
+`CHECK` constraints.
 
 Supabase is optional for mock mode. To work on local Supabase you need the real
 Supabase CLI and Docker available in the Ubuntu shell.
@@ -1258,6 +1302,18 @@ Controlled Coach additionally requires:
 20260713230000_phase_10_onboarding_eligibility_guard.sql
 20260728120000_coach_longitudinal_context_v1.sql
 20260728160000_free_read_only_coach_agent_v1.sql
+20260815075711_coach_byok_provider_v1.sql
+20260815082606_coach_byok_completion_dispatch_v1.sql
+20260819185740_pilot_participation_v1.sql
+20260819203000_coach_operator_pilot_v1.sql
+20260820120000_coach_terminal_replay_probe_v1.sql
+20260820150000_pilot_participation_rls_gate_v1.sql
+20260820170000_account_deletion_recovery_v2.sql
+20260820183000_account_deletion_prepared_pending_guard_v2.sql
+20260820190000_hosted_database_contract_v1.sql
+20260820193000_coach_operator_utc_budget_v1.sql
+20260820194500_coach_operator_budget_period_v1.sql
+20260820200000_account_deletion_replayer_role_guard_v2.sql
 ```
 
 It creates backend-owned Coach request, usage, and memory-selection state;
@@ -1284,7 +1340,7 @@ V2 lifecycle/projection RPCs. The longitudinal Coach
 migration keeps exact V2 scope parameters and fixed-mode history compatible.
 The free-agent migration admits message-only V3 claims and V2 responses, stores
 backend-derived evidence, bounded tool trace/count, and service-tier truth,
-extends history deletion, and retains V1/V2 behavior. The latest Coach
+extends history deletion, and retains V1/V2 behavior. The July English-prompt
 migration admits V1/V2 free-agent prompt provenance and exposes the
 service-role-only rolling-safe V4 claim. The preceding three
 planning guards bind additive timing outside strict V1 payloads, keep
@@ -1294,6 +1350,12 @@ Learning migration adds the forced-RLS reflection, preference, and
 request-identity boundaries; its learned-planning follow-up adds immutable
 Planner/Deadline evidence provenance. A historical Recommendation follow-up
 installed atomic current-feed replacement; P7 later removes that RPC and table.
+The current operator migration then adds V4 Coach constraints, the V8 claim/V3
+completion writers, and a forced-RLS service-role-only append-only dispatch
+ledger with serialized global budget and startup reconciliation. It has not
+been applied to the normal local database merely because the file exists;
+normal verification remains inspection-only unless the user explicitly opts
+into `APPLY_MIGRATIONS=true` after reviewing local rows.
 The earlier small account-export grant gives
 only `service_role` the `lifestyle_entries` read authority required by the
 existing Account Export V1 table set. The account-delete

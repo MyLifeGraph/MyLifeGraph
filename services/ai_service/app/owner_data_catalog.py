@@ -11,6 +11,7 @@ class OwnerDataExportPolicy(StrEnum):
     INCLUDE = "include"
     INCLUDE_SANITIZED = "include_sanitized"
     OMIT_ANTI_REPLAY_LEDGER = "omit_anti_replay_ledger"
+    OMIT_DELETION_RECOVERY_LEDGER = "omit_deletion_recovery_ledger"
 
 
 class OwnerDataSnapshotPolicy(StrEnum):
@@ -124,13 +125,28 @@ def _anti_replay_ledger(
     )
 
 
+def _deletion_recovery_ledger(
+    name: str,
+    description: str,
+) -> OwnerDataCatalogEntry:
+    return OwnerDataCatalogEntry(
+        name=name,
+        description=description,
+        export_policy=OwnerDataExportPolicy.OMIT_DELETION_RECOVERY_LEDGER,
+        snapshot_policy=OwnerDataSnapshotPolicy.OMIT,
+        source=None,
+    )
+
+
 OWNER_DATA_CATALOG = (
     _shared(
         "profiles",
         "Account-level timezone, setup revision, and planning preferences.",
         "id,email,display_name,timezone,daily_preparation_budget_minutes,"
         "timezone_revision,preparation_budget_revision,role,auth_provider,"
-        "onboarding_completed_at,setup_revision,created_at,updated_at",
+        "onboarding_completed_at,setup_revision,"
+        "pilot_participation_notice_version,pilot_participation_accepted_at,"
+        "created_at,updated_at",
         owner_column="id",
         cursor_column="id",
     ),
@@ -269,7 +285,8 @@ OWNER_DATA_CATALOG = (
         "Retry-safe Coach request state and bounded response provenance.",
         "request_id,user_id,contract_version,context_scope,local_date,state,"
         "provider,provider_mode,model_requested,model_reported,model_source,"
-        "prompt_version,context_version,response,used_context,created_at,"
+        "prompt_version,context_version,provider_dispatch_required,response,"
+        "used_context,created_at,"
         "completed_at,failed_at,deleted_at,updated_at",
         sanitized_export=True,
         cursor_column="request_id",
@@ -281,6 +298,15 @@ OWNER_DATA_CATALOG = (
         "model_requested,model_reported,model_source,error_code,counters,created_at",
         sanitized_export=True,
         cursor_column="request_id",
+    ),
+    _anti_replay_ledger(
+        "coach_operator_daily_budgets",
+        "Backend-only user-independent UTC-day shared-provider budget ledger.",
+    ),
+    _anti_replay_ledger(
+        "coach_operator_dispatches",
+        "Backend-only shared-provider dispatch and reservation ledger; "
+        "owner-visible outcomes remain in coach_usage_events.",
     ),
     _export_only(
         "coach_memory_selections",
@@ -397,6 +423,10 @@ OWNER_DATA_CATALOG = (
         "learning_request_identities",
         "Personal Learning retry identity ledger.",
     ),
+    _deletion_recovery_ledger(
+        "account_deletion_intents",
+        "Backend-only minimal restore-safe account deletion ledger.",
+    ),
 )
 
 
@@ -405,7 +435,13 @@ if len(_catalog_names) != len(set(_catalog_names)):
     raise RuntimeError("Owner-data catalog contains duplicate tables.")
 if any(
     (entry.source is None)
-    != (entry.export_policy is OwnerDataExportPolicy.OMIT_ANTI_REPLAY_LEDGER)
+    != (
+        entry.export_policy
+        in {
+            OwnerDataExportPolicy.OMIT_ANTI_REPLAY_LEDGER,
+            OwnerDataExportPolicy.OMIT_DELETION_RECOVERY_LEDGER,
+        }
+    )
     or (entry.source is not None and entry.source.name != entry.name)
     or (
         entry.snapshot_policy is OwnerDataSnapshotPolicy.INCLUDE
@@ -419,8 +455,7 @@ if any(
 ACCOUNT_EXPORT_TABLES = tuple(
     entry.source
     for entry in OWNER_DATA_CATALOG
-    if entry.export_policy is not OwnerDataExportPolicy.OMIT_ANTI_REPLAY_LEDGER
-    and entry.source is not None
+    if entry.source is not None
 )
 ACCOUNT_EXPORT_TABLE_NAMES = tuple(table.name for table in ACCOUNT_EXPORT_TABLES)
 ACCOUNT_EXPORT_SANITIZED_TABLES = tuple(
@@ -429,9 +464,13 @@ ACCOUNT_EXPORT_SANITIZED_TABLES = tuple(
     if entry.export_policy is OwnerDataExportPolicy.INCLUDE_SANITIZED
 )
 ACCOUNT_EXPORT_OMITTED_TABLES = {
-    entry.name: "backend_only_anti_replay_ledger"
+    entry.name: (
+        "backend_only_anti_replay_ledger"
+        if entry.export_policy is OwnerDataExportPolicy.OMIT_ANTI_REPLAY_LEDGER
+        else "backend_only_restore_safe_deletion_ledger"
+    )
     for entry in OWNER_DATA_CATALOG
-    if entry.export_policy is OwnerDataExportPolicy.OMIT_ANTI_REPLAY_LEDGER
+    if entry.source is None
 }
 
 COACH_SNAPSHOT_TABLES = tuple(

@@ -42,7 +42,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(authControllerProvider).valueOrNull;
-    final config = ref.watch(appConfigProvider);
+    AppConfig? config;
+    try {
+      config = ref.watch(appConfigProvider);
+    } on StateError {
+      // Standalone widget tests and embedded previews may intentionally omit
+      // global bootstrap. A real app always supplies AppConfig; diagnostics
+      // stay secondary and fail closed when that owner is absent.
+      config = null;
+    }
     final profile = session?.profile;
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final themeSelection = ref.watch(appThemeSelectionProvider);
@@ -236,7 +244,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           title: 'Account and appearance',
           description: 'Export, deletion, device theme, and sign-out.',
         ),
-        if (config.requiresPilotParticipation)
+        if (config?.requiresPilotParticipation == true)
           AppCard(
             padding: EdgeInsets.zero,
             child: ListTile(
@@ -312,6 +320,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: _chooseAppearance,
           ),
         ),
+        if (config != null)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const ValueKey('build-identity-setting'),
+              leading: const Icon(AppIcons.infoOutline),
+              title: const Text('Build identity'),
+              subtitle: Text(
+                '${config.environment} · '
+                '${config.appReleaseTag.isEmpty ? 'development' : config.appReleaseTag} · '
+                '${config.appBuildSha.isEmpty ? 'development' : config.appBuildSha.length <= 12 ? config.appBuildSha : config.appBuildSha.substring(0, 12)}',
+              ),
+            ),
+          ),
         AppCard(
           child: SizedBox(
             width: double.infinity,
@@ -493,6 +515,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _confirmDeleteAccount() async {
+    final expectedUserId =
+        ref.read(authControllerProvider).valueOrNull?.profile.id;
+    if (expectedUserId == null) {
+      _showMessage('Your account identity is unavailable. Sign in again.');
+      return;
+    }
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => const _DeleteAccountDialog(),
@@ -504,7 +532,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final authNotice = ref.read(authNoticeProvider.notifier);
     setState(() => _isDeleting = true);
     try {
-      await accountRepository.deleteAccount();
+      await authController.prepareAccountDeletion();
+      if (ref.read(authControllerProvider).valueOrNull?.profile.id !=
+          expectedUserId) {
+        throw const AccountSettingsAccessException(
+          'Your account changed before deletion could start.',
+        );
+      }
+      final result = await accountRepository.deleteAccount(
+        expectedUserId: expectedUserId,
+      );
+      if (!result.journalDurable) {
+        authController.enterAccountDeletionRecovery(result);
+        authNotice.state = const AuthNotice(
+          'Deletion is paused before the recovery journal was confirmed. Retry from the deletion recovery screen; your account stays signed in for that retry.',
+          isError: true,
+        );
+        if (mounted) setState(() => _isDeleting = false);
+        return;
+      }
+      authNotice.state = AuthNotice(
+        result.isCompleted
+            ? 'Account and saved synced data deleted.'
+            : 'Deletion was durably accepted and will finish in the background.',
+      );
     } on AccountRecentAuthenticationRequiredException {
       if (mounted) {
         _showMessage(
@@ -514,14 +565,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
       return;
     } on AccountDeletionOutcomeUnknownException {
-      authNotice.state = const AuthNotice(
-        'Deletion could not be confirmed. Sign in again; if the account remains, retry deletion.',
-        isError: true,
-      );
       try {
-        await authController.finalizeDeletedAccount();
+        final recovery = await authController.retryAccountDeletion();
+        authNotice.state = AuthNotice(
+          recovery?.journalDurable == true
+              ? 'Deletion was durably accepted. Finish sign-out from the recovery screen.'
+              : 'Deletion could not yet be confirmed. Retry the same request from the recovery screen.',
+          isError: recovery?.journalDurable != true,
+        );
       } catch (_) {
-        // The controller still clears the local session in its finally block.
+        authNotice.state = const AuthNotice(
+          'Deletion could not yet be confirmed. Reopen the app while signed in to retry the same request.',
+          isError: true,
+        );
       }
       if (mounted) setState(() => _isDeleting = false);
       return;
@@ -532,11 +588,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (mounted) setState(() => _isDeleting = false);
       return;
     }
-    authNotice.state = const AuthNotice(
-      'Account and saved synced data deleted.',
-    );
     try {
-      await authController.finalizeDeletedAccount();
+      await authController.finalizeDeletedAccount(
+        coachCredentialsAlreadyCleared: true,
+      );
     } catch (_) {
       if (mounted) {
         _showMessage(
@@ -630,17 +685,26 @@ class _CoachByokSettingsCardState
       );
     }
     final selected = credentials.provider;
-    final input = selected == CoachProviderName.openai
-        ? _openAiController
-        : _geminiController;
-    final hasKey = credentials.hasKey(selected);
+    final isByok = const {
+      CoachProviderName.openai,
+      CoachProviderName.gemini,
+    }.contains(selected);
+    final input = selected == CoachProviderName.gemini
+        ? _geminiController
+        : _openAiController;
+    final hasKey = selected != null && isByok && credentials.hasKey(selected);
+    final subtitle = selected == CoachProviderName.operatorCodexPilot
+        ? 'Project Coach selected; no personal API key required.'
+        : isByok
+            ? 'Personal API-key provider selected.'
+            : 'Choose Project Coach or use your own API key.';
     return AppCard(
       padding: EdgeInsets.zero,
       child: ExpansionTile(
         key: const ValueKey('settings-coach-provider'),
         leading: const Icon(AppIcons.forumOutlined),
         title: const Text('Coach'),
-        subtitle: const Text('Read-only Coach and provider keys.'),
+        subtitle: Text(subtitle),
         childrenPadding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
           0,
@@ -651,15 +715,22 @@ class _CoachByokSettingsCardState
           DropdownButtonFormField<CoachProviderName>(
             key: const ValueKey('coach-provider-selection'),
             initialValue: selected,
-            decoration: const InputDecoration(labelText: 'Provider'),
+            decoration: const InputDecoration(
+              labelText: 'Coach mode',
+              hintText: 'Choose a mode',
+            ),
             items: const [
               DropdownMenuItem(
+                value: CoachProviderName.operatorCodexPilot,
+                child: Text('Project Coach'),
+              ),
+              DropdownMenuItem(
                 value: CoachProviderName.openai,
-                child: Text('OpenAI'),
+                child: Text('Use my OpenAI key'),
               ),
               DropdownMenuItem(
                 value: CoachProviderName.gemini,
-                child: Text('Gemini'),
+                child: Text('Use my Gemini key'),
               ),
             ],
             onChanged: credentials.busy
@@ -670,56 +741,74 @@ class _CoachByokSettingsCardState
                     }
                   },
           ),
-          const SizedBox(height: AppSpacing.sm),
-          TextField(
-            key: ValueKey('coach-key-${selected.code}'),
-            controller: input,
-            obscureText: true,
-            enableSuggestions: false,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: hasKey ? 'Replacement API key' : 'API key',
-              helperText: hasKey
-                  ? 'A tested key is saved on this device.'
-                  : 'No key is saved for this provider.',
+          if (selected == CoachProviderName.operatorCodexPilot) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'The project VPS creates a temporary read-only snapshot of your '
+              'app data. Restricted Coach tools send your question and only '
+              'the results they query to the shared pilot Codex account. It '
+              'has limited shared capacity: '
+              'up to 5 turns per account and 15 dispatched turns in total per '
+              'UTC day. Busy or unavailable never falls back to your key.',
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              FilledButton(
-                key: const ValueKey('coach-key-test-save'),
-                onPressed: credentials.busy
-                    ? null
-                    : () async {
-                        final saved = await ref
-                            .read(coachCredentialsProvider.notifier)
-                            .testAndSave(selected, input.text);
-                        if (saved && context.mounted) {
-                          input.clear();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Provider key tested and saved.'),
-                            ),
-                          );
-                        }
-                      },
-                child: Text(hasKey ? 'Test and replace' : 'Test and save'),
+          ] else if (isByok) ...[
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              key: ValueKey('coach-key-${selected!.code}'),
+              controller: input,
+              obscureText: true,
+              enableSuggestions: false,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: hasKey ? 'Replacement API key' : 'API key',
+                helperText: hasKey
+                    ? 'A tested key is saved on this device.'
+                    : 'No key is saved for this provider.',
               ),
-              if (hasKey)
-                OutlinedButton(
-                  key: const ValueKey('coach-key-delete'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                FilledButton(
+                  key: const ValueKey('coach-key-test-save'),
                   onPressed: credentials.busy
                       ? null
-                      : () => ref
-                          .read(coachCredentialsProvider.notifier)
-                          .delete(selected),
-                  child: const Text('Delete key'),
+                      : () async {
+                          final saved = await ref
+                              .read(coachCredentialsProvider.notifier)
+                              .testAndSave(selected, input.text);
+                          if (saved && context.mounted) {
+                            input.clear();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Provider key tested and saved.'),
+                              ),
+                            );
+                          }
+                        },
+                  child: Text(hasKey ? 'Test and replace' : 'Test and save'),
                 ),
-            ],
-          ),
+                if (hasKey)
+                  OutlinedButton(
+                    key: const ValueKey('coach-key-delete'),
+                    onPressed: credentials.busy
+                        ? null
+                        : () => ref
+                            .read(coachCredentialsProvider.notifier)
+                            .delete(selected),
+                    child: const Text('Delete key'),
+                  ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'Select a mode explicitly. The app never switches providers '
+              'after an error.',
+            ),
+          ],
           if (credentials.error case final error?) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -738,9 +827,10 @@ class _CoachByokSettingsCardState
             ),
           ),
           Text(
-            'Provider requests may cost money. Relevant results from your '
-            'read-only Coach query are sent to the selected provider. On web, '
-            'keys exist only in this tab and are cleared by reload.',
+            'Personal provider requests may cost money. Relevant results from '
+            'your read-only Coach query are sent only to the mode you select. '
+            'On web, personal keys exist only in this tab and are cleared by '
+            'reload.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

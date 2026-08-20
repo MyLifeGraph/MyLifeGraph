@@ -1,9 +1,9 @@
 # Daily Briefing Implementation Plan
 
-Coach BYOK V3 does not change Daily Briefing authority: cloud tools may read
-the authenticated owner's bounded projection, but neither provider may create
+Coach V4 does not change Daily Briefing authority: provider tools may read
+the authenticated owner's bounded projection, but no provider may create
 or mutate briefings, recommendations, feedback, or any other product record.
-The current Coach projection boundary is `coach-response-v3` with
+The current Coach projection boundary is `coach-response-v4` with
 `free-coach-agent-prompt-v5`.
 
 Status: historical phase plan with a current product-disposition summary,
@@ -1682,8 +1682,8 @@ Goal:
 
 Implemented:
 
-- Added authenticated `coach-request-v3`, `coach-response-v3`,
-  `coach-capabilities-v3`, `coach-history-v3`, history deletion, and SSE
+- Added authenticated `coach-request-v4`, `coach-response-v4`,
+  `coach-capabilities-v5`, `coach-history-v4`, history deletion, and SSE
   lifecycle contracts with one in-flight request per owner, a retained
   profile-local daily question budget, and safe feature flags.
 - Replaced Today/Patterns/Focus/Review, horizons, Focus selection, prompt
@@ -1697,13 +1697,13 @@ Implemented:
 - Reuses Account Export's 10,000-per-table, 50,000-total, and 8 MiB limits and
   reports overflow instead of truncating.
 - Gives request-scoped OpenAI/Gemini BYOK providers bounded catalog-inspection
-  and immutable-SQL results without the SQLite file. Private local Codex uses
-  one required per-turn stdio MCP and additionally receives Python in a
+  and immutable-SQL results without the SQLite file. Local/operator Codex use
+  one required per-turn stdio MCP and additionally receive Python in a
   no-network, non-root, read-only Docker sandbox. A turn has 12 tools/180
   seconds; SQL/Python have shorter limits. Internal plots are temporary and
   never visible.
-- Lets the agent answer directly, combine queries, use Python only through the
-  private local adapter, test or correct a premise, explain absent information,
+- Lets the agent answer directly, combine queries, use Python only through a
+  Codex adapter, test or correct a premise, explain absent information,
   or ask a concise question. Stored free text is untrusted data, never
   instructions.
 - Adds deterministic pre/post wellness safety boundaries, urgent provider
@@ -1712,10 +1712,11 @@ Implemented:
 - Adds request-scoped OpenAI `gpt-5.6-terra` and Gemini
   `gemini-3.6-flash` user-key adapters plus an injectable
   `local_codex_oauth` provider that invokes the current Linux/WSL user's
-  explicitly enabled, already authenticated Codex CLI. Keys and OAuth state are
-  not persisted, and no provider falls back to another.
-- Requires `gpt-5.5`, `service_tier="fast"`, and Fast mode on every private
-  local Codex turn. Model/tier rejection fails honestly with no model or
+  explicitly enabled, already authenticated Codex CLI, plus a default-off
+  `operator_codex_pilot` path through a separate peer-UID executor. Keys and
+  OAuth state are not persisted by FastAPI, and no provider falls back.
+- Requires `gpt-5.5`, `service_tier="fast"`, and Fast mode on every Codex turn.
+  Model/tier rejection fails honestly with no model or
   standard-tier fallback.
 - Derives conservative accessed-source coverage, agent tool trace, snapshot
   size, and provider/model/tier provenance from actual backend execution;
@@ -1725,13 +1726,14 @@ Implemented:
 - Streams safe lifecycle activity and supports cancellation without showing
   hidden reasoning. Temporary snapshot, scripts, plots, and workspaces are
   removed after every terminal path.
-- Keeps compatible V1/V2 response history and legacy context/memory routes
-  readable while current Flutter uses request/response/capability/history V3.
+- Keeps compatible V1-V3 response history and legacy context/memory routes
+  readable while current Flutter uses request/response/capability/history V4.
   The newest legacy fixed-mode provenance pair remains
   `controlled-coach-prompt-v3`/`coach-context-v3`.
 - Adds database follow-up guards for exact provider-call safety provenance,
   owner-first Coach lock order, backend-owned profile identity and onboarding
-  eligibility, canonical-only role authority, and V3 evidence/trace/tier truth.
+  eligibility, canonical-only role authority, V4 evidence/trace/tier truth,
+  pre-stream admission, and durable operator dispatch accounting.
 
 Current evaluation boundary:
 
@@ -1742,8 +1744,8 @@ Current evaluation boundary:
   authority?
 - Are all state-changing suggestions plain text and explicitly non-executable?
 - Does Coach add value beyond the existing briefing instead of restating it?
-- Do OpenAI/Gemini BYOK and private local Codex each expose only their declared
-  tools and preserve the no-fallback/key-retention boundary?
+- Do OpenAI/Gemini BYOK, private local Codex, and Project Coach each expose only
+  their declared tools and preserve the no-fallback/key-retention boundary?
 - Can two Linux developers use their own eligible Codex logins without copying
   credentials while disabled/login/model/Fast/image failures remain honest?
 

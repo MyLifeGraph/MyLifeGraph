@@ -35,8 +35,12 @@ cp "$SOURCE_ROOT/scripts/lib/local_supabase_migrations.sh" \
   "$REPO/scripts/lib/local_supabase_migrations.sh"
 cp "$SOURCE_ROOT/services/ai_service/coach_analysis/Dockerfile" \
   "$REPO/services/ai_service/coach_analysis/Dockerfile"
+cp "$SOURCE_ROOT/services/ai_service/coach_analysis/requirements.txt" \
+  "$REPO/services/ai_service/coach_analysis/requirements.txt"
 cp "$SOURCE_ROOT/services/ai_service/coach_analysis/runner.py" \
   "$REPO/services/ai_service/coach_analysis/runner.py"
+cp "$SOURCE_ROOT/services/ai_service/app/analysis_image.py" \
+  "$REPO/services/ai_service/app/analysis_image.py"
 touch "$REPO/services/ai_service/app/ops/local_daily_refresh.py"
 chmod 700 \
   "$REPO/scripts/start_local_stack.sh" \

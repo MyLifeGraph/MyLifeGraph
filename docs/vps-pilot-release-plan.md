@@ -89,76 +89,79 @@ risk without describing the path as approved or generally production-ready.
 | App access | Public self-signup, email/password plus optional Google | There is no invite flow, account allowlist, or three-user hard cap. CAPTCHA and rate limits control abuse. |
 | BYOK | OpenAI and Gemini keys supplied by the user | A key stays out of Postgres and server logs. An invalid BYOK turn fails as that provider and never changes provider automatically. |
 | Supabase application credentials | Migrate hosted clients/backends to current publishable and secret keys in a focused compatibility change | Flutter receives only a publishable key. API and backup components receive distinct backend secret keys where supported. Database grants may still name PostgreSQL role `service_role`; legacy key names remain compatibility-only until every caller is verified and rotation is separately authorized. |
-| Shared Coach | Explicit proposed provider `operator_codex_pilot` | It is a first-class user choice, not a fallback. It has independent gates, budgets, concurrency, disclosure, and a kill switch. |
+| Shared Coach | Explicit default-off provider `operator_codex_pilot` | It is a first-class user choice, not a fallback. Repository contracts enforce independent gates, budgets, concurrency, disclosure, and a kill switch; live approval remains external. |
 | Initial process model | One Uvicorn worker, one narrow Unix-socket executor, and one admitted shared-provider turn | Admission is reserved before HTTP/SSE commitment. Capacity is raised only after measurement or a cross-process coordinator. |
 | Source of releases | Protected `main` plus an annotated tag | The VPS never deploys a mutable development branch. |
 | Future host move | Preserve a stable `api.<domain>` boundary | Render migration changes DNS and secrets/configuration rather than the app-facing API URL or database. |
 
-The proposed provider and setting names in this plan are design placeholders.
-They do not exist until the corresponding implementation changes, contracts,
-tests, migration, and documentation are merged.
+The provider and setting names in this plan now exist in the working tree and
+are synchronized across Flutter, FastAPI, migration source, tests, and owner
+documentation. They remain default off and are not deployment evidence until
+the reviewed change reaches protected `main` and every live gate passes.
 
 ## Current Evidence And No-Go Findings
 
 ### Repository state
 
-The current repository already contains the Flutter client, authenticated
-FastAPI routes, hosted Supabase configuration boundaries, Vercel build support,
-a Render blueprint, BYOK OpenAI/Gemini adapters, the development-only Codex
-adapter, deterministic fake-provider tests, and extensive local verification.
+The current repository contains the Flutter client, authenticated FastAPI
+routes, hosted Supabase configuration boundaries, Vercel/Render portability,
+BYOK OpenAI/Gemini adapters, the development-only Codex adapter, the
+default-off operator executor, tagged VPS/rollback artifacts, signed-APK and
+encrypted-backup workflows, deterministic tests, and extensive local
+verification.
 The current product truth is documented in
 [Current Product Guide](current-product-guide.md), and exact dated test evidence
 lives only in [Current Verified Baseline](verification.md#current-verified-baseline).
 
-The following gaps make the current checkout a no-go for the target topology:
+The earlier code-level blockers are closed in the working tree: hosted Flutter
+can explicitly select Project Coach without a key; V4/CORS/`Retry-After` are
+synchronized; admission precedes SSE; local/global budgets and ambiguous-
+dispatch replay are durable; FastAPI and executor use different UIDs and a
+peer-authenticated bounded socket; and repository templates cover Caddy,
+`systemd`, exact Codex installation, source manifests, atomic promotion/
+rollback, logs, disk monitoring, signed APK creation, and encrypted logical
+backup. The same-user `local_codex_oauth` remains development-only by design;
+the hosted path never weakens that guard.
 
-1. Hosted Flutter rejects a Coach turn without user BYOK credentials before it
-   reaches FastAPI.
-2. `local_codex_oauth` reports unavailable outside exactly
-   `APP_ENV=development`; running an Internet-facing VPS as development would
-   be a false and unsafe workaround.
-3. FastAPI CORS does not currently allow both Coach BYOK request headers, so a
-   real browser preflight can reject otherwise valid BYOK requests.
-4. The Codex provider requires the analysis image and Docker for the mandatory
-   Python tool. The described VPS login currently has no usable Docker socket.
-5. The repository has no VPS reverse-proxy, service-manager, install, update,
-   rollback, log-retention, or backup/rebuild artifacts.
-6. DNS, firewall, service accounts, `/etc`, Caddy, and `systemd` require an
-   administrator; the described `agent` account has no `sudo` authority.
-7. Public signup has not yet been protected with a verified hosted CAPTCHA and
-   release-day Auth configuration.
-8. The shared subscription provider lacks a persisted global budget, an honest
-   busy response, public-pilot disclosure, and a hosted contract.
-9. Current CI is not yet a complete tag-to-VPS/signed-APK release process, and
-   the existing Android workflow creates a debug artifact rather than the
-   final signed package.
-10. Running FastAPI, Codex OAuth, and rootless Docker under one UID would let a
-    compromised Internet-facing API process reach both the OAuth store and the
-    container daemon while it also holds the Supabase service-role key. Mode
-    `0700` and a child-process environment allowlist do not isolate one process
-    from another process with the same UID.
-11. No independently controlled public domain has been selected, so stable API
-    HTTPS, branded Vercel routing, and authenticated SMTP sender records cannot
-    yet pass their release gates.
-12. The inspected Supabase target is staging. A distinct real-data pilot
-    project, its current keys, Auth configuration, limits, and redirects have
-    not been created, assigned, or inspected.
-13. Repository configuration now supports current Supabase publishable/secret
-    keys, exact staging/pilot project-ref binding, pilot current-key
-    enforcement, and crossover denial with bounded legacy compatibility.
-    Remote pilot-project assignment, current-key configuration/rotation, and
-    release evidence still do not exist.
-14. The working tree now contains the versioned staging-only scenario
-    generator, adult-participation contract/profile migration/backend gate,
-    Flutter pre-signup and post-auth surfaces, and persistent staging identity.
-    The generator hard-allowlists only the reviewed staging ref, binds a
-    15-minute one-use confirmation to the exact run/scenarios/identities,
-    records exact Auth UUIDs in an ignored mode-0600 receipt, and verifies
-    bounded cleanup. None of their normal local-database, complete affected,
-    confirmed remote, or deployment gates is yet evidence.
+The checkout is still a no-go for public promotion until these non-repository
+or intentionally deferred gates close:
 
-These are implementation tasks, not suggestions to weaken the current
-development-only guards.
+1. `ops` must create the three runtime/deploy users plus the locked
+   `mylifegraph-build` preparation identity, install/configure Caddy and the
+   units, install rootless Docker only for `coach-executor`, apply firewall/SSH
+   policy, and pass permission/reboot/live rollback checks on the actual VPS.
+2. An independently controlled domain, DNS, valid HTTPS, custom SMTP, CAPTCHA
+   widget/site key, Auth throttles, email flows, and exact Google web/Android
+   redirects must be selected and verified. No domain/widget exists yet, so
+   local CAPTCHA code is wired only to fail-closed hosted variables; no source
+   claim substitutes for creating and verifying the real widget/domain.
+3. A distinct real-data pilot Supabase project, current publishable/secret
+   keys, reviewed migrations, RLS/grants, and two-user isolation must be
+   created/applied through an explicitly authorized remote operation. The
+   inspected project remains staging and currently stops at
+   `20260815082606`.
+4. Shared-subscription account/terms and privacy approval plus an executor-user
+   Codex login/model/Fast/multi-tool live smoke must pass before the operator
+   flag is enabled.
+5. Android positive signing needs the private keystore/secrets and a physical
+   device; repository tests prove only fail-closed configuration and a debug
+   build.
+6. Backup needs a separately owned encrypted object store, credentials,
+   heartbeat monitor, actual isolated database restore, and a real
+   `account-deletion-journal-v2` bucket/KMS/Object-Lock policy. The versioned
+   export/replay/watermark design exists in source, but until it passes against
+   those external resources an old backup cannot reopen a participant-facing
+   environment.
+7. Vercel held-candidate/manual-promotion settings, branch protection, the
+   annotated RC/final tags, exact artifact set, external monitoring, and the
+   final professor handoff require authorized remote actions and named owners.
+
+The staging-only scenario generator and adult-participation flow are
+implemented in source. The normal-local migration, complete captured-base
+affected gate, and local browser suite now pass; confirmed remote and
+deployment gates remain evidence requirements. None of the remaining items is
+permission to run an Internet service as development or to weaken the
+fail-closed guards.
 
 ### Dated remote Supabase evidence
 
@@ -266,12 +269,15 @@ reach registration. It does not mean unmetered provider use.
   verified bearer token.
 - Preserve RLS and service-role-only mutation boundaries.
 - Keep account export and confirmed deletion accessible and honest.
-- Require one deliberate 18-or-older acceptance before account creation. Store
-  the pending choice only in the current client flow; after Supabase has issued
-  the account and before Setup or any product read/write, commit the accepted
-  notice version and UTC time through a bearer-derived FastAPI command into a
-  backend-owned record. Do not use editable Auth `user_metadata` as eligibility
-  authority and do not collect a date of birth merely for this pilot.
+- Require one deliberate 18-or-older acknowledgement before account creation
+  or Google OAuth, but never persist that pre-auth choice. An immediately
+  authenticated email signup may commit it in the same verified session;
+  confirmation-link and OAuth returns must confirm again through the post-auth
+  gate. Before Setup or any product read/write, store the accepted notice
+  version and UTC time through a bearer-derived FastAPI command and enforce the
+  default-off, exact-project `pilot-participation-gate-v1` restrictive RLS
+  boundary. Do not use editable Auth `user_metadata` as eligibility authority
+  and do not collect a date of birth merely for this pilot.
 - Treat a synced account as ordinary real use: empty reads stay empty and no
   targeted synthetic persona is silently inserted into a participant account.
 
@@ -477,6 +483,13 @@ must not become an operator secret.
 The following work is done and reviewed on developer machines before any VPS
 configuration becomes the primary debugging environment.
 
+Working-tree status on 2026-08-20: sections 0-5, hosted Turnstile acquisition,
+and restore-safe deletion intent/journal/export/replay/watermark are implemented
+in repository source. Real widget/domain/provider configuration, object storage,
+an actual encrypted restore/replay, the complete captured-base gates, and
+independent final review remain open. Nothing in this status claims a remote
+migration or deployment.
+
 ### 0. Establish environment, key, participation, and fixture foundations
 
 Working-tree status on 2026-08-19: the environment/key boundary, visible
@@ -583,16 +596,24 @@ release-mode build exposes only the intended pilot behavior.
   or claim failure releases the unused reservation without dispatch. Test that
   exact safety, busy, first-claim, simultaneous-retry, and terminal-replay order.
 - Persist a global shared-provider budget or otherwise prove that restart and
-  concurrency cannot bypass it.
+  concurrency cannot bypass it. Keep its UTC-day count user-independent so
+  account deletion removes personal dispatch linkage without returning global
+  capacity for that day.
 - After admission and request claim but before the socket dispatch, persist one
   append-only global dispatch/reservation identity and consume its budget
   conservatively. Executor tokens are one-use; startup reconciles an expired
   claimed dispatch to an interrupted terminal request, so the same request id
-  cannot cause a second provider call after an ambiguous crash.
+  cannot cause a second provider call after an ambiguous crash. Confirm the
+  owner-visible completion/failure first and terminalize the private dispatch
+  second; an ambiguous persistence response leaves it open for reconciliation.
 - Start with one Uvicorn worker. The separate executor or another durable
   cross-process authority owns shared-provider reservations; an opaque
   short-lived reservation is consumed once by execution and released on every
   replay, validation, disconnect, timeout, and failure path.
+- Keep the executor `reserve` frame capacity-only: no Codex/model/login/image
+  probe may delay it. FastAPI bounds the entire pre-stream reservation to one
+  second; the separate readiness check runs only after admission and before
+  durable dispatch.
 - Bind each reservation to one executor process/cgroup and a 240-second
   fail-safe lease around the 180-second turn limit. API/executor crash, socket
   loss, or reboot must kill/reap the child and make the slot reusable without
@@ -613,7 +634,10 @@ zero secret leakage or busy-budget consumption.
 ### 4. Package the analysis sandbox safely
 
 - Retain a pinned, versioned analysis image and validate its revision at
-  executor capability startup, not core FastAPI liveness.
+  executor capability startup, not core FastAPI liveness. Derive an immutable
+  release-specific tag from the path-independent source revision, load it from
+  a generated release environment after mutable host configuration, and keep
+  the prior release image for rollback.
 - Run containers rootless only under the dedicated `coach-executor` user.
 - Never expose or mount the rootless daemon socket to FastAPI or an
   Internet-facing container.
@@ -740,6 +764,20 @@ Configure `main` so that:
 - unresolved conversations block merge; and
 - administrators do not routinely bypass the rules.
 
+Configure tag and Actions-environment authority separately; branch protection
+does not protect a workflow loaded from an arbitrary tagged commit:
+
+- a repository ruleset covers `v*-pilot.*-rc.*` and `v*-pilot.*`, permits tag
+  creation only for named release owners from a commit already contained in
+  protected `main`, and blocks tag update and deletion;
+- the `pilot-release` environment accepts only those protected tag patterns and
+  requires the other developer's approval before signing secrets are released;
+- the `pilot-backup` environment accepts deployments only from protected
+  `refs/heads/main` and requires the other developer's approval before DB,
+  Management API, Restic, AWS, or journal-read secrets are released; and
+- export/screenshots of the branch ruleset, tag ruleset, environment deployment
+  branches/tags, and required reviewers are retained with release evidence.
+
 Repository source can describe this policy but cannot prove remote GitHub
 settings. Record a release-day screenshot or settings export as external
 evidence.
@@ -754,7 +792,8 @@ that do not yet exist:
    annotated RC tag such as
    `v0.1.0-pilot.1-rc.1` on the exact `main` SHA. Never move or reuse it.
 2. Publish a source manifest for that RC: Git SHA/tag, current contract and
-   migration references, intended toolchain/lock identities, target project/API
+   the content-hashed migration inventory plus its ordered identity
+   head/count/digest, intended toolchain/lock identities, target project/API
    identifiers, and the source-gate results. It does not claim artifact hashes
    or deployment ids yet.
 3. Build the VPS release, Vercel candidate deployment, signed APK, SBOM, and
@@ -783,6 +822,13 @@ from. They are not rebuilt merely to replace that label with the later final
 tag. The signed final attestation maps the final tag on the same SHA to those
 exact RC-labelled artifacts and checksums.
 
+The API receives that immutable migration prefix as generated
+`APP_MIGRATION_*` release identity. Its `hosted-database-contract-v1`
+readiness check rejects a missing or renamed intermediate migration even when
+the maximum filename is unchanged. Promotion checks the target prefix and the
+full applied database identity; an older compatible app rollback is accepted
+only when its complete prefix still exists unchanged in the DB-ahead history.
+
 The VPS is not automatically deployed from a mutable branch. Before the final
 accumulated promotion into `main`, externally verify that Vercel cannot
 automatically assign the production domain to the merge. Build the RC candidate
@@ -801,8 +847,9 @@ administrator must perform privileged host changes.
 
 - Reconfirm OS, CPU, RAM, free disk, swap, time synchronization, IPv4/IPv6,
   open ports, and existing services.
-- Create three separate tightly scoped identities: a `deploy` owner for
-  immutable release directories/symlink promotion, a `mylifegraph-api` user for
+- Create three separate tightly scoped identities: a `deploy` operator that can
+  invoke only one root-owned promotion helper but owns neither releases nor
+  symlinks, a `mylifegraph-api` user for
   FastAPI with read-only release access and the backend environment, and a
   `coach-executor` user for Codex OAuth/rootless containers. Do not run FastAPI
   as `root`, `ops`, the deployment owner, executor, or a general interactive
@@ -811,7 +858,9 @@ administrator must perform privileged host changes.
 - Create and permission release, configuration, runtime state, temporary, and
   log directories. The API user may write only bounded API temp/runtime state;
   the executor may write only its Codex home, rootless container state, and
-  bounded per-turn temp. Neither may modify a release.
+  bounded per-turn temp. `ops` seals prepared trees as
+  `root:mylifegraph-release` without write bits; deploy, API, and executor may
+  not modify a release.
 - Provide rootless Docker only for `coach-executor`. A host-root daemon or an
   API-readable daemon socket leaves the full evaluation profile No-Go.
 - Ensure the executor's rootless daemon and required user-session/linger boundary
@@ -826,8 +875,9 @@ administrator must perform privileged host changes.
   to `127.0.0.1`; never open 8000 publicly.
 - Harden SSH to keys and disable root/password login only after a second
   administrative session has proved access, avoiding lockout.
-- Install the reviewed `systemd` units and limited administrative permissions
-  needed for deploy/restart, without granting general sudo.
+- Install the reviewed `systemd` units and one sudo rule for the root-owned,
+  fail-closed promotion helper. Do not grant deploy direct `systemctl`, link,
+  release-directory, shell, or general sudo authority.
 - Install/rotate a FastAPI environment file readable only by root and
   `mylifegraph-api`. The executor unit receives a separate non-secret/allowlisted
   environment and no Supabase, scheduler, BYOK, or application credentials.
@@ -842,9 +892,25 @@ administrator must perform privileged host changes.
 
 ### Deployment and runtime-user tasks
 
-- The deployment owner obtains the exact tagged source without ignored local
-  build directories, verifies the tag/manifest, creates the release-local
-  Python 3.12 environment, and installs the committed hashed runtime lock.
+- The deployment owner obtains and independently verifies the exact tagged
+  source without ignored local build directories. `ops` obtains expected
+  transport hashes through an independent trusted channel, installs the
+  archive and manifest as single-link `root:root` mode-0400 files below the
+  root-owned mode-0700 `/srv/mylifegraph/incoming`, and verifies those copies.
+  The deploy user can neither read nor replace them. `ops` performs the privileged
+  preparation only through the root-owned installed
+  `/usr/local/libexec/mylifegraph/prepare_release.sh`, never through an uploaded
+  or deploy-writable checkout. A separately installed root-owned helper derives
+  the analysis-image hash without executing candidate code. Candidate Python,
+  dependency tooling, compilation, and import smoke tests run only as the
+  locked, no-home, no-supplementary-group `mylifegraph-build` account under a
+  clean environment and empty capability set in a separate mode-0710 workspace
+  that cannot traverse the release tree. Archive-derived source, migrations,
+  manifest, and generated identity remain root-owned/read-only; only the
+  pre-created virtualenv and detached bytecode cache are build-writable. The
+  helper terminates and checks for leftover build-UID processes, then computes the
+  complete canonical tree seal and makes the tree root-owned/read-only before
+  returning control to `deploy`.
 - The executor user builds or loads the pinned rootless analysis image through
   the reviewed helper and runs its preflight.
 - The executor user proves the configured absolute Codex binary path, exact
@@ -856,11 +922,21 @@ administrator must perform privileged host changes.
   tokens.
 - Deployment preflight verifies only that the API unit can read a correctly
   permissioned environment file and that the executor cannot; it neither reads
-  nor installs secret values.
-- The deployment owner runs offline release preflight, atomically switches the
-  `current` symlink, restarts through the narrow allowed unit, polls loopback
-  and public HTTPS readiness, and performs the defined switch-back plus second
-  restart if readiness fails.
+  nor installs secret values. It does require the closed backend environment to
+  be exact `APP_ENV=pilot`; unknown/case/whitespace values cannot fall through
+  hosted participation, project, release, or provider checks.
+- The privileged permission proof resolves the real UIDs and rejects drift in
+  the executor peer UID, rootless socket owner/path, mutable image selection,
+  generated release-image identity, or runtime write access to releases.
+- The deployment owner runs offline release preflight and invokes the installed
+  root-owned helper. That helper derives the public origin from root-owned
+  Caddy configuration, re-verifies the candidate and current tree seals,
+  atomically switches the root-owned `current` symlink, restarts only the fixed
+  API/executor units, verifies every systemd operation plus loopback/public
+  HTTPS readiness, and treats every failure after the attempted link switch as
+  one rollback transaction. It re-verifies the prior seal before the defined
+  switch-back plus second restart; if rollback itself cannot be proved, it
+  stops API, executor, and socket and removes a first-deploy candidate link.
 - Retain the previous release until the observation window closes.
 
 Codex installed under a different account is not sufficient evidence. The
@@ -910,6 +986,9 @@ The versioned Caddy configuration must:
   least 60 seconds;
 - preserve `Cache-Control: no-cache, no-store` and stream cancellation;
 - set safe request/body/header limits without truncating supported calls;
+- configure FastAPI with exactly one canonical HTTPS browser origin; hosted
+  startup rejects wildcard, HTTP, localhost/IP, path/port/credentials,
+  whitespace-padded, and multiple origins;
 - omit authorization, BYOK, cookie, query-secret, prompt, and response data
   from access logs; and
 - expose no directory, internal service, Docker API, development documentation,
@@ -1054,13 +1133,18 @@ backups, the initial contract is:
   without placing its password in arguments or logs;
 - export `supabase_migrations` schema/data as separately identified parts and
   fail the job unless the data export contains the required Auth users/
-  identities. Preserve reviewed custom `auth`/`storage` schema changes through
-  the currently supported separate diff/export path rather than assuming the
-  normal schema dump owns Supabase-managed definitions;
-- inventory Storage buckets/objects. If none exist, record the verified empty
-  inventory. If any exist, back up object bytes through the supported Storage/
-  S3 download path with per-object inventory and checksums; a database dump
-  contains Storage metadata but cannot restore deleted object bytes;
+  identities. Preserve reviewed custom `auth`/`storage` changes through the
+  currently supported separate diff path for a hosted destination, and also
+  capture the complete managed `auth,storage` schema for the physically
+  isolated rehearsal. The latter closes version skew between the pinned CLI
+  base image and the hosted managed schema; it is split into foundation and
+  deferred trigger/policy/ACL phases and is never applied to a live project;
+- inventory Storage buckets/objects, including exact read-only counts for the
+  platform-managed Vector Storage bucket/index relations excluded from the CLI
+  data part. If all are empty, record the verified empty inventory. If any are
+  non-empty, fail closed until object bytes and every required vector metadata
+  relation have a reviewed export/restore path with per-object inventory and
+  checksums; a database dump cannot restore deleted object bytes;
 - inventory non-database hosted configuration needed to rebuild Auth and the
   project, including Site URL, redirects, email policy/templates, Google,
   CAPTCHA, SMTP, Realtime/extensions, and sender/domain settings. Preserve a
@@ -1082,11 +1166,22 @@ backups, the initial contract is:
   Postgres target before the first release, after any backup-format/tool change,
   and at least monthly if the pilot runs longer; verify Auth/profile ownership,
   migration history, RLS/grants, canonical row counts, and application reads;
-  then destroy that disposable target through a separate authorized cleanup;
+  neutralize only the disposable image's restore-creator defaults before
+  object creation, attest current plus future client privileges from PostgreSQL
+  catalogs, and compare DDL plus ACLs against an independent
+  migration-built reference. Permit only the reviewed optional-legacy removal
+  and associative-parenthesis normalization for named legacy `CHECK`
+  constraints; any other schema difference fails closed;
+  pin both restore and schema-reference targets to PostgreSQL major 17 for the
+  current hosted generation, fail on a source/target major mismatch, then
+  destroy that disposable target through a separate authorized cleanup;
   and
-- emit only the success/failure timestamp and checksum identity to the off-host
-  monitor. A file that was created but not checksum-verified and restore-proven
-  is not a successful backup.
+- emit only success/failure timing, snapshot identity, and the strict
+  identifier-free `mylifegraph-restore-evidence-v1` summary to the off-host
+  monitor. That summary retains the whole-attestation and schema-reference
+  hashes plus journal inventory/replay-set hashes and count when replay runs;
+  it contains no SQL or user/deletion ids. A file that was created but not
+  checksum-verified and restore-proven is not a successful backup.
 
 Run the scheduled export as a separate non-interactive backup identity or an
 off-host job. Its database/Storage credentials are unreadable by `deploy`,
@@ -1104,10 +1199,11 @@ official CLI restore procedure.
 
 ### Restore-safe account deletion
 
-The current account deletion transaction removes `auth.users` and owner data
-without creating a backup-independent receipt. Before the public pilot, add a
-versioned deletion-recovery contract owned jointly by Account Controls,
-Supabase, Backup, and Privacy:
+Repository source implements the jointly owned `account-deletion-v2`,
+`account-deletion-status-v2`, and `account-deletion-journal-v2` recovery
+boundary below. It is still a public-release No-Go until the protected object
+store, separate recovery identity, real encrypted snapshot, isolated restore,
+replay, and watermark have passed:
 
 - assign one idempotent deletion id after recent-auth and exact `DELETE`
   confirmation, then durably append an envelope-encrypted off-host intent
@@ -1128,9 +1224,10 @@ Supabase, Backup, and Privacy:
 - finalize the journal entry after database deletion, while treating pending
   entries as work that must converge. Both journal append and deletion are
   idempotent by deletion id; no request may create two intents;
-- retain each encrypted entry for at least the longest backup retention plus
-  seven days (35 days for the initial 7-daily/4-weekly policy). Remove it only
-  after every backup that could contain the account has verifiably expired;
+- retain each encrypted entry for 45 days: the 35-day protected pre-migration
+  backup window plus seven days and a four-hour RTO/scheduling cushion. Remove
+  it only after every backup that could contain the account has verifiably
+  expired;
 - provide a versioned restore tool that, while the restored target is isolated,
   decrypts all journal entries newer than the backup cutoff, invokes the exact
   owner-locked deletion idempotently, and verifies absence from `auth.users`,
@@ -1141,12 +1238,20 @@ Supabase, Backup, and Privacy:
   backup predating a user deletion may be restored and the full public pilot is
   No-Go.
 
-The implementation may require an additive service-role-only intent/receipt
-table and a new Account deletion wire version. It must preserve forced RLS,
-deny `anon`/`authenticated` access, stay outside Account Export and Coach
-snapshots, and update every schema/account/verification owner in the same
-change. The journal is recovery metadata, not a product analytics or audit
-feed.
+The additive forced-RLS intent table denies direct application access, remains
+outside Account Export/Coach snapshots, revokes direct V1 service-role delete,
+and grants replay only to `mylifegraph_deletion_replayer`. The first persisted
+`prepared` state already blocks product access and contributes to stale
+readiness, closing the crash window before append. The journal is recovery
+metadata, not a product analytics or audit feed. Source/unit coverage is not a
+real bucket or restore-rehearsal claim.
+
+The release-day database-major audit is also a role-safety gate. PostgreSQL 15
+requires no incident membership for the replayer. PostgreSQL 16+ must expose
+exactly the automatic target-to-migration-creator edge granted by bootstrap OID
+10 with `ADMIN TRUE`, `SET FALSE`, and `INHERIT FALSE`; all other edges are a
+No-Go. Repository PG17 isolation is compatibility evidence, not proof of the
+pilot project's live major or catalog state.
 
 Do not use the normal local database or remote project as the restore target.
 Do not run `db reset`, linked reset, destructive repair, or a live migration
@@ -1169,8 +1274,10 @@ reissued;
 the DNS and ACME recovery procedure still belongs in the runbook.
 
 Application rollback switches the release symlink to the last known-good code
-and restarts both FastAPI and the executor against that release. It never
-reverses applied Supabase migrations. Therefore
+and restarts both FastAPI and the executor against that release. The executor
+reloads that release's generated revision-tagged analysis-image identity; the
+previous image is retained through the rollback window. Rollback never reverses
+applied Supabase migrations. Therefore
 every migration in the pilot sequence must be forward-compatible with the
 previous application until the rollback window closes.
 
@@ -1248,7 +1355,7 @@ The starting configuration is deliberately conservative:
 | --- | --- | --- |
 | Uvicorn workers | 1 | Add only after global budgets/concurrency are cross-process and load-tested. |
 | Shared-provider concurrency | 1 executor-owned reservation | Raise to 2 only after target-host CPU/RAM, cancellation, race/replay behavior, and three-client tests remain stable. |
-| Per-user shared turns | 5 per profile-local day initially | Tune from measured duration and fair-use needs; it is a provider-use limit, not a registration cap. |
+| Per-user shared turns | 5 per UTC day initially | Tune from measured duration and fair-use needs; the immutable UTC period cannot be rotated by changing profile timezone, and it is a provider-use limit rather than a registration cap. |
 | Global shared-provider budget | 15 newly dispatched turns per UTC day initially | Raise only with account/terms approval and usage evidence; retries/replays must not mint budget. |
 | Retained releases | 2 or 3 | Increase only while disk thresholds remain healthy. |
 | FastAPI bind | Loopback only | Never promoted to a public raw port. |
@@ -1317,7 +1424,8 @@ until target-host measurements pass.
 
 - Exact DNS records, valid TLS, renewal, redirect, firewall, and loopback bind
   are verified.
-- The `deploy`, `mylifegraph-api`, and `coach-executor` identities and their
+- The `deploy`, `mylifegraph-api`, `coach-executor`, and locked no-home
+  `mylifegraph-build` identities and their
   filesystem/socket permission matrix pass without an API/executor same-UID
   exception. Any VPS-local backup identity/credential is isolated from all
   three. Rootless sandbox, Caddy, `systemd`, retention, off-host alerts,
@@ -1462,7 +1570,7 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 
 ### Phase 0 — documentation baseline and integration-branch setup
 
-- [ ] Synchronize and verify this decision baseline without remote mutation.
+- [x] Synchronize and verify this decision baseline without remote mutation.
 - [ ] Retain `new_backend_gh` as the temporary implementation authority and
       keep each local slice in a focused, independently verified commit.
 - [ ] Keep tags, Vercel production, and VPS deployment disabled for this
@@ -1475,29 +1583,40 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 - [x] Implement versioned 18-or-older acceptance without date-of-birth storage.
 - [x] Implement the previewed, confirmed, staging-only synthetic scenario
       generator and pilot-target denial.
-- [ ] Run the time-boxed stable Codex Python SDK compatibility spike; retain the
+- [x] Run the time-boxed stable Codex Python SDK compatibility spike; retain the
       pinned CLI adapter unless every required control passes.
-- [ ] Approve the explicit provider contract and disclosure.
+- [x] Implement and synchronize the explicit provider contract and disclosure;
+      live terms/privacy approval remains a Phase D gate.
 - [ ] Approve the general public-registration privacy/participation boundary.
-- [ ] Implement every protected Auth/CAPTCHA operation, challenge lifecycle,
-      SMTP-dependent UX, and exact redirect in code/tests.
-- [ ] Implement hosted Flutter provider selection and states.
-- [ ] Implement FastAPI pilot gate, CORS, global budget, busy response, and
-      release identity.
-- [ ] Add the Flutter build SHA/tag to hosted defines and About/diagnostics.
-- [ ] Add any additive Supabase migration and synchronize every owner.
-- [ ] Implement the restore-safe deletion intent/journal/replay contract and its
-      pending/irreversible UI state.
-- [ ] Implement the bounded executor protocol, separate API/executor identities,
+- [x] Implement every protected Auth/CAPTCHA operation, challenge lifecycle,
+      SMTP-dependent UX, and exact redirect in code/tests; real widget/domain,
+      dashboard configuration, inbox, browser, and device evidence remain
+      Phase C/D gates.
+- [x] Implement hosted Flutter provider selection and states.
+- [x] Implement FastAPI pilot gate, CORS, global budget, busy response, and
+      release identity, plus one-worker route-class IP/verified-owner rate,
+      concurrency, readiness, and chunk-safe request-body admission.
+- [x] Add the Flutter build SHA/tag to hosted defines and About/diagnostics.
+- [x] Add the additive Supabase migration and synchronize every owner; applying
+      it remotely remains an explicit database operation; the normal-local
+      apply and full DB gate passed after a restore-verified backup.
+- [x] Implement the restore-safe deletion intent/journal/export/replay/watermark
+      contract and its pending/irreversible UI state; real off-host storage and
+      isolated restore evidence remain Phase C/D gates.
+- [x] Implement the bounded executor protocol, separate API/executor identities,
       rootless sandbox safeguards, and negative-permission tests.
-- [ ] Add versioned VPS deployment artifacts.
-- [ ] Add signed Android release automation without storing signing secrets.
+- [x] Add versioned VPS deployment artifacts.
+- [x] Add signed Android release automation without storing signing secrets.
+- [x] Add a checksum-pinned CycloneDX source-SBOM step to the immutable RC
+      artifact workflow; the built analysis-image scan remains a release gate.
 
 ### Phase B — local verification and release-candidate creation
 
-- [ ] Run focused tests and the captured-base affected selector.
-- [ ] Run local full/browser/database gates selected by the change.
-- [ ] Rehearse install/update/rollback with the deployment artifacts.
+- [x] Run focused tests and the captured-base affected selector.
+- [x] Run local full/browser/database gates selected by the change.
+- [x] Rehearse install/update/rollback with the deployment artifacts through
+      the repository's fail-closed VPS unit harness; real target-host rehearsal
+      remains Phase D.
 - [ ] Review secret handling and complete diff.
 - [ ] Finish and review the focused commit sequence on `new_backend_gh`, then
       run the complete captured-base affected gate over the accumulated task.
@@ -1532,7 +1651,8 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 ### Phase D — VPS bootstrap and held offline candidate
 
 - [ ] Administrator creates and verifies the separate `deploy`,
-      `mylifegraph-api`, and `coach-executor` identities, rootless executor-only
+      `mylifegraph-api`, `coach-executor`, and locked `mylifegraph-build`
+      identities, rootless executor-only
       Docker, firewall, Caddy, directories, secrets, `systemd`, retention,
       updates, and alerts. API/executor same-UID operation is not an exception.
 - [ ] Shared-provider account/terms and privacy approvals are recorded before

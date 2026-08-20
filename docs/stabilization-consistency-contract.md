@@ -168,7 +168,7 @@ Focus-reflection sheet and invokes the Focus-reflection impact inside successful
 save/delete callbacks, so dismissal affects only Snackbar presentation and not
 Full-week invalidation.
 
-`account-export-v5` preserves the established owner-data set minus Goals,
+`account-export-v6` preserves the established owner-data set minus Goals,
 generic Recommendations, and Decision Feedback, while retaining the three
 owner-content finite Assignment Series projections. Its exact catalog contains
 41 tables and retains the 10,000

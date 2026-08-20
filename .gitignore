@@ -8,6 +8,9 @@ build/
 apps/mobile/.dart_tool/
 apps/mobile/build/
 apps/mobile/android/.gradle/
+apps/mobile/android/key.properties
+apps/mobile/android/*.jks
+apps/mobile/android/*.keystore
 apps/mobile/ios/Pods/
 apps/mobile/ios/.symlinks/
 

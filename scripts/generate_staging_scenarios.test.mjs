@@ -190,7 +190,10 @@ test('cleanup deletes only receipt-bound users and verifies absence', async () =
     const calls = [];
     const fetchImpl = async (url, options = {}) => {
       const method = options.method ?? 'GET';
-      calls.push(`${method} ${new URL(url).pathname}`);
+      calls.push({
+        request: `${method} ${new URL(url).pathname}`,
+        headers: options.headers,
+      });
       if (method === 'DELETE') {
         deleted = true;
         return new Response(null, { status: 204 });
@@ -217,11 +220,15 @@ test('cleanup deletes only receipt-bound users and verifies absence', async () =
     });
 
     assert.deepEqual(result, { usersDeleted: 1 });
-    assert.deepEqual(calls, [
+    assert.deepEqual(calls.map(({ request }) => request), [
       `GET /auth/v1/admin/users/${userId}`,
       `DELETE /auth/v1/admin/users/${userId}`,
       `GET /auth/v1/admin/users/${userId}`,
     ]);
+    for (const call of calls) {
+      assert.equal(call.headers.apikey, 'sb_secret_test-value');
+      assert.equal('Authorization' in call.headers, false);
+    }
     assert.equal(JSON.parse(readFileSync(receiptPath, 'utf8')).status, 'cleaned');
     assert.equal(statSync(receiptPath).mode & 0o777, 0o600);
   } finally {

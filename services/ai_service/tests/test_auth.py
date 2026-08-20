@@ -165,10 +165,21 @@ def test_pilot_participation_gate_requires_exact_persisted_profile_fields() -> N
 
 
 class _ParticipationProfileClient:
-    def __init__(self, rows: object = None, *, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        rows: object = None,
+        *,
+        error: Exception | None = None,
+        deletion_pending: bool = False,
+    ) -> None:
         self.rows = rows
         self.error = error
+        self.deletion_pending = deletion_pending
         self.calls: list[tuple[str, dict]] = []
+
+    async def account_deletion_pending(self, *, user_id: str) -> bool:
+        assert user_id == "owner-1"
+        return self.deletion_pending
 
     async def select(self, table: str, *, params: dict):
         self.calls.append((table, params))
@@ -277,6 +288,30 @@ def test_hosted_principal_missing_acceptance_is_a_structured_403(
         ),
         "notice_version": "pilot-participation-notice-v1",
     }
+
+
+def test_hosted_principal_blocks_product_use_while_deletion_is_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _ParticipationProfileClient([], deletion_pending=True)
+    monkeypatch.setattr(
+        auth_dependencies,
+        "get_settings",
+        lambda: SimpleNamespace(requires_pilot_participation=True),
+    )
+    monkeypatch.setattr(auth_dependencies, "get_supabase_client", lambda _: client)
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(
+            auth_dependencies.get_current_principal(
+                _request(),
+                Principal(user_id="owner-1"),
+            ),
+        )
+
+    assert raised.value.status_code == 423
+    assert raised.value.detail["code"] == "account_deletion_pending"
+    assert client.calls == []
 
 
 def test_hosted_principal_lookup_failure_is_a_sanitized_503(

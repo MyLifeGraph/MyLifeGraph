@@ -5,12 +5,8 @@ import '../core/network/api_client.dart';
 import '../core/supabase/supabase_providers.dart';
 import '../features/coach/application/coach_credentials_controller.dart';
 import '../features/coach/data/coach_api_data_source.dart';
-import '../features/coach/data/coach_credential_store.dart';
 import 'auth_providers.dart';
-
-final coachCredentialStoreProvider = Provider<CoachCredentialStore>(
-  (_) => PlatformCoachCredentialStore(),
-);
+import 'coach_credential_store_provider.dart';
 
 final coachCredentialProfileIdProvider = Provider<String?>((ref) {
   final profileId = ref.watch(

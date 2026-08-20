@@ -31,6 +31,8 @@ test('escalates core, auth, routing, config, schema, and unknown changes', () =>
     'apps/mobile/lib/features/auth/data/auth_repository.dart',
     'apps/mobile/lib/core/routing/app_router.dart',
     'package-lock.json',
+    'deploy/vps/systemd/mylifegraph-api.service',
+    'scripts/configure_pilot_participation_gate.mjs',
     'supabase/migrations/20260730000000_example.sql',
     'unclassified.file',
   ]) {

@@ -1,6 +1,6 @@
 # Setup Personalization Retirement Contract
 
-Coach BYOK V3 preserves this retirement: provider prompts and read-only tools
+Coach V4 preserves this retirement: provider prompts and read-only tools
 do not recreate retired Setup Goals, recommendations, or feedback fields.
 This remains true for `free-coach-agent-prompt-v5`.
 
@@ -96,7 +96,7 @@ rows as untrusted data, but it cannot include Goals or resurrect removed
 onboarding preference, coaching-style, or friction JSON. Weekly Review proposal
 arrays are also removed before Coach use. Compatible V2 fixed-mode requests retain
 `controlled-coach-prompt-v3`/`coach-context-v3`; V1 Today retains paired
-`controlled-coach-prompt-v2`/`coach-context-v2`. Persisted V1/V2 responses and
+`controlled-coach-prompt-v2`/`coach-context-v2`. Persisted V1-V3 responses and
 history remain readable and replay-compatible.
 
 Briefings and Weekly Reviews have no Goal source. `weekly-review-v3` removes the
