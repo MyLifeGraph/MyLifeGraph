@@ -101,11 +101,31 @@ ignored plaintext rehearsal set is pre-migration safety evidence only: it is
 not an encrypted off-host Restic snapshot, contains no Management-API Auth
 configuration inventory, and did not exercise an off-host deletion journal.
 
+After that rehearsal, independent review, and the full local gate, the user
+authorized the exact ten-migration Staging apply from migration-source commit
+`2723ab641518e4cd4e68f2f0a45e055926f55f4b`. Supabase CLI 2.107.0 first
+reconfirmed project ref `oscrunlndfrecjilojja`, the 59-migration remote
+boundary, and an exact ten-file dry-run. The push completed through
+`20260820200000_account_deletion_replayer_role_guard_v2.sql`; the post-push
+linked listing matched all 69 repository versions and a new dry-run reported
+the remote database up to date. A newly authenticated direct Supabase-MCP audit
+then passed the PG17.6 Hosted Database Contract, prepared-deletion guard,
+version-aware deletion-role attributes/membership, postgres global/public
+default-ACL boundary, six-table explicit-grant set, and zero-row classic/vector
+Storage inventory. It also confirmed that the participation gate remains off.
+The aggregate MCP result is `post_migration_pass=true` and
+`overall_pass=false` solely because the Advisor clear-flags are false. Provider
+findings remain: leaked-password protection is disabled; 16
+RLS-initplan performance warnings belong to retained legacy CamelCase policies;
+and 29 unindexed-FK plus 70 unused-index notices are informational. This is
+Staging database evidence only; no application, Auth-setting/provider, VPS,
+Vercel, or public-pilot deployment is claimed.
+
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
 | Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-20: VPS 15, backup 15, Vercel 3, Android 2 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. | Templates/unit checks only; no VPS, cloud, signing-key, or device execution. |
 | Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,098 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260820T133016Z-3151532` passed 8/8 journeys with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
-| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-20; PG17 also passed full owner/ACL restore and deletion replay. | No hosted migration or encrypted off-host restore/replay evidence. |
+| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-20; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
 

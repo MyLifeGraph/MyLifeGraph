@@ -131,15 +131,18 @@ or intentionally deferred gates close:
    units, install rootless Docker only for `coach-executor`, apply firewall/SSH
    policy, and pass permission/reboot/live rollback checks on the actual VPS.
 2. An independently controlled domain, DNS, valid HTTPS, custom SMTP, CAPTCHA
-   widget/site key, Auth throttles, email flows, and exact Google web/Android
-   redirects must be selected and verified. No domain/widget exists yet, so
-   local CAPTCHA code is wired only to fail-closed hosted variables; no source
-   claim substitutes for creating and verifying the real widget/domain.
+   widget/site key, Auth throttles, leaked-password protection, email flows,
+   and exact Google web/Android redirects must be selected and verified. The
+   current Staging Security Advisor still reports leaked-password protection
+   disabled. No domain/widget exists yet, so local CAPTCHA code is wired only
+   to fail-closed hosted variables; no source claim substitutes for creating
+   and verifying the real widget/domain.
 3. A distinct real-data pilot Supabase project, current publishable/secret
    keys, reviewed migrations, RLS/grants, and two-user isolation must be
    created/applied through an explicitly authorized remote operation. The
-   inspected project remains staging and currently stops at
-   `20260815082606`.
+   inspected project remains staging; its explicitly authorized database-only
+   apply now matches the 69-file repository head at `20260820200000`, while its
+   participation gate remains default-off and no app deployment is inferred.
 4. Shared-subscription account/terms and privacy approval plus an executor-user
    Codex login/model/Fast/multi-tool live smoke must pass before the operator
    flag is enabled.

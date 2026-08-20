@@ -127,7 +127,8 @@ V1/V2 response compatibility. It adds no key column: provider API keys never
 enter Postgres. V6 execution is revoked; RLS, explicit grants, advisory-lock
 order, retry identity, and append-only usage boundaries remain unchanged.
 Rows created by the new explicit-provider path use `coach-response-v4` with
-`free-coach-agent-prompt-v5`; the dated staging target below still stops at V3.
+`free-coach-agent-prompt-v5`; the dated 2026-08-15 staging evidence below
+stopped at V3 before the later deployment recorded separately below.
 
 This document primarily captures repository state; a live remote database must
 never be inferred from migration source alone. One explicitly inspected staging
@@ -287,6 +288,46 @@ separate immutable operator budget period in
 `20260820194500_coach_operator_budget_period_v1.sql`, followed by the
 restore-role attribute/membership guard in
 `20260820200000_account_deletion_replayer_role_guard_v2.sql`.
+
+## Confirmed Staging Migration State (2026-08-20)
+
+The user explicitly authorized applying the ten reviewed migrations after the
+pre-migration PG17.6 dump/restore rehearsal and the captured-base local gates
+passed. The linked Supabase CLI 2.107.0 target was rechecked as exact project
+ref `oscrunlndfrecjilojja`. Its read-only preflight still showed 59 applied
+migrations through `20260815082606_coach_byok_completion_dispatch_v1.sql`, and
+`db push --linked --include-all --dry-run` named exactly the ten repository
+files from `20260819185740_pilot_participation_v1.sql` through
+`20260820200000_account_deletion_replayer_role_guard_v2.sql`.
+
+The authorized push completed all ten files without a CLI error. A fresh
+linked migration listing then matched all 69 repository versions through
+`20260820200000`, and a second dry-run reported the remote database up to date.
+The direct project-scoped Supabase MCP was then re-authenticated and confirmed
+PostgreSQL 17.6, the exact 69-row Hosted Database Contract head/digest and
+prepared-deletion guard, and a true deletion-role safety function. The replayer
+has the exact non-login/non-privileged attributes and only PostgreSQL 17's
+expected creator edge to `postgres`: bootstrap grantor, `ADMIN TRUE`,
+`INHERIT FALSE`, and `SET FALSE`. The MCP also found no forbidden application-
+role default ACL across `postgres` global/public table, sequence, or function
+defaults; the six explicitly normalized table grants matched their migration;
+and classic plus vector Storage relations all existed with zero rows. The
+participation singleton remained explicitly default-off with no project ref or
+notice version.
+
+The current Security Advisor reports only leaked-password protection disabled.
+That Auth setting is an external public-release gate and was not changed by the
+database migration authorization. The aggregate MCP result therefore records
+`post_migration_pass=true` but `overall_pass=false` solely because its Security
+and Performance Advisor clear-flags are false. The Performance Advisor reports
+16 Auth RLS-initplan warnings, all on retained legacy CamelCase policies rather
+than the canonical application tables, plus 29 unindexed-FK and 70 unused-index
+informational items. These do not invalidate the successful migration
+postconditions, but they remain recorded provider findings rather than being
+silently presented as a clean advisor result. This is database-migration
+evidence for the staging project only: it does not deploy FastAPI/Flutter,
+prove Auth/provider configuration, substitute for two-user hosted isolation,
+or describe the distinct future real-data pilot project.
 
 ## Runtime Activation
 
