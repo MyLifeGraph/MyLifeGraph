@@ -109,7 +109,7 @@ SQL
     status=$?
     if [[ "$status" -eq 0 ]]; then
       successes=$((successes + 1))
-    elif rg -q 'Coach operator global limit reached' \
+    elif grep -Fq 'Coach operator global limit reached' \
       "$log_root/${labels[$index]}.log"; then
       limited=$((limited + 1))
     else
@@ -162,7 +162,7 @@ SQL
     status=$?
     if [[ "$status" -eq 0 ]]; then
       successes=$((successes + 1))
-    elif rg -q 'Coach daily request limit reached' \
+    elif grep -Fq 'Coach daily request limit reached' \
       "$log_root/${labels[$index]}.log"; then
       limited=$((limited + 1))
     else

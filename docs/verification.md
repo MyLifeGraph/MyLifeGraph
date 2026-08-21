@@ -49,12 +49,14 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 ## Current Verified Baseline
 
 The current pull-request candidate's latest task base is
-`675ff6ab3dd701e1221759a97dc8555d35779a16`, which contains the reviewed
+`cc77a981ab61d689c03a4a68699f6d2086a3d3cd`, which contains the reviewed
 promotion merge `f9198ce2a9560916e8d3c440ea31a6097a651fef` plus the bounded
 Supabase-runner diagnostics, image-identity fixes, and checkout-complete CI
 toolchains, including the shared exact ECR/GHCR allowlist for validated running
-and explicitly requested isolated Postgres images. The post-base correction
-pins every Android CI, staging, and release workflow to guarded Java 21. That
+and explicitly requested isolated Postgres images, and pins every Android CI,
+staging, and release workflow to guarded Java 21. The post-base correction
+removes the optional `rg` runtime dependency from database harness error,
+role, archive, and source classification in favor of baseline `grep`. That
 merge integrates
 GitHub `main` commit `87277e704f318bc569d12c88d665759a22eda2f1`
 without rewriting either history. Its captured-base selector chooses the Full
@@ -67,7 +69,7 @@ PostgreSQL 17 migration history already matched all 69 repository migrations;
 the run neither reset the database nor applied SQL. The Database gate passed
 against that normal PG17 state and the pinned isolated PG15/PG17 full chains,
 including the PG17 owner/ACL restore and deletion replay. Full selector browser
-run `20260821T142307Z-451605` passed all eight independent UI journeys without
+run `20260821T144520Z-501414` passed all eight independent UI journeys without
 retry and with exact run-owned Auth cleanup. This is a pass over the local
 merge candidate selected from the captured base, not a tagged or deployed
 release identity.
@@ -134,7 +136,7 @@ Vercel, or public-pilot deployment is claimed.
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
 | Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-21: VPS 15, backup 15, Vercel 3, Android 5 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. The checksum-verified tracked Gradle 8.14 wrapper also passed `testDebugUnitTest` and `lintDebug`. | Templates/unit and local JVM/lint checks only; no VPS, cloud, signing-key, APK-device, or physical Focus Protection execution. |
-| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T142307Z-451605` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
+| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T144520Z-501414` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
 | Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-21; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
@@ -512,9 +514,9 @@ the CLI failure. The raw log is trap-cleaned. This keeps GitHub Actions log
 backpressure from turning a successful multi-image pull into a false failure
 while retaining bounded diagnostics. Running-target validation and explicit
 isolated-image requests share one allowlist for only the official ECR and GHCR
-Supabase Postgres namespaces. Expected lock-timeout classification in the
-isolated Goal transition uses baseline runner text tools and has no optional
-`rg` dependency.
+Supabase Postgres namespaces. Expected lock-timeout/role-guard and Coach-limit
+classification plus backup archive and safety source scans use baseline runner
+text tools and have no optional `rg` dependency.
 
 Migration verification has separate complementary layers:
 

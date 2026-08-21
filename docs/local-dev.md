@@ -1224,9 +1224,10 @@ as non-destructive merely because it avoids `db reset`.
 
 After normal migration history matches, `verify:db` also runs the Goal-removal
 migration harness in a separately labelled, RAM-only Postgres container with no
-normal Supabase volume. The expected writer-lock timeout is classified with
-baseline runner text tools, so the harness does not require an optional `rg`
-installation. Inside that process the exact database name is
+normal Supabase volume. Goal and Recommendation lock-timeout/role-guard checks,
+Coach limit checks, backup archive checks, and safety source scans use baseline
+runner text tools, so no database verification or recovery path requires an
+optional `rg` installation. Inside that process the exact database name is
 `mylifegraph_goal_removal_migration_test`. The harness initializes a fresh
 schema only through `20260804102409` with `migration up --db-url`, loads filled
 fixtures, applies the original and follow-up Goal migrations separately, proves

@@ -9,7 +9,7 @@ SUPABASE_HOME="$ROOT_DIR/.tools/supabase-home"
 cd "$ROOT_DIR"
 mkdir -p "$SUPABASE_HOME"
 
-for command_name in supabase docker sha256sum rg; do
+for command_name in supabase docker sha256sum; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     printf 'Local backup error: required command %s is unavailable.\n' \
       "$command_name" >&2

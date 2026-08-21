@@ -426,7 +426,25 @@ assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
   'required local image is absent'
 assert_contains \
   "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
-  'SQLSTATE[[:space:]]+55P03'
+  "grep -Eqi 'SQLSTATE[[:space:]]+55P03'"
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'grep -Fq'
+assert_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'Account deletion replayer role has unsafe attributes'
+assert_not_contains \
+  "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
+  'rg -q'
+assert_not_contains \
+  "$ROOT_DIR/scripts/lib/coach_operator_concurrency_harness.sh" \
+  'rg -q'
+assert_not_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  'rg -q'
+assert_not_contains "$ROOT_DIR/scripts/backup_local_supabase.sh" \
+  'sha256sum rg'
+assert_not_contains "$ROOT_DIR/scripts/reset_local_supabase.sh" \
+  'sha256sum rg'
 assert_contains \
   "$ROOT_DIR/scripts/lib/recommendation_retirement_migration_harness.sh" \
   "'version', version"
@@ -478,14 +496,14 @@ assert_contains "$ROOT_DIR/package.json" \
   '"db:reset:local": "bash scripts/reset_local_supabase.sh"'
 
 direct_reset_calls="$TEST_ROOT/direct-reset-calls"
-rg -n --glob '!test_local_supabase_migrations.sh' \
+grep -RInE --exclude='test_local_supabase_migrations.sh' \
   '^[[:space:]]*supabase_cli db reset --local([[:space:]]|$)' \
   "$ROOT_DIR/scripts" >"$direct_reset_calls"
 [[ "$(wc -l <"$direct_reset_calls")" -eq 1 ]]
 assert_contains "$direct_reset_calls" \
   'scripts/lib/local_supabase_database_safety.sh:'
 assert_contains "$direct_reset_calls" 'supabase_cli db reset --local'
-if rg -n --glob '!test_local_supabase_migrations.sh' \
+if grep -RInE --exclude='test_local_supabase_migrations.sh' \
   'db reset --(db-url|linked)' \
   "$ROOT_DIR/scripts" "$ROOT_DIR/.github" >"$TEST_ROOT/unsafe-reset-targets"; then
   printf '%s\n' 'Unsafe Supabase reset target found:' >&2

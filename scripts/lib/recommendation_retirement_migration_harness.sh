@@ -296,7 +296,7 @@ run_recommendation_retirement_migration_harness() (
       'Recommendation-retirement migration passed under a writer lock.' >&2
     return 1
   fi
-  if ! rg -qi 'SQLSTATE[[:space:]]+55P03' \
+  if ! grep -Eqi 'SQLSTATE[[:space:]]+55P03' \
     "$harness_root/locked-migration.log"; then
     recommendation_retirement_harness_sanitize_output \
       <"$harness_root/locked-migration.log" >&2
@@ -395,7 +395,7 @@ SQL
       'Deletion V2 unexpectedly accepted a hostile pre-existing replay role.' >&2
     return 1
   fi
-  if ! rg -q \
+  if ! grep -Fq \
     'Account deletion replayer role has unsafe attributes' \
     "$harness_root/deletion-boundary.log"; then
     recommendation_retirement_harness_sanitize_output \

@@ -20,7 +20,7 @@ if [[ "$APPLY_MIGRATIONS" != 'false' ]]; then
     'Local database reset error: APPLY_MIGRATIONS is not accepted by the reset workflow.' >&2
   exit 2
 fi
-for command_name in supabase docker sha256sum rg; do
+for command_name in supabase docker sha256sum; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     printf 'Local database reset error: required command %s is unavailable.\n' \
       "$command_name" >&2

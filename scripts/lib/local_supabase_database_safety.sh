@@ -466,7 +466,7 @@ local_supabase_create_verified_backup() (
     'TABLE DATA auth users' \
     'TABLE DATA public profiles' \
     'TABLE DATA supabase_migrations schema_migrations'; do
-    if ! rg -q "[[:space:]]${required_entry}[[:space:]]" "$archive_list"; then
+    if ! grep -Eq "[[:space:]]${required_entry}[[:space:]]" "$archive_list"; then
       printf 'Local backup error: archive is missing %s.\n' \
         "$required_entry" >&2
       return 1
