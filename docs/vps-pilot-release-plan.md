@@ -486,12 +486,14 @@ must not become an operator secret.
 The following work is done and reviewed on developer machines before any VPS
 configuration becomes the primary debugging environment.
 
-Working-tree status on 2026-08-20: sections 0-5, hosted Turnstile acquisition,
+Working-tree status on 2026-08-21: sections 0-5, hosted Turnstile acquisition,
 and restore-safe deletion intent/journal/export/replay/watermark are implemented
-in repository source. Real widget/domain/provider configuration, object storage,
-an actual encrypted restore/replay, the complete captured-base gates, and
-independent final review remain open. Nothing in this status claims a remote
-migration or deployment.
+in repository source. The complete captured-base gate and the local full-diff/
+secret review have passed locally; exact gate evidence remains in
+[Current Verified Baseline](verification.md#current-verified-baseline). Real
+widget/domain/provider configuration, object storage, an actual encrypted
+restore/replay, and independent final code/release review remain open. Nothing
+in this status claims a remote migration or deployment.
 
 ### 0. Establish environment, key, participation, and fixture foundations
 
@@ -1620,9 +1622,13 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 - [x] Rehearse install/update/rollback with the deployment artifacts through
       the repository's fail-closed VPS unit harness; real target-host rehearsal
       remains Phase D.
-- [ ] Review secret handling and complete diff.
-- [ ] Finish and review the focused commit sequence on `new_backend_gh`, then
-      run the complete captured-base affected gate over the accumulated task.
+- [x] Review secret handling and the complete local diff.
+- [x] Review the focused implementation commit sequence on `new_backend_gh`
+      and run the complete captured-base affected gate over the accumulated
+      task.
+- [ ] Obtain independent code/release review of the full promotion diff; the
+      recorded independent database-migration review does not close this
+      separate release gate.
 - [ ] Prove remote `main` protection and that the merge cannot auto-assign the
       Vercel production domain.
 - [ ] Promote the complete verified branch into protected `main` through one

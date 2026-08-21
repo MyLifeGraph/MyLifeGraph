@@ -1648,9 +1648,10 @@ npm run db:reset:local
 Only the exact follow-up command printed by that preview can execute the reset.
 It requires the current content-bound confirmation token, automatically creates
 and restore-verifies another full backup, refuses target drift, and invokes only
-`supabase db reset --local`. The fresh chain must apply through
-`20260804192406_harden_goal_removal_dependencies.sql`; expected legacy-table
-skip notices may be emitted for missing CamelCase tables. Use reset only when
+`supabase db reset --local`. That CLI operation replays every local migration;
+the wrapper then fails unless `migration list --local` matches the repository
+exactly, including the current head named above. Expected legacy-table skip
+notices may be emitted for missing CamelCase tables. Use reset only when
 destruction is intended, not merely because a reviewed migration is pending.
 The full safety, recovery, physical-isolation, external-approval, and source
 rollback contract is `docs/local-database-safety.md`.
