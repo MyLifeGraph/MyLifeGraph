@@ -155,9 +155,10 @@ or intentionally deferred gates close:
    export/replay/watermark design exists in source, but until it passes against
    those external resources an old backup cannot reopen a participant-facing
    environment.
-7. Vercel held-candidate/manual-promotion settings, branch protection, the
-   annotated RC/final tags, exact artifact set, external monitoring, and the
-   final professor handoff require authorized remote actions and named owners.
+7. Vercel `main` production-branch settings, tag-bound production rebuild,
+   branch protection, the annotated RC/final tags, exact artifact set,
+   external monitoring, and the final professor handoff require authorized
+   remote actions and named owners.
 
 The staging-only scenario generator and adult-participation flow are
 implemented in source. The normal-local migration, complete captured-base
@@ -491,9 +492,11 @@ and restore-safe deletion intent/journal/export/replay/watermark are implemented
 in repository source. The complete captured-base gate and the local full-diff/
 secret review have passed locally; exact gate evidence remains in
 [Current Verified Baseline](verification.md#current-verified-baseline). Real
-widget/domain/provider configuration, object storage, an actual encrypted
-restore/replay, and independent final code/release review remain open. Nothing
-in this status claims a remote migration or deployment.
+widget/domain/provider configuration, object storage, and an actual encrypted
+restore/replay remain open. An independent second-agent review of the complete
+merge resolution, release scripts, Auth change, documentation, and secret
+boundaries passed on 2026-08-21. Nothing in this status claims a remote
+migration or deployment.
 
 ### 0. Establish environment, key, participation, and fixture foundations
 
@@ -743,16 +746,19 @@ partially integrated branch stack:
    explicitly without force-pushing, rewriting history, or silently dropping
    either side.
 4. After the complete local pilot implementation passes its captured-base
-   affected gate, externally verify `main` branch protection and prove that a
-   merge cannot automatically assign the Vercel production domain. If either
-   condition cannot be proven, stop before the remote merge.
+   affected gate, externally verify `main` branch protection and the Vercel
+   Production Branch setting. `main` may trigger a Production build attempt,
+   but the repository identity gate must reject an untagged merge before
+   Flutter compilation. If either condition cannot be proven, stop before the
+   remote merge.
 5. Open or update one deliberate final promotion pull request from
    `new_backend_gh` into `main`. Review the entire accumulated diff, its
    focused commit sequence, release documentation, and green merge-candidate
    gates; do not force-push or rewrite either branch.
 6. Once that pull request is merged, make protected `main` the sole release
-   authority. Create RC/final tags only from the verified `main` SHA and keep
-   Vercel/VPS promotion held until the immutable release-candidate gates.
+   authority. Create RC/final tags only from the verified `main` SHA, then
+   rebuild that exact tag-bound SHA for Vercel. Keep VPS promotion held until
+   the immutable release-candidate gates.
 7. Retire or archive `new_backend_gh` only after the merge and source identity
    are verified. Deleting it or changing remote protection is a separate
    authorized action. Any later fix starts from protected `main` on a focused
@@ -834,13 +840,14 @@ the maximum filename is unchanged. Promotion checks the target prefix and the
 full applied database identity; an older compatible app rollback is accepted
 only when its complete prefix still exists unchanged in the DB-ahead history.
 
-The VPS is not automatically deployed from a mutable branch. Before the final
-accumulated promotion into `main`, externally verify that Vercel cannot
-automatically assign the production domain to the merge. Build the RC candidate
-first and promote it only at step 6 above. A merge to `main` must not silently
-become public before the tag decision. A small two-person team benefits more
-from an observable manual promotion than from an unreviewed push-to-production
-hook.
+The VPS is not automatically deployed from a mutable branch. Vercel may treat
+`main` as its Production Branch and start a build when the pull request merges.
+That first attempt is intentionally fail-closed: without an annotated RC tag on
+the exact `main` SHA, `verify_vercel_build_identity.mjs` exits before Flutter
+compilation. After the RC tag and exact Production environment values exist,
+rebuild the same `main` SHA and verify it before accepting the successful
+deployment as the new production client. The automatic Git hook therefore is
+not release authority; the tag and exact identity remain authoritative.
 
 ## VPS Preparation And Privileged Bootstrap
 
@@ -957,7 +964,7 @@ build use that hostname, not a raw VPS IP or provider-specific host.
 No root domain is currently owned for this pilot. Before remote Auth or VPS
 cutover, buy one domain whose normal renewal price is at most EUR 20/year and
 whose DNS/account recovery can be held by the named owner. Use
-`app.<domain>` for the manually promoted Vercel client, `api.<domain>` for
+`app.<domain>` for the tag-bound Vercel client, `api.<domain>` for
 Caddy/FastAPI, and a separate sender subdomain such as `auth.<domain>` for
 transactional mail. The default project-ref `*.supabase.co` address remains the
 Supabase client/Auth endpoint. Do not enable the paid Supabase Custom Domain or
@@ -1295,9 +1302,13 @@ previous application until the rollback window closes.
   of 2026-08-19, exceeding included Hobby usage can pause the project and Hobby
   rollback is limited to the previous production deployment; recheck both on
   release day.
-- Connect builds to protected `main`, not the temporary integration branch,
-  but hold automatic production-domain assignment until manual promotion of
-  the tagged and manifested commit.
+- Configure protected `main` as the Production Branch, not the temporary
+  integration branch. A merge-triggered untagged attempt must fail the source
+  identity check; after creating the annotated RC tag, rebuild that exact
+  `main` SHA with the matching Production environment values.
+- Verify the Vercel checkout actually contains that annotated tag object. A
+  shallow checkout that lacks the tag ref must stay failed until the release
+  pipeline fetches the exact immutable tag without broadening source authority.
 - Build from the exact release commit with the hosted Flutter define helper.
 - Embed the non-secret build SHA/tag and verify it in the deployed secondary
   About/diagnostic surface.
@@ -1419,8 +1430,8 @@ until target-host measurements pass.
 - `git diff --check` passes and staged, unstaged, and untracked files are
   reviewed.
 - The single accumulated promotion pull request preserves the focused local
-  commit sequence, is approved and green against protected `main`, and does
-  not silently promote Vercel production.
+  commit sequence, is approved and green against protected `main`, and any
+  merge-triggered Vercel attempt rejects the untagged SHA before compilation.
 - Environment guards reject staging/pilot project-ref crossover, the synthetic
   scenario generator rejects the pilot target, and the hosted publishable/
   secret-key compatibility tests pass without exposing a credential.
@@ -1490,7 +1501,7 @@ until target-host measurements pass.
 ### Client and product gate
 
 - Vercel production and the signed APK identify the same source release.
-- Vercel plan eligibility/limits, manual production promotion, security
+- Vercel plan eligibility/limits, tag-bound production rebuild, security
   headers, and previous-deployment rollback are verified.
 - A newly self-registered account can finish Setup and use the complete claimed
   Supabase/FastAPI slice.
@@ -1626,19 +1637,21 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 - [x] Review the focused implementation commit sequence on `new_backend_gh`
       and run the complete captured-base affected gate over the accumulated
       task.
-- [ ] Obtain independent code/release review of the full promotion diff; the
-      recorded independent database-migration review does not close this
-      separate release gate.
-- [ ] Prove remote `main` protection and that the merge cannot auto-assign the
-      Vercel production domain.
+- [x] Obtain independent code/release review of the full promotion diff; a
+      separate second-agent review passed the merge resolution, release-script,
+      Auth, documentation, and secret-boundary checks on 2026-08-21.
+- [ ] Prove remote `main` protection, confirm `main` as Vercel Production
+      Branch, and prove an untagged merge-triggered build fails before Flutter
+      compilation.
 - [ ] Promote the complete verified branch into protected `main` through one
       reviewed, fully green pull request; do not deploy from the merge alone.
-- [ ] Confirm Vercel cannot assign the production domain automatically; verify
-      Hobby eligibility/limits and keep the candidate deployment held.
+- [ ] Verify Vercel Hobby eligibility/limits and its exact Production
+      environment; the untagged merge attempt may run but must remain failed.
 - [ ] Create one immutable annotated RC tag from the exact `main` SHA and publish
       its source-only manifest.
-- [ ] Build the VPS release, held Vercel candidate, signed APK, analysis image,
-      SBOM, and artifact-manifest draft exactly once from that RC.
+- [ ] Build the VPS release, tag-bound Vercel production deployment, signed APK,
+      analysis image, SBOM, and artifact-manifest draft exactly once from that
+      RC; verify Vercel before accepting its production assignment.
 
 ### Phase C — authorized Supabase and account setup
 
@@ -1687,8 +1700,9 @@ BYOK remains portable because the FastAPI request boundary already owns it.
       exact RC artifact set.
 - [ ] Create the immutable final annotated tag on the same SHA; do not rebuild
       or replace any accepted artifact.
-- [ ] Promote the exact held Vercel candidate and VPS artifacts, distribute the
-      already signed/checksummed APK, and verify security headers and rollback.
+- [ ] Accept the verified tag-bound Vercel deployment, promote the exact VPS
+      artifacts, distribute the already signed/checksummed APK, and verify
+      security headers and rollback.
 - [ ] Complete post-promotion core health/capability, pre-SSE busy response,
       public HTTPS/Auth/SSE/cancel/restart/rollback, three-client capacity, and
       physical-device product/Coach smokes.
@@ -1716,7 +1730,7 @@ developer's review.
 | Codex account/quota owner | Confirms terms/account permission, performs only the `coach-executor` login, owns global/per-user budget and provider kill switch, monitors allowance, and can revoke the provider. |
 | Privacy and academic-scope owner | Approves public participation boundary, processor/provider disclosures, retention/deletion, age/scope, consent/legal basis, and any BYOK-only scope reduction. |
 | Android keystore custodian | Creates and secures the keystore, maintains encrypted recovery and access separation, signs/version-codes releases, publishes checksum, and owns forward-fix procedure. |
-| Vercel owner | Confirms plan eligibility/limits, project/repository ownership, environment values, manual promotion, custom domain, headers, usage monitoring, and rollback. |
+| Vercel owner | Confirms plan eligibility/limits, project/repository ownership, Production Branch and environment values, tag-bound rebuild, custom domain, headers, usage monitoring, and rollback. |
 | Backup and recovery owner | Owns the 24-hour export job, encryption/off-site retention, manifests/checksums, deletion replay record, separate restore rehearsal, RPO/RTO evidence, and recovery authorization. |
 | Monitoring and incident owner | Owns the external monitor, primary/secondary delivery channels, monthly test alert, backup heartbeat, user-visible outage/busy communication, same-day preflight, and rollback/provider-shutdown coordination. |
 

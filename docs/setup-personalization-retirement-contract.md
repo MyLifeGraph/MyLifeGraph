@@ -173,6 +173,8 @@ boundary are unchanged.
 
 The adjacent account entry uses `Sign in` and `Create account`, and its
 configuration or OAuth failures stay provider-neutral. Recovery uses the same
-student language and shared surfaces. These authentication-copy changes occur
-before Setup and do not restore retired personalization inputs or grant a
-client-side profile-repair path.
+student language and shared surfaces. Web signup, recovery, and Google OAuth
+return to the current browser origin with one trailing slash; installed Android
+uses the existing native callback. These authentication changes occur before
+Setup and do not restore retired personalization inputs or grant a client-side
+profile-repair path.

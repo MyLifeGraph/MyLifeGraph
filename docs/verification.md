@@ -48,30 +48,29 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
-The current broad VPS-pilot working tree is based on
-`afcc9f7e667e2daed8faf233746279c186463a75`. Its captured-base selector chooses
-the Full lane. The complete captured-base Full selector passed on 2026-08-20:
-Flutter analysis passed with 1,098 tests, FastAPI Ruff passed with 1,681 tests
-and 2 intentional skips, and the debug web bundle built successfully. The
-source group in the same Fast run passed the documentation, visual, E2E-split,
-VPS, backup, Vercel, Android, Turnstile, staging, participation-operator, and
-local-safety gates. The explicitly authorized guarded local reset first created
-and restore-verified a new full archive, then rebuilt the normal database on
-the CLI-resolved PostgreSQL 17 image through all 69 migrations. The source
-archive retained the four pre-reset local Auth/profile identities; the fresh
-database intentionally had no seed, and the browser gate removed every exact
-run-owned identity, leaving zero Auth users and profiles. The Database gate
-passed against that normal PG17 state and pinned isolated PG15/PG17 full
-chains. Full selector browser run `20260820T133016Z-3151532` passed all eight
-independent UI journeys with exact run-owned Auth cleanup. This is a pass over
-the accumulated task tree selected from the captured base, not a tagged or
-deployed release identity.
+The current promotion merge candidate is based on
+`f5f8ae31e1842d25a18c374c5c453906218a57a6` and locally integrates GitHub
+`main` commit `87277e704f318bc569d12c88d665759a22eda2f1` without rewriting
+either history. Its captured-base selector chooses the Full lane. The complete
+captured-base Full selector passed on 2026-08-21: Flutter analysis passed with
+1,100 tests, FastAPI Ruff passed with 1,681 tests and 2 intentional skips, and
+the debug web bundle built successfully. The source group in the same Fast run
+passed the documentation, visual, E2E-split, VPS, backup, Vercel, Android,
+Turnstile, staging, participation-operator, and local-safety gates. The normal
+PostgreSQL 17 migration history already matched all 69 repository migrations;
+the run neither reset the database nor applied SQL. The Database gate passed
+against that normal PG17 state and the pinned isolated PG15/PG17 full chains,
+including the PG17 owner/ACL restore and deletion replay. Full selector browser
+run `20260821T120126Z-109455` passed all eight independent UI journeys without
+retry and with exact run-owned Auth cleanup. This is a pass over the local
+merge candidate selected from the captured base, not a tagged or deployed
+release identity.
 The former
 2026-08-19 counts belong to the pre-Coach-V4/pre-hosting predecessor and are
 retained only in
 [Verification History](verification-history.md); they do not prove this tree.
 
-Current 2026-08-20 repository evidence includes 15 VPS tests, 15 backup tests,
+Current 2026-08-21 repository evidence includes 15 VPS tests, 15 backup tests,
 3 Vercel-release tests, 2 Android-release tests plus the static Android guard,
 documentation consistency across 96 Markdown files and 82 FastAPI routes, the
 complete Fast suites above, and the debug web build containing the Turnstile
@@ -123,9 +122,9 @@ Vercel, or public-pilot deployment is claimed.
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-20: VPS 15, backup 15, Vercel 3, Android 2 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. | Templates/unit checks only; no VPS, cloud, signing-key, or device execution. |
-| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,098 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260820T133016Z-3151532` passed 8/8 journeys with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
-| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-20; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
+| Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-21: VPS 15, backup 15, Vercel 3, Android 2 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. | Templates/unit checks only; no VPS, cloud, signing-key, or device execution. |
+| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T120126Z-109455` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
+| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-21; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
 

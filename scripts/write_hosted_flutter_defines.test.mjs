@@ -94,6 +94,19 @@ test('hosted defines keep a bounded staging legacy-key transition', () => {
   assert.equal(duringRotation.SUPABASE_ANON_KEY, '');
 });
 
+test('hosted defines reject framework-specific aliases', () => {
+  const aliasesOnly = {
+    ...validEnvironment,
+    SUPABASE_URL: '',
+    SUPABASE_PUBLISHABLE_KEY: '',
+    VITE_SUPABASE_URL: validEnvironment.SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+      validEnvironment.SUPABASE_PUBLISHABLE_KEY,
+  };
+
+  assert.throws(() => hostedFlutterDefines(aliasesOnly), /SUPABASE_URL/);
+});
+
 test('pilot builds require current keys and reject staging crossover', () => {
   const pilotEnvironment = {
     ...validEnvironment,

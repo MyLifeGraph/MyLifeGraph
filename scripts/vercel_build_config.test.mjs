@@ -18,6 +18,7 @@ test('Vercel build uses an immutable official Flutter archive', () => {
   assert.match(build, /\/tmp\/\*\|\/var\/tmp\/\*\|\/home\/\*/);
   assert.match(build, /PATH='\/usr\/local\/bin:\/usr\/bin:\/bin'/);
   assert.match(build, /verify_vercel_build_identity\.mjs/);
+  assert.doesNotMatch(build, /VITE_|NEXT_PUBLIC_|RESOLVED_SUPABASE/);
   assert.match(build, /pub get --enforce-lockfile/);
   assert.match(build, /--no-web-resources-cdn --csp/);
   assert.match(build, /write_web_csp\.mjs/);
@@ -59,6 +60,8 @@ test('Vercel child environment drops inherited sentinel secrets', () => {
         PATH: process.env.PATH,
         SENTINEL_SECRET: 'must-not-reach-child',
         SUPABASE_ACCESS_TOKEN: 'must-not-reach-child-either',
+        VITE_SUPABASE_URL: 'must-not-reach-child-vite',
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'must-not-reach-child-next',
         OPENAI_API_KEY: 'must-not-reach-child-openai',
         AWS_SECRET_ACCESS_KEY: 'must-not-reach-child-aws',
       },
@@ -69,6 +72,6 @@ test('Vercel child environment drops inherited sentinel secrets', () => {
   assert.doesNotMatch(result.stdout, /must-not-reach-child/);
   assert.doesNotMatch(
     result.stdout,
-    /SUPABASE_ACCESS_TOKEN|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|SENTINEL_SECRET/,
+    /SUPABASE_ACCESS_TOKEN|VITE_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|SENTINEL_SECRET/,
   );
 });

@@ -16,8 +16,11 @@ const localDeviceTimezoneMarker = 'device-local';
 
 typedef GoogleOAuthLauncher = Future<bool> Function(String redirectTo);
 typedef GuestCheckInMigrator = Future<void> Function(String userId);
-typedef PendingAccountDeletionResolver = Future<AccountDeletionRecovery?>
-    Function({required String userId, required String accessToken});
+typedef PendingAccountDeletionResolver =
+    Future<AccountDeletionRecovery?> Function({
+      required String userId,
+      required String accessToken,
+    });
 
 class AuthRepository {
   AuthRepository(
@@ -30,14 +33,14 @@ class AuthRepository {
     PendingAccountDeletionResolver? pendingAccountDeletionResolver,
     bool requiresPilotParticipation = false,
     bool requiresAuthCaptcha = false,
-  })  : _useMockData = useMockData,
-        _guestSetupDataSource = guestSetupDataSource,
-        _googleOAuthLauncher = googleOAuthLauncher,
-        _guestCheckInMigrator = guestCheckInMigrator,
-        _pilotParticipationGateway = pilotParticipationGateway,
-        _pendingAccountDeletionResolver = pendingAccountDeletionResolver,
-        _requiresPilotParticipation = requiresPilotParticipation,
-        _requiresAuthCaptcha = requiresAuthCaptcha;
+  }) : _useMockData = useMockData,
+       _guestSetupDataSource = guestSetupDataSource,
+       _googleOAuthLauncher = googleOAuthLauncher,
+       _guestCheckInMigrator = guestCheckInMigrator,
+       _pilotParticipationGateway = pilotParticipationGateway,
+       _pendingAccountDeletionResolver = pendingAccountDeletionResolver,
+       _requiresPilotParticipation = requiresPilotParticipation,
+       _requiresAuthCaptcha = requiresAuthCaptcha;
 
   final SupabaseClient _client;
   final bool _useMockData;
@@ -169,10 +172,7 @@ class AuthRepository {
       return null;
     }
 
-    var profile = await _resolveAuthenticatedProfile(
-      user,
-      preferredName: name,
-    );
+    var profile = await _resolveAuthenticatedProfile(user, preferredName: name);
     if (_requiresPilotParticipation) {
       profile = await _recordCurrentPilotParticipation(profile);
       profile = await _finishAuthenticatedProfile(profile);
@@ -186,11 +186,12 @@ class AuthRepository {
   Future<void> signInWithGoogle({bool confirmed18OrOlder = false}) async {
     _requirePilotParticipationConfirmation(confirmed18OrOlder);
     final redirectTo = authRedirectUrl();
-    final opened = await (_googleOAuthLauncher?.call(redirectTo) ??
-        _client.auth.signInWithOAuth(
-          OAuthProvider.google,
-          redirectTo: redirectTo,
-        ));
+    final opened =
+        await (_googleOAuthLauncher?.call(redirectTo) ??
+            _client.auth.signInWithOAuth(
+              OAuthProvider.google,
+              redirectTo: redirectTo,
+            ));
     if (!opened) {
       throw const AuthException('Google sign-in could not be opened.');
     }
@@ -288,15 +289,14 @@ class AuthRepository {
     return list.isEmpty ? null : list.first;
   }
 
-  AppProfile _profileFromRow(
-    Map<String, dynamic> row, {
-    User? fallbackUser,
-  }) {
+  AppProfile _profileFromRow(Map<String, dynamic> row, {User? fallbackUser}) {
     final acceptedAtValue = row['pilot_participation_accepted_at'];
-    final parsedAcceptedAt =
-        acceptedAtValue is String ? DateTime.tryParse(acceptedAtValue) : null;
-    final acceptedAt =
-        parsedAcceptedAt?.isUtc == true ? parsedAcceptedAt : null;
+    final parsedAcceptedAt = acceptedAtValue is String
+        ? DateTime.tryParse(acceptedAtValue)
+        : null;
+    final acceptedAt = parsedAcceptedAt?.isUtc == true
+        ? parsedAcceptedAt
+        : null;
     return AppProfile(
       id: '${row['id'] ?? fallbackUser?.id ?? ''}',
       email: '${row['email'] ?? fallbackUser?.email ?? ''}',
@@ -431,19 +431,22 @@ class AuthRepository {
 }
 
 AppProfile _deletionRecoveryProfile(User user) => AppProfile(
-      id: user.id,
-      email: user.email ?? '',
-      name: 'Account deletion',
-      timezone: 'UTC',
-      role: AppRole.user,
-      onboardingDone: true,
-      authProvider: user.appMetadata['provider']?.toString() ?? 'email',
-    );
+  id: user.id,
+  email: user.email ?? '',
+  name: 'Account deletion',
+  timezone: 'UTC',
+  role: AppRole.user,
+  onboardingDone: true,
+  authProvider: user.appMetadata['provider']?.toString() ?? 'email',
+);
 
 const nativeAuthCallbackUrl = 'com.mylifegraph.app://login-callback/';
 
 String authRedirectUrl() =>
-    kIsWeb ? '${Uri.base.origin}/' : nativeAuthCallbackUrl;
+    kIsWeb ? webOAuthRedirectTo(Uri.base) : nativeAuthCallbackUrl;
+
+@visibleForTesting
+String webOAuthRedirectTo(Uri baseUri) => '${baseUri.origin}/';
 
 bool usesLocalDemoAuthData({
   required bool useMockData,
@@ -477,23 +480,21 @@ bool shouldReadRemoteProfileForAuthIdentity({
   );
 }
 
-AppProfile localDemoProfileFromAuthUser(
-  User user, {
-  String? preferredName,
-}) {
+AppProfile localDemoProfileFromAuthUser(User user, {String? preferredName}) {
   final email = user.email ?? '';
   final preferred = preferredName?.trim();
   final metadataName = user.userMetadata?['display_name']?.toString().trim();
   final fullName = user.userMetadata?['full_name']?.toString().trim();
-  final fallbackName =
-      email.contains('@') ? email.split('@').first : 'Demo User';
+  final fallbackName = email.contains('@')
+      ? email.split('@').first
+      : 'Demo User';
   final name = preferred?.isNotEmpty == true
       ? preferred!
       : metadataName?.isNotEmpty == true
-          ? metadataName!
-          : fullName?.isNotEmpty == true
-              ? fullName!
-              : fallbackName;
+      ? metadataName!
+      : fullName?.isNotEmpty == true
+      ? fullName!
+      : fallbackName;
   return AppProfile(
     id: user.id,
     email: email,
@@ -509,10 +510,7 @@ bool shouldMigrateGuestCheckIns({
   required bool useMockData,
   required AppProfile profile,
 }) {
-  return !usesLocalDemoAuthData(
-    useMockData: useMockData,
-    profile: profile,
-  );
+  return !usesLocalDemoAuthData(useMockData: useMockData, profile: profile);
 }
 
 Future<AppProfile> overlayLocalDemoSetup({
@@ -520,8 +518,9 @@ Future<AppProfile> overlayLocalDemoSetup({
   required GuestSetupDataSource dataSource,
 }) async {
   final preferences = await SharedPreferences.getInstance();
-  final storedName =
-      preferences.getString(GuestSetupDataSource.guestNameKey)?.trim();
+  final storedName = preferences
+      .getString(GuestSetupDataSource.guestNameKey)
+      ?.trim();
   final storedOnboardingDone =
       preferences.getBool(GuestSetupDataSource.guestOnboardingDoneKey) ?? false;
   IntakeSetupReadState? setup;
@@ -545,8 +544,8 @@ Future<AppProfile> overlayLocalDemoSetup({
     name: displayName?.isNotEmpty == true
         ? displayName
         : storedName?.isNotEmpty == true
-            ? storedName
-            : null,
+        ? storedName
+        : null,
     onboardingDone: true,
   );
 }

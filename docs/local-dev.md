@@ -44,11 +44,15 @@ before compiling unless `APP_ENV` is exactly `staging` or `pilot`,
 `USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, a compatible Supabase
 client key is present, and Supabase/FastAPI URLs are credential-free HTTPS
 roots. Exact `APP_BUILD_SHA`, `APP_RELEASE_TAG`, and `PILOT_CONTACT_EMAIL` are
-also required; Settings renders the identity/contact without exposing secrets.
-privacy notice. Staging binds to `STAGING_SUPABASE_PROJECT_REF` and may temporarily use
-the legacy anon key; pilot additionally requires a distinct
+also required; Settings renders the identity/contact without exposing secrets,
+and hosted Auth includes the contact in its privacy notice. Staging binds to
+`STAGING_SUPABASE_PROJECT_REF` and may temporarily use the legacy anon key;
+pilot additionally requires a distinct
 `PILOT_SUPABASE_PROJECT_REF` and a current `sb_publishable_` key. Neither the
 helper nor CI prints the resulting values.
+The hosted build deliberately does not translate `VITE_*` or `NEXT_PUBLIC_*`
+aliases: Vercel must provide the canonical names so the exact environment,
+project-ref, key-generation, and release-identity checks cannot be bypassed.
 
 ## Remote Staging Verification
 
