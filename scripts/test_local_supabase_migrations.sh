@@ -107,6 +107,11 @@ for rejected_image in \
   fi
 done
 
+assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  'if ! local_supabase_is_recognized_postgres_image "$requested_image"; then'
+assert_not_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  'if [[ ! "$requested_image" =~ ^public\.ecr\.aws/supabase/postgres:'
+
 reset_scenario() {
   local state="$1"
   : >"$EVENTS_FILE"

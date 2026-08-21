@@ -241,7 +241,7 @@ isolated_postgres_start() {
   local_supabase_assert_exact_database_target "$root_dir" || return $?
   postgres_image="$LOCAL_SUPABASE_SAFETY_IMAGE"
   if [[ -n "$requested_image" ]]; then
-    if [[ ! "$requested_image" =~ ^public\.ecr\.aws/supabase/postgres:[A-Za-z0-9._-]+$ ]]; then
+    if ! local_supabase_is_recognized_postgres_image "$requested_image"; then
       printf 'Isolated Postgres error: unsafe image %q.\n' \
         "$requested_image" >&2
       return 2

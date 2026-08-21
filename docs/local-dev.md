@@ -1212,7 +1212,8 @@ raw file. Use that bounded failure output for diagnosis; it does not weaken the
 CLI exit-status or migration-history gate.
 
 Browser E2E uses the same bounded start-log behavior. The running-target guard
-accepts only the exact official `public.ecr.aws/supabase/postgres:<tag>` and
+and explicit isolated compatibility-image requests share one allowlist for
+only the exact official `public.ecr.aws/supabase/postgres:<tag>` and
 `ghcr.io/supabase/postgres:<tag>` forms; changing the CLI mirror does not permit
 another GHCR namespace.
 

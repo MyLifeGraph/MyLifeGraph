@@ -61,12 +61,12 @@ Postgres process and storage boundary.
 | Layer | Enforced behavior | Owning source |
 | --- | --- | --- |
 | Ordinary workflow guard | Rejects `RESET_DB=true`; default migration check is read-only. | `scripts/lib/local_supabase_migrations.sh` |
-| Exact target validation | Requires project `mylifegraph`, the expected Supabase-labelled container, an exact `public.ecr.aws/supabase/postgres:<tag>` or `ghcr.io/supabase/postgres:<tag>` image, a running state, and database/user identity `postgres`. Other registries and GHCR namespaces remain rejected. | `scripts/lib/local_supabase_database_safety.sh` |
+| Exact target validation | Requires project `mylifegraph`, the expected Supabase-labelled container, an exact `public.ecr.aws/supabase/postgres:<tag>` or `ghcr.io/supabase/postgres:<tag>` image, a running state, and database/user identity `postgres`. Explicit isolated-image requests reuse that same exact allowlist; other registries and GHCR namespaces remain rejected. | `scripts/lib/local_supabase_database_safety.sh` |
 | Content-bound approval | Hashes project, container, database, Auth/profile counts, database size, latest migration, and a logical SHA-256 digest of the protected Auth, private product/ledger, public, Storage, and migration data into a short-lived reset token. PostgreSQL 17's per-dump `\\restrict` transport nonces are removed only as one exact, ordered, matching meta-command pair before hashing. | `scripts/lib/local_supabase_database_safety.sh` |
 | Backup gate | Creates a complete custom-format `pg_dump`, checks required archive entries, restores it in a separate container, and compares Auth/profile counts and latest migration. | `scripts/backup_local_supabase.sh` and the shared safety library |
 | Single reset choke point | Rechecks the fingerprint after backup, then and only then invokes `supabase db reset --local`. | `scripts/reset_local_supabase.sh` and the shared safety library |
 | Physical test isolation | Uses a labelled, read-only-root, RAM-only Postgres container with no normal database volume. | `scripts/lib/goal_removal_migration_harness.sh` and the shared safety library |
-| Source regression | Proves rejection paths, backup-before-reset order, target-drift refusal, exact `--local` invocation, absence of unsafe reset targets, and portable lock-timeout classification without optional runner tools. | `scripts/test_local_supabase_migrations.sh` |
+| Source regression | Proves rejection paths, shared exact running/isolated image recognition, backup-before-reset order, target-drift refusal, exact `--local` invocation, absence of unsafe reset targets, and portable lock-timeout classification without optional runner tools. | `scripts/test_local_supabase_migrations.sh` |
 | CI boundary | Fresh jobs start a fresh Supabase stack; they do not pass reset authority into verification or E2E. | `.github/workflows/ci.yml` |
 
 No permanent generic JSON constraint is part of this safety layer. The Goal

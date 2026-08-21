@@ -1062,9 +1062,10 @@ Postgres container. The normal verifier and browser E2E runner capture raw
 stack-start output in a mode-`0600` temporary file, emit one stable success
 marker, and expose only a bounded sanitized tail on failure before
 trap-cleanup; logging backpressure cannot change database authority or conceal
-the CLI failure. The exact official ECR and GHCR Supabase Postgres namespaces
-are recognized for the running target; other registries and namespaces remain
-rejected. An exceptional
+the CLI failure. The running target and any explicitly requested isolated
+compatibility lane share one allowlist for the exact official ECR and GHCR
+Supabase Postgres namespaces; other registries and namespaces remain rejected.
+An exceptional
 normal-local reset requires exact project/container/database validation, a
 content-bound preview token, an
 automatic restore-verified backup, a second unchanged-target check, and the
