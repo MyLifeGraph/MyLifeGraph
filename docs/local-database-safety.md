@@ -295,6 +295,10 @@ The shared isolation helper deliberately does not create a second database in
   the validated container self-address (`/32`) with SCRAM; and
 - an ownership-label check before forced cleanup.
 
+The harness never downloads a requested compatibility image implicitly. Fresh
+CI therefore prefetches both exact PG15 and PG17 pins; the normal stack's
+different PG17 image is not treated as a compatibility-lane substitute.
+
 The disposable server receives no Supabase key, application credential, normal
 database URL, host data volume, or remote-project reference. `pg_net` is
 preloaded only when the isolated bootstrap identity is the image's ordinary

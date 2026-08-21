@@ -49,15 +49,17 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 ## Current Verified Baseline
 
 The current pull-request candidate's latest task base is
-`cc77a981ab61d689c03a4a68699f6d2086a3d3cd`, which contains the reviewed
+`91351af560529329596f96428239832af48035b6`, which contains the reviewed
 promotion merge `f9198ce2a9560916e8d3c440ea31a6097a651fef` plus the bounded
 Supabase-runner diagnostics, image-identity fixes, and checkout-complete CI
 toolchains, including the shared exact ECR/GHCR allowlist for validated running
 and explicitly requested isolated Postgres images, and pins every Android CI,
-staging, and release workflow to guarded Java 21. The post-base correction
-removes the optional `rg` runtime dependency from database harness error,
-role, archive, and source classification in favor of baseline `grep`. That
-merge integrates
+staging, and release workflow to guarded Java 21. It also removes the optional
+`rg` runtime dependency from database harness error, role, archive, and source
+classification in favor of baseline `grep`. The post-base correction makes
+fresh database CI fetch both pinned PG15/PG17 compatibility images before the
+gate instead of relying on the normal stack's different PG17 image. The
+promotion merge integrates
 GitHub `main` commit `87277e704f318bc569d12c88d665759a22eda2f1`
 without rewriting either history. Its captured-base selector chooses the Full
 lane. The complete captured-base Full selector passed on 2026-08-21: Flutter analysis passed with
@@ -69,7 +71,7 @@ PostgreSQL 17 migration history already matched all 69 repository migrations;
 the run neither reset the database nor applied SQL. The Database gate passed
 against that normal PG17 state and the pinned isolated PG15/PG17 full chains,
 including the PG17 owner/ACL restore and deletion replay. Full selector browser
-run `20260821T144520Z-501414` passed all eight independent UI journeys without
+run `20260821T150712Z-550816` passed all eight independent UI journeys without
 retry and with exact run-owned Auth cleanup. This is a pass over the local
 merge candidate selected from the captured base, not a tagged or deployed
 release identity.
@@ -136,7 +138,7 @@ Vercel, or public-pilot deployment is claimed.
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
 | Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-21: VPS 15, backup 15, Vercel 3, Android 5 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. The checksum-verified tracked Gradle 8.14 wrapper also passed `testDebugUnitTest` and `lintDebug`. | Templates/unit and local JVM/lint checks only; no VPS, cloud, signing-key, APK-device, or physical Focus Protection execution. |
-| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T144520Z-501414` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
+| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T150712Z-550816` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
 | Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-21; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
@@ -488,8 +490,9 @@ cleanup. The proof never applies the erase migration to the normal local
 database and grants no remote authority.
 
 The local harness refuses to download either compatibility image implicitly.
-Fresh database CI obtains PG17 through the configured normal Supabase start and
-explicitly pulls the pinned PG15 tag before invoking the same gate.
+Fresh database CI explicitly pulls both pinned compatibility tags before
+invoking the same gate; the configured normal Supabase start's separate PG17
+image is not accepted as an implicit substitute.
 
 Read `docs/supabase-current-state.md` and
 `docs/local-database-safety.md` before database work. Inspect installed CLI

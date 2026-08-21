@@ -1617,7 +1617,9 @@ and emits only the final 200 sanitized lines. Browser E2E applies the same
 bounded start-log policy. Running-target validation and explicit isolated-image
 requests share one allowlist for only the official ECR or GHCR
 `supabase/postgres:<tag>` forms and continue to reject other registries and
-namespaces. Isolated expected lock-timeout/role-guard and Coach limit proofs
+namespaces. Fresh CI explicitly prefetches both exact compatibility pins; its
+normal stack's separate PG17 image is not an implicit substitute. Isolated
+expected lock-timeout/role-guard and Coach limit proofs
 plus backup archive and safety source checks use only baseline runner text
 tools rather than optional `rg`. If the histories differ, review the pending
 SQL and affected local rows before opting in:

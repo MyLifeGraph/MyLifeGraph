@@ -1065,6 +1065,8 @@ trap-cleanup; logging backpressure cannot change database authority or conceal
 the CLI failure. The running target and any explicitly requested isolated
 compatibility lane share one allowlist for the exact official ECR and GHCR
 Supabase Postgres namespaces; other registries and namespaces remain rejected.
+Fresh CI explicitly fetches both pinned compatibility-lane images before the
+gate; the normal stack's separate PG17 image cannot satisfy either exact pin.
 An exceptional
 normal-local reset requires exact project/container/database validation, a
 content-bound preview token, an

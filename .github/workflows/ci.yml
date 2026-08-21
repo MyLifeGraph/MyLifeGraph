@@ -169,8 +169,10 @@ jobs:
           version: 2.107.0
           github-token: ${{ github.token }}
 
-      - name: Fetch pinned PostgreSQL 15 compatibility image
-        run: docker pull public.ecr.aws/supabase/postgres:15.8.1.085
+      - name: Fetch pinned PostgreSQL compatibility images
+        run: |
+          docker pull public.ecr.aws/supabase/postgres:15.8.1.085
+          docker pull public.ecr.aws/supabase/postgres:17.6.1.113
 
       - name: Apply the fresh migration chain and run all pgTAP assertions
         run: npm run verify:db

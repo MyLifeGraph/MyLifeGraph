@@ -1168,8 +1168,9 @@ verifies PostgreSQL 16+'s automatic ADMIN-only role-creator membership, the
 complete pgTAP corpus, a full owner/ACL-preserving restore into a second PG17
 RAM-only target, and one deletion replay. Both images must already exist
 locally; verification does not silently install or upgrade Postgres. Fresh
-database CI obtains PG17 through the normal Supabase start and explicitly pulls
-the pinned PG15 tag before running this gate.
+database CI explicitly pulls both pinned compatibility tags before running this
+gate; the normal Supabase start's separate PG17 image is not accepted as an
+implicit substitute.
 
 The release backup workflow is intentionally narrower than this cross-version
 development proof: both disposable restore/reference templates pin PostgreSQL
