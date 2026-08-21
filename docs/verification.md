@@ -49,12 +49,13 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 ## Current Verified Baseline
 
 The current pull-request candidate's latest task base is
-`699c9f335787695a088109b65c6be2fb37e63269`, which contains the reviewed
+`675ff6ab3dd701e1221759a97dc8555d35779a16`, which contains the reviewed
 promotion merge `f9198ce2a9560916e8d3c440ea31a6097a651fef` plus the bounded
 Supabase-runner diagnostics, image-identity fixes, and checkout-complete CI
-toolchains. The post-base correction makes explicitly requested isolated
-Postgres images reuse the same exact ECR/GHCR allowlist as the validated
-running target. That merge integrates
+toolchains, including the shared exact ECR/GHCR allowlist for validated running
+and explicitly requested isolated Postgres images. The post-base correction
+pins every Android CI, staging, and release workflow to guarded Java 21. That
+merge integrates
 GitHub `main` commit `87277e704f318bc569d12c88d665759a22eda2f1`
 without rewriting either history. Its captured-base selector chooses the Full
 lane. The complete captured-base Full selector passed on 2026-08-21: Flutter analysis passed with
@@ -66,7 +67,7 @@ PostgreSQL 17 migration history already matched all 69 repository migrations;
 the run neither reset the database nor applied SQL. The Database gate passed
 against that normal PG17 state and the pinned isolated PG15/PG17 full chains,
 including the PG17 owner/ACL restore and deletion replay. Full selector browser
-run `20260821T135858Z-397427` passed all eight independent UI journeys without
+run `20260821T142307Z-451605` passed all eight independent UI journeys without
 retry and with exact run-owned Auth cleanup. This is a pass over the local
 merge candidate selected from the captured base, not a tagged or deployed
 release identity.
@@ -76,11 +77,14 @@ retained only in
 [Verification History](verification-history.md); they do not prove this tree.
 
 Current 2026-08-21 repository evidence includes 15 VPS tests, 15 backup tests,
-3 Vercel-release tests, 4 Android-release tests plus the static Android guard,
+3 Vercel-release tests, 5 Android-release tests plus the static Android guard,
 documentation consistency across 96 Markdown files and 82 FastAPI routes, the
 complete Fast suites above, and the debug web build containing the Turnstile
 assets. The tracked, checksum-verified Gradle 8.14 wrapper also completed the
-Android `testDebugUnitTest` and `lintDebug` gate successfully. The normal local
+Android `testDebugUnitTest` and `lintDebug` gate successfully on Java 21. The
+Android source guard requires that same exact Java version in CI, staging, and
+release workflows so Android 36/Robolectric tests cannot regress to the
+unsupported Java 17 runner. The normal local
 PostgreSQL 17 database and pinned, physically separate
 RAM-only PostgreSQL 15 and 17 runs apply the complete 69-file repository chain.
 The Recommendation transition suite passed 53 assertions on both pinned
@@ -129,8 +133,8 @@ Vercel, or public-pilot deployment is claimed.
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-21: VPS 15, backup 15, Vercel 3, Android 4 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. The checksum-verified tracked Gradle 8.14 wrapper also passed `testDebugUnitTest` and `lintDebug`. | Templates/unit and local JVM/lint checks only; no VPS, cloud, signing-key, APK-device, or physical Focus Protection execution. |
-| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T135858Z-397427` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
+| Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-21: VPS 15, backup 15, Vercel 3, Android 5 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. The checksum-verified tracked Gradle 8.14 wrapper also passed `testDebugUnitTest` and `lintDebug`. | Templates/unit and local JVM/lint checks only; no VPS, cloud, signing-key, APK-device, or physical Focus Protection execution. |
+| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T142307Z-451605` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
 | Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-21; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
@@ -606,8 +610,9 @@ The Gradle 8.14 launcher scripts and wrapper JAR are tracked, so a fresh CI
 checkout can run the JVM/lint gate. `verify:android-release` rejects an ignored
 or missing wrapper, a wrapper JAR that differs from Gradle's published SHA-256,
 or wrapper properties with missing, commented, duplicate, unexpected, or
-mismatched active values. Git pins the Unix launcher to LF, the Windows
-launcher to CRLF, and the wrapper JAR to binary treatment:
+mismatched active values. It also requires exactly one active Java 21 pin in
+each Android CI, staging, and release workflow. Git pins the Unix launcher to
+LF, the Windows launcher to CRLF, and the wrapper JAR to binary treatment:
 
 ```bash
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"

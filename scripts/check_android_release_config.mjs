@@ -51,6 +51,30 @@ export function requireExactProperties(source, expected, label) {
   }
 }
 
+export function requireExactJavaVersion(source, expected, label) {
+  const versions = [];
+  for (const [index, rawLine] of source.split(/\r?\n/).entries()) {
+    if (!rawLine.trimStart().startsWith('java-version:')) {
+      continue;
+    }
+    const match = rawLine.match(
+      /^\s*java-version:\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9._+-]+))\s*(?:#.*)?$/,
+    );
+    if (!match) {
+      throw new Error(
+        `${label} has malformed java-version at line ${index + 1}.`,
+      );
+    }
+    versions.push(match[1] ?? match[2] ?? match[3]);
+  }
+  if (versions.length !== 1) {
+    throw new Error(`${label} requires exactly one active java-version.`);
+  }
+  if (versions[0] !== expected) {
+    throw new Error(`${label} requires exact java-version ${expected}.`);
+  }
+}
+
 function requireNotIgnored(source, value) {
   const activePatterns = source
     .split(/\r?\n/)
@@ -101,6 +125,7 @@ export function checkAndroidReleaseConfig() {
   );
   const workflow = read('.github/workflows/pilot-release-apk.yml');
   const stagingWorkflow = read('.github/workflows/staging-debug-apk.yml');
+  const ciWorkflow = read('.github/workflows/ci.yml');
   const captchaPlatform = read(
     'apps/mobile/lib/features/auth/presentation/captcha/auth_captcha_platform_native.dart',
   );
@@ -208,6 +233,9 @@ export function checkAndroidReleaseConfig() {
   );
   requireText(workflow, 'cyclonedx-json=', 'CycloneDX SBOM');
   requireText(workflow, 'source_sbom_sha256', 'SBOM artifact identity');
+  requireExactJavaVersion(ciWorkflow, '21', 'CI workflow');
+  requireExactJavaVersion(workflow, '21', 'release workflow');
+  requireExactJavaVersion(stagingWorkflow, '21', 'staging APK workflow');
   requireImmutableActionPins(workflow, 'release workflow');
   requireImmutableActionPins(stagingWorkflow, 'staging APK workflow');
   requireText(

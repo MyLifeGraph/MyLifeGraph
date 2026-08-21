@@ -148,9 +148,11 @@ and wrapper JAR. Its properties pin the official distribution checksum, and
 `npm run verify:android-release` checks both that checksum and Gradle's
 published wrapper-JAR checksum. The guard parses one unique active value for
 every wrapper property; comments, duplicate keys, and extra properties cannot
-satisfy a pin. Git also preserves LF for the Unix launcher, CRLF for the
-Windows launcher, and treats the JAR as binary. Android Studio and Windows ADB
-are not required.
+satisfy a pin. Local and GitHub Android verification use Java 21 because the
+pinned Android 36/Robolectric test surface cannot run on Java 17; CI, staging,
+and release workflows share that exact guarded Java pin. Git also preserves LF
+for the Unix launcher, CRLF for the Windows launcher, and treats the JAR as
+binary. Android Studio and Windows ADB are not required.
 
 For Android 11+, enable Developer options and Wireless Debugging, then use the
 `adb pair`, `adb connect`, and `adb reverse` commands in
