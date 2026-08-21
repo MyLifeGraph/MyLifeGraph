@@ -143,7 +143,14 @@ rows. Do not hand-edit a receipt or use this command for participant accounts.
 Android Focus Protection uses compile/target SDK 36 and minSdk 24. Keep the
 official command-line SDK, Platform Tools, platform 36, and build tools 36 in
 the ignored `.tools/android-sdk`; ignored `apps/mobile/android/local.properties`
-points `sdk.dir` there. Android Studio and Windows ADB are not required.
+points `sdk.dir` there. The repository tracks the Gradle 8.14 launcher scripts
+and wrapper JAR. Its properties pin the official distribution checksum, and
+`npm run verify:android-release` checks both that checksum and Gradle's
+published wrapper-JAR checksum. The guard parses one unique active value for
+every wrapper property; comments, duplicate keys, and extra properties cannot
+satisfy a pin. Git also preserves LF for the Unix launcher, CRLF for the
+Windows launcher, and treats the JAR as binary. Android Studio and Windows ADB
+are not required.
 
 For Android 11+, enable Developer options and Wireless Debugging, then use the
 `adb pair`, `adb connect`, and `adb reverse` commands in
@@ -1214,7 +1221,9 @@ as non-destructive merely because it avoids `db reset`.
 
 After normal migration history matches, `verify:db` also runs the Goal-removal
 migration harness in a separately labelled, RAM-only Postgres container with no
-normal Supabase volume. Inside that process the exact database name is
+normal Supabase volume. The expected writer-lock timeout is classified with
+baseline runner text tools, so the harness does not require an optional `rg`
+installation. Inside that process the exact database name is
 `mylifegraph_goal_removal_migration_test`. The harness initializes a fresh
 schema only through `20260804102409` with `migration up --db-url`, loads filled
 fixtures, applies the original and follow-up Goal migrations separately, proves

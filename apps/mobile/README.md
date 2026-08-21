@@ -690,7 +690,13 @@ For local Supabase reset E2E, service-role handling, artifacts, and known
 headless browser warnings, use `docs/verification.md` as the source of truth.
 
 Android builds require Android Studio or Android SDK command-line tools. Debug
-builds use debug signing. A distributable release intentionally fails until an
+builds use debug signing. The Gradle 8.14 launchers and wrapper JAR are tracked
+for fresh-clone CI; the Android release source gate checks Gradle's published
+wrapper-JAR SHA-256 and the pinned official distribution SHA-256 before the
+wrapper runs. The guard rejects duplicate, commented-only, unexpected, or
+mismatched active wrapper properties; Git preserves the Unix launcher as LF,
+the Windows launcher as CRLF, and the JAR as binary. Local SDK paths remain
+ignored. A distributable release intentionally fails until an
 ignored `android/key.properties` supplies `storePassword`, `keyPassword`,
 `keyAlias`, and `storeFile` for a private release keystore; release never falls
 back to the debug key. CI may instead supply the complete `ANDROID_KEY*`

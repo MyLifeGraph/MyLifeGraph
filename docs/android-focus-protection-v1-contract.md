@@ -182,6 +182,19 @@ text, and a review video showing agreement, refusal, app choice, and blocking.
 The service is not declared an Accessibility Tool. Play approval is external
 and cannot be guaranteed by code.
 
+## Repository Build Gate
+
+The repository tracks the Gradle 8.14 Unix and Windows launchers plus its
+wrapper JAR so a fresh checkout can execute `testDebugUnitTest` and `lintDebug`.
+The wrapper properties pin the official distribution SHA-256, and the Android
+release source gate verifies that value together with Gradle's published
+wrapper-JAR SHA-256. It requires one exact active value for every wrapper
+property and rejects comments-as-pins, duplicate keys, and extra properties.
+Git preserves the Unix launcher as LF, the Windows launcher as CRLF, and the
+JAR as binary. Local SDK paths and signing material remain ignored. A successful
+JVM, lint, or APK build is source/build evidence only and does not replace the
+physical acceptance matrix below.
+
 ## Physical Acceptance
 
 Use Android 11+ Wireless Debugging directly from WSL:

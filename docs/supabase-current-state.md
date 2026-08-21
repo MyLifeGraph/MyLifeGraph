@@ -1616,8 +1616,9 @@ temporary file; success emits one marker, while failure preserves the CLI exit
 and emits only the final 200 sanitized lines. Browser E2E applies the same
 bounded start-log policy. Running-target validation accepts only the official
 ECR or GHCR `supabase/postgres:<tag>` forms and continues to reject other
-registries and namespaces. If the histories differ, review the pending SQL and
-affected local rows before opting in:
+registries and namespaces. The isolated expected-lock-timeout proof uses only
+baseline runner text tools rather than optional `rg`. If the histories differ,
+review the pending SQL and affected local rows before opting in:
 
 ```bash
 APPLY_MIGRATIONS=true npm run verify:db

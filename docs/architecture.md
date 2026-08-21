@@ -1070,7 +1070,9 @@ content-bound preview token, an
 automatic restore-verified backup, a second unchanged-target check, and the
 dedicated wrapper's `db reset --local` call. Transition fixtures and concurrent
 lock tests likewise run in a separate Postgres process with no normal Supabase
-volume; another database in the normal cluster is not an isolation boundary.
+volume. Expected lock-timeout classification uses the runner's baseline text
+tools and does not depend on optional `rg`; another database in the normal
+cluster is not an isolation boundary.
 These repository controls grant no remote authority.
 
 See `docs/supabase-current-state.md` for the exact current schema caveat and

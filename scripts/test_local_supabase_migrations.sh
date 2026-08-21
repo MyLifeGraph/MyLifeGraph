@@ -373,6 +373,10 @@ assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
   '(public\.ecr\.aws|ghcr\.io)/supabase/postgres:'
 assert_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
   'isolated_postgres_start'
+assert_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
+  "grep -Eqi 'lock timeout|canceling statement due to lock timeout'"
+assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
+  "rg -qi 'lock timeout|canceling statement due to lock timeout'"
 assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
   'db reset --db-url'
 assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \

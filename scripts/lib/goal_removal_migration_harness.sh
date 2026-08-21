@@ -212,7 +212,7 @@ run_goal_removal_migration_harness() (
     printf '%s\n' 'Goal-removal migration unexpectedly passed under a writer lock.' >&2
     return 1
   fi
-  if ! rg -qi 'lock timeout|canceling statement due to lock timeout' \
+  if ! grep -Eqi 'lock timeout|canceling statement due to lock timeout' \
     "$harness_root/locked-migration.log"; then
     goal_removal_harness_sanitize_output \
       <"$harness_root/locked-migration.log" >&2
