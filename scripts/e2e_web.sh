@@ -34,6 +34,8 @@ E2E_LOG_ROOT="$ROOT_DIR/.tools/e2e/runs"
 E2E_RUN_DIR="$E2E_LOG_ROOT/$E2E_RUN_ID"
 FLUTTER_LOG="$E2E_RUN_DIR/flutter-web.log"
 AI_SERVICE_LOG="$E2E_RUN_DIR/ai-service.log"
+SUPABASE_START_FAILURE_TAIL_LINES=200
+SUPABASE_START_LOG=''
 
 timer_now_ms() {
   date +%s%3N
@@ -211,6 +213,10 @@ cleanup() {
     kill "$AI_SERVICE_PID" >/dev/null 2>&1 || true
     wait "$AI_SERVICE_PID" >/dev/null 2>&1 || true
   fi
+  if [[ -n "${SUPABASE_START_LOG:-}" && -f "$SUPABASE_START_LOG" ]]; then
+    rm -f -- "$SUPABASE_START_LOG"
+    SUPABASE_START_LOG=''
+  fi
   emit_timing "process_cleanup" "$cleanup_started_at"
   exit "$original_status"
 }
@@ -218,11 +224,20 @@ trap cleanup EXIT
 
 supabase_started_at="$(timer_now_ms)"
 supabase_cli --version
-if ! start_output="$(supabase_cli start 2>&1)"; then
-  printf '%s\n' "$start_output" | sanitize_supabase_output >&2
+SUPABASE_START_LOG="$(
+  mktemp "${TMPDIR:-/tmp}/mylifegraph-e2e-supabase-start.XXXXXX"
+)"
+chmod 600 "$SUPABASE_START_LOG"
+if ! supabase_cli start >"$SUPABASE_START_LOG" 2>&1; then
+  printf '%s\n' \
+    "Supabase local stack start failed; showing the final ${SUPABASE_START_FAILURE_TAIL_LINES} sanitized log lines." >&2
+  tail -n "$SUPABASE_START_FAILURE_TAIL_LINES" "$SUPABASE_START_LOG" |
+    sanitize_supabase_output >&2
   exit 1
 fi
-printf '%s\n' "$start_output" | sanitize_supabase_output
+printf '%s\n' 'Supabase local stack started.'
+rm -f -- "$SUPABASE_START_LOG"
+SUPABASE_START_LOG=''
 
 local_supabase_prepare_migration_state \
   "$RESET_DB" "$APPLY_MIGRATIONS" false

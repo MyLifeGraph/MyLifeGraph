@@ -19,6 +19,7 @@ mkdir -p \
   "$REPO/services/ai_service" \
   "$REPO/node_modules/playwright" \
   "$REPO/node_modules/.bin" \
+  "$TEST_ROOT/tmp" \
   "$FAKE_BIN"
 cp "$SOURCE_ROOT/scripts/e2e_web.sh" "$REPO/scripts/e2e_web.sh"
 cp "$SOURCE_ROOT/scripts/lib/local_supabase_migrations.sh" \
@@ -32,6 +33,15 @@ case "${1:-}" in
     printf '2.107.0\n'
     ;;
   start)
+    printf 'supabase-start-log-mode=%s\n' \
+      "$(stat -Lc %a "/proc/$$/fd/1")" >>"$TEST_EVENT_FILE"
+    for ((line = 1; line <= ${FAKE_SUPABASE_START_LINES:-1}; line++)); do
+      printf 'supabase-start-line-%03d\n' "$line"
+    done
+    if [[ "${FAKE_SUPABASE_START_FAIL:-false}" == "true" ]]; then
+      printf 'Secret │ fake-local-secret │\n'
+      exit 37
+    fi
     ;;
   migration)
     [[ "${2:-}" == "list" && "${3:-}" == "--local" ]]
@@ -150,6 +160,7 @@ run_case() {
   set +e
   env -i \
     PATH="$FAKE_BIN:/usr/local/bin:/usr/bin:/bin" \
+    TMPDIR="$TEST_ROOT/tmp" \
     TEST_EVENT_FILE="$CASE_EVENTS" \
     TEST_CURL_MARKER="$marker" \
     AI_SERVICE_PYTHON="$FAKE_BIN/python" \
@@ -169,9 +180,17 @@ run_case() {
     sed -n '1,240p' "$CASE_OUTPUT" >&2 || true
     exit 1
   fi
+  if find "$TEST_ROOT/tmp" -mindepth 1 -print -quit | grep -q .; then
+    printf 'Case %s left a Supabase start log behind.\n' "$name" >&2
+    find "$TEST_ROOT/tmp" -mindepth 1 -maxdepth 1 -print >&2
+    exit 1
+  fi
 }
 
 run_case fastapi-occupied 1 FAKE_OCCUPIED_PORT=8000
+assert_contains "$CASE_OUTPUT" 'Supabase local stack started.'
+assert_not_contains "$CASE_OUTPUT" 'supabase-start-line-001'
+assert_contains "$CASE_EVENTS" 'supabase-start-log-mode=600'
 assert_contains "$CASE_OUTPUT" \
   'Port 8000 is already occupied; refusing to reuse an unknown process for AI service.'
 assert_contains "$CASE_EVENTS" 'sport = :8000'
@@ -205,5 +224,18 @@ assert_contains "$CASE_EVENTS" 'sport = :7357'
 assert_not_contains "$CASE_EVENTS" 'backend-start'
 assert_contains "$CASE_EVENTS" 'flutter-start'
 assert_contains "$CASE_EVENTS" 'playwright test'
+
+run_case supabase-start-failure 1 \
+  FAKE_SUPABASE_START_FAIL=true \
+  FAKE_SUPABASE_START_LINES=205
+assert_contains "$CASE_OUTPUT" \
+  'Supabase local stack start failed; showing the final 200 sanitized log lines.'
+assert_not_contains "$CASE_OUTPUT" 'supabase-start-line-001'
+assert_contains "$CASE_OUTPUT" 'supabase-start-line-007'
+assert_contains "$CASE_OUTPUT" 'supabase-start-line-205'
+assert_contains "$CASE_OUTPUT" 'Secret │ <redacted>'
+assert_contains "$CASE_EVENTS" 'supabase-start-log-mode=600'
+assert_not_contains "$CASE_EVENTS" 'backend-start'
+assert_not_contains "$CASE_EVENTS" 'flutter-start'
 
 printf 'e2e_web process-ownership tests passed\n'

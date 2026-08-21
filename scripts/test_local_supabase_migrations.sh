@@ -85,6 +85,28 @@ assert_not_contains() {
   fi
 }
 
+for recognized_image in \
+  'public.ecr.aws/supabase/postgres:17.6.1.113' \
+  'ghcr.io/supabase/postgres:17.6.1.113'; do
+  if ! local_supabase_is_recognized_postgres_image "$recognized_image"; then
+    printf 'Expected recognized Supabase Postgres image: %s\n' \
+      "$recognized_image" >&2
+    exit 1
+  fi
+done
+
+for rejected_image in \
+  'docker.io/supabase/postgres:17.6.1.113' \
+  'ghcr.io/other/postgres:17.6.1.113' \
+  'ghcr.io/supabase/postgres' \
+  'ghcr.io/supabase/postgres:17.6.1.113@sha256:unsafe'; do
+  if local_supabase_is_recognized_postgres_image "$rejected_image"; then
+    printf 'Unexpectedly recognized Supabase Postgres image: %s\n' \
+      "$rejected_image" >&2
+    exit 1
+  fi
+done
+
 reset_scenario() {
   local state="$1"
   : >"$EVENTS_FILE"
@@ -347,6 +369,8 @@ assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   'tail -n "$SUPABASE_START_FAILURE_TAIL_LINES" "$start_log" |'
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   "Supabase local stack started."
+assert_contains "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh" \
+  '(public\.ecr\.aws|ghcr\.io)/supabase/postgres:'
 assert_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
   'isolated_postgres_start'
 assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \

@@ -1058,10 +1058,13 @@ Local database operations have a separate safety boundary. Normal verification,
 stack start, and E2E may inspect migration history or apply explicitly reviewed
 pending migrations, but they cannot delegate reset authority. Full backups are
 published only after a restore succeeds in a physically separate, RAM-only
-Postgres container. The normal verifier captures raw stack-start output in a
-mode-`0600` temporary file, emits one stable success marker, and exposes only a
-bounded sanitized tail on failure before trap-cleanup; logging backpressure
-cannot change database authority or conceal the CLI exit status. An exceptional
+Postgres container. The normal verifier and browser E2E runner capture raw
+stack-start output in a mode-`0600` temporary file, emit one stable success
+marker, and expose only a bounded sanitized tail on failure before
+trap-cleanup; logging backpressure cannot change database authority or conceal
+the CLI failure. The exact official ECR and GHCR Supabase Postgres namespaces
+are recognized for the running target; other registries and namespaces remain
+rejected. An exceptional
 normal-local reset requires exact project/container/database validation, a
 content-bound preview token, an
 automatic restore-verified backup, a second unchanged-target check, and the

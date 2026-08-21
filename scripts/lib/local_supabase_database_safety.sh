@@ -7,6 +7,12 @@
 # input. A reset must be target-bound, preceded by a full verified backup, and
 # invoked through scripts/reset_local_supabase.sh.
 
+local_supabase_is_recognized_postgres_image() {
+  local image="$1"
+
+  [[ "$image" =~ ^(public\.ecr\.aws|ghcr\.io)/supabase/postgres:[A-Za-z0-9._-]+$ ]]
+}
+
 local_supabase_safety_project_id() {
   local root_dir="$1"
   local project_id
@@ -59,7 +65,7 @@ local_supabase_assert_exact_database_target() {
   fi
 
   image="$(docker inspect --format '{{.Config.Image}}' "$database_container")"
-  if [[ ! "$image" =~ ^public\.ecr\.aws/supabase/postgres:[A-Za-z0-9._-]+$ ]]; then
+  if ! local_supabase_is_recognized_postgres_image "$image"; then
     printf '%s\n' \
       'Local database safety error: the running database does not use a recognized Supabase Postgres image.' >&2
     return 1

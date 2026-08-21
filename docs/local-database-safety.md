@@ -61,7 +61,7 @@ Postgres process and storage boundary.
 | Layer | Enforced behavior | Owning source |
 | --- | --- | --- |
 | Ordinary workflow guard | Rejects `RESET_DB=true`; default migration check is read-only. | `scripts/lib/local_supabase_migrations.sh` |
-| Exact target validation | Requires project `mylifegraph`, the expected Supabase-labelled container, a recognized Supabase Postgres image, a running state, and database/user identity `postgres`. | `scripts/lib/local_supabase_database_safety.sh` |
+| Exact target validation | Requires project `mylifegraph`, the expected Supabase-labelled container, an exact `public.ecr.aws/supabase/postgres:<tag>` or `ghcr.io/supabase/postgres:<tag>` image, a running state, and database/user identity `postgres`. Other registries and GHCR namespaces remain rejected. | `scripts/lib/local_supabase_database_safety.sh` |
 | Content-bound approval | Hashes project, container, database, Auth/profile counts, database size, latest migration, and a logical SHA-256 digest of the protected Auth, private product/ledger, public, Storage, and migration data into a short-lived reset token. PostgreSQL 17's per-dump `\\restrict` transport nonces are removed only as one exact, ordered, matching meta-command pair before hashing. | `scripts/lib/local_supabase_database_safety.sh` |
 | Backup gate | Creates a complete custom-format `pg_dump`, checks required archive entries, restores it in a separate container, and compares Auth/profile counts and latest migration. | `scripts/backup_local_supabase.sh` and the shared safety library |
 | Single reset choke point | Rechecks the fingerprint after backup, then and only then invokes `supabase db reset --local`. | `scripts/reset_local_supabase.sh` and the shared safety library |
@@ -86,12 +86,13 @@ files with `supabase_migrations.schema_migrations`, runs the physically isolated
 Goal transition harness, and finally runs the complete pgTAP suite against the
 normal local database. It does not apply SQL or reset data by default.
 
-The verifier captures raw `supabase start` output only in a mode-`0600`
-temporary file. Success emits one stable marker instead of replaying Docker
-pull progress into CI; failure emits at most the final 200 sanitized lines.
-The raw file is trap-cleaned in both cases. This bounded logging prevents a
-successful image pull from failing solely because the CI log channel applies
-backpressure, without hiding the CLI exit status or exposing local keys.
+The verifier and browser E2E runner capture raw `supabase start` output only in
+a mode-`0600` temporary file. Success emits one stable marker instead of
+replaying Docker pull progress into CI; failure emits at most the final 200
+sanitized lines. The raw file is trap-cleaned in both cases. This bounded
+logging prevents a successful image pull from failing solely because the CI log
+channel applies backpressure, without hiding the CLI failure or exposing local
+keys.
 
 The same no-reset rule applies to:
 

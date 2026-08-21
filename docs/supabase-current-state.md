@@ -1613,8 +1613,11 @@ history differ. It then runs the physically separate Goal-removal transition
 harness and complete pgTAP suite, and never runs Flutter tests. It never applies
 SQL automatically. Raw stack-start output stays in a trap-cleaned mode-`0600`
 temporary file; success emits one marker, while failure preserves the CLI exit
-and emits only the final 200 sanitized lines. If the histories differ, review
-the pending SQL and affected local rows before opting in:
+and emits only the final 200 sanitized lines. Browser E2E applies the same
+bounded start-log policy. Running-target validation accepts only the official
+ECR or GHCR `supabase/postgres:<tag>` forms and continues to reject other
+registries and namespaces. If the histories differ, review the pending SQL and
+affected local rows before opting in:
 
 ```bash
 APPLY_MIGRATIONS=true npm run verify:db

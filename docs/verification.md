@@ -48,9 +48,10 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
-The current pull-request candidate is based on
-`f9198ce2a9560916e8d3c440ea31a6097a651fef`, the reviewed promotion merge that
-integrates GitHub `main` commit `87277e704f318bc569d12c88d665759a22eda2f1`
+The current pull-request candidate's latest task base is
+`91edbe84ee56b982383776d437c90532680914c0`, which contains the reviewed
+promotion merge `f9198ce2a9560916e8d3c440ea31a6097a651fef`. That merge integrates
+GitHub `main` commit `87277e704f318bc569d12c88d665759a22eda2f1`
 without rewriting either history. Its captured-base selector chooses the Full
 lane. The complete captured-base Full selector passed on 2026-08-21: Flutter analysis passed with
 1,100 tests, FastAPI Ruff passed with 1,681 tests and 2 intentional skips, and
@@ -61,7 +62,7 @@ PostgreSQL 17 migration history already matched all 69 repository migrations;
 the run neither reset the database nor applied SQL. The Database gate passed
 against that normal PG17 state and the pinned isolated PG15/PG17 full chains,
 including the PG17 owner/ACL restore and deletion replay. Full selector browser
-run `20260821T123512Z-184220` passed all eight independent UI journeys without
+run `20260821T125736Z-235163` passed all eight independent UI journeys without
 retry and with exact run-owned Auth cleanup. This is a pass over the local
 merge candidate selected from the captured base, not a tagged or deployed
 release identity.
@@ -123,7 +124,7 @@ Vercel, or public-pilot deployment is claimed.
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
 | Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-21: VPS 15, backup 15, Vercel 3, Android 2 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. | Templates/unit checks only; no VPS, cloud, signing-key, or device execution. |
-| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T123512Z-184220` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
+| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T125736Z-235163` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
 | Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-21; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
@@ -494,11 +495,13 @@ history to match, runs the physically isolated Goal-removal transition harness,
 and runs the complete final-state pgTAP suite. It never resets the normal local
 database or applies pending SQL automatically.
 
-`supabase start` writes its raw progress to a mode-`0600` temporary log. A
-successful start emits one stable marker; a failed start emits only the final
-200 sanitized lines and preserves the CLI failure. The raw log is trap-cleaned.
-This keeps GitHub Actions log backpressure from turning a successful multi-image
-pull into a false database failure while retaining bounded diagnostics.
+During database verification and browser E2E, `supabase start` writes its raw
+progress to a mode-`0600` temporary log. A successful start emits one stable
+marker; a failed start emits only the final 200 sanitized lines and preserves
+the CLI failure. The raw log is trap-cleaned. This keeps GitHub Actions log
+backpressure from turning a successful multi-image pull into a false failure
+while retaining bounded diagnostics. Running-target validation recognizes only
+the official ECR and GHCR Supabase Postgres namespaces.
 
 Migration verification has separate complementary layers:
 
