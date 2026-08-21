@@ -1058,8 +1058,12 @@ Local database operations have a separate safety boundary. Normal verification,
 stack start, and E2E may inspect migration history or apply explicitly reviewed
 pending migrations, but they cannot delegate reset authority. Full backups are
 published only after a restore succeeds in a physically separate, RAM-only
-Postgres container. An exceptional normal-local reset requires exact
-project/container/database validation, a content-bound preview token, an
+Postgres container. The normal verifier captures raw stack-start output in a
+mode-`0600` temporary file, emits one stable success marker, and exposes only a
+bounded sanitized tail on failure before trap-cleanup; logging backpressure
+cannot change database authority or conceal the CLI exit status. An exceptional
+normal-local reset requires exact project/container/database validation, a
+content-bound preview token, an
 automatic restore-verified backup, a second unchanged-target check, and the
 dedicated wrapper's `db reset --local` call. Transition fixtures and concurrent
 lock tests likewise run in a separate Postgres process with no normal Supabase

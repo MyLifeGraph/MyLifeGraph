@@ -43,8 +43,27 @@ sanitize_supabase_output() {
 
 supabase_cli --version
 supabase_cli --help >/dev/null
-start_output="$(supabase_cli start 2>&1)"
-printf '%s\n' "$start_output" | sanitize_supabase_output
+
+SUPABASE_START_FAILURE_TAIL_LINES=200
+start_log="$(mktemp "${TMPDIR:-/tmp}/mylifegraph-supabase-start.XXXXXX")"
+chmod 600 "$start_log"
+cleanup_start_log() {
+  if [[ -n "${start_log:-}" && -f "$start_log" ]]; then
+    rm -f -- "$start_log"
+  fi
+}
+trap cleanup_start_log EXIT
+
+if ! supabase_cli start >"$start_log" 2>&1; then
+  printf '%s\n' \
+    "Supabase local stack start failed; showing the final ${SUPABASE_START_FAILURE_TAIL_LINES} sanitized log lines." >&2
+  tail -n "$SUPABASE_START_FAILURE_TAIL_LINES" "$start_log" |
+    sanitize_supabase_output >&2
+  exit 1
+fi
+printf '%s\n' 'Supabase local stack started.'
+cleanup_start_log
+trap - EXIT
 
 local_supabase_prepare_migration_state \
   "$RESET_DB" "$APPLY_MIGRATIONS" false

@@ -1611,8 +1611,10 @@ This default starts/reuses the local stack, inspects
 `supabase migration list --local`, and fails if repository files and database
 history differ. It then runs the physically separate Goal-removal transition
 harness and complete pgTAP suite, and never runs Flutter tests. It never applies
-SQL automatically. If the histories differ, review the pending SQL and affected
-local rows before opting in:
+SQL automatically. Raw stack-start output stays in a trap-cleaned mode-`0600`
+temporary file; success emits one marker, while failure preserves the CLI exit
+and emits only the final 200 sanitized lines. If the histories differ, review
+the pending SQL and affected local rows before opting in:
 
 ```bash
 APPLY_MIGRATIONS=true npm run verify:db

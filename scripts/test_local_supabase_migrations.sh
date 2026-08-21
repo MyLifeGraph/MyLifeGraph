@@ -335,6 +335,18 @@ assert_contains "$ROOT_DIR/supabase/config.toml" \
   'major_version = 17'
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   'source "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh"'
+assert_not_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'start_output='
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'mktemp "${TMPDIR:-/tmp}/mylifegraph-supabase-start.XXXXXX"'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'chmod 600 "$start_log"'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'trap cleanup_start_log EXIT'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'tail -n "$SUPABASE_START_FAILURE_TAIL_LINES" "$start_log" |'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  "Supabase local stack started."
 assert_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
   'isolated_postgres_start'
 assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \

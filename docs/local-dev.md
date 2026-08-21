@@ -1198,6 +1198,12 @@ FLUTTER_BIN=/path/to/flutter \
 scripts/verify_supabase_local.sh
 ```
 
+That wrapper does not replay successful Docker pull progress. It stores raw
+`supabase start` output in a mode-`0600` temporary file, prints one success
+marker, and on failure prints only a bounded sanitized tail before removing the
+raw file. Use that bounded failure output for diagnosis; it does not weaken the
+CLI exit-status or migration-history gate.
+
 This explicit opt-in may change or delete local rows. It must not be described
 as non-destructive merely because it avoids `db reset`.
 

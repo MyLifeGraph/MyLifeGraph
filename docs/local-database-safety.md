@@ -86,6 +86,13 @@ files with `supabase_migrations.schema_migrations`, runs the physically isolated
 Goal transition harness, and finally runs the complete pgTAP suite against the
 normal local database. It does not apply SQL or reset data by default.
 
+The verifier captures raw `supabase start` output only in a mode-`0600`
+temporary file. Success emits one stable marker instead of replaying Docker
+pull progress into CI; failure emits at most the final 200 sanitized lines.
+The raw file is trap-cleaned in both cases. This bounded logging prevents a
+successful image pull from failing solely because the CI log channel applies
+backpressure, without hiding the CLI exit status or exposing local keys.
+
 The same no-reset rule applies to:
 
 ```bash
