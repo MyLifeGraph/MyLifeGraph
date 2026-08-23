@@ -75,6 +75,17 @@ run `20260821T150712Z-550816` passed all eight independent UI journeys without
 retry and with exact run-owned Auth cleanup. This is a pass over the local
 merge candidate selected from the captured base, not a tagged or deployed
 release identity.
+GitHub PR #2 then ran all seven protected required checks against source head
+`76fa77097dfae53b7d571523b262a8c96acc7ead` in Actions run `32496871368`:
+classification, documentation/visual contracts, Flutter/Android, complete
+FastAPI, debug web, fresh migrations/pgTAP, and full browser E2E all passed.
+The PR merged normally without an administrator bypass on 2026-08-23, producing
+protected `main` commit `f1556bc7a4aac8d0d00228428e9f05e668fb0671`.
+The merge-triggered Vercel status was failed, which is consistent with the
+required fail-closed behavior while no annotated RC identity or exact
+Production release values exist. Its filtered provider log was not obtainable
+in this session, so the checklist does not yet claim proof of the exact failure
+step. No successful tagged artifact or public deployment is claimed.
 The former
 2026-08-19 counts belong to the pre-Coach-V4/pre-hosting predecessor and are
 retained only in

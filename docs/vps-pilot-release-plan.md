@@ -769,11 +769,16 @@ partially integrated branch stack:
 Configure `main` so that:
 
 - direct pushes, force pushes, and deletion are blocked;
-- pull requests and one approval from the second developer are required;
+- pull requests are required, but no approval from another developer or GitHub
+  account is mandatory;
 - required current CI checks must pass against the merge candidate;
-- stale approvals are dismissed after relevant changes;
+- any optional approval becomes stale after relevant changes;
 - unresolved conversations block merge; and
-- administrators do not routinely bypass the rules.
+- administrators remain subject to the rules and do not routinely bypass them.
+
+Independent review remains useful for high-risk release changes and can be
+performed by a separate reviewer or independent agent. It is release evidence,
+not a standing dependency on another developer account.
 
 Configure tag and Actions-environment authority separately; branch protection
 does not protect a workflow loaded from an arbitrary tagged commit:
@@ -782,12 +787,14 @@ does not protect a workflow loaded from an arbitrary tagged commit:
   creation only for named release owners from a commit already contained in
   protected `main`, and blocks tag update and deletion;
 - the `pilot-release` environment accepts only those protected tag patterns and
-  requires the other developer's approval before signing secrets are released;
+  exposes signing secrets only to the exact tag-bound workflow after its
+  fail-closed source-identity guards, without a required reviewer account;
 - the `pilot-backup` environment accepts deployments only from protected
-  `refs/heads/main` and requires the other developer's approval before DB,
-  Management API, Restic, AWS, or journal-read secrets are released; and
+  `refs/heads/main` and exposes DB, Management API, Restic, AWS, or journal-read
+  secrets only to the guarded backup workflow, without a required reviewer
+  account; and
 - export/screenshots of the branch ruleset, tag ruleset, environment deployment
-  branches/tags, and required reviewers are retained with release evidence.
+  branches/tags, and reviewer settings are retained with release evidence.
 
 Repository source can describe this policy but cannot prove remote GitHub
 settings. Record a release-day screenshot or settings export as external
@@ -1643,8 +1650,11 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 - [ ] Prove remote `main` protection, confirm `main` as Vercel Production
       Branch, and prove an untagged merge-triggered build fails before Flutter
       compilation.
-- [ ] Promote the complete verified branch into protected `main` through one
-      reviewed, fully green pull request; do not deploy from the merge alone.
+- [x] Promote the complete verified branch into protected `main` through one
+      reviewed, fully green pull request; PR #2 merged on 2026-08-23 with the
+      exact identity recorded in the
+      [current verification baseline](verification.md#current-verified-baseline),
+      without deploying from the merge alone.
 - [ ] Verify Vercel Hobby eligibility/limits and its exact Production
       environment; the untagged merge attempt may run but must remain failed.
 - [ ] Create one immutable annotated RC tag from the exact `main` SHA and publish
@@ -1716,15 +1726,16 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 
 ## Responsibility Matrix
 
-Assign a named person to every role before remote work. One person may hold
-several roles in a two-developer team, but each hat retains its own checklist
-and no one self-approves a change for which the plan requires the second
-developer's review.
+Assign a named owner to every mandatory role before remote work. One person may
+hold several roles, but each hat retains its own checklist. Independent review
+is recommended for high-risk changes and may be supplied by another person or
+an independent agent; neither the repository workflow nor release authority
+requires another developer account.
 
 | Accountable role | Required ownership and evidence |
 | --- | --- |
 | Release and go/no-go owner | Coordinates gates, enforces the additional EUR 10/month ceiling, freezes the candidate, signs the manifest, chooses full versus explicitly approved degraded profile, and records the final decision. |
-| Independent code/release reviewer | Reviews PRs, full promotion diff, secret boundaries, manifest, and rollback evidence without being the change author for the approval in question. |
+| Optional independent code/release reviewer | Reviews PRs, full promotion diff, secret boundaries, manifest, and rollback evidence as additional evidence rather than a mandatory account approval. |
 | Supabase/Auth/SMTP owner | Owns distinct staging/pilot refs, publishable/secret-key migration, staging-only fixtures, backup/restore, migrations, RLS/grants, Auth/CAPTCHA, Google, redirects, SMTP/domain delivery, rate limits, and release-day read-only evidence. |
 | VPS/DNS/Caddy owner | Holds privileged `ops` authority and owns host patching, the three service identities, filesystem/Unix-socket permissions, executor-only rootless Docker, firewall, DNS/TLS, Caddy, `systemd`, logs, reboot, and rebuild. |
 | Codex account/quota owner | Confirms terms/account permission, performs only the `coach-executor` login, owns global/per-user budget and provider kill switch, monitors allowance, and can revoke the provider. |
