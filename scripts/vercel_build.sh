@@ -4,6 +4,7 @@ set -Eeuo pipefail
 # No frontend dependency, tool bootstrap, define helper, or compiler process may
 # inherit backend-only credentials from a misconfigured build environment.
 source scripts/lib/vercel_build_environment.sh
+source scripts/lib/vercel_tool_trust.sh
 
 readonly FLUTTER_VERSION='3.44.0'
 readonly FLUTTER_COMMIT='559ffa3f75e7402d65a8def9c28389a9b2e6fe42'
@@ -38,12 +39,11 @@ USE_MOCK_DATA='false'
 COACH_SURFACE_ENABLED='true'
 readonly APP_ENV APP_RELEASE_TAG USE_MOCK_DATA COACH_SURFACE_ENABLED
 
-# Vercel's version-managed Node 24 binary is owned by its unprivileged build
-# user at the provider path /node24/bin/node. Only that exact resolved binary
-# gets a narrow build-UID exception. Git, curl, sha256sum, and tar remain
+# Vercel's version-managed Node 24 binary is provider-owned rather than root-
+# owned at /node24/bin/node. Only that exact resolved binary gets a narrow
+# owner exception. Git, curl, sha256sum, and tar remain
 # root-only. Every trusted tool must also stay outside checkout/temp/home roots
 # and use non-group/world-writable files and parent directories.
-readonly VERCEL_BUILD_UID="${EUID}"
 for tool in node git curl sha256sum tar; do
   resolved="$(command -v -- "${tool}" 2>/dev/null || true)"
   [[ "${resolved}" == /* && -f "${resolved}" && -x "${resolved}" ]] || {
@@ -59,18 +59,11 @@ for tool in node git curl sha256sum tar; do
   esac
   tool_uid="$(/usr/bin/stat -c '%u' -- "${resolved}")"
   tool_mode="$(/usr/bin/stat -c '%a' -- "${resolved}")"
-  tool_owner_trusted='false'
-  if [[ "${tool_uid}" == '0' ]]; then
-    tool_owner_trusted='true'
-  elif [[ "${tool}" == 'node' && "${resolved}" == '/node24/bin/node' &&
-    "${tool_uid}" == "${VERCEL_BUILD_UID}" ]]; then
-    tool_owner_trusted='true'
-  fi
-  [[ "${tool_owner_trusted}" == 'true' && "${tool_mode}" =~ ^[0-7]{3,4}$ ]] || {
+  vercel_tool_owner_is_trusted "${tool}" "${resolved}" "${tool_uid}" || {
     printf 'Vercel build error: system tool ownership is invalid: %s.\n' "${tool}" >&2
     exit 1
   }
-  (( (8#${tool_mode} & 022) == 0 )) || {
+  vercel_tool_mode_is_trusted "${tool_mode}" || {
     printf 'Vercel build error: system tool is group/world writable: %s.\n' "${tool}" >&2
     exit 1
   }
@@ -78,20 +71,12 @@ for tool in node git curl sha256sum tar; do
   while [[ -n "${tool_parent}" ]]; do
     parent_uid="$(/usr/bin/stat -c '%u' -- "${tool_parent}")"
     parent_mode="$(/usr/bin/stat -c '%a' -- "${tool_parent}")"
-    parent_owner_trusted='false'
-    if [[ "${parent_uid}" == '0' ]]; then
-      parent_owner_trusted='true'
-    elif [[ "${tool}" == 'node' && "${resolved}" == '/node24/bin/node' &&
-      "${parent_uid}" == "${VERCEL_BUILD_UID}" ]]; then
-      case "${tool_parent}" in
-        /node24|/node24/bin) parent_owner_trusted='true' ;;
-      esac
-    fi
-    [[ "${parent_owner_trusted}" == 'true' && "${parent_mode}" =~ ^[0-7]{3,4}$ ]] || {
+    vercel_tool_parent_owner_is_trusted \
+      "${tool}" "${resolved}" "${tool_uid}" "${tool_parent}" "${parent_uid}" || {
       printf 'Vercel build error: system tool parent ownership is invalid: %s.\n' "${tool}" >&2
       exit 1
     }
-    (( (8#${parent_mode} & 022) == 0 )) || {
+    vercel_tool_mode_is_trusted "${parent_mode}" || {
       printf 'Vercel build error: system tool parent is group/world writable: %s.\n' "${tool}" >&2
       exit 1
     }

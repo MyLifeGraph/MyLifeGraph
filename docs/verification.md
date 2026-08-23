@@ -82,7 +82,7 @@ The Vercel fix's captured-base selector again chose the Full lane and passed on
 1,681 tests with 2 intentional skips passed; documentation/source guards, the
 debug Web build, the normal PostgreSQL 17 history, pinned isolated PG15/PG17
 chains, restore/deletion replay, and all database assertions passed. Browser
-run `20260823T144218Z-1286070` passed all eight independent journeys without
+run `20260823T160433Z-1380835` passed all eight independent journeys without
 retry and removed every run-owned Auth identity. This local evidence includes
 the SHA-bound hosted identity change and the Vercel build-user tool-trust fix;
 it is not by itself a successful provider deployment claim.
@@ -98,14 +98,22 @@ project's Production deployment `dpl_9KsQf5crXUpQuF18TEAEXvqrjWoy` failed
 before Flutter with the filtered provider error
 `system tool ownership is invalid: node`. The repository check had incorrectly
 required root ownership even though Vercel's version-managed Node binary is
-owned by its unprivileged build user. The current fix keeps Git, curl,
+provider-owned rather than root-owned. The current fix keeps Git, curl,
 sha256sum, and tar root-only and gives only the exact resolved
-`/node24/bin/node` path plus its two provider parents a build-UID exception.
+`/node24/bin/node` path plus its two consistently owned provider parents an
+exception.
 It additionally requires Node major 24, regular/executable tools, refusal of
 checkout/temp/home paths, no group/world-writable tool or parent, and the clean
 public child-environment allowlist. It also derives the Web build SHA and `main-<SHA>`
 or `preview-<SHA>` identity from Vercel's exact provider context instead of a
-mutable project value or an annotated tag. A new successful Production build
+mutable project value or an annotated tag. PR #4 Preview deployment
+`my-life-graph-qxrknizc4-my-life-graph-s-projects.vercel.app` from source
+`1010607` reproduced the same ownership error and proved that Vercel's Node
+owner is also distinct from the build shell EUID. The follow-up therefore
+keys its exception only to the exact resolved provider path, consistent
+non-root parent ownership, safe modes, and Node 24; executable negative tests
+deny non-root Git/download/checksum/archive tools, wrong Node paths or parents,
+foreign owners, and writable modes. A new successful Production build
 is not claimed until the protected PR merge and live provider verification.
 No successful tagged artifact or VPS/Android deployment is claimed.
 The former
@@ -171,7 +179,7 @@ Vercel, or public-pilot deployment is claimed.
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
 | Current VPS/backup/Vercel/Android source gates | The captured-base rerun passed on 2026-08-23, including the Vercel identity/environment/secret-isolation guards; Docs passed across 96 Markdown files and 82 FastAPI routes. Earlier unchanged evidence includes VPS 15, backup 15, Android 5 plus its static guard, and the checksum-verified Gradle 8.14 `testDebugUnitTest`/`lintDebug` pass. | Templates/unit and local JVM/lint checks only; the observed Vercel failure is provider evidence, but no successful new deployment, VPS, signing-key, APK-device, or physical Focus Protection execution is claimed. |
-| Current Flutter/FastAPI/Web | The 2026-08-23 captured-base Full pass includes Flutter analysis and 1,100 tests, FastAPI Ruff and 1,681 tests/2 skips, and the debug web build. Browser run `20260823T144218Z-1286070` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no successful hosted public-origin or real-provider claim. |
+| Current Flutter/FastAPI/Web | The 2026-08-23 captured-base Full pass includes Flutter analysis and 1,100 tests, FastAPI Ruff and 1,681 tests/2 skips, and the debug web build. Browser run `20260823T160433Z-1380835` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no successful hosted public-origin or real-provider claim. |
 | Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs again passed on 2026-08-23, including both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, 23-file/475-assertion final-state pgTAP, and PG17 owner/ACL restore plus deletion replay. The earlier exact ten-file Staging push advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no new remote database operation, encrypted off-host restore/replay, or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |

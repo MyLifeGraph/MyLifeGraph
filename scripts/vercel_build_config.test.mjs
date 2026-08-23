@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const build = readFileSync(new URL('./vercel_build.sh', import.meta.url), 'utf8');
@@ -16,20 +17,8 @@ test('Vercel build uses an immutable official Flutter archive', () => {
   assert.doesNotMatch(build, /command -v flutter/);
   assert.doesNotMatch(build, /git clone/);
   assert.match(build, /\/tmp\/\*\|\/var\/tmp\/\*\|\/home\/\*/);
-  assert.match(build, /readonly VERCEL_BUILD_UID="\$\{EUID\}"/);
-  assert.match(
-    build,
-    /tool[^\n]*'node'[^\n]*resolved[^\n]*'\/node24\/bin\/node'/,
-  );
-  assert.match(
-    build,
-    /\/node24\|\/node24\/bin\) parent_owner_trusted='true'/,
-  );
-  assert.match(build, /tool_uid[^\n]*== '0'/);
-  assert.doesNotMatch(
-    build,
-    /(?:git|curl|sha256sum|tar)[^\n]*VERCEL_BUILD_UID/,
-  );
+  assert.match(build, /source scripts\/lib\/vercel_tool_trust\.sh/);
+  assert.doesNotMatch(build, /VERCEL_BUILD_UID|\$\{EUID\}/);
   assert.match(build, /node_version[^\n]*--version/);
   assert.match(build, /\^v24\\\./);
   assert.match(build, /PATH='\/usr\/local\/bin:\/usr\/bin:\/bin'/);
@@ -43,6 +32,80 @@ test('Vercel build uses an immutable official Flutter archive', () => {
   assert.match(build, /pub get --enforce-lockfile/);
   assert.match(build, /--no-web-resources-cdn --csp/);
   assert.match(build, /write_web_csp\.mjs/);
+});
+
+function trustPredicate(name, ...args) {
+  return spawnSync(
+    '/bin/bash',
+    ['-c', 'source "$1"; shift; "$@"', 'bash',
+      fileURLToPath(new URL('./lib/vercel_tool_trust.sh', import.meta.url)),
+      name,
+      ...args],
+    { encoding: 'utf8', env: { PATH: '/usr/bin:/bin' } },
+  ).status === 0;
+}
+
+test('Vercel tool trust narrowly permits only provider Node ownership', () => {
+  for (const tool of ['node', 'git', 'curl', 'sha256sum', 'tar']) {
+    assert.equal(
+      trustPredicate('vercel_tool_owner_is_trusted', tool, `/bin/${tool}`, '0'),
+      true,
+    );
+  }
+  assert.equal(
+    trustPredicate(
+      'vercel_tool_owner_is_trusted',
+      'node',
+      '/node24/bin/node',
+      '1000',
+    ),
+    true,
+  );
+  for (const [tool, path, uid] of [
+    ['git', '/usr/bin/git', '1000'],
+    ['curl', '/usr/bin/curl', '1000'],
+    ['sha256sum', '/usr/bin/sha256sum', '1000'],
+    ['tar', '/usr/bin/tar', '1000'],
+    ['node', '/usr/local/bin/node', '1000'],
+    ['node', '/node24/bin/node', 'not-a-uid'],
+  ]) {
+    assert.equal(
+      trustPredicate('vercel_tool_owner_is_trusted', tool, path, uid),
+      false,
+    );
+  }
+});
+
+test('Vercel tool trust rejects foreign Node parents and writable modes', () => {
+  for (const parent of ['/node24', '/node24/bin']) {
+    assert.equal(
+      trustPredicate(
+        'vercel_tool_parent_owner_is_trusted',
+        'node',
+        '/node24/bin/node',
+        '1000',
+        parent,
+        '1000',
+      ),
+      true,
+    );
+  }
+  for (const args of [
+    ['node', '/node24/bin/node', '1000', '/node24/bin', '1001'],
+    ['node', '/node24/bin/node', '1000', '/opt/node24', '1000'],
+    ['git', '/usr/bin/git', '1000', '/usr/bin', '1000'],
+  ]) {
+    assert.equal(
+      trustPredicate('vercel_tool_parent_owner_is_trusted', ...args),
+      false,
+    );
+  }
+  for (const mode of ['755', '555', '500']) {
+    assert.equal(trustPredicate('vercel_tool_mode_is_trusted', mode), true);
+  }
+  for (const mode of ['775', '777', '757', 'not-a-mode']) {
+    assert.equal(trustPredicate('vercel_tool_mode_is_trusted', mode), false);
+  }
 });
 
 test('Vercel response headers enforce browser security boundaries', () => {
