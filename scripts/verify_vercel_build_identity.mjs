@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const SHA = /^[0-9a-f]{40}$/;
-const RC_TAG = /^v[0-9]+\.[0-9]+\.[0-9]+-pilot\.[0-9]+-rc\.[0-9]+$/;
+const VERCEL_SOURCE_IDENTITY = /^(?:main|preview)-[0-9a-f]{40}$/;
 
 function required(environment, name, pattern) {
   const value = environment[name];
@@ -34,6 +34,11 @@ export function verifyVercelEnvironment(environment, gitIdentity) {
   if (appSha !== vercelSha || gitIdentity.headSha !== vercelSha) {
     throw new Error('APP_BUILD_SHA does not match Vercel and checkout identity.');
   }
+  const releaseIdentity = required(
+    environment,
+    'APP_RELEASE_TAG',
+    VERCEL_SOURCE_IDENTITY,
+  );
   const ref = required(
     environment,
     'VERCEL_GIT_COMMIT_REF',
@@ -43,14 +48,16 @@ export function verifyVercelEnvironment(environment, gitIdentity) {
     if (environment.VERCEL_ENV !== 'production' || ref !== 'main') {
       throw new Error('Pilot Vercel builds require production mode from main.');
     }
-    const tag = required(environment, 'APP_RELEASE_TAG', RC_TAG);
-    if (gitIdentity.tagType !== 'tag' || gitIdentity.tagSha !== appSha) {
-      throw new Error(
-        `APP_RELEASE_TAG ${tag} is not an annotated tag for APP_BUILD_SHA.`,
-      );
+    if (releaseIdentity !== `main-${appSha}`) {
+      throw new Error('APP_RELEASE_TAG does not match the Vercel main SHA.');
     }
-  } else if (environment.VERCEL_ENV !== 'preview' || ref === 'main') {
-    throw new Error('Staging Vercel builds require a non-main preview ref.');
+  } else {
+    if (environment.VERCEL_ENV !== 'preview' || ref === 'main') {
+      throw new Error('Staging Vercel builds require a non-main preview ref.');
+    }
+    if (releaseIdentity !== `preview-${appSha}`) {
+      throw new Error('APP_RELEASE_TAG does not match the Vercel preview SHA.');
+    }
   }
   return { appEnvironment, appSha, ref };
 }
@@ -63,23 +70,8 @@ function git(...args) {
 }
 
 export function verifyCurrentVercelCheckout(environment = process.env) {
-  const tag = environment.APP_RELEASE_TAG ?? '';
-  const appEnvironment = environment.APP_ENV;
-  let tagType = null;
-  let tagSha = null;
-  if (appEnvironment === 'pilot' && RC_TAG.test(tag)) {
-    try {
-      tagType = git('cat-file', '-t', `refs/tags/${tag}`);
-      tagSha = git('rev-list', '-n', '1', `refs/tags/${tag}`);
-    } catch {
-      tagType = null;
-      tagSha = null;
-    }
-  }
   return verifyVercelEnvironment(environment, {
     headSha: git('rev-parse', 'HEAD'),
-    tagType,
-    tagSha,
   });
 }
 

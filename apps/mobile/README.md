@@ -111,7 +111,7 @@ The app reads configuration from Dart defines in
 | --- | --- | --- |
 | `APP_ENV` | `development` | `development` is local; hosted builds accept exact `staging` or `pilot`. |
 | `APP_BUILD_SHA` | empty locally | Hosted builds require the exact lowercase 40-character source SHA; Settings diagnostics display its short form. |
-| `APP_RELEASE_TAG` | empty locally | Hosted builds require an exact `vX.Y.Z-pilot.N[-rc.N]` tag and display it with the build identity. |
+| `APP_RELEASE_TAG` | empty locally | Hosted builds require either an exact `vX.Y.Z-pilot.N[-rc.N]` artifact tag or the Vercel SHA-bound identity `main-<40-char-SHA>` / `preview-<40-char-SHA>`; Settings displays it with the build identity. |
 | `USE_MOCK_DATA` | `false` in code, `true` in scripts | Enables mock repository paths. |
 | `SUPABASE_URL` | empty | Enables Supabase when paired with one compatible client key. |
 | `SUPABASE_PUBLISHABLE_KEY` | empty | Current public `sb_publishable_` key for the Supabase client; required by pilot builds. |

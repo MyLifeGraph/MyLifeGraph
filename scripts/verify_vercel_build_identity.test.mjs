@@ -13,12 +13,12 @@ const pilot = {
   VERCEL_GIT_COMMIT_REF: 'main',
   APP_ENV: 'pilot',
   APP_BUILD_SHA: sha,
-  APP_RELEASE_TAG: 'v0.1.0-pilot.1-rc.1',
+  APP_RELEASE_TAG: `main-${sha}`,
 };
-const taggedCheckout = { headSha: sha, tagType: 'tag', tagSha: sha };
+const checkout = { headSha: sha };
 
-test('pilot identity binds Vercel, protected main, SHA, and annotated RC tag', () => {
-  assert.deepEqual(verifyVercelEnvironment(pilot, taggedCheckout), {
+test('pilot identity binds Vercel production to protected main and its SHA', () => {
+  assert.deepEqual(verifyVercelEnvironment(pilot, checkout), {
     appEnvironment: 'pilot',
     appSha: sha,
     ref: 'main',
@@ -30,16 +30,13 @@ test('pilot identity binds Vercel, protected main, SHA, and annotated RC tag', (
     { ...pilot, VERCEL_GIT_COMMIT_SHA: 'b'.repeat(40) },
     { ...pilot, VERCEL_GIT_REPO_OWNER: 'attacker' },
   ]) {
-    assert.throws(() => verifyVercelEnvironment(environment, taggedCheckout));
+    assert.throws(() => verifyVercelEnvironment(environment, checkout));
   }
   assert.throws(() =>
-    verifyVercelEnvironment(pilot, { ...taggedCheckout, tagType: 'commit' }),
-  );
-  assert.throws(() =>
-    verifyVercelEnvironment(pilot, {
-      ...taggedCheckout,
-      tagSha: 'b'.repeat(40),
-    }),
+    verifyVercelEnvironment(
+      { ...pilot, APP_RELEASE_TAG: `main-${'b'.repeat(40)}` },
+      checkout,
+    ),
   );
 });
 
@@ -49,19 +46,22 @@ test('staging identity is isolated to a non-main preview', () => {
     APP_ENV: 'staging',
     VERCEL_ENV: 'preview',
     VERCEL_GIT_COMMIT_REF: 'staging-candidate',
+    APP_RELEASE_TAG: `preview-${sha}`,
   };
   assert.equal(
-    verifyVercelEnvironment(staging, {
-      headSha: sha,
-      tagType: null,
-      tagSha: null,
-    }).appEnvironment,
+    verifyVercelEnvironment(staging, checkout).appEnvironment,
     'staging',
   );
   assert.throws(() =>
     verifyVercelEnvironment(
       { ...staging, VERCEL_GIT_COMMIT_REF: 'main' },
-      taggedCheckout,
+      checkout,
+    ),
+  );
+  assert.throws(() =>
+    verifyVercelEnvironment(
+      { ...staging, APP_RELEASE_TAG: `preview-${'b'.repeat(40)}` },
+      checkout,
     ),
   );
 });

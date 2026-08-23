@@ -15,7 +15,11 @@ void main() {
       (tester) async {
     final semantics = tester.ensureSemantics();
     final store = _MorningStore();
-    await _pumpPage(tester, store);
+    await _pumpPage(
+      tester,
+      store,
+      currentInstant: DateTime(2026, 8, 20, 7),
+    );
 
     expect(find.text('MORNING · SLEEP'), findsOneWidget);
     expect(find.text('How did you sleep?'), findsOneWidget);
@@ -36,6 +40,15 @@ void main() {
           .onPressed,
       isNotNull,
     );
+
+    tester
+        .widget<CaptureClockControl>(find.byType(CaptureClockControl).at(0))
+        .onChanged('23:00');
+    await tester.pump();
+    tester
+        .widget<CaptureClockControl>(find.byType(CaptureClockControl).at(1))
+        .onChanged('07:00');
+    await tester.pump();
 
     await _tapVisible(tester, find.text('Next'));
     expect(find.text('MORNING · CHECK-IN'), findsOneWidget);
@@ -395,6 +408,7 @@ Future<void> _pumpPage(
   Size viewSize = const Size(1200, 1500),
   double textScale = 1,
   bool disableAnimations = false,
+  DateTime? currentInstant,
 }) async {
   final router = GoRouter(
     initialLocation: '/morning-calibration',
@@ -424,8 +438,14 @@ Future<void> _pumpPage(
     ProviderScope(
       overrides: [
         profileLocalDateSourceProvider.overrideWithValue(
-          const SessionProfileLocalDateSource(session: null),
+          SessionProfileLocalDateSource(
+            session: null,
+            currentInstant:
+                currentInstant == null ? DateTime.now : () => currentInstant,
+          ),
         ),
+        if (currentInstant != null)
+          currentInstantProvider.overrideWithValue(() => currentInstant),
         quickCheckInStoreProvider.overrideWithValue(store),
       ],
       child: MaterialApp.router(

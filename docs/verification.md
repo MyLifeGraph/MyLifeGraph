@@ -48,8 +48,10 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
-The current pull-request candidate's latest task base is
-`91351af560529329596f96428239832af48035b6`, which contains the reviewed
+The current Vercel-build-fix candidate's task base is
+`3def90d2ed84b0c22c2541329077c8a012c3c3dc`, the protected-`main` result after
+PR #3 removed the standing external-account approval requirement while
+retaining the technical branch protections. That base contains the reviewed
 promotion merge `f9198ce2a9560916e8d3c440ea31a6097a651fef` plus the bounded
 Supabase-runner diagnostics, image-identity fixes, and checkout-complete CI
 toolchains, including the shared exact ECR/GHCR allowlist for validated running
@@ -75,17 +77,51 @@ run `20260821T150712Z-550816` passed all eight independent UI journeys without
 retry and with exact run-owned Auth cleanup. This is a pass over the local
 merge candidate selected from the captured base, not a tagged or deployed
 release identity.
+The Vercel fix's captured-base selector again chose the Full lane and passed on
+2026-08-23. Flutter analysis and all 1,100 tests passed; FastAPI Ruff and all
+1,681 tests with 2 intentional skips passed; documentation/source guards, the
+debug Web build, the normal PostgreSQL 17 history, pinned isolated PG15/PG17
+chains, restore/deletion replay, and all database assertions passed. Browser
+run `20260823T164225Z-1487184` passed all eight independent journeys without
+retry and removed every run-owned Auth identity. This local evidence includes
+the SHA-bound hosted identity change and the Vercel build-user tool-trust fix;
+it is not by itself a successful provider deployment claim.
 GitHub PR #2 then ran all seven protected required checks against source head
 `76fa77097dfae53b7d571523b262a8c96acc7ead` in Actions run `32496871368`:
 classification, documentation/visual contracts, Flutter/Android, complete
 FastAPI, debug web, fresh migrations/pgTAP, and full browser E2E all passed.
 The PR merged normally without an administrator bypass on 2026-08-23, producing
 protected `main` commit `f1556bc7a4aac8d0d00228428e9f05e668fb0671`.
-The merge-triggered Vercel status was failed, which is consistent with the
-required fail-closed behavior while no annotated RC identity or exact
-Production release values exist. Its filtered provider log was not obtainable
-in this session, so the checklist does not yet claim proof of the exact failure
-step. No successful tagged artifact or public deployment is claimed.
+PR #3 then produced protected `main`
+`3def90d2ed84b0c22c2541329077c8a012c3c3dc`. The linked MyLifeGraph Vercel
+project's Production deployment `dpl_9KsQf5crXUpQuF18TEAEXvqrjWoy` failed
+before Flutter with the filtered provider error
+`system tool ownership is invalid: node`. The repository check had incorrectly
+required root ownership even though Vercel's version-managed Node binary is
+provider-owned rather than root-owned. The current fix keeps Git, curl,
+sha256sum, and tar root-only and gives only the exact resolved
+`/node24/bin/node` path plus its two consistently owned provider parents an
+exception.
+It additionally requires Node major 24, regular/executable tools, refusal of
+checkout/temp/home paths, no group/world-writable tool or parent, and the clean
+public child-environment allowlist. It also derives the Web build SHA and `main-<SHA>`
+or `preview-<SHA>` identity from Vercel's exact provider context instead of a
+mutable project value or an annotated tag. PR #4 Preview deployment
+`my-life-graph-qxrknizc4-my-life-graph-s-projects.vercel.app` from source
+`1010607` reproduced the same ownership error and proved that Vercel's Node
+owner is also distinct from the build shell EUID. The follow-up therefore
+keys its exception only to the exact resolved provider path, consistent
+non-root parent ownership, safe modes, and Node 24; executable negative tests
+deny non-root Git/download/checksum/archive tools, wrong Node paths or parents,
+foreign owners, and writable modes. Preview deployment
+`dpl_4MJ7MY6pjBgptLGznyGWHetoFaXf` from the resulting source `e3737c0` then
+passed Node trust, checkout identity, and the pinned Flutter archive checksum.
+It exposed the next provider mismatch: root-run tar retained the archive's
+numeric Flutter owner, so Git refused the extracted temporary SDK as dubious
+ownership. The current follow-up extracts the checksum-verified SDK with
+`--no-same-owner`; it does not broaden Git `safe.directory`. A new successful Production build
+is not claimed until the protected PR merge and live provider verification.
+No successful tagged artifact or VPS/Android deployment is claimed.
 The former
 2026-08-19 counts belong to the pre-Coach-V4/pre-hosting predecessor and are
 retained only in
@@ -148,9 +184,9 @@ Vercel, or public-pilot deployment is claimed.
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Current VPS/backup/Vercel/Android source gates | Final local rerun passed on 2026-08-21: VPS 15, backup 15, Vercel 3, Android 5 plus its static guard; Docs passed across 96 Markdown files and 82 FastAPI routes. The checksum-verified tracked Gradle 8.14 wrapper also passed `testDebugUnitTest` and `lintDebug`. | Templates/unit and local JVM/lint checks only; no VPS, cloud, signing-key, APK-device, or physical Focus Protection execution. |
-| Current Flutter/FastAPI/Web | Captured-base Full passed Flutter analysis and 1,100 tests plus FastAPI Ruff and 1,681 tests/2 skips; the debug web build passed. Full browser run `20260821T150712Z-550816` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no hosted public-origin or real-provider claim. |
-| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs passed both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, and 23-file/475-assertion final-state pgTAP on 2026-08-21; PG17 also passed full owner/ACL restore and deletion replay. The exact ten-file Staging push then advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no encrypted off-host restore/replay or real-data pilot-project claim. |
+| Current VPS/backup/Vercel/Android source gates | The captured-base rerun passed on 2026-08-23, including the Vercel identity/environment/secret-isolation guards; Docs passed across 96 Markdown files and 82 FastAPI routes. Earlier unchanged evidence includes VPS 15, backup 15, Android 5 plus its static guard, and the checksum-verified Gradle 8.14 `testDebugUnitTest`/`lintDebug` pass. | Templates/unit and local JVM/lint checks only; the observed Vercel failure is provider evidence, but no successful new deployment, VPS, signing-key, APK-device, or physical Focus Protection execution is claimed. |
+| Current Flutter/FastAPI/Web | The 2026-08-23 captured-base Full pass includes Flutter analysis and 1,100 tests, FastAPI Ruff and 1,681 tests/2 skips, and the debug web build. Browser run `20260823T164225Z-1487184` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no successful hosted public-origin or real-provider claim. |
+| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs again passed on 2026-08-23, including both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, 23-file/475-assertion final-state pgTAP, and PG17 owner/ACL restore plus deletion replay. The earlier exact ten-file Staging push advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no new remote database operation, encrypted off-host restore/replay, or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
 

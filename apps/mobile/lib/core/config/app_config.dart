@@ -235,10 +235,20 @@ class AppConfig {
         'APP_BUILD_SHA must be an exact lowercase 40-character SHA.',
       );
     }
-    if (!RegExp(
+    final sourceIdentity = RegExp(
+      r'^(main|preview)-([0-9a-f]{40})$',
+    ).firstMatch(appReleaseTag);
+    final releaseTag = RegExp(
       r'^v[0-9]+\.[0-9]+\.[0-9]+-pilot\.[0-9]+(?:-rc\.[0-9]+)?$',
-    ).hasMatch(appReleaseTag)) {
-      throw StateError('APP_RELEASE_TAG must be an exact pilot release tag.');
+    ).hasMatch(appReleaseTag);
+    final expectedChannel = environment == 'pilot' ? 'main' : 'preview';
+    if (!releaseTag &&
+        (sourceIdentity == null ||
+            sourceIdentity.group(1) != expectedChannel ||
+            sourceIdentity.group(2) != appBuildSha)) {
+      throw StateError(
+        'APP_RELEASE_TAG must be an exact pilot tag or SHA-bound hosted source identity.',
+      );
     }
   }
 

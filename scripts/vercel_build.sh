@@ -4,6 +4,7 @@ set -Eeuo pipefail
 # No frontend dependency, tool bootstrap, define helper, or compiler process may
 # inherit backend-only credentials from a misconfigured build environment.
 source scripts/lib/vercel_build_environment.sh
+source scripts/lib/vercel_tool_trust.sh
 
 readonly FLUTTER_VERSION='3.44.0'
 readonly FLUTTER_COMMIT='559ffa3f75e7402d65a8def9c28389a9b2e6fe42'
@@ -16,9 +17,36 @@ readonly MLG_FLUTTER_ARCHIVE="${MLG_FLUTTER_CACHE_ROOT}/flutter-${FLUTTER_VERSIO
   printf 'Vercel build error: VERCEL must be exactly 1.\n' >&2
   exit 1
 }
+
+# Vercel owns the Git/ref identity. Do not require operators to copy a mutable
+# commit SHA or a synthetic release label into project environment variables.
+readonly APP_BUILD_SHA="${VERCEL_GIT_COMMIT_SHA-}"
+case "${VERCEL_ENV-}:${VERCEL_GIT_COMMIT_REF-}" in
+  production:main)
+    APP_ENV='pilot'
+    APP_RELEASE_TAG="main-${APP_BUILD_SHA}"
+    ;;
+  preview:*)
+    APP_ENV='staging'
+    APP_RELEASE_TAG="preview-${APP_BUILD_SHA}"
+    ;;
+  *)
+    APP_ENV=''
+    APP_RELEASE_TAG=''
+    ;;
+esac
+USE_MOCK_DATA='false'
+COACH_SURFACE_ENABLED='true'
+readonly APP_ENV APP_RELEASE_TAG USE_MOCK_DATA COACH_SURFACE_ENABLED
+
+# Vercel's version-managed Node 24 binary is provider-owned rather than root-
+# owned at /node24/bin/node. Only that exact resolved binary gets a narrow
+# owner exception. Git, curl, sha256sum, and tar remain
+# root-only. Every trusted tool must also stay outside checkout/temp/home roots
+# and use non-group/world-writable files and parent directories.
 for tool in node git curl sha256sum tar; do
   resolved="$(command -v -- "${tool}" 2>/dev/null || true)"
-  [[ "${resolved}" == /* && -x "${resolved}" ]] || {
+  [[ "${resolved}" == /* && -f "${resolved}" && -x "${resolved}" ]] || {
     printf 'Vercel build error: required system tool is unavailable: %s.\n' "${tool}" >&2
     exit 1
   }
@@ -31,11 +59,11 @@ for tool in node git curl sha256sum tar; do
   esac
   tool_uid="$(/usr/bin/stat -c '%u' -- "${resolved}")"
   tool_mode="$(/usr/bin/stat -c '%a' -- "${resolved}")"
-  [[ "${tool_uid}" == '0' && "${tool_mode}" =~ ^[0-7]{3,4}$ ]] || {
+  vercel_tool_owner_is_trusted "${tool}" "${resolved}" "${tool_uid}" || {
     printf 'Vercel build error: system tool ownership is invalid: %s.\n' "${tool}" >&2
     exit 1
   }
-  (( (8#${tool_mode} & 022) == 0 )) || {
+  vercel_tool_mode_is_trusted "${tool_mode}" || {
     printf 'Vercel build error: system tool is group/world writable: %s.\n' "${tool}" >&2
     exit 1
   }
@@ -43,11 +71,12 @@ for tool in node git curl sha256sum tar; do
   while [[ -n "${tool_parent}" ]]; do
     parent_uid="$(/usr/bin/stat -c '%u' -- "${tool_parent}")"
     parent_mode="$(/usr/bin/stat -c '%a' -- "${tool_parent}")"
-    [[ "${parent_uid}" == '0' && "${parent_mode}" =~ ^[0-7]{3,4}$ ]] || {
+    vercel_tool_parent_owner_is_trusted \
+      "${tool}" "${resolved}" "${tool_uid}" "${tool_parent}" "${parent_uid}" || {
       printf 'Vercel build error: system tool parent ownership is invalid: %s.\n' "${tool}" >&2
       exit 1
     }
-    (( (8#${parent_mode} & 022) == 0 )) || {
+    vercel_tool_mode_is_trusted "${parent_mode}" || {
       printf 'Vercel build error: system tool parent is group/world writable: %s.\n' "${tool}" >&2
       exit 1
     }
@@ -59,6 +88,12 @@ for tool in node git curl sha256sum tar; do
 done
 PATH='/usr/local/bin:/usr/bin:/bin'
 export PATH
+
+node_version="$(/usr/bin/env -i PATH=/usr/bin:/bin "${NODE_BIN}" --version)"
+[[ "${node_version}" =~ ^v24\.[0-9]+\.[0-9]+$ ]] || {
+  printf 'Vercel build error: provider Node major differs from the project pin.\n' >&2
+  exit 1
+}
 
 build_home="$(mktemp -d /tmp/mylifegraph-vercel-home.XXXXXX)"
 readonly VERCEL_BUILD_HOME="${build_home}"
@@ -100,7 +135,8 @@ if ! printf '%s  %s\n' "${FLUTTER_ARCHIVE_SHA256}" "${MLG_FLUTTER_ARCHIVE}" |
 fi
 
 sdk_tmp="$(mktemp -d /tmp/mylifegraph-vercel-flutter.XXXXXX)"
-vercel_run_clean "${TAR_BIN}" -xJf "${MLG_FLUTTER_ARCHIVE}" -C "${sdk_tmp}"
+vercel_run_clean "${TAR_BIN}" --no-same-owner -xJf \
+  "${MLG_FLUTTER_ARCHIVE}" -C "${sdk_tmp}"
 readonly MLG_FLUTTER_HOME="${sdk_tmp}/flutter"
 readonly FLUTTER_BIN="${MLG_FLUTTER_HOME}/bin/flutter"
 [[ -x "${FLUTTER_BIN}" ]] || {
