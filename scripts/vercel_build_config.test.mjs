@@ -21,6 +21,8 @@ test('Vercel build uses an immutable official Flutter archive', () => {
   assert.doesNotMatch(build, /VERCEL_BUILD_UID|\$\{EUID\}/);
   assert.match(build, /node_version[^\n]*--version/);
   assert.match(build, /\^v24\\\./);
+  assert.match(build, /TAR_BIN[^\n]*--no-same-owner/);
+  assert.doesNotMatch(build, /safe\.directory/);
   assert.match(build, /PATH='\/usr\/local\/bin:\/usr\/bin:\/bin'/);
   assert.match(build, /verify_vercel_build_identity\.mjs/);
   assert.match(build, /APP_BUILD_SHA="\$\{VERCEL_GIT_COMMIT_SHA-\}"/);

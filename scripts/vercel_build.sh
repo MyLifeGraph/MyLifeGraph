@@ -135,7 +135,8 @@ if ! printf '%s  %s\n' "${FLUTTER_ARCHIVE_SHA256}" "${MLG_FLUTTER_ARCHIVE}" |
 fi
 
 sdk_tmp="$(mktemp -d /tmp/mylifegraph-vercel-flutter.XXXXXX)"
-vercel_run_clean "${TAR_BIN}" -xJf "${MLG_FLUTTER_ARCHIVE}" -C "${sdk_tmp}"
+vercel_run_clean "${TAR_BIN}" --no-same-owner -xJf \
+  "${MLG_FLUTTER_ARCHIVE}" -C "${sdk_tmp}"
 readonly MLG_FLUTTER_HOME="${sdk_tmp}/flutter"
 readonly FLUTTER_BIN="${MLG_FLUTTER_HOME}/bin/flutter"
 [[ -x "${FLUTTER_BIN}" ]] || {
