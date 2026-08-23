@@ -1,0 +1,110 @@
+name: Encrypted pilot Supabase backup
+
+on:
+  schedule:
+    - cron: '41 1 * * *'
+    - cron: '17 3 1 * *'
+  workflow_dispatch:
+    inputs:
+      retention_class:
+        description: Snapshot retention class
+        required: true
+        default: routine
+        type: choice
+        options:
+          - routine
+          - pre_migration
+          - release_candidate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pilot-supabase-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: vars.PILOT_BACKUP_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: pilot-backup
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify protected main identity before secrets
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "MyLifeGraph/MyLifeGraph" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_REF_NAME" == "main" ]]
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]
+          [[ "$(git rev-parse refs/remotes/origin/main)" == "$GITHUB_SHA" ]]
+          [[ -z "$(git status --porcelain=v1)" ]]
+
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2
+        with:
+          version: 2.107.0
+
+      - name: Install checksum-pinned Restic
+        run: |
+          set -Eeuo pipefail
+          curl --disable --silent --show-error --fail --location \
+            --output "$RUNNER_TEMP/restic.bz2" \
+            https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_linux_amd64.bz2
+          printf '%s  %s\n' \
+            f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c \
+            "$RUNNER_TEMP/restic.bz2" | sha256sum --check --strict
+          bunzip2 --stdout "$RUNNER_TEMP/restic.bz2" > "$RUNNER_TEMP/restic"
+          chmod 0755 "$RUNNER_TEMP/restic"
+          [[ "$($RUNNER_TEMP/restic version | awk 'NR == 1 {print $2}')" == '0.19.1' ]]
+
+      - name: Prepare protected backup credentials
+        env:
+          RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+          HEARTBEAT_CONFIG: ${{ secrets.BACKUP_HEARTBEAT_CURL_CONFIG }}
+        run: |
+          umask 077
+          [[ -n "$RESTIC_PASSWORD" && -n "$HEARTBEAT_CONFIG" ]]
+          printf '%s' "$RESTIC_PASSWORD" > "$RUNNER_TEMP/restic-password"
+          printf '%s' "$HEARTBEAT_CONFIG" > "$RUNNER_TEMP/heartbeat.curlrc"
+
+      - name: Export, encrypt, restore-check, and retain
+        env:
+          PILOT_SUPABASE_PROJECT_REF: ${{ vars.PILOT_SUPABASE_PROJECT_REF }}
+          PILOT_PUBLIC_APP_ORIGIN: ${{ vars.PILOT_PUBLIC_APP_ORIGIN }}
+          PILOT_EXPECTED_MIGRATION_HEAD: ${{ vars.PILOT_EXPECTED_MIGRATION_HEAD }}
+          TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          # setup-cli exposes its versioned temporary install through PATH.
+          SUPABASE_BIN: supabase
+          SUPABASE_EXPECTED_VERSION: 2.107.0
+          RESTIC_BIN: ${{ runner.temp }}/restic
+          RESTIC_EXPECTED_VERSION: 0.19.1
+          RESTIC_REPOSITORY: ${{ secrets.RESTIC_REPOSITORY }}
+          RESTIC_PASSWORD_FILE: ${{ runner.temp }}/restic-password
+          BACKUP_HEARTBEAT_CURL_CONFIG: ${{ runner.temp }}/heartbeat.curlrc
+          RUN_DATABASE_RESTORE_REHEARSAL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '17 3 1 * *' }}
+          BACKUP_RETENTION_CLASS: ${{ inputs.retention_class || 'routine' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.BACKUP_AWS_DEFAULT_REGION }}
+          ACCOUNT_DELETION_JOURNAL_S3_URL: ${{ vars.ACCOUNT_DELETION_JOURNAL_S3_URL }}
+          ACCOUNT_DELETION_JOURNAL_S3_REGION: ${{ vars.ACCOUNT_DELETION_JOURNAL_S3_REGION }}
+          ACCOUNT_DELETION_JOURNAL_S3_KMS_KEY_ARN: ${{ vars.ACCOUNT_DELETION_JOURNAL_S3_KMS_KEY_ARN }}
+          DELETION_JOURNAL_READ_ACCESS_KEY_ID: ${{ secrets.DELETION_JOURNAL_READ_ACCESS_KEY_ID }}
+          DELETION_JOURNAL_READ_SECRET_ACCESS_KEY: ${{ secrets.DELETION_JOURNAL_READ_SECRET_ACCESS_KEY }}
+          DELETION_JOURNAL_READ_SESSION_TOKEN: ${{ secrets.DELETION_JOURNAL_READ_SESSION_TOKEN }}
+        run: deploy/backup/bin/run_backup.sh
+
+      - name: Remove backup credential material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/restic-password"
+          rm -f "$RUNNER_TEMP/heartbeat.curlrc"
+          rm -f "$RUNNER_TEMP/restic.bz2"
+          rm -f "$RUNNER_TEMP/restic"

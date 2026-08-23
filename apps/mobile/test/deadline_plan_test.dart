@@ -1,0 +1,372 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
+
+import 'support/deadline_plan_fixtures.dart';
+
+void main() {
+  test('parses exact active detail and preserves honest progress fields', () {
+    final plan = DeadlinePlanResponse.fromJson(deadlinePlanEnvelope()).plan;
+
+    expect(plan.id, deadlinePlanId);
+    expect(plan.status, DeadlinePlanStatus.active);
+    expect(plan.activeRevision!.blocks.single.plannedMinutes, 50);
+    expect(plan.progress.creditedPriorMinutes, 30);
+    expect(plan.progress.trackedFocusMinutes, 25);
+    expect(plan.progress.remainingMinutes, 245);
+  });
+
+  test('accepts sparse Setup timing from an omit-null Deadline response', () {
+    final json = deadlinePlanEnvelope();
+    final revision = json['active_revision'] as Map<String, dynamic>;
+    revision['timing_preference'] = {
+      'source': 'setup',
+      'evidence_count': 0,
+      'fell_back_to_setup': false,
+    };
+
+    final timing = DeadlinePlanResponse.fromJson(json)
+        .plan
+        .activeRevision!
+        .timingPreference;
+
+    expect(timing.source, 'setup');
+    expect(timing.window, isNull);
+    expect(timing.warning, isNull);
+  });
+
+  test('preserves learned evidence when allocation used Setup fallback', () {
+    final json = deadlinePlanEnvelope();
+    final revision = json['active_revision'] as Map<String, dynamic>;
+    revision['timing_preference'] = {
+      'source': 'learned_personal_pattern',
+      'window': '09-13',
+      'evidence_count': 24,
+      'evidence_starts_on': '2026-06-01',
+      'evidence_ends_on': '2026-07-20',
+      'evidence_fingerprint': List.filled(64, 'b').join(),
+      'fell_back_to_setup': true,
+    };
+
+    final timing = DeadlinePlanResponse.fromJson(json)
+        .plan
+        .activeRevision!
+        .timingPreference;
+
+    expect(timing.usedLearnedPattern, isTrue);
+    expect(timing.fellBackToSetup, isTrue);
+    expect(timing.evidenceCount, 24);
+  });
+
+  test('rejects a reversed learned evidence date range', () {
+    final json = deadlinePlanEnvelope();
+    final revision = json['active_revision'] as Map<String, dynamic>;
+    revision['timing_preference'] = {
+      'source': 'learned_personal_pattern',
+      'window': '09-13',
+      'evidence_count': 24,
+      'evidence_starts_on': '2026-07-20',
+      'evidence_ends_on': '2026-06-01',
+      'evidence_fingerprint': List.filled(64, 'b').join(),
+      'fell_back_to_setup': false,
+    };
+
+    expect(
+      () => DeadlinePlanResponse.fromJson(json),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('workload requires exact seven-day provenance and budget arithmetic',
+      () {
+    final workload = PreparationWorkload.fromJson(
+      preparationWorkloadEnvelope(firstDayReservedMinutes: 140),
+    );
+
+    expect(workload.days, hasLength(7));
+    expect(workload.days.first.remainingBudgetMinutes, 0);
+    expect(workload.days.first.overBudgetMinutes, 20);
+    expect(workload.daysNeedingReview, 1);
+
+    final invalidCases = [
+      preparationWorkloadEnvelope()..['origin'] = 'local_demo',
+      preparationWorkloadEnvelope()..['daily_preparation_budget_minutes'] = 121,
+      preparationWorkloadEnvelope()
+        ..['days'] = [
+          ...(preparationWorkloadEnvelope()['days'] as List).take(6),
+        ],
+      preparationWorkloadEnvelope()
+        ..['days'] = [
+          for (final day in preparationWorkloadEnvelope()['days'] as List)
+            Map<String, dynamic>.from(day as Map),
+        ],
+    ];
+    ((invalidCases.last['days'] as List).first
+        as Map<String, dynamic>)['remaining_budget_minutes'] = 71;
+
+    for (final invalid in invalidCases) {
+      expect(
+        () => PreparationWorkload.fromJson(invalid),
+        throwsA(isA<DeadlinePlanContractException>()),
+      );
+    }
+  });
+
+  test('workload keeps consecutive profile dates stable across DST', () {
+    final json = preparationWorkloadEnvelope();
+    final days = json['days'] as List;
+    for (var offset = 0; offset < days.length; offset++) {
+      (days[offset] as Map<String, dynamic>)['local_date'] = DateTime.utc(
+        2026,
+        3,
+        27 + offset,
+      ).toIso8601String().split('T').first;
+    }
+
+    final workload = PreparationWorkload.fromJson(json);
+
+    expect(
+      workload.days.map((day) => day.localDate.isUtc),
+      everyElement(isTrue),
+    );
+    expect(
+      workload.days.map((day) => day.localDate.day),
+      orderedEquals([27, 28, 29, 30, 31, 1, 2]),
+    );
+  });
+
+  test('workload detail strictly explains unique plan contributions', () {
+    final detail = PreparationWorkloadDetail.fromJson(
+      preparationWorkloadDetailEnvelope(),
+    );
+
+    expect(detail.localDateKey, '2026-07-20');
+    expect(detail.overBudgetMinutes, 20);
+    expect(detail.contributions, hasLength(2));
+    expect(detail.contributions.first.blockCount, 2);
+
+    final wrongTotal = preparationWorkloadDetailEnvelope()
+      ..['reserved_preparation_minutes'] = 139;
+    final duplicatePlans = preparationWorkloadDetailEnvelope();
+    final contributions = duplicatePlans['contributions'] as List;
+    (contributions.last as Map<String, dynamic>)['plan_id'] = deadlinePlanId;
+    final unknown = preparationWorkloadDetailEnvelope()..['extra'] = true;
+
+    for (final invalid in [wrongTotal, duplicatePlans, unknown]) {
+      expect(
+        () => PreparationWorkloadDetail.fromJson(invalid),
+        throwsA(isA<DeadlinePlanContractException>()),
+      );
+    }
+  });
+
+  test('proposal payload has exact keys and permits explicit busy periods', () {
+    final draft = DeadlinePlanProposalDraft(
+      planId: deadlinePlanId,
+      baseRevision: 0,
+      kind: DeadlinePlanKind.exam,
+      title: ' Algorithms exam ',
+      deadlineAt: DateTime.parse('2026-07-25T15:00:00Z'),
+      estimatedTotalMinutes: 300,
+      creditedPriorMinutes: 0,
+      preferredSessionMinutes: 50,
+      maxDailyMinutes: 120,
+      planningStartOn: '2026-07-18',
+      bufferDays: 1,
+      sourceKind: DeadlinePlanSourceKind.manual,
+      sourceCalendarEventId: null,
+      sourceCalendarEventFingerprint: null,
+      useCalendarAvailability: true,
+    );
+
+    expect(draft.toJson(requestId: deadlineRequestId), {
+      'request_id': deadlineRequestId,
+      'plan_id': deadlinePlanId,
+      'base_revision': 0,
+      'kind': 'exam',
+      'title': 'Algorithms exam',
+      'deadline_at': '2026-07-25T15:00:00.000Z',
+      'estimated_total_minutes': 300,
+      'credited_prior_minutes': 0,
+      'preferred_session_minutes': 50,
+      'max_daily_minutes': 120,
+      'planning_start_on': '2026-07-18',
+      'buffer_days': 1,
+      'source_kind': 'manual',
+      'use_calendar_availability': true,
+    });
+  });
+
+  test('rejects prior credit equal to estimate', () {
+    final json = deadlinePlanEnvelope();
+    final revision = json['active_revision'] as Map<String, dynamic>;
+    revision['credited_prior_minutes'] = 300;
+    revision['remaining_minutes_at_proposal'] = 0;
+    revision['planned_minutes'] = 0;
+    revision['unscheduled_minutes'] = 0;
+    revision['blocks'] = <Map<String, dynamic>>[];
+
+    expect(
+      () => DeadlinePlanResponse.fromJson(json),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('feed rejects more than fifty plans', () {
+    final detail = deadlinePlanDetail();
+    final json = deadlinePlanFeed(
+      plans: List.generate(51, (_) => Map<String, dynamic>.from(detail)),
+    );
+
+    expect(
+      () => DeadlinePlanFeed.fromJson(json),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('revision rejects duplicate or non-contiguous block sequences', () {
+    final duplicate = deadlineRevision(
+      plannedMinutes: 100,
+      unscheduledMinutes: 145,
+      blocks: [
+        deadlineBlock(),
+        deadlineBlock(
+          id: '44444444-4444-4444-8444-444444444444',
+        ),
+      ],
+    );
+    final gap = deadlineRevision(
+      plannedMinutes: 100,
+      unscheduledMinutes: 145,
+      blocks: [
+        deadlineBlock(),
+        deadlineBlock(
+          id: '44444444-4444-4444-8444-444444444444',
+          sequence: 3,
+        ),
+      ],
+    );
+
+    expect(
+      () => DeadlinePlanRevision.fromJson(duplicate),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+    expect(
+      () => DeadlinePlanRevision.fromJson(gap),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('revision rejects a skipped revision and an inexact block duration', () {
+    final skipped = deadlineRevision(revision: 3, baseRevision: 1);
+    final wrongDuration = deadlineRevision(
+      plannedMinutes: 40,
+      unscheduledMinutes: 205,
+      blocks: [deadlineBlock(plannedMinutes: 40)],
+    );
+
+    expect(
+      () => DeadlinePlanRevision.fromJson(skipped),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+    expect(
+      () => DeadlinePlanRevision.fromJson(wrongDuration),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('completed plan requires its active revision', () {
+    final json = deadlinePlanEnvelope(status: 'completed')
+      ..remove('active_revision');
+
+    expect(
+      () => DeadlinePlanResponse.fromJson(json),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('terminal plan rejects a pending revision', () {
+    final json = deadlinePlanEnvelope(status: 'completed', pending: true);
+
+    expect(
+      () => DeadlinePlanResponse.fromJson(json),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('progress stays authoritative to active revision while replan is staged',
+      () {
+    final valid = DeadlinePlanResponse.fromJson(
+      deadlinePlanEnvelope(pending: true),
+    ).plan;
+    expect(valid.progress.estimatedTotalMinutes, 300);
+    expect(valid.pendingRevision!.estimatedTotalMinutes, 420);
+
+    final mismatched = deadlinePlanEnvelope(pending: true);
+    final progress = mismatched['progress'] as Map<String, dynamic>;
+    progress
+      ..['estimated_total_minutes'] = 420
+      ..['credited_prior_minutes'] = 60
+      ..['accounted_minutes'] = 85
+      ..['remaining_minutes'] = 335;
+
+    expect(
+      () => DeadlinePlanResponse.fromJson(mismatched),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('cancelled unconfirmed draft has no task or revision', () {
+    final detail = deadlinePlanDetail(status: 'draft');
+    final identity = detail['plan'] as Map<String, dynamic>;
+    identity['status'] = 'cancelled';
+    identity['cancelled_at'] = '2026-07-18T12:00:00Z';
+    detail.remove('pending_revision');
+    final plan = DeadlinePlanResponse.fromJson({
+      'contract_version': 'deadline-plan-v1',
+      'origin': 'authenticated_backend',
+      ...detail,
+    }).plan;
+
+    expect(plan.status, DeadlinePlanStatus.cancelled);
+    expect(plan.currentRevision, 0);
+    expect(plan.taskId, isNull);
+    expect(plan.displayedRevision, isNull);
+  });
+
+  test('rejects mismatched revision identity and unsupported energy window',
+      () {
+    final mismatched = deadlinePlanEnvelope();
+    (mismatched['active_revision'] as Map<String, dynamic>)['plan_id'] =
+        '55555555-5555-4555-8555-555555555555';
+    expect(
+      () => DeadlinePlanResponse.fromJson(mismatched),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+
+    final unsupported = deadlinePlanEnvelope();
+    (unsupported['active_revision']
+        as Map<String, dynamic>)['best_energy_window'] = 'lunch';
+    expect(
+      () => DeadlinePlanResponse.fromJson(unsupported),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
+  test('rejects active or pending revision kind that differs from root plan',
+      () {
+    final activeMismatch = deadlinePlanEnvelope();
+    (activeMismatch['active_revision'] as Map<String, dynamic>)['kind'] =
+        'assignment';
+
+    final pendingMismatch = deadlinePlanEnvelope(pending: true);
+    (pendingMismatch['pending_revision'] as Map<String, dynamic>)['kind'] =
+        'assignment';
+
+    for (final invalid in [activeMismatch, pendingMismatch]) {
+      expect(
+        () => DeadlinePlanResponse.fromJson(invalid),
+        throwsA(isA<DeadlinePlanContractException>()),
+      );
+    }
+  });
+}

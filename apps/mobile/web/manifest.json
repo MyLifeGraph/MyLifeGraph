@@ -3,9 +3,9 @@
     "short_name": "MyLifeGraph",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "AI-powered personal coach and life graph app.",
+    "background_color": "#08110F",
+    "theme_color": "#08110F",
+    "description": "A calm personal operating system for your day.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -1,0 +1,826 @@
+import re
+from datetime import date, datetime, time, timedelta
+from typing import Any, Literal, Self
+from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.models.planning_timing import PlanningTimingProvenance
+
+
+DEADLINE_PLAN_CONTRACT_VERSION = "deadline-plan-v1"
+PREPARATION_WORKLOAD_CONTRACT_VERSION = "preparation-workload-v1"
+PREPARATION_WORKLOAD_DETAIL_CONTRACT_VERSION = "preparation-workload-detail-v1"
+EXAM_WEEK_OUTLOOK_CONTRACT_VERSION = "exam-week-outlook-v1"
+
+DeadlineKind = Literal["exam", "assignment"]
+DeadlinePlanStatus = Literal["draft", "active", "completed", "cancelled"]
+DeadlineRevisionState = Literal["proposed", "active", "superseded"]
+DeadlineBlockState = Literal[
+    "proposed",
+    "upcoming",
+    "partial",
+    "completed",
+    "missed",
+]
+DeadlineSourceKind = Literal["manual", "calendar_event"]
+DeadlineSourceStatus = Literal["not_applicable", "current", "stale", "unavailable"]
+EnergyWindow = Literal[
+    "early_morning",
+    "morning",
+    "afternoon",
+    "evening",
+    "variable",
+]
+ExamWeekMode = Literal["inactive", "watch", "exam_week", "overdue"]
+ExamWeekRisk = Literal["on_track", "attention", "high", "critical", "unknown"]
+ExamWeekFit = Literal[
+    "fits_with_sleep_protected",
+    "fits_only_using_sleep_window",
+    "does_not_fit_before_buffer",
+    "unknown",
+]
+ExamWeekWarningCode = Literal[
+    "exam_overdue",
+    "missing_recommended_buffer",
+    "missed_preparation_blocks",
+    "remaining_work_does_not_fit",
+    "sleep_capacity_tradeoff",
+    "repeated_sleep_shortfall",
+    "sleep_plan_missing",
+    "capacity_incomplete",
+    "pending_preview_sleep_overlap",
+]
+
+
+class PreparationWorkloadDay(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    local_date: date
+    reserved_preparation_minutes: int = Field(ge=0, le=30_000)
+    remaining_budget_minutes: int | None = Field(default=None, ge=0, le=480)
+    over_budget_minutes: int = Field(ge=0, le=30_000)
+    active_plan_count: int = Field(ge=0, le=50)
+    fixed_commitment_minutes: int = Field(ge=0, le=1_440)
+
+
+class PreparationWorkloadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["preparation-workload-v1"]
+    origin: Literal["authenticated_backend"]
+    generated_at: datetime
+    timezone: str = Field(min_length=1, max_length=100)
+    daily_preparation_budget_minutes: int | None = Field(
+        default=None,
+        ge=25,
+        le=480,
+    )
+    days: list[PreparationWorkloadDay] = Field(min_length=7, max_length=7)
+
+    @model_validator(mode="after")
+    def validate_workload(self) -> Self:
+        if self.generated_at.tzinfo is None:
+            raise ValueError("preparation workload timestamp must be timezone-aware")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("preparation workload timezone is invalid") from exc
+        if (
+            self.daily_preparation_budget_minutes is not None
+            and self.daily_preparation_budget_minutes % 5 != 0
+        ):
+            raise ValueError("preparation workload budget must use five-minute steps")
+        for index, day in enumerate(self.days):
+            if (
+                index > 0
+                and (day.local_date - self.days[index - 1].local_date).days != 1
+            ):
+                raise ValueError("preparation workload days must be consecutive")
+            budget = self.daily_preparation_budget_minutes
+            if budget is None:
+                if (
+                    day.remaining_budget_minutes is not None
+                    or day.over_budget_minutes != 0
+                ):
+                    raise ValueError("unset preparation budget cannot imply capacity")
+            elif (
+                day.remaining_budget_minutes
+                != max(0, budget - day.reserved_preparation_minutes)
+                or day.over_budget_minutes
+                != max(0, day.reserved_preparation_minutes - budget)
+            ):
+                raise ValueError(
+                    "preparation workload budget arithmetic is inconsistent",
+                )
+        return self
+
+
+class PreparationWorkloadContribution(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    plan_id: UUID = Field(strict=False)
+    title: str = Field(min_length=1, max_length=160)
+    reserved_preparation_minutes: int = Field(ge=5, le=480)
+    block_count: int = Field(ge=1, le=120)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("preparation workload title must be trimmed")
+        return value
+
+
+class PreparationWorkloadDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["preparation-workload-detail-v1"]
+    origin: Literal["authenticated_backend"]
+    generated_at: datetime
+    timezone: str = Field(min_length=1, max_length=100)
+    local_date: date
+    daily_preparation_budget_minutes: int | None = Field(
+        default=None,
+        ge=25,
+        le=480,
+    )
+    reserved_preparation_minutes: int = Field(ge=0, le=30_000)
+    remaining_budget_minutes: int | None = Field(default=None, ge=0, le=480)
+    over_budget_minutes: int = Field(ge=0, le=30_000)
+    contributions: list[PreparationWorkloadContribution] = Field(max_length=50)
+
+    @model_validator(mode="after")
+    def validate_detail(self) -> Self:
+        if self.generated_at.tzinfo is None:
+            raise ValueError("preparation workload detail timestamp must be aware")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(
+                "preparation workload detail timezone is invalid",
+            ) from exc
+        budget = self.daily_preparation_budget_minutes
+        if budget is None:
+            if (
+                self.remaining_budget_minutes is not None
+                or self.over_budget_minutes != 0
+            ):
+                raise ValueError("unset preparation budget cannot imply capacity")
+        elif (
+            budget % 5 != 0
+            or self.remaining_budget_minutes
+            != max(0, budget - self.reserved_preparation_minutes)
+            or self.over_budget_minutes
+            != max(0, self.reserved_preparation_minutes - budget)
+        ):
+            raise ValueError(
+                "preparation workload detail arithmetic is inconsistent",
+            )
+        plan_ids = [item.plan_id for item in self.contributions]
+        if len(plan_ids) != len(set(plan_ids)):
+            raise ValueError("preparation workload detail plans must be unique")
+        if sum(
+            item.reserved_preparation_minutes for item in self.contributions
+        ) != self.reserved_preparation_minutes:
+            raise ValueError("preparation workload detail total is inconsistent")
+        return self
+
+
+class ExamWeekSleepPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    capture_id: str = Field(min_length=1, max_length=160)
+    entry_date: date
+    captured_at: datetime
+    planned_sleep_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    sleep_target_minutes: int = Field(ge=300, le=720)
+
+    @model_validator(mode="after")
+    def validate_sleep_plan(self) -> Self:
+        if self.captured_at.tzinfo is None:
+            raise ValueError("sleep plan capture timestamp must be aware")
+        if self.sleep_target_minutes % 15 != 0:
+            raise ValueError("sleep target must use 15-minute steps")
+        return self
+
+
+class ExamWeekSleepNight(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    entry_date: date
+    estimated_sleep_minutes: int = Field(gt=0, le=960)
+    sleep_target_minutes: int = Field(ge=300, le=720)
+    shortfall_minutes: int = Field(ge=0, le=720)
+    at_least_one_hour_short: bool
+
+    @model_validator(mode="after")
+    def validate_sleep_night(self) -> Self:
+        expected = max(0, self.sleep_target_minutes - self.estimated_sleep_minutes)
+        if (
+            self.sleep_target_minutes % 15 != 0
+            or self.shortfall_minutes != expected
+            or self.at_least_one_hour_short != (expected >= 60)
+        ):
+            raise ValueError("sleep-night arithmetic is inconsistent")
+        return self
+
+
+class ExamWeekPlanOutlook(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    plan_id: UUID = Field(strict=False)
+    kind: DeadlineKind
+    title: str = Field(min_length=1, max_length=160)
+    deadline_at: datetime
+    local_deadline_date: date
+    days_remaining: int = Field(ge=-366, le=366)
+    active_revision: int = Field(ge=1, le=200)
+    pending_revision: int | None = Field(default=None, ge=1, le=200)
+    saved_buffer_days: int = Field(ge=0, le=30)
+    recommended_buffer_days: int = Field(ge=0, le=30)
+    last_preparation_date: date
+    remaining_minutes: int = Field(ge=0, le=30_000)
+    future_scheduled_minutes: int = Field(ge=0, le=30_000)
+    future_minutes_after_buffer: int = Field(ge=0, le=30_000)
+    missed_preparation_minutes: int = Field(ge=0, le=30_000)
+    simulated_regular_minutes: int = Field(ge=0, le=30_000)
+    unscheduled_regular_minutes: int = Field(ge=0, le=30_000)
+    simulated_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=30_000,
+    )
+    unscheduled_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=30_000,
+    )
+    pending_preview_sleep_overlap: bool
+
+    @model_validator(mode="after")
+    def validate_plan_outlook(self) -> Self:
+        if self.deadline_at.tzinfo is None:
+            raise ValueError("exam-week deadline must be timezone-aware")
+        if self.recommended_buffer_days < self.saved_buffer_days:
+            raise ValueError("recommended buffer cannot shrink the saved buffer")
+        additional = max(
+            0,
+            self.remaining_minutes - self.future_scheduled_minutes,
+        )
+        if (
+            self.simulated_regular_minutes + self.unscheduled_regular_minutes
+            != additional
+        ):
+            raise ValueError("regular capacity arithmetic is inconsistent")
+        protected = self.simulated_sleep_protected_minutes
+        protected_missing = self.unscheduled_sleep_protected_minutes
+        if (protected is None) != (protected_missing is None):
+            raise ValueError("protected capacity must be wholly present or absent")
+        if (
+            protected is not None
+            and protected_missing is not None
+            and protected + protected_missing != additional
+        ):
+            raise ValueError("sleep-protected capacity arithmetic is inconsistent")
+        return self
+
+
+class ExamWeekMinuteTotals(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    remaining_minutes: int = Field(ge=0, le=1_500_000)
+    future_scheduled_minutes: int = Field(ge=0, le=1_500_000)
+    missed_preparation_minutes: int = Field(ge=0, le=1_500_000)
+    simulated_regular_minutes: int = Field(ge=0, le=1_500_000)
+    unscheduled_regular_minutes: int = Field(ge=0, le=1_500_000)
+    simulated_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=1_500_000,
+    )
+    unscheduled_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=1_500_000,
+    )
+
+
+class ExamWeekOutlookResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["exam-week-outlook-v1"]
+    origin: Literal["authenticated_backend"]
+    generated_at: datetime
+    timezone: str = Field(min_length=1, max_length=100)
+    local_date: date
+    mode: ExamWeekMode
+    risk_level: ExamWeekRisk
+    capacity_status: ExamWeekFit
+    current_sleep_plan: ExamWeekSleepPlan | None = None
+    recent_sleep_nights: list[ExamWeekSleepNight] = Field(max_length=3)
+    exams: list[ExamWeekPlanOutlook] = Field(max_length=50)
+    assignments: list[ExamWeekPlanOutlook] = Field(max_length=50)
+    warning_codes: list[ExamWeekWarningCode] = Field(max_length=9)
+    minutes: ExamWeekMinuteTotals
+
+    @model_validator(mode="after")
+    def validate_outlook(self) -> Self:
+        if self.generated_at.tzinfo is None:
+            raise ValueError("exam-week outlook timestamp must be aware")
+        try:
+            zone = ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("exam-week outlook timezone is invalid") from exc
+        if self.generated_at.astimezone(zone).date() != self.local_date:
+            raise ValueError("exam-week outlook local date is inconsistent")
+        if any(plan.kind != "exam" for plan in self.exams) or any(
+            plan.kind != "assignment" for plan in self.assignments
+        ):
+            raise ValueError("exam-week plan groups are inconsistent")
+        ids = [plan.plan_id for plan in [*self.exams, *self.assignments]]
+        if len(ids) != len(set(ids)):
+            raise ValueError("exam-week plans must be unique")
+        if len({night.entry_date for night in self.recent_sleep_nights}) != len(
+            self.recent_sleep_nights,
+        ):
+            raise ValueError("exam-week sleep nights must be unique")
+        if self.recent_sleep_nights != sorted(
+            self.recent_sleep_nights,
+            key=lambda item: item.entry_date,
+            reverse=True,
+        ):
+            raise ValueError("exam-week sleep nights must be newest first")
+        if len(self.warning_codes) != len(set(self.warning_codes)):
+            raise ValueError("exam-week warning codes must be unique")
+        if self.mode == "inactive" and self.exams:
+            raise ValueError("inactive exam-week outlook cannot contain exams")
+        return self
+
+
+class DeadlinePlanProposalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    request_id: UUID = Field(strict=False)
+    plan_id: UUID = Field(strict=False)
+    base_revision: int = Field(ge=0, le=199)
+    kind: DeadlineKind
+    title: str = Field(min_length=1, max_length=160)
+    deadline_at: datetime = Field(strict=False)
+    estimated_total_minutes: int = Field(ge=30, le=30_000)
+    credited_prior_minutes: int = Field(ge=0, le=29_999)
+    preferred_session_minutes: int = Field(ge=25, le=180)
+    max_daily_minutes: int = Field(ge=25, le=480)
+    planning_start_on: date = Field(strict=False)
+    buffer_days: int = Field(ge=0, le=7)
+    source_kind: DeadlineSourceKind
+    source_calendar_event_id: UUID | None = Field(default=None, strict=False)
+    source_calendar_event_fingerprint: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    use_calendar_availability: bool
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_explicit_nulls(cls, value: Any) -> Any:
+        if isinstance(value, dict) and any(item is None for item in value.values()):
+            raise ValueError(
+                "deadline proposal fields must be omitted rather than null",
+            )
+        if isinstance(value, dict):
+            for key in ("request_id", "plan_id", "source_calendar_event_id"):
+                if key in value:
+                    _require_transport_uuid(value[key], field=key)
+            raw_deadline = value.get("deadline_at")
+            if not isinstance(raw_deadline, str) or not re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+                r"(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})",
+                raw_deadline,
+            ):
+                raise ValueError("deadline_at must be an aware ISO-8601 string")
+            raw_start = value.get("planning_start_on")
+            if not isinstance(raw_start, str) or not re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}",
+                raw_start,
+            ):
+                raise ValueError("planning_start_on must be an ISO date string")
+        return value
+
+    @field_validator("title")
+    @classmethod
+    def require_exact_title(cls, value: str) -> str:
+        if value != value.strip():
+            raise ValueError("title must not contain surrounding whitespace")
+        return value
+
+    @field_validator("deadline_at")
+    @classmethod
+    def require_aware_deadline(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("deadline_at must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def validate_exact_shape(self) -> Self:
+        if self.credited_prior_minutes >= self.estimated_total_minutes:
+            raise ValueError(
+                "credited_prior_minutes must be below estimated_total_minutes",
+            )
+        if self.max_daily_minutes < self.preferred_session_minutes:
+            raise ValueError(
+                "max_daily_minutes must be at least preferred_session_minutes",
+            )
+        has_event_id = self.source_calendar_event_id is not None
+        has_event_fingerprint = self.source_calendar_event_fingerprint is not None
+        if self.source_kind == "calendar_event":
+            if not has_event_id or not has_event_fingerprint:
+                raise ValueError(
+                    "calendar_event source requires its id and exact fingerprint",
+                )
+        elif has_event_id or has_event_fingerprint:
+            raise ValueError("manual source cannot contain calendar event fields")
+        return self
+
+
+class DeadlinePlanMutationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    request_id: UUID = Field(strict=False)
+    expected_revision: int = Field(ge=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_explicit_nulls(cls, value: Any) -> Any:
+        if isinstance(value, dict) and any(item is None for item in value.values()):
+            raise ValueError("deadline mutation fields cannot be null")
+        if isinstance(value, dict) and "request_id" in value:
+            _require_transport_uuid(value["request_id"], field="request_id")
+        return value
+
+
+class DeadlinePlanIdentity(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    id: UUID
+    status: DeadlinePlanStatus
+    kind: DeadlineKind
+    title: str = Field(min_length=1, max_length=160)
+    managed_task_id: UUID | None = None
+    original_estimated_total_minutes: int = Field(ge=30, le=30_000)
+    original_credited_prior_minutes: int = Field(ge=0, le=29_999)
+    current_revision: int = Field(ge=0)
+    latest_revision: int = Field(ge=1, le=200)
+    attention_reasons: list[str] = Field(default_factory=list, max_length=12)
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> Self:
+        timestamps = [self.created_at, self.updated_at]
+        timestamps.extend(
+            value for value in (self.completed_at, self.cancelled_at) if value
+        )
+        if any(value.tzinfo is None for value in timestamps):
+            raise ValueError("deadline plan timestamps must be timezone-aware")
+        if (
+            self.original_credited_prior_minutes
+            >= self.original_estimated_total_minutes
+        ):
+            raise ValueError("original prior credit must be below original estimate")
+        if self.status == "completed":
+            if self.completed_at is None or self.cancelled_at is not None:
+                raise ValueError("completed plan lifecycle is invalid")
+        elif self.status == "cancelled":
+            if self.cancelled_at is None or self.completed_at is not None:
+                raise ValueError("cancelled plan lifecycle is invalid")
+        elif self.completed_at is not None or self.cancelled_at is not None:
+            raise ValueError("open plan cannot have a terminal timestamp")
+        if (self.current_revision == 0) != (self.managed_task_id is None):
+            raise ValueError("managed task identity must match first activation")
+        if self.latest_revision < max(1, self.current_revision):
+            raise ValueError("latest deadline revision cannot precede the active one")
+        if len(self.attention_reasons) != len(set(self.attention_reasons)):
+            raise ValueError("deadline attention reasons must be unique")
+        return self
+
+
+class DeadlinePlanBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    id: UUID
+    sequence: int = Field(ge=1, le=120)
+    starts_at: datetime
+    ends_at: datetime
+    local_date: date
+    local_start_time: time
+    local_end_time: time
+    planned_minutes: int = Field(ge=5, le=240)
+    recovery_minutes: int = Field(ge=0, le=60)
+    reserved_ends_at: datetime
+    credited_tracked_minutes: int = Field(ge=0, le=240)
+    state: DeadlineBlockState
+
+    @model_validator(mode="after")
+    def validate_block(self) -> Self:
+        if (
+            self.starts_at.tzinfo is None
+            or self.ends_at.tzinfo is None
+            or self.reserved_ends_at.tzinfo is None
+        ):
+            raise ValueError("deadline block instants must be timezone-aware")
+        if self.ends_at <= self.starts_at:
+            raise ValueError("deadline block must have a positive interval")
+        if self.credited_tracked_minutes > self.planned_minutes:
+            raise ValueError("block credit cannot exceed planned minutes")
+        if (
+            self.recovery_minutes % 5 != 0
+            or self.reserved_ends_at - self.ends_at
+            != timedelta(minutes=self.recovery_minutes)
+        ):
+            raise ValueError("deadline block recovery is inconsistent")
+        return self
+
+
+class DeadlinePlanRevision(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    plan_id: UUID
+    revision: int = Field(ge=1, le=200)
+    base_revision: int = Field(ge=0, le=199)
+    state: DeadlineRevisionState
+    kind: DeadlineKind
+    title: str = Field(min_length=1, max_length=160)
+    deadline_at: datetime
+    estimated_total_minutes: int = Field(ge=30, le=30_000)
+    credited_prior_minutes: int = Field(ge=0, le=29_999)
+    preferred_session_minutes: int = Field(ge=25, le=180)
+    max_daily_minutes: int = Field(ge=25, le=480)
+    planning_start_on: date
+    buffer_days: int = Field(ge=0, le=7)
+    source_kind: DeadlineSourceKind
+    source_calendar_event_id: UUID | None = None
+    source_calendar_event_fingerprint: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    source_status: DeadlineSourceStatus
+    use_calendar_availability: bool
+    availability_connection_id: UUID | None = None
+    availability_import_id: UUID | None = None
+    timezone: str = Field(min_length=1, max_length=100)
+    best_energy_window: EnergyWindow
+    planning_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    timing_preference: PlanningTimingProvenance = PlanningTimingProvenance(
+        source="setup",
+    )
+    study_setup_revision: int | None = Field(default=None, ge=1)
+    recovery_minutes: int = Field(ge=0, le=60)
+    tracked_focus_minutes_at_proposal: int = Field(ge=0)
+    remaining_minutes_at_proposal: int = Field(ge=0, le=30_000)
+    planned_minutes: int = Field(ge=0, le=30_000)
+    unscheduled_minutes: int = Field(ge=0, le=30_000)
+    created_at: datetime
+    activated_at: datetime | None = None
+    superseded_at: datetime | None = None
+    blocks: list[DeadlinePlanBlock] = Field(default_factory=list, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_revision(self) -> Self:
+        if self.deadline_at.tzinfo is None or self.created_at.tzinfo is None:
+            raise ValueError("deadline revision timestamps must be timezone-aware")
+        if any(
+            value is not None and value.tzinfo is None
+            for value in (self.activated_at, self.superseded_at)
+        ):
+            raise ValueError("deadline revision timestamps must be timezone-aware")
+        if self.credited_prior_minutes >= self.estimated_total_minutes:
+            raise ValueError("prior credit must be below estimate")
+        if self.revision != self.base_revision + 1:
+            raise ValueError("deadline revision must advance its exact base")
+        if self.source_kind == "manual":
+            if (
+                self.source_calendar_event_id is not None
+                or self.source_calendar_event_fingerprint is not None
+                or self.source_status != "not_applicable"
+            ):
+                raise ValueError("manual deadline source projection is invalid")
+        elif (
+            self.source_calendar_event_id is None
+            or self.source_calendar_event_fingerprint is None
+            or self.source_status not in {"current", "stale", "unavailable"}
+        ):
+            raise ValueError("calendar deadline source projection is invalid")
+        has_connection = self.availability_connection_id is not None
+        has_import = self.availability_import_id is not None
+        if (
+            has_connection != has_import
+            or self.use_calendar_availability != has_connection
+        ):
+            raise ValueError("calendar availability provenance is inconsistent")
+        expected_remaining = max(
+            0,
+            self.estimated_total_minutes
+            - self.credited_prior_minutes
+            - self.tracked_focus_minutes_at_proposal,
+        )
+        if self.remaining_minutes_at_proposal != expected_remaining:
+            raise ValueError("deadline proposal remaining minutes are inconsistent")
+        if self.planned_minutes + self.unscheduled_minutes != expected_remaining:
+            raise ValueError("deadline revision minute summary is inconsistent")
+        if self.planned_minutes != sum(block.planned_minutes for block in self.blocks):
+            raise ValueError("deadline block minutes do not match revision summary")
+        if self.study_setup_revision is None:
+            if self.recovery_minutes != 0:
+                raise ValueError("deadline revision cannot invent recovery")
+        elif (
+            self.recovery_minutes < 5
+            or self.recovery_minutes % 5 != 0
+            or any(
+                block.recovery_minutes != self.recovery_minutes
+                or block.planned_minutes > self.preferred_session_minutes
+                for block in self.blocks
+            )
+        ):
+            raise ValueError("deadline Study rhythm is inconsistent")
+        short = [
+            block
+            for block in self.blocks
+            if block.planned_minutes < self.preferred_session_minutes
+        ]
+        if self.study_setup_revision is not None and short and short != self.blocks[-1:]:
+            raise ValueError("only the final deadline Study block may be short")
+        try:
+            zone = ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("deadline revision timezone is invalid") from exc
+        if sorted(block.sequence for block in self.blocks) != list(
+            range(1, len(self.blocks) + 1),
+        ):
+            raise ValueError("deadline block sequences must be contiguous")
+        for block in self.blocks:
+            starts_local = block.starts_at.astimezone(zone)
+            ends_local = block.ends_at.astimezone(zone)
+            if (block.ends_at - block.starts_at).total_seconds() != (
+                block.planned_minutes * 60
+            ):
+                raise ValueError("deadline block duration is inconsistent")
+            if (
+                block.local_date != starts_local.date()
+                or block.local_date != ends_local.date()
+                or block.local_date
+                != block.reserved_ends_at.astimezone(zone).date()
+                or block.local_start_time != starts_local.time().replace(tzinfo=None)
+                or block.local_end_time != ends_local.time().replace(tzinfo=None)
+            ):
+                raise ValueError("deadline block local projection is inconsistent")
+        if self.state == "proposed":
+            if self.activated_at is not None or self.superseded_at is not None:
+                raise ValueError("proposed deadline revision has lifecycle timestamps")
+        elif self.state == "active":
+            if self.activated_at is None or self.superseded_at is not None:
+                raise ValueError("active deadline revision lifecycle is invalid")
+        elif self.superseded_at is None:
+            raise ValueError("superseded deadline revision requires superseded_at")
+        return self
+
+
+class DeadlinePlanProgress(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    estimated_total_minutes: int = Field(ge=30, le=30_000)
+    credited_prior_minutes: int = Field(ge=0, le=29_999)
+    tracked_focus_minutes: int = Field(ge=0)
+    accounted_minutes: int = Field(ge=0)
+    remaining_minutes: int = Field(ge=0, le=30_000)
+    completion_suggested: bool
+
+    @model_validator(mode="after")
+    def validate_progress(self) -> Self:
+        if self.accounted_minutes != min(
+            self.estimated_total_minutes,
+            self.credited_prior_minutes + self.tracked_focus_minutes,
+        ):
+            raise ValueError("deadline progress accounting is inconsistent")
+        if self.remaining_minutes != (
+            self.estimated_total_minutes - self.accounted_minutes
+        ):
+            raise ValueError("deadline remaining minutes are inconsistent")
+        if self.completion_suggested != (self.remaining_minutes == 0):
+            raise ValueError("deadline completion suggestion is inconsistent")
+        return self
+
+
+class DeadlinePlanDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    plan: DeadlinePlanIdentity
+    active_revision: DeadlinePlanRevision | None = None
+    pending_revision: DeadlinePlanRevision | None = None
+    progress: DeadlinePlanProgress
+
+    @model_validator(mode="after")
+    def validate_detail(self) -> Self:
+        if self.active_revision is not None:
+            if (
+                self.active_revision.plan_id != self.plan.id
+                or self.active_revision.state != "active"
+                or self.active_revision.revision != self.plan.current_revision
+            ):
+                raise ValueError("active deadline revision does not match plan")
+        if self.pending_revision is not None:
+            if (
+                self.pending_revision.plan_id != self.plan.id
+                or self.pending_revision.state != "proposed"
+                or self.pending_revision.revision != self.plan.latest_revision
+            ):
+                raise ValueError("pending deadline revision does not match plan")
+        if self.plan.status == "draft":
+            if self.active_revision is not None or self.pending_revision is None:
+                raise ValueError("draft deadline plan requires one pending revision")
+            if (
+                self.plan.current_revision != 0
+                or self.plan.latest_revision != self.pending_revision.revision
+                or self.plan.kind != self.pending_revision.kind
+                or self.plan.title != self.pending_revision.title
+            ):
+                raise ValueError("draft deadline identity does not match proposal")
+        elif self.plan.status == "active":
+            if (
+                self.active_revision is None
+                or self.plan.managed_task_id != self.plan.id
+            ):
+                raise ValueError("active deadline plan projection is incomplete")
+            if (
+                self.plan.kind != self.active_revision.kind
+                or self.plan.title != self.active_revision.title
+            ):
+                raise ValueError("active deadline identity does not match revision")
+            if self.pending_revision is None:
+                # Cancelled/superseded batch children leave an append-only
+                # revision number above the active revision without exposing a
+                # pending preview. The next proposal advances from latest.
+                if self.plan.latest_revision < self.plan.current_revision:
+                    raise ValueError("active deadline latest revision is inconsistent")
+            elif (
+                self.plan.latest_revision != self.pending_revision.revision
+                or self.pending_revision.revision <= self.plan.current_revision
+            ):
+                raise ValueError("active pending revision sequence is inconsistent")
+        elif self.plan.status == "completed" or (
+            self.plan.status == "cancelled" and self.plan.current_revision > 0
+        ):
+            if self.active_revision is None or self.pending_revision is not None:
+                raise ValueError("terminal activated deadline plan is inconsistent")
+            if (
+                self.plan.kind != self.active_revision.kind
+                or self.plan.title != self.active_revision.title
+            ):
+                raise ValueError("terminal deadline identity does not match revision")
+        elif self.plan.status == "cancelled":
+            if self.active_revision is not None or self.pending_revision is not None:
+                raise ValueError("cancelled draft deadline plan retained a revision")
+        projection = self.active_revision or self.pending_revision
+        expected_estimate = (
+            projection.estimated_total_minutes
+            if projection is not None
+            else self.plan.original_estimated_total_minutes
+        )
+        expected_prior = (
+            projection.credited_prior_minutes
+            if projection is not None
+            else self.plan.original_credited_prior_minutes
+        )
+        if (
+            self.progress.estimated_total_minutes != expected_estimate
+            or self.progress.credited_prior_minutes != expected_prior
+        ):
+            raise ValueError("deadline progress does not match its current projection")
+        return self
+
+
+class DeadlinePlanResponse(DeadlinePlanDetail):
+    contract_version: Literal["deadline-plan-v1"]
+    origin: Literal["authenticated_backend"]
+
+
+class DeadlinePlansResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["deadline-plan-v1"]
+    origin: Literal["authenticated_backend"]
+    plans: list[DeadlinePlanDetail] = Field(default_factory=list, max_length=50)
+
+
+def _require_transport_uuid(value: Any, *, field: str) -> None:
+    if not isinstance(value, str) or value != value.strip():
+        raise ValueError(f"{field} must be a canonical UUID string")
+    try:
+        parsed = UUID(value)
+    except ValueError as exc:
+        raise ValueError(f"{field} must be a canonical UUID string") from exc
+    if str(parsed) != value:
+        raise ValueError(f"{field} must be a canonical UUID string")

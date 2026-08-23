@@ -1,0 +1,236 @@
+import asyncio
+from datetime import UTC, date, datetime
+from typing import Any
+
+import pytest
+
+from app.repositories.weekly_review_repository import (
+    SupabaseWeeklyReviewRepository,
+    _weekly_review,
+)
+
+
+class FakeClient:
+    def __init__(self) -> None:
+        self.select_calls = []
+        self.upsert_calls = []
+        self.rpc_calls = []
+        self.review_rows: list[dict[str, Any]] = []
+        self.habit_log_page = 0
+
+    async def select(self, table: str, *, params):
+        self.select_calls.append((table, params))
+        if table == "profiles":
+            return [
+                {
+                    "timezone": "Europe/Berlin",
+                    "onboarding_completed_at": "2026-07-01T10:00:00+00:00",
+                },
+            ]
+        if table == "weekly_reviews":
+            return self.review_rows
+        if table == "habit_logs":
+            if self.habit_log_page == 0:
+                self.habit_log_page += 1
+                return [
+                    {
+                        "id": f"log-{index}",
+                        "habit_id": "habit-1",
+                        "entry_date": "2026-07-06",
+                        "status": "completed",
+                        "value": 1,
+                        "created_at": "2026-07-06T10:00:00+00:00",
+                        "updated_at": "2026-07-06T10:00:00+00:00",
+                    }
+                    for index in range(1000)
+                ]
+            if self.habit_log_page == 1:
+                self.habit_log_page += 1
+                return [
+                    {
+                        "id": "log-final",
+                        "habit_id": "habit-1",
+                        "entry_date": "2026-07-07",
+                        "status": "skipped",
+                        "value": 0,
+                        "created_at": "2026-07-07T10:00:00+00:00",
+                        "updated_at": "2026-07-07T10:00:00+00:00",
+                    },
+                ]
+        return []
+
+    async def upsert(self, table: str, *, rows, on_conflict: str):
+        self.upsert_calls.append((table, rows, on_conflict))
+        return [{"id": "review-1", **rows[0]}]
+
+    async def rpc(self, function: str, *, params):
+        self.rpc_calls.append((function, params))
+        return {"id": "review-1", **params["p_row"]}
+
+
+def test_profile_and_context_reads_are_owner_scoped_bounded_and_paginated() -> None:
+    client = FakeClient()
+    repository = SupabaseWeeklyReviewRepository(client)
+
+    async def run():
+        profile = await repository.get_profile(user_id="user-1")
+        context = await repository.load_context(
+            user_id="user-1",
+            starts_on=date(2026, 7, 6),
+            ends_on=date(2026, 7, 12),
+            starts_at=datetime(2026, 7, 5, 22, tzinfo=UTC),
+            ends_at=datetime(2026, 7, 12, 22, tzinfo=UTC),
+        )
+        return profile, context
+
+    profile, context = asyncio.run(run())
+
+    assert profile.timezone == "Europe/Berlin"
+    assert profile.onboarded is True
+    assert len(context.habit_logs) == 1001
+    habit_log_calls = [
+        dict(params) for table, params in client.select_calls if table == "habit_logs"
+    ]
+    assert all("offset" not in call for call in habit_log_calls)
+    assert "or" not in habit_log_calls[0]
+    assert "id.gt.log-999" in habit_log_calls[1]["or"]
+    assert all(call["user_id"] == "eq.user-1" for call in habit_log_calls)
+    assert all(call["entry_date"] == "lte.2026-07-12" for call in habit_log_calls)
+
+    task_calls = [params for table, params in client.select_calls if table == "tasks"]
+    assert len(task_calls) == 3
+    task_filters = [dict(call) for call in task_calls]
+    assert {call["status"] for call in task_filters} == {
+        "in.(todo,in_progress)",
+        "eq.done",
+        "eq.cancelled",
+    }
+    assert task_filters[0]["created_at"] == "lt.2026-07-12T22:00:00+00:00"
+    assert task_filters[1]["completed_at"] == "lt.2026-07-12T22:00:00+00:00"
+    assert task_filters[2]["cancelled_at"] == "lt.2026-07-12T22:00:00+00:00"
+
+
+def test_persisted_review_parser_normalizes_json_dates_and_timestamps() -> None:
+    client = FakeClient()
+    client.review_rows = [valid_review_row()]
+    repository = SupabaseWeeklyReviewRepository(client)
+
+    review = asyncio.run(
+        repository.get_weekly_review(user_id="user-1", period_key="2026-W28"),
+    )
+
+    assert review is not None
+    assert review.generated_at == datetime(2026, 7, 13, 8, tzinfo=UTC)
+    assert review.provenance.evidence_window.starts_on == date(2026, 7, 6)
+    assert review.provenance.source_snapshot_generated_at == datetime(
+        2026,
+        7,
+        13,
+        7,
+        tzinfo=UTC,
+    )
+    assert review.proposals == []
+
+
+def test_persisted_review_parser_rejects_cross_boundary_metadata() -> None:
+    row = valid_review_row()
+    row["source_fingerprint"] = "b" * 64
+    with pytest.raises(ValueError, match="fingerprint"):
+        _weekly_review(row)
+
+    row = valid_review_row()
+    row["provenance"]["evidence_window"]["ends_on"] = "2026-07-19"
+    with pytest.raises(ValueError, match="evidence window"):
+        _weekly_review(row)
+
+
+def test_persist_uses_stable_user_period_identity() -> None:
+    client = FakeClient()
+    repository = SupabaseWeeklyReviewRepository(client)
+    row = valid_review_row()
+    row.pop("id")
+    row["source_observed_at"] = "2026-07-13T08:00:00+00:00"
+
+    review = asyncio.run(
+        repository.persist_weekly_review(
+            user_id="user-1",
+            period_key="2026-W28",
+            row=row,
+        ),
+    )
+
+    assert review.id == "review-1"
+    assert client.upsert_calls == []
+    assert client.rpc_calls == [
+        (
+            "persist_weekly_review_v3",
+            {
+                "p_user_id": "user-1",
+                "p_period_key": "2026-W28",
+                "p_source_observed_at": "2026-07-13T08:00:00+00:00",
+                "p_row": row,
+            },
+        ),
+    ]
+
+
+def valid_review_row() -> dict[str, Any]:
+    return {
+        "id": "review-1",
+        "user_id": "user-1",
+        "period_key": "2026-W28",
+        "week_start": "2026-07-06",
+        "week_end": "2026-07-12",
+        "timezone": "Europe/Berlin",
+        "data_quality": "sufficient",
+        "narrative": "A bounded weekly review.",
+        "facts": {
+            "tasks": {
+                "completed": 1,
+                "carried": 1,
+                "overdue_carried": 0,
+                "cancelled": 0,
+            },
+            "habits": {
+                "active": 1,
+                "paused": 0,
+                "archived": 0,
+                "stable_definitions": 1,
+                "changed_definitions": 0,
+                "scheduled_opportunities": 4,
+                "completed": 2,
+                "skipped": 0,
+                "missed": 2,
+                "recovery_open": 0,
+                "unknown": 0,
+            },
+            "focus": {
+                "completed_sessions": 0,
+                "abandoned_sessions": 0,
+                "active_sessions": 0,
+                "actual_minutes": 0,
+            },
+            "recovery": {"observed_days": 7, "recovery_days": 0},
+        },
+        "proposals": [],
+        "evidence_refs": [],
+        "provenance": {
+            "engine": "deterministic",
+            "contract_version": "weekly-review-v3",
+            "source_snapshot_id": "snapshot-1",
+            "source_snapshot_generated_at": "2026-07-13T07:00:00+00:00",
+            "evidence_window": {
+                "starts_on": "2026-07-06",
+                "ends_on": "2026-07-12",
+                "days": 7,
+            },
+            "source_fingerprint": "a" * 64,
+            "baseline": "none",
+            "limitations": [],
+            "llm_used": False,
+        },
+        "source_fingerprint": "a" * 64,
+        "generated_at": "2026-07-13T08:00:00+00:00",
+        "created_at": "2026-07-13T08:00:00+00:00",
+        "updated_at": "2026-07-13T08:00:00+00:00",
+    }

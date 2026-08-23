@@ -1,0 +1,225 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/features/insights/data/datasources/insights_mock_data_source.dart';
+import 'package:my_life_graph/features/insights/data/datasources/insights_supabase_data_source.dart';
+import 'package:my_life_graph/features/insights/data/repositories/insights_repository_impl.dart';
+import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
+import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+void main() {
+  test('uses mock correlation points only when mock mode is allowed', () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      supabaseDataSource: _EmptySupabaseDataSource(),
+      allowMockData: true,
+    );
+
+    final points = await repository.getCorrelationDataPoints(windowDays: 14);
+
+    expect(points, hasLength(1));
+    expect(points.single.values['sleep_hours'], 7.5);
+  });
+
+  test('real correlation reconstruction is retired in favor of backend points',
+      () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      supabaseDataSource: _EmptySupabaseDataSource(),
+      allowMockData: false,
+    );
+
+    expect(
+      repository.getCorrelationDataPoints(windowDays: 14),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('personal-patterns-v1'),
+        ),
+      ),
+    );
+  });
+
+  test('propagates a real correlation source failure', () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      supabaseDataSource: _ThrowingSupabaseDataSource(),
+      allowMockData: false,
+    );
+
+    expect(
+      repository.getCorrelationDataPoints(windowDays: 14),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('reports missing real correlation configuration as an error', () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      allowMockData: false,
+    );
+
+    expect(
+      repository.getCorrelationDataPoints(windowDays: 14),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('propagates real discovered-insight failures', () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      supabaseDataSource: _ThrowingSupabaseDataSource(),
+      allowMockData: false,
+    );
+
+    expect(repository.getInsights(), throwsA(isA<StateError>()));
+  });
+
+  test('reports missing real discovered-insight configuration as an error',
+      () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      allowMockData: false,
+    );
+
+    expect(repository.getInsights(), throwsA(isA<StateError>()));
+  });
+
+  test('keeps nullable persisted insight confidence honest', () {
+    const mapper = InsightSupabaseRowMapper();
+    final withoutConfidence = mapper.fromRow(
+      _insightRow(confidence: null),
+    );
+    final withConfidence = mapper.fromRow(
+      _insightRow(confidence: 0.82),
+    );
+
+    expect(withoutConfidence.confidence, isNull);
+    expect(withoutConfidence.confidenceLabel, 'Confidence not stored');
+    expect(withConfidence.confidence, 0.82);
+    expect(withConfidence.confidenceLabel, '82% confidence');
+  });
+
+  test('rejects malformed persisted insight confidence', () {
+    const mapper = InsightSupabaseRowMapper();
+
+    expect(
+      () => mapper.fromRow(_insightRow(confidence: '0.82')),
+      throwsFormatException,
+    );
+    expect(
+      () => mapper.fromRow(_insightRow(confidence: 1.2)),
+      throwsFormatException,
+    );
+  });
+
+  test('paginates through every row beyond one response page', () async {
+    const paginator = InsightsQueryPaginator(pageSize: 2);
+    final sourceRows = List.generate(5, (index) => {'id': 'row-$index'});
+    final requestedRanges = <(int, int)>[];
+
+    final rows = await paginator.load((from, to) async {
+      requestedRanges.add((from, to));
+      if (from >= sourceRows.length) {
+        return const <Map<String, dynamic>>[];
+      }
+      final end = to + 1 > sourceRows.length ? sourceRows.length : to + 1;
+      return sourceRows.sublist(
+        from,
+        end,
+      );
+    });
+
+    expect(rows.map((row) => row['id']), [
+      'row-0',
+      'row-1',
+      'row-2',
+      'row-3',
+      'row-4',
+    ]);
+    expect(requestedRanges, [(0, 1), (2, 3), (4, 5)]);
+  });
+
+  test('accepts the exact pagination bound after an empty sentinel page',
+      () async {
+    const paginator = InsightsQueryPaginator(pageSize: 2, maxRows: 4);
+    final sourceRows = List.generate(4, (index) => {'id': 'row-$index'});
+    final requestedRanges = <(int, int)>[];
+
+    final rows = await paginator.load((from, to) async {
+      requestedRanges.add((from, to));
+      if (from >= sourceRows.length) {
+        return const <Map<String, dynamic>>[];
+      }
+      final end = to + 1 > sourceRows.length ? sourceRows.length : to + 1;
+      return sourceRows.sublist(from, end);
+    });
+
+    expect(rows, hasLength(4));
+    expect(requestedRanges, [(0, 1), (2, 3), (4, 4)]);
+  });
+
+  test('fails explicitly when a source exceeds the pagination bound', () async {
+    const paginator = InsightsQueryPaginator(pageSize: 2, maxRows: 4);
+    final sourceRows = List.generate(5, (index) => {'id': 'row-$index'});
+
+    await expectLater(
+      paginator.load((from, to) async {
+        if (from >= sourceRows.length) {
+          return const <Map<String, dynamic>>[];
+        }
+        final end = to + 1 > sourceRows.length ? sourceRows.length : to + 1;
+        return sourceRows.sublist(from, end);
+      }),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('exceeds the 4-row verification limit'),
+        ),
+      ),
+    );
+  });
+}
+
+Map<String, dynamic> _insightRow({required Object? confidence}) => {
+      'id': 'insight-1',
+      'title': 'Stored pattern',
+      'description': 'A persisted non-causal observation.',
+      'confidence': confidence,
+      'category': 'Recovery',
+      'priority': 'medium',
+    };
+
+class _SentinelMockDataSource extends InsightsMockDataSource {
+  const _SentinelMockDataSource();
+
+  @override
+  Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
+    required int windowDays,
+  }) async {
+    return [
+      CorrelationDataPoint(
+        date: DateTime(2026, 7, 7),
+        values: const {'sleep_hours': 7.5},
+      ),
+    ];
+  }
+}
+
+class _EmptySupabaseDataSource extends InsightsSupabaseDataSource {
+  _EmptySupabaseDataSource() : super(_testSupabaseClient());
+}
+
+class _ThrowingSupabaseDataSource extends InsightsSupabaseDataSource {
+  _ThrowingSupabaseDataSource() : super(_testSupabaseClient());
+
+  @override
+  Future<List<Insight>> getInsights() async {
+    throw StateError('real source failed');
+  }
+}
+
+SupabaseClient _testSupabaseClient() {
+  return SupabaseClient('http://localhost:54321', 'test-anon-key');
+}

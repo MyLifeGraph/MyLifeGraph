@@ -3,5 +3,8 @@ include: package:flutter_lints/flutter.yaml
 linter:
   rules:
     avoid_print: true
+    # Flutter 3.44 reports this style-only preference across established
+    # constructor seams; keep the existing explicit assignment convention.
+    prefer_initializing_formals: false
     prefer_single_quotes: true
     require_trailing_commas: true

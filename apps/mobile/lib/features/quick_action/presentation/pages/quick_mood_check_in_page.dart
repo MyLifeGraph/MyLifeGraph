@@ -1,16 +1,18 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/supabase/supabase_providers.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
-import '../../data/quick_check_in_supabase_data_source.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
+import '../../../focus/domain/focus_session.dart';
+import '../../../focus/presentation/widgets/focus_reflection_sheet.dart';
+import '../../domain/quick_check_in.dart';
+import 'package:my_life_graph/composition/quick_check_in_providers.dart';
+import '../widgets/daily_capture_controls.dart';
 
 class QuickMoodCheckInPage extends ConsumerStatefulWidget {
   const QuickMoodCheckInPage({super.key});
@@ -21,209 +23,294 @@ class QuickMoodCheckInPage extends ConsumerStatefulWidget {
 }
 
 class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
-  final TextEditingController _notesController = TextEditingController();
-  int _stepIndex = 0;
-  int _mood = 7;
-  int _energy = 6;
-  double _sleepHours = 7;
-  int _stress = 4;
-  bool _isSaving = false;
+  final _reflectionController = TextEditingController();
+  final _blockerController = TextEditingController();
 
-  static const _steps = [
-    _QuickStepSpec(
-      label: 'MOOD',
-      title: 'How are you feeling?',
-      subtitle: 'Rate your current mood from heavy to great.',
-      unit: '',
-      kind: _QuickStepKind.rating,
+  late EveningShutdownDraft _draft;
+  var _stepIndex = 0;
+  var _isLoading = true;
+  var _loadedSavedCapture = false;
+  var _safeCaptureLoaded = false;
+  var _isSaving = false;
+  String? _loadError;
+  String? _saveError;
+  List<FocusSession> _todayFocusSessions = const [];
+  Map<String, FocusReflection> _todayFocusReflections = const {};
+
+  static const _steps = <_EveningStep>[
+    _EveningStep(
+      eyebrow: 'EVENING · CHECK-IN',
+      title: 'Close today in under a minute',
+      subtitle: 'Three quick ratings are enough for today\'s state.',
+      kind: _EveningStepKind.checkIn,
     ),
-    _QuickStepSpec(
-      label: 'ENERGY',
-      title: 'How much energy do you have?',
-      subtitle: 'This helps the coach adjust reminders and workload.',
-      unit: '',
-      kind: _QuickStepKind.rating,
+    _EveningStep(
+      eyebrow: 'EVENING · SLEEP PLAN',
+      title: 'When do you plan to sleep?',
+      subtitle:
+          'Set tonight\'s intended start and your personal duration target.',
+      kind: _EveningStepKind.sleepPlan,
     ),
-    _QuickStepSpec(
-      label: 'SLEEP',
-      title: 'Last night\'s sleep',
-      subtitle: 'Rough hours are enough for now.',
-      unit: 'h',
-      kind: _QuickStepKind.sleep,
-    ),
-    _QuickStepSpec(
-      label: 'STRESS',
-      title: 'How stressed are you?',
-      subtitle: 'Use this as a quick pressure check.',
-      unit: '',
-      kind: _QuickStepKind.rating,
-    ),
-    _QuickStepSpec(
-      label: 'COACH NOTES',
-      title: 'Anything else?',
-      subtitle: 'Add context your future AI coach should remember.',
-      unit: '',
-      kind: _QuickStepKind.notes,
+    _EveningStep(
+      eyebrow: 'EVENING · CONTEXT',
+      title: 'What should tomorrow know?',
+      subtitle: 'Add pressure context or optional notes only when useful.',
+      kind: _EveningStepKind.context,
     ),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    final capturedAt = ref.read(currentInstantProvider)();
+    _draft = EveningShutdownDraft.empty(
+      capturedAt,
+      entryDate: ref.read(profileLocalDateSourceProvider).dateKeyAt(capturedAt),
+    );
+    Future<void>.microtask(_loadToday);
+  }
+
+  @override
   void dispose() {
-    _notesController.dispose();
+    _reflectionController.dispose();
+    _blockerController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final step = _steps[_stepIndex];
-    final progress = (_stepIndex + 1) / _steps.length;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF030809),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxHeight < 900;
-            final ultraCompact = constraints.maxHeight < 760;
-            final outerPadding = compact ? AppSpacing.sm : AppSpacing.md;
-
-            return SingleChildScrollView(
-              padding: EdgeInsets.all(outerPadding),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - outerPadding * 2,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: _QuickCheckInShell(
-                      progress: progress,
-                      step: step,
-                      canGoBack: _stepIndex > 0,
-                      isLastStep: _stepIndex == _steps.length - 1,
-                      isSaving: _isSaving,
-                      compact: compact,
-                      ultraCompact: ultraCompact,
-                      onClose: () => context.go(AppRoutes.quickAction),
-                      onBack: _previousStep,
-                      onNext: _nextStep,
-                      child: _buildStepContent(
-                        step,
-                        compact: compact,
-                        ultraCompact: ultraCompact,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+    return CaptureFlowScaffold(
+      eyebrow: step.eyebrow,
+      title: step.title,
+      subtitle: step.subtitle,
+      progress: (_stepIndex + 1) / _steps.length,
+      canGoBack: _stepIndex > 0,
+      canContinue: _safeCaptureLoaded && _canContinue,
+      isLastStep: _stepIndex == _steps.length - 1,
+      isLoading: _isLoading,
+      isSaving: _isSaving,
+      saveLabel: 'Save evening check-in',
+      statusMessage: _loadedSavedCapture
+          ? 'Today\'s evening check-in is loaded. Saving updates only these evening answers.'
+          : null,
+      errorMessage: _saveError,
+      loadErrorMessage: _loadError,
+      onRetryLoad: _loadToday,
+      onClose: () =>
+          context.canPop() ? context.pop() : context.go(AppRoutes.quickAction),
+      onBack: _previousStep,
+      onNext: _nextStep,
+      child: _buildStep(step.kind),
     );
   }
 
-  Widget _buildStepContent(
-    _QuickStepSpec step, {
-    required bool compact,
-    required bool ultraCompact,
-  }) {
-    return switch (step.kind) {
-      _QuickStepKind.rating => _RatingStep(
-          value: _currentRating,
-          unit: step.unit,
-          helperText: _helperTextForStep(step),
-          compact: compact,
-          ultraCompact: ultraCompact,
-          onChanged: _setCurrentRating,
-        ),
-      _QuickStepKind.sleep => _SleepStep(
-          value: _sleepHours,
-          compact: compact,
-          ultraCompact: ultraCompact,
-          onChanged: (value) => setState(() => _sleepHours = value),
-        ),
-      _QuickStepKind.notes => _NotesStep(
-          controller: _notesController,
-          compact: compact,
-          ultraCompact: ultraCompact,
-        ),
+  Widget _buildStep(_EveningStepKind kind) {
+    return switch (kind) {
+      _EveningStepKind.checkIn => _buildCheckInStep(),
+      _EveningStepKind.sleepPlan => _buildSleepPlanStep(),
+      _EveningStepKind.context => _buildContextStep(),
     };
   }
 
-  int get _currentRating {
-    return switch (_stepIndex) {
-      0 => _mood,
-      1 => _energy,
-      3 => _stress,
-      _ => _mood,
+  Widget _buildCheckInStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Mood', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        CaptureRatingControl(
+          value: _draft.mood,
+          semanticPrefix: 'evening mood',
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(mood: value),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Energy left', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        CaptureRatingControl(
+          value: _draft.energy,
+          semanticPrefix: 'evening energy',
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(energy: value),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Stress', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        CaptureRatingControl(
+          value: _draft.stress,
+          semanticPrefix: 'evening stress',
+          onChanged: (value) => setState(() {
+            _draft = _draft.copyWith(
+              stress: value,
+              stressSource: value < 5 ? null : _draft.stressSource,
+              stressControllability:
+                  value < 5 ? null : _draft.stressControllability,
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSleepPlanStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const CaptureInfoDisclosure(
+          heading: 'Planned sleep time',
+          description:
+              'This is your intention for tonight, not an automatic restriction.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureClockControl(
+          label: 'Planned sleep start',
+          semanticLabel: 'planned sleep time',
+          value: _draft.plannedSleepTime,
+          quickValues: const ['22:00', '23:00', '00:00'],
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(plannedSleepTime: value),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        const CaptureInfoDisclosure(
+          heading: 'Sleep duration target',
+          description:
+              'Eight hours is shown first. It becomes your current sleep plan only when you save.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureSleepTargetControl(
+          value: _draft.sleepTargetMinutes,
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(sleepTargetMinutes: value),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContextStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_draft.requiresStressContext) ...[
+          Text(
+            'What drove the pressure?',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CaptureChoiceControl<StressSource>(
+            value: _draft.stressSource,
+            choices: StressSource.values
+                .map(
+                  (value) => CaptureChoice(
+                    value: value,
+                    label: _stressSourceLabel(value),
+                    semanticLabel: 'stress source ${value.code}',
+                    description: _stressSourceDescription(value),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(
+              () => _draft = _draft.copyWith(stressSource: value),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'How much could you influence it?',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CaptureChoiceControl<StressControllability>(
+            value: _draft.stressControllability,
+            equalWidthRow: true,
+            choices: StressControllability.values
+                .map(
+                  (value) => CaptureChoice(
+                    value: value,
+                    label: _stressControllabilityLabel(value),
+                    semanticLabel: 'stress influence ${value.code}',
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(
+              () => _draft = _draft.copyWith(stressControllability: value),
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        TextField(
+          controller: _reflectionController,
+          maxLength: 500,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Reflection (optional)',
+            hintText: 'A short observation, if useful',
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _blockerController,
+          maxLength: 240,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Specific blocker (optional)',
+            hintText: 'Leave blank if there was no specific blocker',
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Optional blanks stay absent. They do not become tasks or memories.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (_todayFocusSessions.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          const Divider(),
+          Material(
+            type: MaterialType.transparency,
+            child: ListTile(
+              key: const ValueKey('evening-focus-reflections'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(AppIcons.timerOutlined),
+              title: const Text('Today\'s Focus sessions'),
+              subtitle: Text(
+                '${_todayFocusReflections.length} rated · '
+                '${_todayFocusSessions.length - _todayFocusReflections.length} open',
+              ),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: _openTodayFocusReflections,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool get _canContinue {
+    if (_isLoading) {
+      return false;
+    }
+    return switch (_steps[_stepIndex].kind) {
+      _EveningStepKind.checkIn =>
+        _draft.mood != null && _draft.energy != null && _draft.stress != null,
+      _EveningStepKind.sleepPlan =>
+        _draft.plannedSleepTime != null && _draft.sleepTargetMinutes != null,
+      _EveningStepKind.context => _draft.hasConsistentStressContext,
     };
-  }
-
-  void _setCurrentRating(int value) {
-    setState(() {
-      switch (_stepIndex) {
-        case 0:
-          _mood = value;
-        case 1:
-          _energy = value;
-        case 3:
-          _stress = value;
-      }
-    });
-  }
-
-  String _helperTextForStep(_QuickStepSpec step) {
-    if (step.label == 'MOOD') {
-      return '${_moodLabel(_mood)} will be saved as today\'s mood signal.';
-    }
-    if (step.label == 'ENERGY') {
-      return '${_energyLabel(_energy)} energy will tune workload nudges.';
-    }
-    return '${_stressLabel(_stress)} stress will tune reminder intensity.';
-  }
-
-  String _moodLabel(int value) {
-    if (value >= 8) {
-      return 'Great';
-    }
-    if (value >= 6) {
-      return 'Good';
-    }
-    if (value >= 4) {
-      return 'Neutral';
-    }
-    return 'Heavy';
-  }
-
-  String _energyLabel(int value) {
-    if (value >= 8) {
-      return 'High';
-    }
-    if (value >= 5) {
-      return 'Steady';
-    }
-    return 'Low';
-  }
-
-  String _stressLabel(int value) {
-    if (value >= 8) {
-      return 'High';
-    }
-    if (value >= 5) {
-      return 'Moderate';
-    }
-    return 'Low';
   }
 
   void _previousStep() {
-    if (_stepIndex == 0) {
-      return;
+    if (_stepIndex > 0) {
+      setState(() => _stepIndex--);
     }
-    setState(() => _stepIndex--);
   }
 
   Future<void> _nextStep() async {
+    if (!_canContinue) {
+      return;
+    }
     if (_stepIndex < _steps.length - 1) {
       setState(() => _stepIndex++);
       return;
@@ -232,44 +319,44 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _save() async {
-    final session = ref.read(authControllerProvider).valueOrNull;
-    if (session?.isGuestSession == true) {
-      await _saveGuestDraft();
-      if (mounted) {
-        _showMessage('Guest check-in saved locally.');
-        context.go(AppRoutes.dashboard);
-      }
+    if (_isSaving || !_safeCaptureLoaded) {
       return;
     }
-
-    final client = ref.read(supabaseClientProvider);
-    if (client == null) {
-      _showMessage('Supabase is not configured.');
-      return;
-    }
-
-    setState(() => _isSaving = true);
+    final draft = _draft.copyWith(
+      reflectionNote: _reflectionController.text,
+      specificBlocker: _blockerController.text,
+    );
+    setState(() {
+      _draft = draft;
+      _isSaving = true;
+      _saveError = null;
+    });
     try {
-      await QuickCheckInSupabaseDataSource(client).save(
-        QuickCheckInDraft(
-          mood: _mood,
-          energy: _energy,
-          sleepHours: _sleepHours,
-          stress: _stress,
-          coachNotes: _notesController.text,
-        ),
+      final store = ref.read(quickCheckInStoreProvider);
+      await store.saveEvening(draft);
+      await ref.read(projectionRefreshCoordinatorProvider).dailyCaptureChanged(
+            targetDate: draft.entryDate,
+            refreshDailySnapshot:
+                store.target == QuickCheckInSaveTarget.supabase,
+          );
+      if (!mounted) {
+        return;
+      }
+      _showMessage(
+        store.target == QuickCheckInSaveTarget.guest
+            ? 'Evening check-in saved on this device.'
+            : 'Evening check-in saved.',
       );
-      ref.invalidate(dashboardSnapshotProvider);
-      if (mounted) {
-        _showMessage('Quick check-in saved.');
-        context.go(AppRoutes.dashboard);
+      context.go(AppRoutes.dashboard);
+    } catch (error) {
+      if (!mounted) {
+        return;
       }
-    } catch (_) {
-      if (mounted) {
-        _showMessage(
-          'Could not save DailyLog. Supabase rejected the main row.',
-        );
-      }
+      final message = error is QuickCheckInUnavailableException
+          ? 'Synced check-in saving is unavailable. Your answers are still here; try again when your account connection is available.'
+          : 'Could not save. Your answers are still here. Try again.';
+      setState(() => _saveError = message);
+      _showMessage(message);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -277,19 +364,183 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     }
   }
 
-  Future<void> _saveGuestDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('guest_quick_checkins');
-    final values = raw == null ? <dynamic>[] : jsonDecode(raw) as List<dynamic>;
-    values.add({
-      'createdAt': DateTime.now().toIso8601String(),
-      'mood': _mood,
-      'energy': _energy,
-      'sleepHours': _sleepHours,
-      'stress': _stress,
-      'coachNotes': _notesController.text.trim(),
+  Future<void> _loadToday() async {
+    if (_isLoading && _safeCaptureLoaded) return;
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
     });
-    await prefs.setString('guest_quick_checkins', jsonEncode(values));
+    try {
+      final store = ref.read(quickCheckInStoreProvider);
+      final targetDate = ref.read(profileLocalDateSourceProvider).today();
+      final entry = await store.loadToday(targetDate);
+      _safeCaptureLoaded = true;
+      EveningShutdownDraft? sleepPlan;
+      try {
+        sleepPlan = await store.loadLatestEvening();
+      } catch (_) {
+        // A prior Evening value is only a convenience here. The current
+        // branch read above is the required CAS baseline.
+      }
+      final focusData = await _loadTodayFocusReflections(
+        dailyCaptureEntryDate(targetDate),
+      );
+      final saved = entry?.evening;
+      if (mounted) {
+        final source = saved?.forEditing() ?? _draft;
+        final next = source.copyWith(
+          capturedAt: saved == null ? null : _draft.capturedAt,
+          plannedSleepTime:
+              source.plannedSleepTime ?? sleepPlan?.plannedSleepTime,
+          sleepTargetMinutes: source.sleepTargetMinutes ??
+              sleepPlan?.sleepTargetMinutes ??
+              EveningShutdownDraft.defaultSleepTargetMinutes,
+        );
+        setState(() {
+          _draft = next;
+          if (saved != null) {
+            _reflectionController.text = saved.reflectionNote;
+            _blockerController.text = saved.specificBlocker;
+            _loadedSavedCapture = true;
+          }
+          _todayFocusSessions = focusData?.sessions ?? const [];
+          _todayFocusReflections = focusData?.reflections ?? const {};
+          _safeCaptureLoaded = true;
+          _loadError = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _safeCaptureLoaded = false;
+          _loadError =
+              'Today\'s saved capture could not be loaded. Saving is blocked because its current branch version is unknown. Your draft is still here.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<_TodayFocusReflectionData?> _loadTodayFocusReflections(
+    String targetDate,
+  ) async {
+    try {
+      final source = ref.read(eveningFocusReflectionSourceProvider);
+      if (source == null) return null;
+      final recent = await source.fetchRecentSessions(limit: 50);
+      final sessions = recent
+          .where(
+            (session) =>
+                !session.isActive && session.snapshotEntryDate == targetDate,
+          )
+          .toList(growable: false);
+      final reflections = await source.fetchReflectionsForSessions(sessions);
+      return _TodayFocusReflectionData(
+        sessions: sessions,
+        reflections: reflections,
+      );
+    } catch (_) {
+      // The optional Focus row must not block Daily Capture.
+      return null;
+    }
+  }
+
+  Future<void> _openTodayFocusReflections() async {
+    if (_todayFocusSessions.isEmpty) return;
+    final selected = _todayFocusSessions.length == 1
+        ? _todayFocusSessions.single
+        : await showModalBottomSheet<FocusSession>(
+            context: context,
+            showDragHandle: true,
+            builder: (sheetContext) => SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                children: [
+                  Text(
+                    'Today\'s Focus sessions',
+                    style: Theme.of(sheetContext).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final session in _todayFocusSessions)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        session.status == FocusSessionStatus.completed
+                            ? AppIcons.checkCircleOutline
+                            : AppIcons.cancelOutlined,
+                      ),
+                      title: Text(session.label ?? 'Focus session'),
+                      subtitle: Text(
+                        '${session.actualMinutes ?? 0} min · '
+                        '${_todayFocusReflections.containsKey(session.id) ? 'rated' : 'open'}',
+                      ),
+                      trailing: const Icon(AppIcons.chevronRight),
+                      onTap: () => Navigator.of(sheetContext).pop(session),
+                    ),
+                ],
+              ),
+            ),
+          );
+    if (selected == null || !mounted) return;
+    await _openFocusReflection(selected);
+  }
+
+  Future<void> _openFocusReflection(FocusSession session) async {
+    final source = ref.read(eveningFocusReflectionSourceProvider);
+    if (source == null || !mounted) return;
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
+    final existing = _todayFocusReflections[session.id];
+    Future<void> refreshFullWeek() async {
+      try {
+        await projectionRefresh.focusReflectionChanged();
+      } catch (_) {
+        // The reflection write is already durable; projection refresh is best
+        // effort even when the sheet or page has since been dismissed.
+      }
+    }
+
+    final outcome = await showFocusReflectionSheet(
+      context: context,
+      session: session,
+      existing: existing,
+      onSave: (draft) async {
+        final saved = await source.saveReflection(
+          session: session,
+          draft: draft,
+          existing: existing,
+        );
+        await refreshFullWeek();
+        if (mounted) {
+          setState(() {
+            _todayFocusReflections = {
+              ..._todayFocusReflections,
+              session.id: saved,
+            };
+          });
+        }
+        return saved;
+      },
+      onDelete: (reflection) async {
+        await source.deleteReflection(reflection);
+        await refreshFullWeek();
+        if (mounted) {
+          setState(() {
+            _todayFocusReflections = {..._todayFocusReflections}
+              ..remove(session.id);
+          });
+        }
+      },
+    );
+    if (!mounted) return;
+    if (outcome == FocusReflectionSheetOutcome.saved) {
+      _showMessage('Focus reflection saved.');
+    } else if (outcome == FocusReflectionSheetOutcome.deleted) {
+      _showMessage('Focus reflection deleted.');
+    }
   }
 
   void _showMessage(String message) {
@@ -299,489 +550,59 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 }
 
-class _QuickCheckInShell extends StatelessWidget {
-  const _QuickCheckInShell({
-    required this.progress,
-    required this.step,
-    required this.child,
-    required this.canGoBack,
-    required this.isLastStep,
-    required this.isSaving,
-    required this.compact,
-    required this.ultraCompact,
-    required this.onClose,
-    required this.onBack,
-    required this.onNext,
+class _TodayFocusReflectionData {
+  const _TodayFocusReflectionData({
+    required this.sessions,
+    required this.reflections,
   });
 
-  final double progress;
-  final _QuickStepSpec step;
-  final Widget child;
-  final bool canGoBack;
-  final bool isLastStep;
-  final bool isSaving;
-  final bool compact;
-  final bool ultraCompact;
-  final VoidCallback onClose;
-  final VoidCallback onBack;
-  final VoidCallback onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    final headerPadding = EdgeInsets.fromLTRB(
-      compact ? AppSpacing.md : AppSpacing.lg,
-      compact ? AppSpacing.md : AppSpacing.lg,
-      compact ? AppSpacing.md : AppSpacing.lg,
-      compact ? AppSpacing.sm : AppSpacing.md,
-    );
-    final bodyPadding = EdgeInsets.all(
-      ultraCompact ? AppSpacing.sm : (compact ? AppSpacing.md : AppSpacing.lg),
-    );
-    final footerPadding =
-        EdgeInsets.all(compact ? AppSpacing.md : AppSpacing.lg);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF102025),
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFF294048), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color:
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-            blurRadius: 36,
-            spreadRadius: -16,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: headerPadding,
-            child: Column(
-              children: [
-                Container(
-                  width: compact ? 52 : 64,
-                  height: compact ? 6 : 8,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2A323C),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: compact ? 8 : 10,
-                    backgroundColor: const Color(0xFF2A323C),
-                  ),
-                ),
-                SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            step.label,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelLarge
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontSize: compact ? 12 : null,
-                                  letterSpacing: compact ? 4 : 5,
-                                ),
-                          ),
-                          SizedBox(
-                            height: compact ? AppSpacing.sm : AppSpacing.md,
-                          ),
-                          Text(
-                            step.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineLarge
-                                ?.copyWith(
-                                  fontSize:
-                                      ultraCompact ? 25 : (compact ? 29 : 34),
-                                  height: 1.08,
-                                ),
-                          ),
-                          SizedBox(
-                            height: compact ? AppSpacing.sm : AppSpacing.md,
-                          ),
-                          Text(
-                            step.subtitle,
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      color: const Color(0xFFA8B5BE),
-                                      fontSize: compact ? 14 : null,
-                                      height: 1.35,
-                                    ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: onClose,
-                      icon: Icon(Icons.close, size: compact ? 28 : 34),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFF294048)),
-          Padding(
-            padding: bodyPadding,
-            child: child,
-          ),
-          const Divider(height: 1, color: Color(0xFF294048)),
-          Padding(
-            padding: footerPadding,
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: canGoBack ? onBack : null,
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('Back'),
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(
-                        vertical: compact ? AppSpacing.md : AppSpacing.lg,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: isSaving ? null : onNext,
-                    icon: isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            isLastStep
-                                ? Icons.send_outlined
-                                : Icons.arrow_forward,
-                          ),
-                    label: Text(
-                      isSaving ? 'Saving...' : (isLastStep ? 'Save' : 'Next'),
-                    ),
-                    style: FilledButton.styleFrom(
-                      padding: EdgeInsets.symmetric(
-                        vertical: compact ? AppSpacing.md : AppSpacing.lg,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  final List<FocusSession> sessions;
+  final Map<String, FocusReflection> reflections;
 }
 
-class _RatingStep extends StatelessWidget {
-  const _RatingStep({
-    required this.value,
-    required this.unit,
-    required this.helperText,
-    required this.compact,
-    required this.ultraCompact,
-    required this.onChanged,
-  });
+String _stressSourceLabel(StressSource value) => switch (value) {
+      StressSource.workload => 'Workload',
+      StressSource.avoidablePressure => 'Avoidable pressure',
+      StressSource.privateEmotional => 'Private or emotional',
+      StressSource.physicalRecovery => 'Physical recovery',
+      StressSource.externalEnvironment => 'External environment',
+    };
 
-  final int value;
-  final String unit;
-  final String helperText;
-  final bool compact;
-  final bool ultraCompact;
-  final ValueChanged<int> onChanged;
+String _stressSourceDescription(StressSource value) => switch (value) {
+      StressSource.workload => 'Deadlines, volume, meetings, or responsibility',
+      StressSource.avoidablePressure =>
+        'Late starts, unclear next actions, or planning debt',
+      StressSource.privateEmotional =>
+        'Personal events, conflict, grief, family, or worry',
+      StressSource.physicalRecovery =>
+        'Illness, pain, poor sleep, exhaustion, or recovery',
+      StressSource.externalEnvironment =>
+        'Travel, noise, interruptions, or external constraints',
+    };
 
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: constraints.maxWidth,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _CurrentRatingCard(
-                  value: '$value$unit',
-                  compact: compact,
-                  ultraCompact: ultraCompact,
-                ),
-                SizedBox(height: ultraCompact ? AppSpacing.xs : AppSpacing.sm),
-                Slider(
-                  value: value.toDouble(),
-                  min: 1,
-                  max: 10,
-                  divisions: 9,
-                  onChanged: (next) => onChanged(next.round()),
-                ),
-                SizedBox(height: ultraCompact ? AppSpacing.xs : AppSpacing.xs),
-                GridView.count(
-                  crossAxisCount: 5,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing:
-                      ultraCompact ? AppSpacing.xs : AppSpacing.sm,
-                  mainAxisSpacing: ultraCompact ? AppSpacing.xs : AppSpacing.sm,
-                  childAspectRatio: compact ? 1.75 : 1.55,
-                  children: List.generate(10, (index) {
-                    final rating = index + 1;
-                    return _RatingButton(
-                      rating: rating,
-                      isSelected: rating == value,
-                      onTap: () => onChanged(rating),
-                    );
-                  }),
-                ),
-                SizedBox(height: ultraCompact ? AppSpacing.xs : AppSpacing.sm),
-                Container(
-                  width: double.infinity,
-                  padding:
-                      EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Text.rich(
-                    TextSpan(
-                      text: helperText.split(' ').first,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                      children: [
-                        TextSpan(
-                          text: helperText.substring(helperText.indexOf(' ')),
-                          style:
-                              Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: const Color(0xFFA8B5BE),
-                                    fontSize: compact ? 14 : null,
-                                  ),
-                        ),
-                      ],
-                    ),
-                    maxLines: compact ? 2 : null,
-                    overflow:
-                        compact ? TextOverflow.ellipsis : TextOverflow.clip,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+String _stressControllabilityLabel(StressControllability value) =>
+    switch (value) {
+      StressControllability.hardlyControllable => 'Little influence',
+      StressControllability.partlyControllable => 'Some influence',
+      StressControllability.mostlyControllable => 'Mostly within my influence',
+    };
+
+enum _EveningStepKind {
+  checkIn,
+  sleepPlan,
+  context,
 }
 
-class _SleepStep extends StatelessWidget {
-  const _SleepStep({
-    required this.value,
-    required this.compact,
-    required this.ultraCompact,
-    required this.onChanged,
-  });
-
-  final double value;
-  final bool compact;
-  final bool ultraCompact;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _CurrentRatingCard(
-          value: '${value.round()} h',
-          compact: compact,
-          ultraCompact: ultraCompact,
-        ),
-        SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
-        Slider(
-          value: value,
-          min: 0,
-          max: 12,
-          divisions: 24,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-}
-
-class _NotesStep extends StatelessWidget {
-  const _NotesStep({
-    required this.controller,
-    required this.compact,
-    required this.ultraCompact,
-  });
-
-  final TextEditingController controller;
-  final bool compact;
-  final bool ultraCompact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'What should your coach know?',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontSize: compact ? 17 : null,
-              ),
-        ),
-        SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
-        SizedBox(
-          height: ultraCompact ? 180 : (compact ? 220 : 300),
-          child: TextField(
-            controller: controller,
-            expands: true,
-            minLines: null,
-            maxLines: null,
-            textAlignVertical: TextAlignVertical.top,
-            decoration: InputDecoration(
-              hintText:
-                  'I felt distracted after lunch, but the morning class went well...',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(22),
-                borderSide: const BorderSide(color: Color(0xFF303B47)),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CurrentRatingCard extends StatelessWidget {
-  const _CurrentRatingCard({
-    required this.value,
-    required this.compact,
-    required this.ultraCompact,
-  });
-
-  final String value;
-  final bool compact;
-  final bool ultraCompact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        vertical: ultraCompact
-            ? AppSpacing.md
-            : (compact ? AppSpacing.lg : AppSpacing.xl),
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF242D34),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Current rating',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFA8B5BE),
-                ),
-          ),
-          SizedBox(height: compact ? AppSpacing.xs : AppSpacing.md),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  fontSize: ultraCompact ? 46 : (compact ? 58 : 72),
-                  height: 1,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RatingButton extends StatelessWidget {
-  const _RatingButton({
-    required this.rating,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final int rating;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : const Color(0xFF0C1218),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : const Color(0xFF303B47),
-            width: 1.5,
-          ),
-        ),
-        child: Text(
-          '$rating',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: isSelected ? Colors.black : const Color(0xFFA8B5BE),
-              ),
-        ),
-      ),
-    );
-  }
-}
-
-enum _QuickStepKind { rating, sleep, notes }
-
-class _QuickStepSpec {
-  const _QuickStepSpec({
-    required this.label,
+class _EveningStep {
+  const _EveningStep({
+    required this.eyebrow,
     required this.title,
     required this.subtitle,
-    required this.unit,
     required this.kind,
   });
 
-  final String label;
+  final String eyebrow;
   final String title;
   final String subtitle;
-  final String unit;
-  final _QuickStepKind kind;
+  final _EveningStepKind kind;
 }

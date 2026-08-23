@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="focus_protection_accessibility_label">MyLifeGraph Focus protection</string>
+    <string name="focus_protection_accessibility_description">Blocks only apps you select during a protected Focus session. Reads package changes only, never window content, messages, text, or clicks.</string>
+</resources>

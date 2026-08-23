@@ -25,3 +25,12 @@ class SkillScore {
   final int score;
   final String signal;
 }
+
+class SkillsetProfileUnavailableException implements Exception {
+  const SkillsetProfileUnavailableException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'SkillsetProfileUnavailableException: $message';
+}

@@ -1,0 +1,1048 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
+import 'package:my_life_graph/core/contracts/account_deletion.dart';
+import 'package:my_life_graph/features/auth/data/auth_repository.dart';
+import 'package:my_life_graph/features/auth/domain/app_session.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
+import 'package:my_life_graph/composition/coach_credential_store_provider.dart';
+import 'package:my_life_graph/features/coach/data/coach_credential_store.dart';
+import 'package:my_life_graph/features/coach/domain/coach.dart';
+import 'package:my_life_graph/features/settings/application/account_export_saver.dart';
+import 'package:my_life_graph/features/settings/domain/account_settings.dart';
+import 'package:my_life_graph/features/settings/domain/account_settings_repository.dart';
+import 'package:my_life_graph/features/settings/presentation/pages/settings_page.dart';
+import 'package:my_life_graph/features/settings/presentation/providers/account_settings_providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+void main() {
+  late _SettingsCredentialStore credentialStore;
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    credentialStore = _SettingsCredentialStore();
+  });
+
+  testWidgets(
+      'synced settings retries timezone, exports, and requires typed deletion',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository()
+      ..failNextTimezone = true;
+    final exportSaver = _FakeExportSaver();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+              canUseWeeklyReview: true,
+              canUseCalendarIntegration: true,
+              canAccessCoachBackend: true,
+              canShowCoachSurface: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+          accountExportSaverProvider.overrideWithValue(exportSaver),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Synced account'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Synced account')),
+    );
+    await tester.scrollUntilVisible(
+      find.text('In-app reminders'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('In-app reminders'), findsOneWidget);
+    expect(
+      find.text(
+        'Allow banners while the app is open and choose what may appear.',
+      ),
+      findsOneWidget,
+    );
+    tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Change timezone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change timezone'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Existing preparation reservations keep'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('do not refresh automatically'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Europe/Berlin').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/London').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save timezone'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not update the timezone. Try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Change timezone'), findsOneWidget);
+
+    await tester.tap(find.text('Change timezone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/Berlin').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/London').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save timezone'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.timezoneCalls, ['Europe/London', 'Europe/London']);
+    expect(find.text('Europe/London'), findsOneWidget);
+
+    accountRepository.timezoneError =
+        const AccountProfileUpdateOutcomeUnknownException('unknown');
+    await tester.tap(find.text('Change timezone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/London').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/Paris').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save timezone'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Timezone update could not be confirmed. Select the same timezone again to retry safely, or sign in again to verify it before choosing another.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Europe/London'), findsOneWidget);
+
+    accountRepository.timezoneError =
+        const AccountTimezoneRejectedException('not recognized');
+    await tester.tap(find.text('Change timezone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/London').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/Paris').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save timezone'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Timezone was not recognized. Choose another IANA timezone.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Europe/London'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Export data'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Export data'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export data'));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(accountRepository.exportCalls, 1);
+    expect(exportSaver.calls, 1);
+    expect(find.text('Account export saved.'), findsOneWidget);
+
+    accountRepository.exportError = const AccountExportTooLargeException(
+      'too large',
+    );
+    await tester.tap(find.text('Export data'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'The current export cannot include this much data. Nothing was exported; remove data only if you already intended to, then try again.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account'));
+    await tester.pumpAndSettle();
+
+    final confirmButton = find.widgetWithText(FilledButton, 'Delete account');
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Type DELETE to confirm'),
+      'delete',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Type DELETE to confirm'),
+      'DELETE',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.deleteCalls, 1);
+    expect(authRepository.deletedAccountSignOutCalls, 1);
+    expect(
+      container.read(authNoticeProvider)?.message,
+      'Account and saved synced data deleted.',
+    );
+    expect(container.read(authNoticeProvider)?.isError, isFalse);
+  });
+
+  testWidgets('custom IANA timezone path is available and validated',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change timezone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/Berlin').last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Enter another IANA timezone…'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Enter another IANA timezone…').last);
+    await tester.pumpAndSettle();
+
+    final save = find.widgetWithText(FilledButton, 'Save timezone');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Custom IANA timezone'),
+      'not-a-zone',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Custom IANA timezone'),
+      'Africa/Johannesburg',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.timezoneCalls, ['Africa/Johannesburg']);
+  });
+
+  testWidgets('daily preparation budget can be saved and removed explicitly',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final setting = find.byKey(
+      const ValueKey('daily-preparation-budget-setting'),
+    );
+    await tester.dragUntilVisible(
+      setting,
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(setting.hitTestable(), findsOneWidget);
+    await tester.tap(setting.hitTestable());
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('transparent rule, not an AI estimate'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('daily-preparation-budget-input')),
+      '120',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save budget'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.preparationBudgetCalls, [120]);
+    expect(
+      find.text('2h total per day across confirmed preparation plans.'),
+      findsOneWidget,
+    );
+
+    await tester.dragUntilVisible(
+      setting,
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(setting.hitTestable());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove budget'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.preparationBudgetCalls, [120, null]);
+    expect(
+      find.text('Not set. Existing per-plan limits still apply.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('preparation budget dialog stays usable at 320px and 200% text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: SettingsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final setting = find.byKey(
+      const ValueKey('daily-preparation-budget-setting'),
+    );
+    await tester.dragUntilVisible(
+      setting,
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(setting.hitTestable(), findsOneWidget);
+    await tester.tap(setting.hitTestable());
+    await tester.pumpAndSettle();
+    final dialog = find.byType(AlertDialog);
+    expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
+    await tester.enterText(
+      find.byKey(const ValueKey('daily-preparation-budget-input')),
+      '120',
+    );
+    await tester.pump();
+    final save = find.widgetWithText(FilledButton, 'Save budget');
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    expect(save.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pending account export does not hand off after navigation',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository();
+    final exportRequest = Completer<void>();
+    final accountRepository = _FakeAccountSettingsRepository()
+      ..exportCompleter = exportRequest;
+    final exportSaver = _FakeExportSaver();
+    final showSettings = ValueNotifier(true);
+    addTearDown(showSettings.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+          accountExportSaverProvider.overrideWithValue(exportSaver),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showSettings,
+              builder: (_, visible, __) => visible
+                  ? const SettingsPage()
+                  : const Text('Different destination'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Export data'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Export data'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export data'));
+    await tester.pump();
+
+    expect(accountRepository.exportCalls, 1);
+    expect(exportSaver.calls, 0);
+    showSettings.value = false;
+    await tester.pump();
+    exportRequest.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Different destination'), findsOneWidget);
+    expect(exportSaver.calls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('account dialog results are ignored after Settings unmounts',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository();
+    final showSettings = ValueNotifier<bool>(true);
+    addTearDown(showSettings.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showSettings,
+              builder: (_, visible, __) => visible
+                  ? const SettingsPage()
+                  : const Text('Different destination'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Change timezone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/Berlin').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Europe/London').last);
+    await tester.pumpAndSettle();
+    showSettings.value = false;
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save timezone'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.timezoneCalls, isEmpty);
+    expect(tester.takeException(), isNull);
+
+    showSettings.value = true;
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Type DELETE to confirm'),
+      'DELETE',
+    );
+    await tester.pump();
+    showSettings.value = false;
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete account'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.deleteCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('recent-auth deletion rejection keeps the account signed in',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository()
+      ..deleteError = const AccountRecentAuthenticationRequiredException(
+        'recent authentication required',
+      );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Synced account')),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Type DELETE to confirm'),
+      'DELETE',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete account'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.deleteCalls, 1);
+    expect(authRepository.deletedAccountSignOutCalls, 0);
+    expect(container.read(authControllerProvider).valueOrNull, isNotNull);
+    expect(
+      find.text(
+        'For safety, sign out and sign in again, then return here to delete the account.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('ambiguous deletion enters stable recovery without signing out',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository()
+      ..deletionRecoveryAfterInitialLoad = true;
+    final accountRepository = _FakeAccountSettingsRepository()
+      ..deleteError = const AccountDeletionOutcomeUnknownException(
+        'outcome unknown',
+      );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Synced account')),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Type DELETE to confirm'),
+      'DELETE',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete account'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.deleteCalls, 1);
+    expect(authRepository.deletedAccountSignOutCalls, 0);
+    expect(
+      container.read(authControllerProvider).valueOrNull?.isDeletionRecovery,
+      isTrue,
+    );
+    expect(
+      container.read(authNoticeProvider)?.message,
+      'Deletion could not yet be confirmed. Retry the same request from the recovery screen.',
+    );
+    expect(container.read(authNoticeProvider)?.isError, isTrue);
+  });
+
+  testWidgets('delete finalization survives leaving Settings before commit',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository();
+    final deletion = Completer<void>();
+    final accountRepository = _FakeAccountSettingsRepository()
+      ..deleteCompleter = deletion;
+    final showSettings = ValueNotifier<bool>(true);
+    addTearDown(showSettings.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showSettings,
+              builder: (_, visible, __) => visible
+                  ? const SettingsPage()
+                  : const Text('Different destination'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Synced account')),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Type DELETE to confirm'),
+      'DELETE',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete account'));
+    await tester.pump();
+
+    showSettings.value = false;
+    await tester.pump();
+    expect(find.text('Different destination'), findsOneWidget);
+    deletion.complete();
+    await tester.pumpAndSettle();
+
+    expect(authRepository.deletedAccountSignOutCalls, 1);
+    expect(container.read(authControllerProvider).valueOrNull, isNull);
+    expect(
+      container.read(authNoticeProvider)?.message,
+      'Account and saved synced data deleted.',
+    );
+    expect(container.read(authNoticeProvider)?.isError, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'account dialogs keep their lower actions reachable at 320 pixels with larger text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          coachCredentialStoreProvider.overrideWithValue(credentialStore),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(1.5),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: SettingsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final changeTimezone = find.text('Change timezone');
+    await tester.dragUntilVisible(
+      changeTimezone,
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(changeTimezone.hitTestable(), findsOneWidget);
+    await tester.tap(changeTimezone.hitTestable());
+    await tester.pumpAndSettle();
+
+    var dialog = find.byType(AlertDialog);
+    expect(dialog, findsOneWidget);
+    expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
+    final saveTimezone = find.widgetWithText(
+      FilledButton,
+      'Save timezone',
+    );
+    await tester.ensureVisible(saveTimezone);
+    await tester.pumpAndSettle();
+    expect(saveTimezone.hitTestable(), findsOneWidget);
+    await tester.tap(saveTimezone.hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Account timezone'), findsNothing);
+
+    final deleteEntry = find.text('Delete account');
+    await tester.scrollUntilVisible(
+      deleteEntry,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(deleteEntry);
+    await tester.pumpAndSettle();
+    await tester.tap(deleteEntry);
+    await tester.pumpAndSettle();
+
+    dialog = find.byType(AlertDialog);
+    expect(dialog, findsOneWidget);
+    expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Type DELETE to confirm'),
+      'DELETE',
+    );
+    await tester.pump();
+    final confirmDelete = find.widgetWithText(
+      FilledButton,
+      'Delete account',
+    );
+    await tester.ensureVisible(confirmDelete);
+    await tester.pumpAndSettle();
+    expect(confirmDelete.hitTestable(), findsOneWidget);
+    await tester.tap(confirmDelete.hitTestable());
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.deleteCalls, 1);
+    expect(authRepository.deletedAccountSignOutCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _SettingsAuthRepository extends AuthRepository {
+  _SettingsAuthRepository()
+      : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+          useMockData: false,
+        );
+
+  final _session = AppSession.authenticated(
+    const AppProfile(
+      id: 'account-id',
+      email: 'person@example.test',
+      name: 'Account Person',
+      timezone: 'Europe/Berlin',
+      role: AppRole.user,
+      onboardingDone: true,
+      authProvider: 'email',
+    ),
+  );
+  int deletedAccountSignOutCalls = 0;
+  int currentSessionCalls = 0;
+  bool deletionRecoveryAfterInitialLoad = false;
+
+  @override
+  Stream<AuthState> get authStateChanges => const Stream.empty();
+
+  @override
+  Future<AppSession?> currentSession() async {
+    currentSessionCalls += 1;
+    if (deletionRecoveryAfterInitialLoad && currentSessionCalls > 1) {
+      return AppSession.deletionRecovery(
+        _session.profile,
+        const AccountDeletionRecovery(
+          deletionId: 'a1000000-0000-4000-8000-000000000001',
+          result: null,
+        ),
+      );
+    }
+    return _session;
+  }
+
+  @override
+  Future<void> signOutAfterAccountDeletion() async {
+    deletedAccountSignOutCalls += 1;
+  }
+}
+
+class _SettingsCredentialStore implements CoachCredentialStore {
+  final Map<String, String> values = {};
+  int deleteAllCalls = 0;
+
+  String _key(String profileId, CoachProviderName provider) =>
+      '$profileId:${provider.code}';
+
+  @override
+  Future<String?> read(String profileId, CoachProviderName provider) async =>
+      values[_key(profileId, provider)];
+
+  @override
+  Future<void> write(
+    String profileId,
+    CoachProviderName provider,
+    String key,
+  ) async {
+    values[_key(profileId, provider)] = key;
+  }
+
+  @override
+  Future<void> delete(String profileId, CoachProviderName provider) async {
+    values.remove(_key(profileId, provider));
+  }
+
+  @override
+  Future<void> deleteProfile(String profileId) async {
+    values.removeWhere((key, _) => key.startsWith('$profileId:'));
+  }
+
+  @override
+  Future<void> deleteAllCoachCredentials() async {
+    deleteAllCalls += 1;
+    values.clear();
+  }
+}
+
+class _FakeAccountSettingsRepository implements AccountSettingsRepository {
+  bool failNextTimezone = false;
+  Object? timezoneError;
+  Object? deleteError;
+  Completer<void>? deleteCompleter;
+  final List<String> timezoneCalls = [];
+  final List<int?> preparationBudgetCalls = [];
+  int exportCalls = 0;
+  Object? exportError;
+  Completer<void>? exportCompleter;
+  int deleteCalls = 0;
+
+  @override
+  Future<AccountTimezoneWrite> updateTimezone(
+    String timezone, {
+    required int expectedRevision,
+  }) async {
+    timezoneCalls.add(timezone);
+    if (failNextTimezone) {
+      failNextTimezone = false;
+      throw StateError('temporary profile failure');
+    }
+    final error = timezoneError;
+    timezoneError = null;
+    if (error != null) throw error;
+    return AccountTimezoneWrite(
+      timezone: timezone,
+      revision: expectedRevision + 1,
+      updatedAt: DateTime.utc(2026, 7, 29, 12),
+      replayed: false,
+    );
+  }
+
+  @override
+  Future<AccountPreparationBudgetWrite> updateDailyPreparationBudget(
+    int? minutes, {
+    required int expectedRevision,
+  }) async {
+    preparationBudgetCalls.add(minutes);
+    return AccountPreparationBudgetWrite(
+      minutes: minutes,
+      revision: expectedRevision + 1,
+      updatedAt: DateTime.utc(2026, 7, 29, 12),
+      replayed: false,
+    );
+  }
+
+  @override
+  Future<AccountExportEnvelope> exportAccount() async {
+    exportCalls += 1;
+    final completer = exportCompleter;
+    if (completer != null) await completer.future;
+    final error = exportError;
+    exportError = null;
+    if (error != null) throw error;
+    final data = <String, dynamic>{
+      for (final table in accountExportTableNames)
+        table: <Map<String, dynamic>>[],
+    };
+    return AccountExportEnvelope.fromJson({
+      'contract_version': 'account-export-v6',
+      'exported_at': '2026-07-13T12:00:00Z',
+      'data': data,
+      'record_counts': <String, int>{
+        for (final table in accountExportTableNames) table: 0,
+      },
+      'ledger_policy': {
+        'sanitized_tables': accountExportV1SanitizedTables,
+        'omitted_tables': accountExportV1OmittedTables,
+      },
+      'limits': {
+        'max_rows_per_table': accountExportV1MaxRowsPerTable,
+        'max_total_rows': accountExportV1MaxTotalRows,
+        'max_json_bytes': accountExportV1MaxJsonBytes,
+      },
+    });
+  }
+
+  @override
+  Future<AccountDeletionResult> deleteAccount({required String expectedUserId}) async {
+    expect(expectedUserId, 'account-id');
+    deleteCalls += 1;
+    final completer = deleteCompleter;
+    if (completer != null) await completer.future;
+    final error = deleteError;
+    if (error != null) throw error;
+    return AccountDeletionResult(
+      deletionId: 'a1000000-0000-4000-8000-000000000001',
+      state: AccountDeletionState.completed,
+      acceptedAt: DateTime.utc(2026, 8, 20, 12),
+      completedAt: DateTime.utc(2026, 8, 20, 12, 0, 1),
+      journalDurable: true,
+    );
+  }
+}
+
+class _FakeExportSaver implements AccountExportSaver {
+  int calls = 0;
+
+  @override
+  Future<AccountExportSaveResult> save({
+    required String suggestedName,
+    required AccountExportEnvelope export,
+    Rect? sharePositionOrigin,
+  }) async {
+    calls += 1;
+    expect(suggestedName, startsWith('mylifegraph-export-'));
+    expect(export.contractVersion, 'account-export-v6');
+    return AccountExportSaveResult.saved;
+  }
+}

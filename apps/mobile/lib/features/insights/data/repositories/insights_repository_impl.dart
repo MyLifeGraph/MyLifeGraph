@@ -1,3 +1,4 @@
+import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/repositories/insights_repository.dart';
 import '../datasources/insights_mock_data_source.dart';
@@ -18,15 +19,29 @@ class InsightsRepositoryImpl implements InsightsRepository {
 
   @override
   Future<List<Insight>> getInsights() async {
-    if (_allowMockData || _supabaseDataSource == null) {
+    if (_allowMockData) {
       return _mockDataSource.getInsights();
     }
-
-    try {
-      final items = await _supabaseDataSource.getInsights();
-      return items;
-    } catch (_) {
-      return const [];
+    final source = _supabaseDataSource;
+    if (source == null) {
+      throw StateError('Account insights are not configured.');
     }
+
+    return source.getInsights();
+  }
+
+  @override
+  Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
+    required int windowDays,
+  }) async {
+    final boundedWindowDays = normalizeInsightsWindowDays(windowDays);
+    if (_allowMockData) {
+      return _mockDataSource.getCorrelationDataPoints(
+        windowDays: boundedWindowDays,
+      );
+    }
+    throw StateError(
+      'Account correlation points are provided by personal-patterns-v1.',
+    );
   }
 }

@@ -1,36 +1,678 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/app.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/navigation/app_routes.dart';
+import 'package:my_life_graph/features/auth/domain/intake_response.dart';
+import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('renders authentication gate first', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appConfigProvider.overrideWithValue(
-            const AppConfig(
-              environment: 'test',
-              supabaseUrl: '',
-              supabaseAnonKey: '',
-              aiServiceBaseUrl: 'http://localhost:8000',
-              useMockData: true,
-            ),
-          ),
-        ],
-        child: const PersonalOptimizationApp(),
-      ),
-    );
-
-    await tester.pumpAndSettle();
+    await _pumpTestApp(tester);
 
     expect(find.text('Build your day-aware coach'), findsOneWidget);
-    expect(find.text('Login'), findsWidgets);
-    expect(find.text('Register'), findsOneWidget);
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('Create account'), findsOneWidget);
     expect(find.text('Continue as guest'), findsOneWidget);
     expect(find.text('Sign in with Google'), findsOneWidget);
   });
+
+  testWidgets('guest can complete onboarding and reach dashboard',
+      (tester) async {
+    await _pumpTestApp(tester);
+
+    await _startGuestAndCompleteSetup(tester);
+
+    expect(find.text('Today at a glance'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    final rawIntake = prefs.getString('auth_guest_intake_response');
+    expect(rawIntake, isNotNull);
+    final intake = jsonDecode(rawIntake!) as Map<String, dynamic>;
+    final responses = intake['responses'] as Map<String, dynamic>;
+    for (final retiredKey in const [
+      'primary_focus_areas',
+      'goals',
+      'friction_points',
+      'coaching_style',
+      'reminder_preference',
+      'context_note',
+    ]) {
+      expect(responses, isNot(contains(retiredKey)));
+    }
+    expect(responses['routines'], isEmpty);
+    expect(responses['fixed_commitments'], isEmpty);
+    expect(jsonEncode(responses), isNot(contains('Math')));
+  });
+
+  testWidgets('setup requires explicit core selections', (tester) async {
+    await _pumpTestApp(tester);
+
+    await tester.ensureVisible(find.text('Continue as guest'));
+    await tester.tap(find.text('Continue as guest'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save setup'));
+    await tester.tap(find.text('Save setup'));
+    await tester.pump();
+
+    expect(find.text('Choose a typical weekday shape.'), findsOneWidget);
+    expect(find.text('Required setup'), findsOneWidget);
+  });
+
+  testWidgets('named guest routine stays candidate until cadence activation',
+      (tester) async {
+    await _pumpTestApp(tester);
+    await _startGuestAndFillRequiredSetup(tester);
+
+    await tester.ensureVisible(find.text('Routines'));
+    await tester.tap(find.text('Routines'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Add routine candidate'));
+    await tester.tap(find.text('Add routine candidate'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Routine name'),
+      'Evening reset',
+    );
+    await tester.pump();
+
+    final statusDropdown = find.descendant(
+      of: find.ancestor(
+        of: find.text('Routine status'),
+        matching: find.byType(InputDecorator),
+      ),
+      matching: find.byType(DropdownButton<IntakeRoutineStatus>),
+    );
+    await tester.ensureVisible(statusDropdown);
+    await tester.tap(statusDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Active').last);
+    await tester.pump();
+    expect(
+      find.text(
+        'Choose and confirm cadence before activating or pausing this routine.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Save setup'));
+    await tester.tap(find.text('Save setup'));
+    await tester.pumpAndSettle();
+    final preferences = await SharedPreferences.getInstance();
+    final envelope = jsonDecode(
+      preferences.getString('auth_guest_setup_v1')!,
+    ) as Map<String, dynamic>;
+    final responses = envelope['responses'] as Map<String, dynamic>;
+    final routine =
+        (responses['routines'] as List<dynamic>).single as Map<String, dynamic>;
+    expect(routine['title'], 'Evening reset');
+    expect(routine['status'], 'candidate');
+    expect(routine['cadence_confirmed'], isFalse);
+    expect(routine, isNot(contains('frequency')));
+    expect(routine, isNot(contains('target')));
+  });
+
+  testWidgets(
+      'weekly routine requires explicit target and resets across cadence',
+      (tester) async {
+    await _pumpTestApp(tester);
+    await _startGuestAndFillRequiredSetup(tester);
+    await tester.ensureVisible(find.text('Routines'));
+    await tester.tap(find.text('Routines'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add routine candidate'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Routine name'),
+      'Weekly review',
+    );
+
+    await _selectLabeledDropdown<String>(
+      tester,
+      'Cadence (required before activation)',
+      'Weekly',
+    );
+    var targetField = find.widgetWithText(
+      TextFormField,
+      'Weekly target (1–7)',
+    );
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+              of: targetField,
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text,
+      isEmpty,
+    );
+    await tester.enterText(targetField, '3');
+    await tester.pump();
+
+    await _selectLabeledDropdown<String>(
+      tester,
+      'Cadence (required before activation)',
+      'Daily',
+    );
+    targetField = find.widgetWithText(TextFormField, 'Daily target (fixed)');
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+              of: targetField,
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text,
+      '1',
+    );
+
+    await _selectLabeledDropdown<String>(
+      tester,
+      'Cadence (required before activation)',
+      'Weekly',
+    );
+    targetField = find.widgetWithText(
+      TextFormField,
+      'Weekly target (1–7)',
+    );
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+              of: targetField,
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text,
+      isEmpty,
+    );
+    await tester.enterText(targetField, '3');
+    await tester.pump();
+    await _selectLabeledDropdown<IntakeRoutineStatus>(
+      tester,
+      'Routine status',
+      'Active',
+    );
+
+    await tester.ensureVisible(find.text('Save setup'));
+    await tester.tap(find.text('Save setup'));
+    await tester.pumpAndSettle();
+    final preferences = await SharedPreferences.getInstance();
+    final envelope = jsonDecode(
+      preferences.getString('auth_guest_setup_v1')!,
+    ) as Map<String, dynamic>;
+    final responses = envelope['responses'] as Map<String, dynamic>;
+    final routine =
+        (responses['routines'] as List<dynamic>).single as Map<String, dynamic>;
+    expect(routine['status'], 'active');
+    expect(routine['cadence_confirmed'], isTrue);
+    expect(routine['frequency'], 'weekly');
+    expect(routine['target'], 3);
+  });
+
+  testWidgets('edit setup preserves a custom saved weekday shape',
+      (tester) async {
+    const customWeekday = 'four-day rotating schedule';
+    final setupState = IntakeSetupReadState(
+      exists: true,
+      revision: 2,
+      baseRevision: 1,
+      requestId: '6948e550-67d4-4fd9-bb29-bb80382ea8fe',
+      status: 'applied',
+      intakeResponseId: 'local-intake',
+      snapshotId: 'local-snapshot',
+      completedAt: DateTime.utc(2026, 7, 10),
+      responses: _requiredSetupDraft().copyWith(
+        weekdayShape: customWeekday,
+      ),
+      summary: const {},
+    );
+    await _pumpTestApp(
+      tester,
+      initialPreferences: {
+        'auth_guest_active': true,
+        'auth_guest_onboarding_done': true,
+        'auth_guest_setup_v1': jsonEncode(setupState.toJson()),
+      },
+    );
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Setup and commitments'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review your setup'), findsOneWidget);
+    expect(find.text(customWeekday), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('guest can merge evening and morning captures locally',
+      (tester) async {
+    await _pumpTestApp(tester);
+
+    await _startGuestAndCompleteSetup(tester);
+
+    await tester.tap(find.byIcon(AppIcons.add).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Quick actions'), findsOneWidget);
+
+    await tester.tap(find.text('Evening check-in'));
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      'evening mood 2 of 10',
+      'evening energy 9 of 10',
+      'evening stress 8 of 10',
+    ]) {
+      final choice = find.bySemanticsLabel(label);
+      await tester.ensureVisible(choice);
+      await tester.tap(choice);
+      await tester.pump();
+    }
+    final eveningNext = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Next'),
+    );
+    expect(eveningNext.onPressed, isNotNull);
+    eveningNext.onPressed!.call();
+    await tester.pumpAndSettle();
+    final plannedSleep =
+        find.bySemanticsLabel('planned sleep time preset 23:00');
+    await tester.ensureVisible(plannedSleep);
+    await tester.tap(plannedSleep);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Next'));
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    for (final label in [
+      'stress source private_emotional',
+      'stress influence hardly_controllable',
+    ]) {
+      final choice = find.bySemanticsLabel(label);
+      await tester.ensureVisible(choice);
+      await tester.tap(choice);
+      await tester.pump();
+    }
+    expect(
+      _textFieldWithLabel('Possible priority tomorrow (optional)'),
+      findsNothing,
+    );
+    await tester.ensureVisible(find.text('Save evening check-in'));
+    await tester.tap(find.text('Save evening check-in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Today at a glance'), findsOneWidget);
+    await tester.tap(find.byIcon(AppIcons.add).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Morning check-in'));
+    await tester.pumpAndSettle();
+    for (final label in [
+      'estimated sleep start preset 00:00',
+      'estimated wake time preset 05:30',
+    ]) {
+      final choice = find.bySemanticsLabel(label);
+      await tester.ensureVisible(choice);
+      await tester.tap(choice);
+      await tester.pump();
+    }
+    final morningNext = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Next'),
+    );
+    expect(morningNext.onPressed, isNotNull);
+    morningNext.onPressed!.call();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.bySemanticsLabel('morning sleep quality 3 of 10'),
+    );
+    await tester.tap(
+      find.bySemanticsLabel('morning sleep quality 3 of 10'),
+    );
+    await tester.ensureVisible(
+      find.bySemanticsLabel('morning energy 4 of 10'),
+    );
+    await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Save morning check-in'));
+    await tester.tap(find.text('Save morning check-in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Today at a glance'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    final raw = jsonDecode(
+      prefs.getString('guest_quick_checkins')!,
+    ) as List<dynamic>;
+    expect(raw, hasLength(1));
+    final captures = (raw.single as Map<String, dynamic>)['captures'] as Map;
+    final evening = captures['evening'] as Map;
+    final morning = captures['morning'] as Map;
+    expect(evening['mood'], 2);
+    expect(evening['energy'], 9);
+    expect(evening['stress_intensity'], 8);
+    expect(evening['stress_source'], 'private_emotional');
+    expect(evening['stress_controllability'], 'hardly_controllable');
+    expect(evening.containsKey('tomorrow_priority'), isFalse);
+    expect(evening['planned_sleep_time'], '23:00');
+    expect(evening['sleep_target_minutes'], 480);
+    expect(evening['branch_version'], dailyCaptureV5);
+    expect(evening.containsKey('main_friction'), isFalse);
+    expect(evening.containsKey('additional_frictions'), isFalse);
+    expect(evening.containsKey('reflection_note'), isFalse);
+    expect(evening.containsKey('specific_blocker'), isFalse);
+    expect(evening.containsKey('gentle_tomorrow'), isFalse);
+    expect(morning['sleep_hours'], 5.5);
+    expect(morning['sleep_quality'], 3);
+    expect(morning['current_energy'], 4);
+    expect(morning, isNot(contains('day_shape')));
+    expect(morning['estimated_sleep_minutes'], 330);
+    expect(morning['sleep_target_minutes'], 480);
+    expect(morning['source_evening_capture_id'], evening['capture_id']);
+    expect(morning['branch_version'], dailyCaptureV5);
+
+    await tester.tap(find.byIcon(AppIcons.add).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Today\'s saved captures'), findsNothing);
+    expect(
+      find.text(
+        'Mood 2 | Energy 4 | Sleep 5.5 h | Sleep quality 3/10 | Stress 8',
+      ),
+      findsNothing,
+    );
+    expect(find.text('Local'), findsNothing);
+    expect(find.text('Completed today'), findsNWidgets(2));
+  });
+
+  testWidgets('guest only sees quick actions that work locally',
+      (tester) async {
+    await _pumpTestApp(tester);
+
+    await _startGuestAndCompleteSetup(tester);
+
+    expect(find.text('Local demo'), findsOneWidget);
+    await tester.tap(find.byIcon(AppIcons.add).last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Evening check-in'), findsOneWidget);
+    expect(find.text('Morning check-in'), findsOneWidget);
+    expect(find.text('Habit completion'), findsNothing);
+    expect(find.text('Habit management'), findsNothing);
+  });
+
+  testWidgets('guest shell gates previews and keeps settings honest',
+      (tester) async {
+    await _pumpTestApp(tester);
+
+    await _startGuestAndCompleteSetup(tester);
+
+    expect(find.text('Coach'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsOneWidget);
+
+    final router = GoRouter.of(
+      tester.element(find.text('Today at a glance')),
+    );
+    router.go(AppRoutes.coach);
+    await tester.pumpAndSettle();
+    expect(find.text('Ask anything'), findsOneWidget);
+    expect(find.text('Coach unavailable'), findsOneWidget);
+    expect(find.text('Ask Coach'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('coach-message-field')))
+          .enabled,
+      isFalse,
+    );
+
+    router.go(AppRoutes.more);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.coach);
+    expect(find.text('Coach unavailable'), findsOneWidget);
+
+    router.go(AppRoutes.deepWork);
+    await tester.pumpAndSettle();
+    expect(find.text('Quick actions'), findsOneWidget);
+
+    router.go(AppRoutes.habitManagement);
+    await tester.pumpAndSettle();
+    expect(find.text('Synced Planner unavailable'), findsOneWidget);
+    expect(find.byKey(const ValueKey('planner-locked')), findsOneWidget);
+    expect(find.text('Habit management'), findsNothing);
+
+    router.go(AppRoutes.weeklyReview);
+    await tester.pumpAndSettle();
+    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text('Weekly review'), findsNothing);
+
+    router.go(AppRoutes.calendarIntegration);
+    await tester.pumpAndSettle();
+    expect(find.text('Calendar import'), findsOneWidget);
+    expect(
+      find.text('Calendar import unavailable in local demo'),
+      findsOneWidget,
+    );
+    expect(find.text('Create read-only source'), findsNothing);
+
+    router.go(AppRoutes.settings);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Inbox'), findsOneWidget);
+    expect(find.text('Guest Coach User'), findsOneWidget);
+    expect(find.text('guest@personal-coach.local'), findsOneWidget);
+    expect(find.text('Setup and commitments'), findsOneWidget);
+    await _scrollSliverUntilVisible(
+      tester,
+      find.text('In-app reminders'),
+    );
+    expect(find.text('In-app reminders'), findsOneWidget);
+    expect(
+      find.text('In-app banners are available only for a synced account.'),
+      findsOneWidget,
+    );
+    await _scrollSliverUntilVisible(
+      tester,
+      find.text('Calendar import (optional)'),
+    );
+    expect(find.text('Calendar import (optional)'), findsOneWidget);
+    expect(find.text('Coach'), findsNWidgets(2));
+    await _scrollSliverUntilVisible(
+      tester,
+      find.text('Export data'),
+    );
+    expect(find.text('Export data'), findsOneWidget);
+    expect(find.text('Delete account'), findsOneWidget);
+    await _scrollSliverUntilVisible(
+      tester,
+      find.text('Appearance'),
+    );
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Dark · Saved on this device.'), findsOneWidget);
+    await _scrollSliverUntilVisible(
+      tester,
+      find.text('Sign out'),
+    );
+    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('Alert rules'), findsNothing);
+    expect(find.text('Coach behavior'), findsNothing);
+    expect(find.text('Personal memory'), findsNothing);
+    expect(find.text('Biometric app lock'), findsNothing);
+
+    final setupEntry = find.widgetWithText(ListTile, 'Setup and commitments');
+    await _scrollSliverUntilVisible(
+      tester,
+      setupEntry,
+      down: false,
+    );
+    tester.widget<ListTile>(setupEntry).onTap!.call();
+    await tester.pumpAndSettle();
+    expect(find.text('Review your setup'), findsOneWidget);
+    expect(find.text('Flexible schedule'), findsOneWidget);
+    expect(find.text('No optional setup commitments.'), findsOneWidget);
+  });
+
+  testWidgets('guest can inspect correlation insights', (tester) async {
+    await _pumpTestApp(tester);
+
+    await _startGuestAndCompleteSetup(tester);
+
+    await tester.tap(find.text('Insights'));
+    await tester.pumpAndSettle();
+
+    tester.view.physicalSize = const Size(1200, 1300);
+    await tester.pumpAndSettle();
+    expect(find.text('ONE OBSERVATION'), findsOneWidget);
+    expect(find.text('Advanced correlation exploration'), findsOneWidget);
+    expect(find.text('Compare'), findsNothing);
+
+    await tester.tap(find.text('Advanced correlation exploration'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Compare'), findsOneWidget);
+    expect(find.text('90d'), findsOneWidget);
+    expect(find.text('All'), findsNothing);
+    expect(find.text('Trend overlay'), findsOneWidget);
+    expect(find.text('0-100 normalized'), findsOneWidget);
+
+    await tester.drag(
+      find.byType(CustomScrollView).last,
+      const Offset(0, -900),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Top patterns'), findsOneWidget);
+    expect(find.text('Correlation matrix'), findsOneWidget);
+  });
 }
+
+Future<void> _pumpTestApp(
+  WidgetTester tester, {
+  Map<String, Object> initialPreferences = const {},
+}) async {
+  SharedPreferences.setMockInitialValues(initialPreferences);
+  tester.view.physicalSize = const Size(1200, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        appConfigProvider.overrideWithValue(
+          const AppConfig(
+            environment: 'test',
+            supabaseUrl: '',
+            supabaseAnonKey: '',
+            aiServiceBaseUrl: 'http://localhost:8000',
+            useMockData: true,
+            coachSurfaceEnabled: true,
+          ),
+        ),
+      ],
+      child: const PersonalOptimizationApp(),
+    ),
+  );
+
+  await tester.pumpAndSettle();
+}
+
+IntakeResponseDraft _requiredSetupDraft() {
+  return const IntakeResponseDraft(
+    displayName: null,
+    weekdayShape: 'flexible',
+    bestEnergyWindow: 'morning',
+    routines: [],
+    fixedCommitments: [],
+    calendarConnectionIntent: null,
+  );
+}
+
+Future<void> _startGuestAndCompleteSetup(WidgetTester tester) async {
+  await _startGuestAndFillRequiredSetup(tester);
+
+  await tester.ensureVisible(find.text('Save setup'));
+  await tester.tap(find.text('Save setup'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _startGuestAndFillRequiredSetup(WidgetTester tester) async {
+  await tester.ensureVisible(find.text('Continue as guest'));
+  await tester.tap(find.text('Continue as guest'));
+  await tester.pumpAndSettle();
+
+  expect(find.text('Required setup'), findsOneWidget);
+  expect(find.text('Math'), findsNothing);
+  expect(find.text('Build a steadier weekly routine'), findsNothing);
+
+  await _selectDropdownValue(tester, 0, 'Flexible schedule');
+  await _selectDropdownValue(tester, 1, 'Morning');
+}
+
+Future<void> _selectDropdownValue(
+  WidgetTester tester,
+  int index,
+  String value,
+) async {
+  final dropdown = find.byType(DropdownButton<String>).at(index);
+  await tester.ensureVisible(dropdown);
+  await tester.tap(dropdown);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(value).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _scrollSliverUntilVisible(
+  WidgetTester tester,
+  Finder target, {
+  bool down = true,
+}) async {
+  final scrollView = find.byType(CustomScrollView).first;
+  for (var attempt = 0; attempt < 12; attempt += 1) {
+    if (target.evaluate().isNotEmpty) {
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      return;
+    }
+    await tester.drag(
+      scrollView,
+      Offset(0, down ? -300 : 300),
+    );
+    await tester.pumpAndSettle();
+  }
+  fail(
+    'Could not reveal ${target.describeMatch(Plurality.one)} '
+    'in the settings sliver.',
+  );
+}
+
+Future<void> _selectLabeledDropdown<T>(
+  WidgetTester tester,
+  String label,
+  String value,
+) async {
+  final dropdown = find.descendant(
+    of: find.ancestor(
+      of: find.text(label),
+      matching: find.byType(InputDecorator),
+    ),
+    matching: find.byType(DropdownButton<T>),
+  );
+  await tester.ensureVisible(dropdown);
+  await tester.tap(dropdown);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(value).last);
+  await tester.pumpAndSettle();
+}
+
+Finder _textFieldWithLabel(String label) => find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == label,
+      description: 'TextField with label $label',
+    );

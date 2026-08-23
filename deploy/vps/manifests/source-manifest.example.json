@@ -1,0 +1,18 @@
+{
+  "schema_version": "mylifegraph-source-release-v1",
+  "release_tag": "v0.1.0-pilot.1-rc.1",
+  "release_sha": "0000000000000000000000000000000000000000",
+  "created_at_utc": "2026-08-19T00:00:00Z",
+  "source_archive": {
+    "name": "mylifegraph-v0.1.0-pilot.1-rc.1.tar.gz",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "requirements_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "contracts_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "migration_head": "20260820200000_account_deletion_replayer_role_guard_v2.sql",
+  "migration_inventory": {
+    "count": 69,
+    "identity_sha256": "e1c5fe56d8a359f4aa08248e5363a2cdbafd518c09e4046d48ccf1ae7f4f8ff9",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

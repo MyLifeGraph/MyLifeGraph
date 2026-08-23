@@ -1,0 +1,15 @@
+[Unit]
+Description=MyLifeGraph Coach executor socket
+After=systemd-tmpfiles-setup.service
+
+[Socket]
+ListenStream=/run/mylifegraph-coach/executor.sock
+SocketUser=coach-executor
+SocketGroup=mylifegraph-api
+SocketMode=0660
+DirectoryMode=0750
+RemoveOnStop=true
+Accept=false
+
+[Install]
+WantedBy=sockets.target

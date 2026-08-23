@@ -1,11 +1,30 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/widgets/async_value_view.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
+import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
+import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
+import '../../domain/entities/personal_patterns.dart';
+import '../../domain/entities/sleep_recommendation.dart';
+import '../../domain/services/correlation_analyzer.dart';
+import '../../domain/services/coaching_observation.dart';
+import '../../../optimization/domain/entities/skillset_profile.dart';
+import 'package:my_life_graph/composition/optimization_providers.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/insights_providers.dart';
+
+part '../widgets/insights_exploration_widgets.dart';
+part '../widgets/insights_summary_widgets.dart';
 
 class InsightsPage extends ConsumerWidget {
   const InsightsPage({super.key});
@@ -13,655 +32,382 @@ class InsightsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final insights = ref.watch(insightsProvider);
-    final snapshot = ref.watch(dashboardSnapshotProvider);
+    final report = ref.watch(correlationReportProvider);
+    final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+    final showExampleSkillset = capabilities.isLocalDemo;
+    final personalPatterns = ref.watch(personalPatternsProvider);
+    final sleepRecommendation = ref.watch(sleepRecommendationProvider);
+    final skillset =
+        showExampleSkillset ? ref.watch(skillsetProfileProvider) : null;
+    void retry() {
+      ref.invalidate(insightsProvider);
+      ref.invalidate(correlationReportProvider);
+      ref.invalidate(personalPatternsProvider);
+      ref.invalidate(sleepRecommendationProvider);
+    }
 
-    return AsyncValueView(
-      value: insights,
-      data: (items) => AsyncValueView(
-        value: snapshot,
-        data: (data) => _InsightsHome(
-          insights: items,
-          sleepHours: data.recoveryScore / 10,
-          screenHours: (240 - data.focusMinutesToday).clamp(60, 360) / 60,
-          activityScore: data.optimizationScore,
-        ),
-      ),
+    if ((insights.hasError && !insights.hasValue) ||
+        (report.hasError && !report.hasValue)) {
+      return AppPage(
+        title: 'Insights',
+        actions: [
+          AppHeaderActions(
+            pageActions: [_InsightsRefreshButton(onRefresh: retry)],
+          ),
+        ],
+        children: [
+          _InsightsLoadError(onRetry: retry),
+        ],
+      );
+    }
+    if (!insights.hasValue || !report.hasValue) {
+      return AppPage(
+        title: 'Insights',
+        actions: [
+          AppHeaderActions(
+            pageActions: [_InsightsRefreshButton(onRefresh: retry)],
+          ),
+        ],
+        children: const [
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
+    }
+
+    return _InsightsHome(
+      insights: insights.requireValue,
+      report: report.requireValue,
+      skillset: skillset,
+      personalPatterns: personalPatterns,
+      sleepRecommendation: sleepRecommendation,
+      showPersonalPatterns: !showExampleSkillset,
     );
   }
 }
 
-class _InsightsHome extends StatelessWidget {
+class _InsightsHome extends ConsumerStatefulWidget {
   const _InsightsHome({
     required this.insights,
-    required this.sleepHours,
-    required this.screenHours,
-    required this.activityScore,
+    required this.report,
+    required this.skillset,
+    required this.personalPatterns,
+    required this.sleepRecommendation,
+    required this.showPersonalPatterns,
   });
 
   final List<Insight> insights;
-  final double sleepHours;
-  final double screenHours;
-  final int activityScore;
+  final CorrelationReport report;
+  final AsyncValue<SkillsetProfile>? skillset;
+  final AsyncValue<PersonalPatterns?> personalPatterns;
+  final AsyncValue<SleepRecommendation?> sleepRecommendation;
+  final bool showPersonalPatterns;
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 520;
-        final pagePadding = isMobile ? AppSpacing.md : AppSpacing.lg;
-
-        return SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  pagePadding,
-                  isMobile ? AppSpacing.sm : AppSpacing.lg,
-                  pagePadding,
-                  AppSpacing.xl,
-                ),
-                sliver: SliverList.list(
-                  children: [
-                    _InsightsHeader(isMobile: isMobile),
-                    SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                    _MetricCardsRow(
-                      sleepHours: sleepHours,
-                      screenHours: screenHours,
-                      activityScore: activityScore,
-                      isMobile: isMobile,
-                    ),
-                    SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
-                    _SleepTrendCard(
-                      sleepHours: sleepHours,
-                      isMobile: isMobile,
-                    ),
-                    SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
-                    _DiscoveredPatternsCard(
-                      insights: insights,
-                      isMobile: isMobile,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
 }
 
-class _InsightsHeader extends StatelessWidget {
-  const _InsightsHeader({required this.isMobile});
-
-  final bool isMobile;
+class _InsightsHomeState extends ConsumerState<_InsightsHome> {
+  String _metricAId = 'sleep_hours';
+  String _metricBId = 'useful_progress';
+  final Set<String> _trendMetricIds = {
+    'sleep_hours',
+    'useful_progress',
+  };
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = isMobile || constraints.maxWidth < 420;
-        final titleSize = isMobile ? 38.0 : 46.0;
-
-        final copy = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'PATTERNS AND TRENDS',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontSize: isCompact ? 12 : 14,
-                    letterSpacing: isCompact ? 2.5 : 4,
-                  ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'Insights',
-              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontSize: titleSize,
-                    height: 1,
-                  ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'This week versus last week, discovered patterns, and recent AI notes.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: const Color(0xFFA8B5BE),
-                    height: 1.7,
-                  ),
-            ),
-          ],
-        );
-
-        final actions = Column(
-          children: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.md,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () {},
-              icon: const Icon(Icons.auto_awesome, size: 18),
-              label: const Text('Run AI\nanalysis'),
-            ),
-          ],
-        );
-
-        if (isMobile) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              copy,
-              const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.md,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () {},
-                  icon: const Icon(Icons.auto_awesome, size: 18),
-                  label: const Text('Run AI analysis'),
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: copy),
-            const SizedBox(width: AppSpacing.md),
-            actions,
-          ],
-        );
-      },
-    );
+  void didUpdateWidget(covariant _InsightsHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.report.metrics.length >= 2) {
+      _ensureSelectedMetricsExist();
+    }
   }
-}
-
-class _MetricCardsRow extends StatelessWidget {
-  const _MetricCardsRow({
-    required this.sleepHours,
-    required this.screenHours,
-    required this.activityScore,
-    required this.isMobile,
-  });
-
-  final double sleepHours;
-  final double screenHours;
-  final int activityScore;
-  final bool isMobile;
 
   @override
   Widget build(BuildContext context) {
-    final metrics = [
-      _InsightMetric(
-        icon: Icons.nightlight_round,
-        title: 'Sleep',
-        value: '${sleepHours.toStringAsFixed(1)}h',
-        compare: '0% vs last week',
-      ),
-      _InsightMetric(
-        icon: Icons.phone_android,
-        title: 'Screen time',
-        value: '${screenHours.toStringAsFixed(1)}h',
-        compare: '0% vs last week',
-      ),
-      _InsightMetric(
-        icon: Icons.monitor_heart_outlined,
-        title: 'Activity',
-        value: '$activityScore',
-        compare: '0% vs last week',
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (isMobile) {
-          return GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: AppSpacing.sm,
-            mainAxisSpacing: AppSpacing.sm,
-            childAspectRatio: 0.56,
-            children:
-                metrics.map((metric) => _MetricCard(metric: metric)).toList(),
-          );
-        }
-
-        if (constraints.maxWidth >= 560) {
-          return Row(
-            children: metrics
-                .map(
-                  (metric) => Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        right: metric == metrics.last ? 0 : AppSpacing.md,
-                      ),
-                      child: _MetricCard(metric: metric),
-                    ),
-                  ),
-                )
-                .toList(),
-          );
-        }
-
-        final cardWidth = (constraints.maxWidth * 0.42).clamp(148.0, 188.0);
-        return SizedBox(
-          height: 212,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: metrics.length,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
-            itemBuilder: (context, index) => _MetricCard(
-              metric: metrics[index],
-              width: cardWidth,
-            ),
-          ),
-        );
-      },
+    final windowDays = ref.watch(insightsWindowDaysProvider);
+    final isMobile = MediaQuery.sizeOf(context).width < 620;
+    final observation = const CoachingObservationBuilder().build(widget.report);
+    if (widget.report.metrics.length < 2) {
+      return _SparseInsightsHome(
+        isMobile: isMobile,
+        report: widget.report,
+        observation: observation,
+        skillset: widget.skillset,
+        personalPatterns: widget.personalPatterns,
+        sleepRecommendation: widget.sleepRecommendation,
+        showPersonalPatterns: widget.showPersonalPatterns,
+        onRefresh: () {
+          ref.invalidate(correlationReportProvider);
+          ref.invalidate(insightsProvider);
+          ref.invalidate(personalPatternsProvider);
+          ref.invalidate(sleepRecommendationProvider);
+          if (widget.skillset != null) {
+            ref.invalidate(skillsetProfileProvider);
+          }
+        },
+      );
+    }
+    _ensureSelectedMetricsExist();
+    final activeResult = widget.report.resultFor(_metricAId, _metricBId);
+    final values = const CorrelationAnalyzer().pairValues(
+      points: widget.report.points,
+      metricAId: _metricAId,
+      metricBId: _metricBId,
     );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.metric, this.width});
-
-  final _InsightMetric metric;
-  final double? width;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 124;
-        final iconSize = isCompact ? 40.0 : 48.0;
-
-        return _InsightsPanel(
-          width: width,
-          padding: EdgeInsets.all(isCompact ? AppSpacing.sm : AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: iconSize,
-                    height: iconSize,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF222B33),
-                      borderRadius: BorderRadius.circular(isCompact ? 18 : 22),
-                    ),
-                    child: Icon(
-                      metric.icon,
-                      size: isCompact ? 22 : 24,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+    final metricA = widget.report.metricById(_metricAId);
+    final metricB = widget.report.metricById(_metricBId);
+    return SafeArea(
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              isMobile ? AppSpacing.md : AppSpacing.lg,
+              isMobile ? AppSpacing.sm : AppSpacing.lg,
+              isMobile ? AppSpacing.md : AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            sliver: SliverList.list(
+              children: [
+                _InsightsHeader(
+                  isMobile: isMobile,
+                  onRefresh: () {
+                    ref.invalidate(correlationReportProvider);
+                    ref.invalidate(insightsProvider);
+                    ref.invalidate(personalPatternsProvider);
+                    ref.invalidate(sleepRecommendationProvider);
+                    if (widget.skillset != null) {
+                      ref.invalidate(skillsetProfileProvider);
+                    }
+                  },
+                ),
+                SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
+                if (widget.showPersonalPatterns) ...[
+                  _PersonalStudyPatternCard(
+                    patterns: widget.personalPatterns,
+                    onRetry: () => ref.invalidate(personalPatternsProvider),
                   ),
-                  const Spacer(),
-                  Icon(
-                    Icons.trending_up,
-                    size: isCompact ? 20 : 24,
-                    color: Theme.of(context).colorScheme.primary,
+                  SizedBox(
+                    height: isMobile ? AppSpacing.md : AppSpacing.lg,
                   ),
+                  _SleepRecommendationCard(
+                    value: widget.sleepRecommendation,
+                    onRetry: () => ref.invalidate(sleepRecommendationProvider),
+                  ),
+                ] else
+                  _CoachingObservationCard(observation: observation),
+                SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
+                if (widget.skillset != null) ...[
+                  _SkillsetProfileCard(
+                    skillset: widget.skillset!,
+                    onRetry: () => ref.invalidate(skillsetProfileProvider),
+                  ),
+                  SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
                 ],
-              ),
-              SizedBox(height: isCompact ? AppSpacing.md : AppSpacing.lg),
-              Text(
-                metric.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  metric.value,
-                  style: isCompact
-                      ? Theme.of(context).textTheme.titleLarge
-                      : Theme.of(context).textTheme.headlineMedium,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                metric.compare,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: isCompact ? 12 : null,
-                    ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SleepTrendCard extends StatelessWidget {
-  const _SleepTrendCard({
-    required this.sleepHours,
-    required this.isMobile,
-  });
-
-  final double sleepHours;
-  final bool isMobile;
-
-  @override
-  Widget build(BuildContext context) {
-    return _InsightsPanel(
-      padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Sleep trend',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              Text('7 days', style: Theme.of(context).textTheme.bodyMedium),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          _SleepTrendBar(
-            sleepHours: sleepHours,
-            isMobile: isMobile,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Text(
-                'Goal 8h',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFFA8B5BE),
-                    ),
-              ),
-              const Spacer(),
-              Text(
-                'Today ${sleepHours.toStringAsFixed(1)}h',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SleepTrendBar extends StatelessWidget {
-  const _SleepTrendBar({
-    required this.sleepHours,
-    required this.isMobile,
-  });
-
-  final double sleepHours;
-  final bool isMobile;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = (sleepHours / 8).clamp(0.03, 1.0);
-
-    return Container(
-      height: isMobile ? 120 : 150,
-      padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1F2C34),
-        borderRadius: BorderRadius.circular(42),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Sleep duration',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFA8B5BE),
-                ),
-          ),
-          const Spacer(),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 12,
-              backgroundColor: const Color(0xFF0D121A),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DiscoveredPatternsCard extends StatelessWidget {
-  const _DiscoveredPatternsCard({
-    required this.insights,
-    required this.isMobile,
-  });
-
-  final List<Insight> insights;
-  final bool isMobile;
-
-  @override
-  Widget build(BuildContext context) {
-    return _InsightsPanel(
-      padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.psychology_outlined,
-                color: Theme.of(context).colorScheme.primary,
-                size: 34,
-              ),
-              SizedBox(width: isMobile ? AppSpacing.md : AppSpacing.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Discovered patterns',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Stored in long-term memory',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: const Color(0xFFA8B5BE),
+                _InsightsPanel(
+                  padding: EdgeInsets.zero,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ExpansionTile(
+                      title: const Text('Advanced correlation exploration'),
+                      subtitle: const Text(
+                        'Inspect matrices, trends, and individual signal pairs.',
+                      ),
+                      childrenPadding: EdgeInsets.all(
+                        isMobile ? AppSpacing.md : AppSpacing.lg,
+                      ),
+                      children: [
+                        _ControlsPanel(
+                          isMobile: isMobile,
+                          windowDays: windowDays,
+                          metrics: widget.report.metrics,
+                          metricAId: _metricAId,
+                          metricBId: _metricBId,
+                          onWindowChanged: (value) {
+                            ref
+                                .read(insightsWindowDaysProvider.notifier)
+                                .state = value;
+                          },
+                          onMetricAChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _metricAId = value;
+                              if (_metricAId == _metricBId ||
+                                  const CorrelationPairPolicy().isBlocked(
+                                    _metricAId,
+                                    _metricBId,
+                                  )) {
+                                _metricBId = _fallbackMetricId(
+                                  except: _metricAId,
+                                  pairedWith: _metricAId,
+                                );
+                              }
+                            });
+                          },
+                          onMetricBChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _metricBId = value;
+                              if (_metricAId == _metricBId ||
+                                  const CorrelationPairPolicy().isBlocked(
+                                    _metricAId,
+                                    _metricBId,
+                                  )) {
+                                _metricAId = _fallbackMetricId(
+                                  except: _metricBId,
+                                  pairedWith: _metricBId,
+                                );
+                              }
+                            });
+                          },
+                        ),
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        _TrendOverlayCard(
+                          report: widget.report,
+                          selectedMetricIds: _trendMetricIds,
+                          onMetricToggled: (metricId) {
+                            setState(() {
+                              if (_trendMetricIds.contains(metricId)) {
+                                if (_trendMetricIds.length > 1) {
+                                  _trendMetricIds.remove(metricId);
+                                }
+                              } else if (_trendMetricIds.every(
+                                (selected) =>
+                                    !const CorrelationPairPolicy().isBlocked(
+                                  selected,
+                                  metricId,
+                                ),
+                              )) {
+                                _trendMetricIds.add(metricId);
+                              }
+                            });
+                          },
+                          isMobile: isMobile,
+                        ),
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        if (isMobile) ...[
+                          _CorrelationCard(
+                            metricA: metricA,
+                            metricB: metricB,
+                            result: activeResult,
+                            values: values,
+                            isMobile: true,
                           ),
+                          const SizedBox(height: AppSpacing.md),
+                          _TopPatternsCard(
+                            report: widget.report,
+                            isMobile: true,
+                          ),
+                        ] else
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: _CorrelationCard(
+                                  metricA: metricA,
+                                  metricB: metricB,
+                                  result: activeResult,
+                                  values: values,
+                                  isMobile: false,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.lg),
+                              Expanded(
+                                flex: 2,
+                                child: _TopPatternsCard(
+                                  report: widget.report,
+                                  isMobile: false,
+                                ),
+                              ),
+                            ],
+                          ),
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        _CorrelationMatrixCard(
+                          report: widget.report,
+                          selectedMetricAId: _metricAId,
+                          selectedMetricBId: _metricBId,
+                          onPairSelected: (metricAId, metricBId) {
+                            setState(() {
+                              _metricAId = metricAId;
+                              _metricBId = metricBId;
+                            });
+                          },
+                        ),
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        _DiscoveredPatternsCard(
+                          insights: widget.insights,
+                          isMobile: isMobile,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          ...insights.map(
-            (insight) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _PatternTile(insight: insight, isMobile: isMobile),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PatternTile extends StatelessWidget {
-  const _PatternTile({
-    required this.insight,
-    required this.isMobile,
-  });
-
-  final Insight insight;
-  final bool isMobile;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: const Color(0xFF222C33),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        insight.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    _ImpactBadge(impact: insight.impact),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  insight.summary,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: const Color(0xFFA8B5BE),
-                        height: 1.45,
-                      ),
-                ),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        insight.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        insight.summary,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: const Color(0xFFA8B5BE),
-                              height: 1.45,
-                            ),
-                      ),
-                    ],
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                _ImpactBadge(impact: insight.impact),
               ],
             ),
-    );
-  }
-}
-
-class _ImpactBadge extends StatelessWidget {
-  const _ImpactBadge({required this.impact});
-
-  final String impact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF101721),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        impact,
-        style: Theme.of(context).textTheme.labelLarge,
-      ),
-    );
-  }
-}
-
-class _InsightsPanel extends StatelessWidget {
-  const _InsightsPanel({
-    required this.child,
-    this.padding = EdgeInsets.zero,
-    this.width,
-  });
-
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final double? width;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xFF122329),
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFF2A424A), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color:
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-            blurRadius: 28,
-            spreadRadius: -18,
-            offset: const Offset(0, 20),
           ),
         ],
       ),
-      child: child,
     );
   }
-}
 
-class _InsightMetric {
-  const _InsightMetric({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.compare,
-  });
+  void _ensureSelectedMetricsExist() {
+    final metricIds = widget.report.metrics.map((metric) => metric.id).toSet();
+    if (!metricIds.contains(_metricAId)) {
+      _metricAId = widget.report.metrics.first.id;
+    }
+    if (!metricIds.contains(_metricBId) ||
+        _metricAId == _metricBId ||
+        const CorrelationPairPolicy().isBlocked(_metricAId, _metricBId)) {
+      _metricBId = _fallbackMetricId(
+        except: _metricAId,
+        pairedWith: _metricAId,
+      );
+    }
+    _trendMetricIds.removeWhere((id) => !metricIds.contains(id));
+    if (_trendMetricIds.length < 2 &&
+        !_trendMetricIds.contains(_metricBId) &&
+        _trendMetricIds.every(
+          (selected) => !const CorrelationPairPolicy().isBlocked(
+            selected,
+            _metricBId,
+          ),
+        )) {
+      _trendMetricIds.add(_metricBId);
+    }
+    if (_trendMetricIds.isEmpty) {
+      _trendMetricIds.add(_metricAId);
+      _trendMetricIds.add(_metricBId);
+    }
+  }
 
-  final IconData icon;
-  final String title;
-  final String value;
-  final String compare;
+  String _fallbackMetricId({
+    required String except,
+    String? pairedWith,
+  }) {
+    final candidates = widget.report.metrics.where(
+      (metric) =>
+          metric.id != except &&
+          (pairedWith == null ||
+              !const CorrelationPairPolicy().isBlocked(
+                metric.id,
+                pairedWith,
+              )),
+    );
+    for (final preferred in const ['useful_progress', 'focus_minutes']) {
+      for (final candidate in candidates) {
+        if (candidate.id == preferred) return candidate.id;
+      }
+    }
+    return candidates.isEmpty
+        ? widget.report.metrics.first.id
+        : candidates.first.id;
+  }
 }

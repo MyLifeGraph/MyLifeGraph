@@ -1,3 +1,6 @@
+import 'pilot_participation.dart' as participation;
+import '../../../core/contracts/account_deletion.dart';
+
 enum AppRole {
   user,
   vip,
@@ -25,6 +28,11 @@ class AppProfile {
     required this.role,
     required this.onboardingDone,
     required this.authProvider,
+    this.dailyPreparationBudgetMinutes,
+    this.timezoneRevision = 1,
+    this.preparationBudgetRevision = 1,
+    this.pilotParticipationNoticeVersion,
+    this.pilotParticipationAcceptedAt,
   });
 
   final String id;
@@ -34,9 +42,18 @@ class AppProfile {
   final AppRole role;
   final bool onboardingDone;
   final String authProvider;
+  final int? dailyPreparationBudgetMinutes;
+  final int timezoneRevision;
+  final int preparationBudgetRevision;
+  final String? pilotParticipationNoticeVersion;
+  final DateTime? pilotParticipationAcceptedAt;
 
   bool get isGuest => role == AppRole.guest;
   bool get isAdmin => role == AppRole.admin;
+  bool get hasCurrentPilotParticipation =>
+      pilotParticipationNoticeVersion ==
+          participation.pilotParticipationNoticeVersion &&
+      pilotParticipationAcceptedAt?.isUtc == true;
 
   AppProfile copyWith({
     String? name,
@@ -45,6 +62,9 @@ class AppProfile {
     AppRole? role,
     bool? onboardingDone,
     String? authProvider,
+    int? timezoneRevision,
+    String? pilotParticipationNoticeVersion,
+    DateTime? pilotParticipationAcceptedAt,
   }) {
     return AppProfile(
       id: id,
@@ -54,53 +74,52 @@ class AppProfile {
       role: role ?? this.role,
       onboardingDone: onboardingDone ?? this.onboardingDone,
       authProvider: authProvider ?? this.authProvider,
+      dailyPreparationBudgetMinutes: dailyPreparationBudgetMinutes,
+      timezoneRevision: timezoneRevision ?? this.timezoneRevision,
+      preparationBudgetRevision: preparationBudgetRevision,
+      pilotParticipationNoticeVersion: pilotParticipationNoticeVersion ??
+          this.pilotParticipationNoticeVersion,
+      pilotParticipationAcceptedAt:
+          pilotParticipationAcceptedAt ?? this.pilotParticipationAcceptedAt,
+    );
+  }
+
+  AppProfile withDailyPreparationBudget(
+    int? minutes, {
+    int? revision,
+  }) {
+    return AppProfile(
+      id: id,
+      email: email,
+      name: name,
+      timezone: timezone,
+      role: role,
+      onboardingDone: onboardingDone,
+      authProvider: authProvider,
+      dailyPreparationBudgetMinutes: minutes,
+      timezoneRevision: timezoneRevision,
+      preparationBudgetRevision: revision ?? preparationBudgetRevision,
+      pilotParticipationNoticeVersion: pilotParticipationNoticeVersion,
+      pilotParticipationAcceptedAt: pilotParticipationAcceptedAt,
     );
   }
 }
 
 class AppSession {
-  const AppSession.authenticated(this.profile) : isGuestSession = false;
-  const AppSession.guest(this.profile) : isGuestSession = true;
+  const AppSession.authenticated(this.profile)
+      : isGuestSession = false,
+        deletionRecovery = null;
+  const AppSession.guest(this.profile)
+      : isGuestSession = true,
+        deletionRecovery = null;
+  const AppSession.deletionRecovery(this.profile, this.deletionRecovery)
+      : isGuestSession = false;
 
   final AppProfile profile;
   final bool isGuestSession;
+  final AccountDeletionRecovery? deletionRecovery;
 
   bool get isAuthenticated => !isGuestSession;
-  bool get requiresOnboarding => !profile.onboardingDone;
-}
-
-class TimetableDraft {
-  const TimetableDraft({
-    required this.title,
-    required this.location,
-    required this.weekday,
-    required this.startsAt,
-    required this.endsAt,
-  });
-
-  final String title;
-  final String location;
-  final int weekday;
-  final String startsAt;
-  final String endsAt;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'location': location,
-      'weekday': weekday,
-      'startsAt': startsAt,
-      'endsAt': endsAt,
-    };
-  }
-
-  static TimetableDraft fromJson(Map<String, dynamic> json) {
-    return TimetableDraft(
-      title: '${json['title'] ?? ''}',
-      location: '${json['location'] ?? ''}',
-      weekday: (json['weekday'] as num?)?.toInt() ?? 1,
-      startsAt: '${json['startsAt'] ?? '08:15'}',
-      endsAt: '${json['endsAt'] ?? '09:45'}',
-    );
-  }
+  bool get isDeletionRecovery => deletionRecovery != null;
+  bool get requiresOnboarding => !isDeletionRecovery && !profile.onboardingDone;
 }

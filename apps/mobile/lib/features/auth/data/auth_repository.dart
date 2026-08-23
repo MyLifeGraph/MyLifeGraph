@@ -1,17 +1,56 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/contracts/account_deletion.dart';
 import '../../../core/supabase/supabase_tables.dart';
+import 'guest_setup_data_source.dart';
+import 'pilot_participation_api_data_source.dart';
 import '../domain/app_session.dart';
+import '../domain/auth_captcha.dart';
+import '../domain/auth_failure.dart';
+import '../domain/intake_response.dart';
+
+const localDeviceTimezoneMarker = 'device-local';
+
+typedef GoogleOAuthLauncher = Future<bool> Function(String redirectTo);
+typedef GuestCheckInMigrator = Future<void> Function(String userId);
+typedef PendingAccountDeletionResolver =
+    Future<AccountDeletionRecovery?> Function({
+      required String userId,
+      required String accessToken,
+    });
 
 class AuthRepository {
-  AuthRepository(this._client);
+  AuthRepository(
+    this._client, {
+    required bool useMockData,
+    GuestSetupDataSource guestSetupDataSource = const GuestSetupDataSource(),
+    GoogleOAuthLauncher? googleOAuthLauncher,
+    GuestCheckInMigrator? guestCheckInMigrator,
+    PilotParticipationGateway? pilotParticipationGateway,
+    PendingAccountDeletionResolver? pendingAccountDeletionResolver,
+    bool requiresPilotParticipation = false,
+    bool requiresAuthCaptcha = false,
+  }) : _useMockData = useMockData,
+       _guestSetupDataSource = guestSetupDataSource,
+       _googleOAuthLauncher = googleOAuthLauncher,
+       _guestCheckInMigrator = guestCheckInMigrator,
+       _pilotParticipationGateway = pilotParticipationGateway,
+       _pendingAccountDeletionResolver = pendingAccountDeletionResolver,
+       _requiresPilotParticipation = requiresPilotParticipation,
+       _requiresAuthCaptcha = requiresAuthCaptcha;
 
   final SupabaseClient _client;
+  final bool _useMockData;
+  final GuestSetupDataSource _guestSetupDataSource;
+  final GoogleOAuthLauncher? _googleOAuthLauncher;
+  final GuestCheckInMigrator? _guestCheckInMigrator;
+  final PilotParticipationGateway? _pilotParticipationGateway;
+  final PendingAccountDeletionResolver? _pendingAccountDeletionResolver;
+  final bool _requiresPilotParticipation;
+  final bool _requiresAuthCaptcha;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -20,11 +59,32 @@ class AuthRepository {
   Future<AppSession?> currentSession() async {
     final user = _client.auth.currentUser;
     if (user != null) {
-      final profile = await ensureProfileForAuthUser(user);
-      await _migrateGuestTimetable(profile.id);
-      await _migrateGuestCheckIns(profile.id);
+      final deletionRecovery = await _pendingDeletionRecovery(user);
+      if (deletionRecovery != null) {
+        if (_client.auth.currentUser?.id != user.id) {
+          _cachedSession = null;
+          return null;
+        }
+        final session = AppSession.deletionRecovery(
+          _deletionRecoveryProfile(user),
+          deletionRecovery,
+        );
+        _cachedSession = session;
+        return session;
+      }
+      final profile = await _resolveAuthenticatedProfile(user);
+      if (_client.auth.currentUser?.id != user.id) {
+        _cachedSession = null;
+        return null;
+      }
       _cachedSession = AppSession.authenticated(profile);
       return _cachedSession;
+    }
+
+    if (_requiresPilotParticipation) {
+      await _clearGuestActiveFlag();
+      _cachedSession = null;
+      return null;
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -38,7 +98,7 @@ class AuthRepository {
       id: 'local_guest',
       email: 'guest@personal-coach.local',
       name: prefs.getString(_Prefs.guestName) ?? 'Guest Coach User',
-      timezone: 'Europe/Berlin',
+      timezone: localDeviceTimezoneMarker,
       role: AppRole.guest,
       onboardingDone: prefs.getBool(_Prefs.guestOnboardingDone) ?? false,
       authProvider: 'guest',
@@ -50,18 +110,37 @@ class AuthRepository {
   Future<AppSession> signInWithEmail({
     required String email,
     required String password,
+    String? captchaToken,
   }) async {
+    final verifiedCaptchaToken = validateAuthCaptchaToken(
+      requiredForEnvironment: _requiresAuthCaptcha,
+      token: captchaToken,
+    );
     final response = await _client.auth.signInWithPassword(
       email: email,
       password: password,
+      captchaToken: verifiedCaptchaToken,
     );
     final user = response.user ?? _client.auth.currentUser;
     if (user == null) {
       throw const AuthException('Login did not return a user session.');
     }
-    final profile = await ensureProfileForAuthUser(user);
-    await _migrateGuestTimetable(profile.id);
-    await _migrateGuestCheckIns(profile.id);
+    final deletionRecovery = await _pendingDeletionRecovery(user);
+    if (deletionRecovery != null) {
+      if (_client.auth.currentUser?.id != user.id) {
+        throw const AuthException('Account session changed during sign-in.');
+      }
+      final session = AppSession.deletionRecovery(
+        _deletionRecoveryProfile(user),
+        deletionRecovery,
+      );
+      _cachedSession = session;
+      return session;
+    }
+    final profile = await _resolveAuthenticatedProfile(user);
+    if (_client.auth.currentUser?.id != user.id) {
+      throw const AuthException('Account session changed during sign-in.');
+    }
     await _clearGuestActiveFlag();
     final session = AppSession.authenticated(profile);
     _cachedSession = session;
@@ -72,36 +151,89 @@ class AuthRepository {
     required String email,
     required String password,
     String? name,
+    bool confirmed18OrOlder = false,
+    String? captchaToken,
   }) async {
+    _requirePilotParticipationConfirmation(confirmed18OrOlder);
     final response = await _client.auth.signUp(
       email: email,
       password: password,
+      emailRedirectTo: authRedirectUrl(),
       data: {
         if (name != null && name.trim().isNotEmpty) 'display_name': name.trim(),
       },
+      captchaToken: validateAuthCaptchaToken(
+        requiredForEnvironment: _requiresAuthCaptcha,
+        token: captchaToken,
+      ),
     );
     final user = response.user;
     if (user == null || response.session == null) {
       return null;
     }
 
-    final profile = await ensureProfileForAuthUser(user, preferredName: name);
-    await _migrateGuestTimetable(profile.id);
-    await _migrateGuestCheckIns(profile.id);
+    var profile = await _resolveAuthenticatedProfile(user, preferredName: name);
+    if (_requiresPilotParticipation) {
+      profile = await _recordCurrentPilotParticipation(profile);
+      profile = await _finishAuthenticatedProfile(profile);
+    }
     await _clearGuestActiveFlag();
     final session = AppSession.authenticated(profile);
     _cachedSession = session;
     return session;
   }
 
-  Future<void> signInWithGoogle() async {
-    await _client.auth.signInWithOAuth(
-      OAuthProvider.google,
-      redirectTo: kIsWeb ? webOAuthRedirectTo(Uri.base) : null,
+  Future<void> signInWithGoogle({bool confirmed18OrOlder = false}) async {
+    _requirePilotParticipationConfirmation(confirmed18OrOlder);
+    final redirectTo = authRedirectUrl();
+    final opened =
+        await (_googleOAuthLauncher?.call(redirectTo) ??
+            _client.auth.signInWithOAuth(
+              OAuthProvider.google,
+              redirectTo: redirectTo,
+            ));
+    if (!opened) {
+      throw const AuthException('Google sign-in could not be opened.');
+    }
+  }
+
+  Future<void> requestPasswordReset({
+    required String email,
+    String? captchaToken,
+  }) async {
+    await _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: authRedirectUrl(),
+      captchaToken: validateAuthCaptchaToken(
+        requiredForEnvironment: _requiresAuthCaptcha,
+        token: captchaToken,
+      ),
     );
   }
 
+  Future<void> resendSignupConfirmation({
+    required String email,
+    String? captchaToken,
+  }) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email.trim(),
+      emailRedirectTo: authRedirectUrl(),
+      captchaToken: validateAuthCaptchaToken(
+        requiredForEnvironment: _requiresAuthCaptcha,
+        token: captchaToken,
+      ),
+    );
+  }
+
+  Future<void> updatePassword({required String password}) async {
+    await _client.auth.updateUser(UserAttributes(password: password));
+  }
+
   Future<AppSession> continueAsGuest() async {
+    if (_requiresPilotParticipation) {
+      throw const PilotParticipationUnavailableException();
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_Prefs.guestActive, true);
     final session = AppSession.guest(
@@ -109,7 +241,7 @@ class AuthRepository {
         id: 'local_guest',
         email: 'guest@personal-coach.local',
         name: prefs.getString(_Prefs.guestName) ?? 'Guest Coach User',
-        timezone: 'Europe/Berlin',
+        timezone: localDeviceTimezoneMarker,
         role: AppRole.guest,
         onboardingDone: prefs.getBool(_Prefs.guestOnboardingDone) ?? false,
         authProvider: 'guest',
@@ -119,257 +251,303 @@ class AuthRepository {
     return session;
   }
 
-  Future<AppSession> completeOnboarding({
-    required String? name,
-    required List<TimetableDraft> timetable,
-  }) async {
-    final session = _cachedSession ?? await currentSession();
-    if (session == null) {
-      throw StateError('No active session.');
-    }
-
-    if (session.isGuestSession) {
-      final prefs = await SharedPreferences.getInstance();
-      final cleanName = name?.trim();
-      if (cleanName != null && cleanName.isNotEmpty) {
-        await prefs.setString(_Prefs.guestName, cleanName);
-      }
-      await prefs.setBool(_Prefs.guestOnboardingDone, true);
-      await prefs.setString(
-        _Prefs.guestTimetable,
-        jsonEncode(timetable.map((draft) => draft.toJson()).toList()),
-      );
-      final updated = AppSession.guest(
-        session.profile.copyWith(
-          name: cleanName?.isNotEmpty == true ? cleanName : null,
-          onboardingDone: true,
-        ),
-      );
-      _cachedSession = updated;
-      return updated;
-    }
-
-    final now = DateTime.now().toIso8601String();
-    final profile = session.profile;
-    await _safeUserUpdate(profile.id, {
-      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
-      'onboardingDone': true,
-      'updatedAt': now,
-    });
-    await _saveTimetable(profile.id, timetable);
-
-    final updated = AppSession.authenticated(
-      profile.copyWith(
-        name: name?.trim().isNotEmpty == true ? name!.trim() : null,
-        onboardingDone: true,
-      ),
-    );
-    _cachedSession = updated;
-    return updated;
-  }
-
   Future<void> signOut() async {
     await _client.auth.signOut();
     await _clearGuestActiveFlag();
     _cachedSession = null;
   }
 
-  Future<AppProfile> ensureProfileForAuthUser(
-    User user, {
-    String? preferredName,
-  }) async {
-    final existing = await _selectUser(user.id);
-    if (existing != null) {
-      return _profileFromRow(existing, fallbackUser: user);
-    }
-
-    final now = DateTime.now().toIso8601String();
-    final email = user.email ?? '';
-    final name = preferredName?.trim().isNotEmpty == true
-        ? preferredName!.trim()
-        : user.userMetadata?['display_name']?.toString() ??
-            user.userMetadata?['full_name']?.toString() ??
-            (email.contains('@') ? email.split('@').first : 'New User');
-    final provider = user.appMetadata['provider']?.toString() ?? 'email';
-    final row = {
-      'id': user.id,
-      'email': email,
-      'name': name,
-      'timezone': 'Europe/Berlin',
-      'authProvider': provider,
-      'onboardingDone': false,
-      'updatedAt': now,
-      'role': AppRole.user.databaseValue,
-    };
-
+  Future<void> signOutAfterAccountDeletion() async {
     try {
-      await _client.from(SupabaseTables.users).insert(row);
-    } on PostgrestException catch (error) {
-      if (!error.message.toLowerCase().contains('role')) {
-        rethrow;
-      }
-      final fallback = Map<String, dynamic>.from(row)..remove('role');
-      await _client.from(SupabaseTables.users).insert(fallback);
-    }
-
-    final inserted = await _selectUser(user.id);
-    return _profileFromRow(inserted ?? row, fallbackUser: user);
-  }
-
-  Future<Map<String, dynamic>?> _selectUser(String id) async {
-    try {
-      final rows = await _client
-          .from(SupabaseTables.users)
-          .select('id,email,name,timezone,authProvider,onboardingDone,role')
-          .eq('id', id)
-          .limit(1);
-      final list = List<Map<String, dynamic>>.from(rows as List);
-      return list.isEmpty ? null : list.first;
-    } on PostgrestException catch (error) {
-      if (!error.message.toLowerCase().contains('role')) {
-        rethrow;
-      }
-      final rows = await _client
-          .from(SupabaseTables.users)
-          .select('id,email,name,timezone,authProvider,onboardingDone')
-          .eq('id', id)
-          .limit(1);
-      final list = List<Map<String, dynamic>>.from(rows as List);
-      return list.isEmpty ? null : list.first;
+      await _client.auth.signOut();
+    } finally {
+      await _clearGuestActiveFlag();
+      _cachedSession = null;
     }
   }
 
-  AppProfile _profileFromRow(
-    Map<String, dynamic> row, {
-    User? fallbackUser,
-  }) {
+  Future<AppProfile> requireProfileForAuthUser(User user) async {
+    final existing = await _selectProfile(user.id);
+    if (existing == null) {
+      throw const MissingProfileInvariantException();
+    }
+    return _profileFromRow(existing, fallbackUser: user);
+  }
+
+  Future<Map<String, dynamic>?> _selectProfile(String id) async {
+    final rows = await _client
+        .from(SupabaseTables.profiles)
+        .select(
+          'id,email,display_name,timezone,daily_preparation_budget_minutes,'
+          'timezone_revision,preparation_budget_revision,auth_provider,'
+          'onboarding_completed_at,role,pilot_participation_notice_version,'
+          'pilot_participation_accepted_at',
+        )
+        .eq('id', id)
+        .limit(1);
+    final list = List<Map<String, dynamic>>.from(rows as List);
+    return list.isEmpty ? null : list.first;
+  }
+
+  AppProfile _profileFromRow(Map<String, dynamic> row, {User? fallbackUser}) {
+    final acceptedAtValue = row['pilot_participation_accepted_at'];
+    final parsedAcceptedAt = acceptedAtValue is String
+        ? DateTime.tryParse(acceptedAtValue)
+        : null;
+    final acceptedAt = parsedAcceptedAt?.isUtc == true
+        ? parsedAcceptedAt
+        : null;
     return AppProfile(
       id: '${row['id'] ?? fallbackUser?.id ?? ''}',
       email: '${row['email'] ?? fallbackUser?.email ?? ''}',
-      name: '${row['name'] ?? 'New User'}',
-      timezone: '${row['timezone'] ?? 'Europe/Berlin'}',
+      name: '${row['display_name'] ?? 'New User'}',
+      timezone: '${row['timezone'] ?? 'UTC'}',
       role: AppRole.fromDatabase(row['role']?.toString()),
-      onboardingDone: row['onboardingDone'] == true,
-      authProvider: '${row['authProvider'] ?? 'email'}',
+      onboardingDone: row['onboarding_completed_at'] != null,
+      authProvider: '${row['auth_provider'] ?? 'email'}',
+      dailyPreparationBudgetMinutes:
+          (row['daily_preparation_budget_minutes'] as num?)?.toInt(),
+      timezoneRevision: (row['timezone_revision'] as num?)?.toInt() ?? 1,
+      preparationBudgetRevision:
+          (row['preparation_budget_revision'] as num?)?.toInt() ?? 1,
+      pilotParticipationNoticeVersion:
+          row['pilot_participation_notice_version'] as String?,
+      pilotParticipationAcceptedAt: acceptedAt,
     );
   }
 
-  Future<void> _safeUserUpdate(String id, Map<String, dynamic> values) async {
-    try {
-      await _client.from(SupabaseTables.users).update(values).eq('id', id);
-    } on PostgrestException catch (error) {
-      if (!error.message.toLowerCase().contains('role')) {
-        rethrow;
+  Future<AppProfile> _resolveAuthenticatedProfile(
+    User user, {
+    String? preferredName,
+  }) async {
+    final authProvider = user.appMetadata['provider']?.toString() ?? 'email';
+    if (!shouldReadRemoteProfileForAuthIdentity(
+      useMockData: _useMockData,
+      email: user.email,
+      authProvider: authProvider,
+    )) {
+      final localProfile = localDemoProfileFromAuthUser(
+        user,
+        preferredName: preferredName,
+      );
+      try {
+        return await overlayLocalDemoSetup(
+          profile: localProfile,
+          dataSource: _guestSetupDataSource,
+        );
+      } catch (_) {
+        return localProfile;
       }
-      final fallback = Map<String, dynamic>.from(values)..remove('role');
-      await _client.from(SupabaseTables.users).update(fallback).eq('id', id);
     }
+    final profile = await requireProfileForAuthUser(user);
+    if (_requiresPilotParticipation && !profile.hasCurrentPilotParticipation) {
+      return profile;
+    }
+    return _finishAuthenticatedProfile(profile);
   }
 
-  Future<void> _saveTimetable(
-    String userId,
-    List<TimetableDraft> timetable,
-  ) async {
-    if (timetable.isEmpty) {
-      return;
-    }
-    final now = DateTime.now();
-    final rows = timetable.map((draft) {
-      return {
-        'id': 'schedule_${now.microsecondsSinceEpoch}_${draft.weekday}',
-        'userId': userId,
-        'title':
-            draft.title.trim().isEmpty ? 'Study block' : draft.title.trim(),
-        'location':
-            draft.location.trim().isEmpty ? null : draft.location.trim(),
-        'weekday': draft.weekday,
-        'startsAt': draft.startsAt,
-        'endsAt': draft.endsAt,
-        'source': 'onboarding',
-        'updatedAt': now.toIso8601String(),
-      };
-    }).toList();
-    await _client.from(SupabaseTables.scheduleItems).insert(rows);
-  }
-
-  Future<void> _migrateGuestTimetable(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_Prefs.guestTimetable);
-    if (raw == null || raw.isEmpty) {
-      return;
+  Future<AppProfile> _finishAuthenticatedProfile(AppProfile profile) async {
+    if (shouldMigrateGuestCheckIns(
+      useMockData: _useMockData,
+      profile: profile,
+    )) {
+      await _migrateGuestCheckIns(profile.id);
+      return profile;
     }
     try {
-      final values = jsonDecode(raw) as List<dynamic>;
-      final drafts = values
-          .whereType<Map<String, dynamic>>()
-          .map(TimetableDraft.fromJson)
-          .toList();
-      await _saveTimetable(userId, drafts);
-      await prefs.remove(_Prefs.guestTimetable);
+      return await overlayLocalDemoSetup(
+        profile: profile,
+        dataSource: _guestSetupDataSource,
+      );
     } catch (_) {
-      return;
+      return profile;
     }
+  }
+
+  void _requirePilotParticipationConfirmation(bool confirmed18OrOlder) {
+    if (!_requiresPilotParticipation) return;
+    if (!confirmed18OrOlder) {
+      throw const PilotParticipationConfirmationRequiredException();
+    }
+  }
+
+  Future<AppProfile> acceptCurrentPilotParticipation() async {
+    final session = _cachedSession;
+    if (!_requiresPilotParticipation ||
+        session == null ||
+        session.isGuestSession) {
+      throw const PilotParticipationUnavailableException();
+    }
+    final accepted = await _recordCurrentPilotParticipation(session.profile);
+    final complete = await _finishAuthenticatedProfile(accepted);
+    _cachedSession = AppSession.authenticated(complete);
+    return complete;
+  }
+
+  Future<AppProfile> _recordCurrentPilotParticipation(
+    AppProfile profile,
+  ) async {
+    final gateway = _pilotParticipationGateway;
+    final currentSession = _client.auth.currentSession;
+    if (gateway == null ||
+        currentSession == null ||
+        currentSession.user.id != profile.id ||
+        currentSession.accessToken.isEmpty) {
+      throw const PilotParticipationUnavailableException();
+    }
+    final accepted = await gateway.accept(
+      accessToken: currentSession.accessToken,
+    );
+    return profile.copyWith(
+      pilotParticipationNoticeVersion: accepted.noticeVersion,
+      pilotParticipationAcceptedAt: accepted.acceptedAt,
+    );
   }
 
   Future<void> _migrateGuestCheckIns(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_Prefs.guestQuickCheckIns);
-    if (raw == null || raw.isEmpty) {
-      return;
-    }
     try {
-      final values = jsonDecode(raw) as List<dynamic>;
-      for (final value in values.whereType<Map<String, dynamic>>()) {
-        final now =
-            DateTime.tryParse('${value['createdAt']}') ?? DateTime.now();
-        final id = 'guest_migrated_daily_${now.microsecondsSinceEpoch}';
-        final date = DateTime(now.year, now.month, now.day).toIso8601String();
-        final mood = (value['mood'] as num?)?.toInt() ?? 7;
-        final energy = (value['energy'] as num?)?.toInt() ?? 6;
-        final stress = (value['stress'] as num?)?.toInt() ?? 4;
-        final notes = '${value['coachNotes'] ?? ''}'.trim();
-
-        await _client.from(SupabaseTables.dailyLogs).insert({
-          'id': id,
-          'userId': userId,
-          'date': date,
-          'sleepHours': (value['sleepHours'] as num?)?.toDouble() ?? 7,
-          'energyLevel': energy,
-          'mood': _moodEnumValue(mood),
-          'reflection': [
-            'Migrated from guest quick check-in.',
-            'Stress rating: $stress/10.',
-            if (notes.isNotEmpty) notes,
-          ].join(' '),
-          'updatedAt': now.toIso8601String(),
-        });
-      }
-      await prefs.remove(_Prefs.guestQuickCheckIns);
+      await _guestCheckInMigrator?.call(userId);
     } catch (_) {
       return;
     }
-  }
-
-  String _moodEnumValue(int rating) {
-    if (rating >= 9) {
-      return 'GREAT';
-    }
-    if (rating >= 7) {
-      return 'GOOD';
-    }
-    if (rating >= 5) {
-      return 'NEUTRAL';
-    }
-    if (rating >= 3) {
-      return 'BAD';
-    }
-    return 'VERY_BAD';
   }
 
   Future<void> _clearGuestActiveFlag() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_Prefs.guestActive, false);
   }
+
+  Future<AccountDeletionRecovery?> _pendingDeletionRecovery(User user) async {
+    final resolver = _pendingAccountDeletionResolver;
+    final session = _client.auth.currentSession;
+    if (resolver == null ||
+        session == null ||
+        session.user.id != user.id ||
+        session.accessToken.isEmpty) {
+      return null;
+    }
+    return resolver(userId: user.id, accessToken: session.accessToken);
+  }
+}
+
+AppProfile _deletionRecoveryProfile(User user) => AppProfile(
+  id: user.id,
+  email: user.email ?? '',
+  name: 'Account deletion',
+  timezone: 'UTC',
+  role: AppRole.user,
+  onboardingDone: true,
+  authProvider: user.appMetadata['provider']?.toString() ?? 'email',
+);
+
+const nativeAuthCallbackUrl = 'com.mylifegraph.app://login-callback/';
+
+String authRedirectUrl() =>
+    kIsWeb ? webOAuthRedirectTo(Uri.base) : nativeAuthCallbackUrl;
+
+@visibleForTesting
+String webOAuthRedirectTo(Uri baseUri) => '${baseUri.origin}/';
+
+bool usesLocalDemoAuthData({
+  required bool useMockData,
+  required AppProfile profile,
+}) {
+  return useMockData ||
+      profile.role == AppRole.guest ||
+      profile.authProvider == 'guest' ||
+      profile.email.toLowerCase() == 'demo@personal-coach.local';
+}
+
+bool usesLocalDemoAuthIdentity({
+  required bool useMockData,
+  required String? email,
+  required String? authProvider,
+}) {
+  return useMockData ||
+      authProvider == 'guest' ||
+      email?.toLowerCase() == 'demo@personal-coach.local';
+}
+
+bool shouldReadRemoteProfileForAuthIdentity({
+  required bool useMockData,
+  required String? email,
+  required String? authProvider,
+}) {
+  return !usesLocalDemoAuthIdentity(
+    useMockData: useMockData,
+    email: email,
+    authProvider: authProvider,
+  );
+}
+
+AppProfile localDemoProfileFromAuthUser(User user, {String? preferredName}) {
+  final email = user.email ?? '';
+  final preferred = preferredName?.trim();
+  final metadataName = user.userMetadata?['display_name']?.toString().trim();
+  final fullName = user.userMetadata?['full_name']?.toString().trim();
+  final fallbackName = email.contains('@')
+      ? email.split('@').first
+      : 'Demo User';
+  final name = preferred?.isNotEmpty == true
+      ? preferred!
+      : metadataName?.isNotEmpty == true
+      ? metadataName!
+      : fullName?.isNotEmpty == true
+      ? fullName!
+      : fallbackName;
+  return AppProfile(
+    id: user.id,
+    email: email,
+    name: name,
+    timezone: localDeviceTimezoneMarker,
+    role: AppRole.user,
+    onboardingDone: false,
+    authProvider: user.appMetadata['provider']?.toString() ?? 'email',
+  );
+}
+
+bool shouldMigrateGuestCheckIns({
+  required bool useMockData,
+  required AppProfile profile,
+}) {
+  return !usesLocalDemoAuthData(useMockData: useMockData, profile: profile);
+}
+
+Future<AppProfile> overlayLocalDemoSetup({
+  required AppProfile profile,
+  required GuestSetupDataSource dataSource,
+}) async {
+  final preferences = await SharedPreferences.getInstance();
+  final storedName = preferences
+      .getString(GuestSetupDataSource.guestNameKey)
+      ?.trim();
+  final storedOnboardingDone =
+      preferences.getBool(GuestSetupDataSource.guestOnboardingDoneKey) ?? false;
+  IntakeSetupReadState? setup;
+  try {
+    setup = await dataSource.read();
+  } catch (_) {
+    return profile.copyWith(
+      name: storedName?.isNotEmpty == true ? storedName : null,
+      onboardingDone: storedOnboardingDone,
+    );
+  }
+  final responses = setup.responses;
+  if (!setup.exists || setup.status != 'applied' || responses == null) {
+    return profile.copyWith(
+      name: storedName?.isNotEmpty == true ? storedName : null,
+      onboardingDone: storedOnboardingDone,
+    );
+  }
+  final displayName = responses.displayName?.trim();
+  return profile.copyWith(
+    name: displayName?.isNotEmpty == true
+        ? displayName
+        : storedName?.isNotEmpty == true
+        ? storedName
+        : null,
+    onboardingDone: true,
+  );
 }
 
 class _Prefs {
@@ -378,9 +556,12 @@ class _Prefs {
   static const guestActive = 'auth_guest_active';
   static const guestName = 'auth_guest_name';
   static const guestOnboardingDone = 'auth_guest_onboarding_done';
-  static const guestTimetable = 'auth_guest_timetable';
-  static const guestQuickCheckIns = 'guest_quick_checkins';
 }
 
-@visibleForTesting
-String webOAuthRedirectTo(Uri baseUri) => '${baseUri.origin}/';
+class PilotParticipationConfirmationRequiredException implements Exception {
+  const PilotParticipationConfirmationRequiredException();
+}
+
+class PilotParticipationUnavailableException implements Exception {
+  const PilotParticipationUnavailableException();
+}

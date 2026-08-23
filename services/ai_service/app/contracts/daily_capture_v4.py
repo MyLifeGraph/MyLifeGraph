@@ -1,0 +1,654 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
+from math import isfinite
+from typing import Literal
+
+
+DAILY_CAPTURE_CONTRACT_VERSION = "daily-capture-v5"
+DailyCaptureV4Branch = Literal["morning", "evening"]
+_PRECISE_CAPTURE_VERSIONS = frozenset(
+    {"daily-capture-v4", DAILY_CAPTURE_CONTRACT_VERSION},
+)
+
+_EVENING_REQUIRED_KEYS = frozenset(
+    {
+        "branch_version",
+        "capture_kind",
+        "entry_date",
+        "capture_id",
+        "captured_at",
+        "mood",
+        "energy",
+        "stress_intensity",
+        "stress_intensity_label",
+        "planned_sleep_time",
+        "sleep_target_minutes",
+    },
+)
+_EVENING_OPTIONAL_KEYS = frozenset(
+    {
+        "stress_source",
+        "stress_controllability",
+        "focus_band",
+        "tomorrow_priority",
+        "reflection_note",
+        "specific_blocker",
+    },
+)
+_MORNING_REQUIRED_KEYS = frozenset(
+    {
+        "branch_version",
+        "capture_kind",
+        "entry_date",
+        "capture_id",
+        "captured_at",
+        "sleep_hours",
+        "sleep_quality",
+        "current_energy",
+        "day_shape",
+        "estimated_sleep_started_at",
+        "woke_at",
+        "estimated_sleep_minutes",
+        "sleep_target_minutes",
+    },
+)
+_MORNING_OPTIONAL_KEYS = frozenset({"source_evening_capture_id"})
+_MORNING_V5_REQUIRED_KEYS = _MORNING_REQUIRED_KEYS - {"day_shape"}
+
+
+@dataclass(frozen=True)
+class DailyCaptureV4SleepPlan:
+    capture_id: str
+    entry_date: date
+    captured_at: datetime
+    planned_sleep_time: str
+    sleep_target_minutes: int
+
+
+@dataclass(frozen=True)
+class DailyCaptureV4SleepEpisode:
+    capture_id: str
+    entry_date: date
+    captured_at: datetime
+    estimated_sleep_started_at: datetime
+    woke_at: datetime
+    estimated_sleep_minutes: int
+    sleep_target_minutes: int
+    sleep_quality: int
+    current_energy: int
+    day_shape: Literal["normal", "constrained", "flexible"] | None
+    source_evening_capture_id: str | None
+
+    @property
+    def target_deviation_minutes(self) -> int:
+        return self.estimated_sleep_minutes - self.sleep_target_minutes
+
+
+@dataclass(frozen=True)
+class DailyCaptureV4ParseResult:
+    value: DailyCaptureV4SleepPlan | DailyCaptureV4SleepEpisode | None
+    issues: tuple[str, ...]
+
+
+def validate_daily_capture_v4_branch(
+    raw: object,
+    *,
+    row_date: date,
+    branch: DailyCaptureV4Branch,
+) -> tuple[str, ...]:
+    """Validate one new-write V4 branch against its complete strict contract."""
+
+    if not isinstance(raw, dict):
+        return (f"{branch}.invalid_object",)
+    required = _MORNING_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
+    optional = _MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS
+    issues: list[str] = []
+    if required - set(raw):
+        issues.append(f"{branch}.missing_fields")
+    if set(raw) - required - optional:
+        issues.append(f"{branch}.unexpected_fields")
+
+    parsed = (
+        parse_daily_capture_v4_sleep_episode(raw, row_date=row_date)
+        if branch == "morning"
+        else parse_daily_capture_v4_sleep_plan(raw, row_date=row_date)
+    )
+    issues.extend(parsed.issues)
+
+    integer_fields = (
+        (
+            "sleep_quality",
+            "current_energy",
+            "estimated_sleep_minutes",
+            "sleep_target_minutes",
+        )
+        if branch == "morning"
+        else ("mood", "energy", "stress_intensity", "sleep_target_minutes")
+    )
+    for field in integer_fields:
+        if field in raw and type(raw[field]) is not int:
+            issues.append(f"{branch}.invalid_{field}")
+    if type(raw.get("captured_at")) is not str:
+        issues.append(f"{branch}.invalid_captured_at")
+
+    if branch == "evening":
+        focus_band = raw.get("focus_band")
+        if focus_band is not None and focus_band not in _FOCUS_BANDS:
+            issues.append("evening.invalid_focus_band")
+        for field, maximum in (
+            ("tomorrow_priority", 160),
+            ("reflection_note", 1_000),
+            ("specific_blocker", 280),
+        ):
+            if (
+                field in raw
+                and _optional_bounded_text(raw[field], maximum=maximum) is None
+            ):
+                issues.append(f"evening.invalid_{field}")
+
+    return tuple(_dedupe(issues))
+
+
+def validate_daily_capture_branch(
+    raw: object,
+    *,
+    row_date: date,
+    branch: DailyCaptureV4Branch,
+) -> tuple[str, ...]:
+    """Validate a complete V4 rollout branch or a current strict V5 branch."""
+
+    if not isinstance(raw, dict):
+        return (f"{branch}.invalid_object",)
+    version = raw.get("branch_version")
+    if version == "daily-capture-v4":
+        return validate_daily_capture_v4_branch(
+            raw,
+            row_date=row_date,
+            branch=branch,
+        )
+    if version != DAILY_CAPTURE_CONTRACT_VERSION:
+        return (f"{branch}.invalid_branch_version",)
+
+    required = (
+        _MORNING_V5_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
+    )
+    optional = _MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS
+    issues: list[str] = []
+    if required - set(raw):
+        issues.append(f"{branch}.missing_fields")
+    if set(raw) - required - optional:
+        issues.append(f"{branch}.unexpected_fields")
+
+    parsed = (
+        parse_daily_capture_sleep_episode(
+            raw,
+            row_date=row_date,
+            container_version=version,
+        )
+        if branch == "morning"
+        else parse_daily_capture_sleep_plan(
+            raw,
+            row_date=row_date,
+            container_version=version,
+        )
+    )
+    issues.extend(parsed.issues)
+    integer_fields = (
+        (
+            "sleep_quality",
+            "current_energy",
+            "estimated_sleep_minutes",
+            "sleep_target_minutes",
+        )
+        if branch == "morning"
+        else ("mood", "energy", "stress_intensity", "sleep_target_minutes")
+    )
+    for field in integer_fields:
+        if field in raw and type(raw[field]) is not int:
+            issues.append(f"{branch}.invalid_{field}")
+    if type(raw.get("captured_at")) is not str:
+        issues.append(f"{branch}.invalid_captured_at")
+    if branch == "evening":
+        focus_band = raw.get("focus_band")
+        if focus_band is not None and focus_band not in _FOCUS_BANDS:
+            issues.append("evening.invalid_focus_band")
+        for field, maximum in (
+            ("tomorrow_priority", 160),
+            ("reflection_note", 1_000),
+            ("specific_blocker", 280),
+        ):
+            if (
+                field in raw
+                and _optional_bounded_text(raw[field], maximum=maximum) is None
+            ):
+                issues.append(f"evening.invalid_{field}")
+    return tuple(_dedupe(issues))
+
+
+def parse_daily_capture_v4_sleep_plan(
+    raw: object,
+    *,
+    row_date: date,
+) -> DailyCaptureV4ParseResult:
+    return _parse_sleep_plan(
+        raw,
+        row_date=row_date,
+        version="daily-capture-v4",
+        allow_compatibility=False,
+    )
+
+
+def parse_daily_capture_sleep_plan(
+    raw: object,
+    *,
+    row_date: date,
+    container_version: object,
+) -> DailyCaptureV4ParseResult:
+    version, allow_compatibility, identity_issues = _precise_branch_identity(
+        raw,
+        kind="evening",
+        container_version=container_version,
+    )
+    if version is None:
+        return DailyCaptureV4ParseResult(None, identity_issues)
+    return _parse_sleep_plan(
+        raw,
+        row_date=row_date,
+        version=version,
+        allow_compatibility=allow_compatibility,
+    )
+
+
+def _parse_sleep_plan(
+    raw: object,
+    *,
+    row_date: date,
+    version: str,
+    allow_compatibility: bool = False,
+) -> DailyCaptureV4ParseResult:
+    kind = "evening"
+    common, issues = _common_branch(
+        raw,
+        kind=kind,
+        row_date=row_date,
+        version=version,
+        allow_compatibility=allow_compatibility,
+    )
+    if common is None:
+        return DailyCaptureV4ParseResult(None, tuple(issues))
+    assert isinstance(raw, dict)
+
+    mood = _whole_number(raw.get("mood"), minimum=1, maximum=10)
+    energy = _whole_number(raw.get("energy"), minimum=1, maximum=10)
+    stress = _whole_number(
+        raw.get("stress_intensity"),
+        minimum=1,
+        maximum=10,
+    )
+    if mood is None:
+        issues.append("evening.invalid_mood")
+    if energy is None:
+        issues.append("evening.invalid_energy")
+    if stress is None:
+        issues.append("evening.invalid_stress_intensity")
+    source = raw.get("stress_source")
+    controllability = raw.get("stress_controllability")
+    if (
+        stress is not None
+        and stress >= 5
+        and (
+            source not in _STRESS_SOURCES
+            or controllability not in _STRESS_CONTROLLABILITY
+        )
+    ):
+        issues.append("evening.missing_stress_context")
+    if (source is None) != (controllability is None):
+        issues.append("evening.incomplete_stress_context")
+    if source is not None and source not in _STRESS_SOURCES:
+        issues.append("evening.invalid_stress_source")
+    if controllability is not None and controllability not in _STRESS_CONTROLLABILITY:
+        issues.append("evening.invalid_stress_controllability")
+    expected_label = _stress_label(stress) if stress is not None else None
+    if raw.get("stress_intensity_label") != expected_label:
+        issues.append("evening.invalid_stress_intensity_label")
+
+    planned_sleep_time = raw.get("planned_sleep_time")
+    target = _sleep_target_minutes(raw.get("sleep_target_minutes"))
+    if not _valid_clock(planned_sleep_time):
+        issues.append("evening.invalid_planned_sleep_time")
+    if target is None:
+        issues.append("evening.invalid_sleep_target_minutes")
+    if issues:
+        return DailyCaptureV4ParseResult(None, tuple(_dedupe(issues)))
+    assert isinstance(planned_sleep_time, str)
+    assert target is not None
+    return DailyCaptureV4ParseResult(
+        DailyCaptureV4SleepPlan(
+            capture_id=common.capture_id,
+            entry_date=row_date,
+            captured_at=common.captured_at,
+            planned_sleep_time=planned_sleep_time,
+            sleep_target_minutes=target,
+        ),
+        (),
+    )
+
+
+def parse_daily_capture_v4_sleep_episode(
+    raw: object,
+    *,
+    row_date: date,
+) -> DailyCaptureV4ParseResult:
+    return _parse_sleep_episode(
+        raw,
+        row_date=row_date,
+        version="daily-capture-v4",
+        allow_compatibility=False,
+    )
+
+
+def parse_daily_capture_sleep_episode(
+    raw: object,
+    *,
+    row_date: date,
+    container_version: object,
+) -> DailyCaptureV4ParseResult:
+    version, allow_compatibility, identity_issues = _precise_branch_identity(
+        raw,
+        kind="morning",
+        container_version=container_version,
+    )
+    if version is None:
+        return DailyCaptureV4ParseResult(None, identity_issues)
+    return _parse_sleep_episode(
+        raw,
+        row_date=row_date,
+        version=version,
+        allow_compatibility=allow_compatibility,
+    )
+
+
+def _parse_sleep_episode(
+    raw: object,
+    *,
+    row_date: date,
+    version: str,
+    allow_compatibility: bool,
+) -> DailyCaptureV4ParseResult:
+    common, issues = _common_branch(
+        raw,
+        kind="morning",
+        row_date=row_date,
+        version=version,
+        allow_compatibility=allow_compatibility,
+    )
+    if common is None:
+        return DailyCaptureV4ParseResult(None, tuple(issues))
+    assert isinstance(raw, dict)
+
+    started_at = _aware_datetime(raw.get("estimated_sleep_started_at"))
+    woke_at = _aware_datetime(raw.get("woke_at"))
+    estimated = _whole_number(
+        raw.get("estimated_sleep_minutes"),
+        minimum=1,
+        maximum=16 * 60,
+    )
+    target = _sleep_target_minutes(raw.get("sleep_target_minutes"))
+    sleep_hours = _finite_number(raw.get("sleep_hours"))
+    sleep_quality = _whole_number(
+        raw.get("sleep_quality"),
+        minimum=1,
+        maximum=10,
+    )
+    current_energy = _whole_number(
+        raw.get("current_energy"),
+        minimum=1,
+        maximum=10,
+    )
+    day_shape = raw.get("day_shape")
+    source_evening_capture_id = raw.get("source_evening_capture_id")
+
+    if started_at is None:
+        issues.append("morning.invalid_estimated_sleep_started_at")
+    if woke_at is None:
+        issues.append("morning.invalid_woke_at")
+    interval_minutes: int | None = None
+    if started_at is not None and woke_at is not None:
+        seconds = (woke_at - started_at).total_seconds()
+        if seconds <= 0 or seconds > 16 * 60 * 60 or seconds % 60 != 0:
+            issues.append("morning.invalid_sleep_interval")
+        else:
+            interval_minutes = int(seconds // 60)
+    if estimated is None or estimated != interval_minutes:
+        issues.append("morning.invalid_estimated_sleep_minutes")
+    if target is None:
+        issues.append("morning.invalid_sleep_target_minutes")
+    if (
+        sleep_hours is None
+        or estimated is None
+        or abs(sleep_hours - estimated / 60) > 0.0001
+    ):
+        issues.append("morning.sleep_duration_mismatch")
+    if sleep_quality is None:
+        issues.append("morning.invalid_sleep_quality")
+    if current_energy is None:
+        issues.append("morning.invalid_current_energy")
+    if version == "daily-capture-v4" and day_shape not in _DAY_SHAPES:
+        issues.append("morning.invalid_day_shape")
+    if version == DAILY_CAPTURE_CONTRACT_VERSION and "day_shape" in raw:
+        issues.append("morning.unexpected_fields")
+    if (
+        source_evening_capture_id is not None
+        and _bounded_string(source_evening_capture_id, maximum=160) is None
+    ):
+        issues.append("morning.invalid_source_evening_capture_id")
+
+    if issues:
+        return DailyCaptureV4ParseResult(None, tuple(_dedupe(issues)))
+    assert started_at is not None
+    assert woke_at is not None
+    assert estimated is not None
+    assert target is not None
+    assert sleep_quality is not None
+    assert current_energy is not None
+    assert day_shape is None or isinstance(day_shape, str)
+    return DailyCaptureV4ParseResult(
+        DailyCaptureV4SleepEpisode(
+            capture_id=common.capture_id,
+            entry_date=row_date,
+            captured_at=common.captured_at,
+            estimated_sleep_started_at=started_at,
+            woke_at=woke_at,
+            estimated_sleep_minutes=estimated,
+            sleep_target_minutes=target,
+            sleep_quality=sleep_quality,
+            current_energy=current_energy,
+            day_shape=day_shape,
+            source_evening_capture_id=source_evening_capture_id,
+        ),
+        (),
+    )
+
+
+@dataclass(frozen=True)
+class _CommonBranch:
+    capture_id: str
+    captured_at: datetime
+
+
+def _precise_branch_identity(
+    raw: object,
+    *,
+    kind: str,
+    container_version: object,
+) -> tuple[str | None, bool, tuple[str, ...]]:
+    if not isinstance(raw, dict):
+        return None, False, (f"{kind}.invalid_object",)
+    if (
+        not isinstance(container_version, str)
+        or container_version not in _PRECISE_CAPTURE_VERSIONS
+    ):
+        return None, False, (f"{kind}.invalid_container_version",)
+
+    branch_version = raw.get("branch_version")
+    if (
+        not isinstance(branch_version, str)
+        or branch_version not in _PRECISE_CAPTURE_VERSIONS
+    ):
+        return None, False, (f"{kind}.invalid_branch_version",)
+
+    compatibility = raw.get("compatibility")
+    if branch_version == container_version:
+        if compatibility is not None and compatibility is not False:
+            return None, False, (f"{kind}.invalid_compatibility",)
+        return branch_version, False, ()
+
+    if (
+        container_version == DAILY_CAPTURE_CONTRACT_VERSION
+        and branch_version == "daily-capture-v4"
+    ):
+        if compatibility is not True:
+            return None, False, (f"{kind}.missing_compatibility",)
+        return branch_version, True, ()
+
+    return None, False, (f"{kind}.invalid_branch_version",)
+
+
+def _common_branch(
+    raw: object,
+    *,
+    kind: str,
+    row_date: date,
+    version: str,
+    allow_compatibility: bool = False,
+) -> tuple[_CommonBranch | None, list[str]]:
+    if not isinstance(raw, dict):
+        return None, [f"{kind}.invalid_object"]
+    issues: list[str] = []
+    if raw.get("branch_version") != version:
+        issues.append(f"{kind}.invalid_branch_version")
+    compatibility = raw.get("compatibility")
+    if (
+        compatibility is not None
+        and compatibility is not False
+        and not (allow_compatibility and compatibility is True)
+    ):
+        issues.append(f"{kind}.invalid_compatibility")
+    if raw.get("capture_kind") != kind:
+        issues.append(f"{kind}.invalid_capture_kind")
+    if raw.get("entry_date") != row_date.isoformat():
+        issues.append(f"{kind}.invalid_entry_date")
+    capture_id = _bounded_string(raw.get("capture_id"), maximum=160)
+    if capture_id is None:
+        issues.append(f"{kind}.invalid_capture_id")
+    captured_at = _aware_datetime(raw.get("captured_at"))
+    if captured_at is None:
+        issues.append(f"{kind}.invalid_captured_at")
+    if issues:
+        return None, issues
+    assert capture_id is not None
+    assert captured_at is not None
+    return _CommonBranch(capture_id, captured_at), []
+
+
+def _aware_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(UTC)
+
+
+def _bounded_string(value: object, *, maximum: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    clean = value.strip()
+    return clean if clean and len(clean) <= maximum else None
+
+
+def _optional_bounded_text(value: object, *, maximum: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    clean = value.strip()
+    return clean if clean and len(clean) <= maximum else None
+
+
+def _whole_number(
+    value: object,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    numeric = float(value)
+    if not isfinite(numeric) or not numeric.is_integer():
+        return None
+    integer = int(numeric)
+    return integer if minimum <= integer <= maximum else None
+
+
+def _finite_number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    numeric = float(value)
+    return numeric if isfinite(numeric) and 0 <= numeric <= 16 else None
+
+
+def _sleep_target_minutes(value: object) -> int | None:
+    target = _whole_number(value, minimum=300, maximum=720)
+    return target if target is not None and target % 15 == 0 else None
+
+
+def _valid_clock(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 5:
+        return False
+    try:
+        return datetime.strptime(value, "%H:%M").strftime("%H:%M") == value
+    except ValueError:
+        return False
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
+def _stress_label(stress: int) -> str:
+    if stress >= 8:
+        return "high"
+    if stress >= 5:
+        return "medium"
+    return "low"
+
+
+_STRESS_SOURCES = frozenset(
+    {
+        "workload",
+        "avoidable_pressure",
+        "private_emotional",
+        "physical_recovery",
+        "external_environment",
+    },
+)
+_STRESS_CONTROLLABILITY = frozenset(
+    {"hardly_controllable", "partly_controllable", "mostly_controllable"},
+)
+_FOCUS_BANDS = frozenset(
+    {
+        "none",
+        "under_30_minutes",
+        "30_to_60_minutes",
+        "1_to_2_hours",
+        "over_2_hours",
+    },
+)
+_DAY_SHAPES = frozenset({"normal", "constrained", "flexible"})

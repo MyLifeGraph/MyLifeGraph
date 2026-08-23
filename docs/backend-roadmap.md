@@ -1,0 +1,1476 @@
+# Backend Roadmap
+
+Current Coach delivery implements request-scoped OpenAI/Gemini BYOK and the
+separately gated `operator_codex_pilot` path. Hosted CORS, pre-stream busy
+admission, durable per-user/global budgets, exact release identity, the strict
+Unix-socket executor, and no-fallback Flutter states exist in repository
+source. Gemini's REST boundary uses revision `2026-05-20`, the current `steps`
+timeline, full stateless tool history, and the current structured-text format;
+the removed `outputs` schema is rejected. BYOK batching is cumulatively limited
+before tool execution and provider bodies/history are byte-bounded. The shared mode remains default off and is not hosted-release-ready
+until account/terms, VPS, TLS, live-provider, migration, and public acceptance
+gates pass. The same-user Codex OAuth provider remains development-only.
+The synchronized public versions are `coach-request-v4`,
+`coach-capabilities-v5`, `coach-history-v4`, `coach-response-v4`, and
+`free-coach-agent-prompt-v5`; V1-V3 remain compatibility inputs/history.
+
+This document is the source of truth for the intended backend flow and the next
+implementation sequence. It describes the target product architecture, the
+background service roles, the data model direction, and how to keep LLM usage
+low enough for multiple users.
+
+The cross-platform delivery and release sequence is now owned by
+`docs/vps-pilot-release-plan.md`: protected `main`, tagged releases, public
+self-registration, VPS/HTTPS operation, Vercel, signed Android delivery,
+shared-provider safeguards, and professor handoff. That document distinguishes
+implemented repository preparation from external acceptance; it is not itself
+deployment evidence. The first
+configuration foundation is implemented: current Supabase client/backend key
+names, exact staging/pilot ref binding, pilot current-key enforcement, and
+crossover denial. There is still no remote pilot project, key rotation, or
+deployed operator-provider path in this checkout.
+
+The next local pilot foundation is also implemented in repository source:
+`pilot-participation-v1` / `pilot-participation-notice-v1` stores a
+backend-owned version/time pair on the canonical profile through a
+service-role-only, bearer-derived command. Exact staging/pilot product
+dependencies fail closed without that pair; development, account export, and
+account deletion preserve their explicit boundaries. Flutter provides the
+pre-signup notice, post-auth gate, Settings notice link, hosted guest denial,
+and persistent staging identity. This does not prove any remote migration,
+Auth setting, privacy approval, or deployment. The staging scenario generator
+is implemented with exact-target preview, one-use confirmation, receipt-owned
+cleanup, and pilot-target denial; no confirmed remote generator run is claimed.
+
+The implemented Setup-personalization retirement in
+`docs/setup-personalization-retirement-contract.md` is authoritative wherever
+older roadmap history below mentions Setup Goals, focus/friction/style answers,
+or Setup-owned Reminder preferences.
+
+The 2026-08-14 P7 retirement is authoritative wherever older roadmap history
+below mentions the generic Today Recommendation feed, Recommendation refresh,
+Decision Feedback, or feedback-based ranking. Those routes, Flutter surfaces,
+runtime modules, tables, and scheduler fields are removed. Current contracts
+are `daily-briefing-v2`, `weekly-review-v3`, `account-export-v6`,
+`personal-snapshot-v3`, and `free-coach-agent-prompt-v5`. The independent
+Insights Sleep Recommendation, `ai_insights.recommendation`, memory type
+`recommendation`, skillset, and ordinary Coach advice remain.
+
+## Product Goal
+
+MyLifeGraph should become a personal coaching app that can start with a small
+guided intake, learn from daily use, and produce useful recommendations without
+calling an LLM for every screen load.
+
+The product should not compete as a complete task manager, habit tracker,
+journal, wearable dashboard, and chat assistant at the same time. Its primary
+job is to turn current capacity, Tasks, commitments, habits, and recent behavior
+into one realistic next action, then learn from the outcome. The detailed user
+operating loop, product object model, habit contract, and maturity gates live in
+`docs/daily-briefing-implementation-plan.md`.
+
+The backend direction is:
+
+```text
+Flutter app
+  -> Supabase Auth
+  -> Supabase Postgres for user-owned records
+  -> FastAPI AI service for privileged and intelligence workflows
+       -> deterministic services first
+       -> optional job workers
+       -> LLM provider only behind budgeted service boundaries
+```
+
+Flutter may write only the explicitly granted user-owned records whose current
+contracts permit direct Data API mutation, such as daily capture and supported
+manual Task, Habit, schedule, and focus lifecycles. The `goals` table has been
+removed; there is no active Goal mutation or evaluation path. Canonical profile
+identity and authorization, Setup application, notifications, Coach messages,
+backend projections, retry ledgers, and planning confirmation are backend-owned.
+FastAPI owns workflows that need service-role access, aggregation, generation,
+verification, cross-table reasoning, atomic multi-table mutation, or any LLM
+call. RLS is row authorization and never substitutes for the table privilege
+boundary recorded in `docs/supabase-current-state.md`.
+
+## Current Backend State
+
+Already implemented:
+
+- Supabase Auth and canonical snake_case app tables.
+- Flutter mock and guest mode.
+- Flutter Supabase-backed auth, onboarding, dashboard, notifications, and
+  check-ins, plus a typed authenticated Controlled Coach surface. Guest/mock
+  Coach remains honest local-unavailable and zero-call.
+- Honest Capture:
+  - One canonical lightweight check-in implementation serves both current routes.
+  - Mood, energy, sleep, and stress require explicit selection and flow through a
+    typed draft to local guest or Supabase persistence.
+  - Supabase writes link four current signals to the daily log and replace them
+    on same-day save; guest storage also keeps one entry per calendar day.
+  - Failed writes retain the draft, in-flight duplicate submits are ignored, and
+    exact values are covered by mapper, widget, guest, and browser assertions.
+- Lightweight Evening And Morning Capture:
+  - `EveningShutdownDraft` and `MorningCalibrationDraft` merge into one typed
+    `DailyCaptureEntry` per local date without one capture erasing the other.
+  - Evening stores exact stress intensity/source/controllability and only
+    explicitly supplied optional reflection/blocker detail. The active form no
+    longer edits or writes tomorrow priority; a retained legacy value survives
+    an otherwise valid branch edit.
+    Primary/additional friction choices are retired. Evening also stores one
+    required planned local sleep clock and bounded duration target. Morning
+    stores aware estimated start/wake instants, their derived duration, the
+    target used, an independent required `1..10` `sleep_quality` estimate,
+    and current energy without Day Shape. Older V2–V4 objects remain readable
+    with friction/Day Shape ignored and explicit branch compatibility.
+  - `daily_logs.metadata.captures` owns the two structured states. Numeric
+    projections retain existing consumers: Morning energy takes precedence,
+    Evening owns mood/stress, and Morning owns sleep.
+  - Supabase rebuilds a dynamic maximum of four deterministically identified
+    current-state events linked to the daily row. Guest V5 storage keeps the
+    same merge semantics and retains V1–V4 read/auth-migration compatibility.
+    Complete V4 guest branches are normalized to strict V5 before an account
+    write; incomplete older sleep fields are never guessed, and local data is
+    cleared only after every branch save succeeds.
+    Raw sleep clocks stay in Daily Log metadata; downstream facts receive the
+    derived duration.
+  - Successful real captures request the daily snapshot for their explicit
+    local `target_date`; backend event filtering prefers metadata entry date in
+    a broadened UTC read window. Guest/mock remains entirely local.
+  - Dashboard capture state stays direct and nullable. Phase 1 adds no Daily
+    Mode, action ranking, briefing persistence, recommendation generation on
+    save, or LLM usage.
+- FastAPI `/v1/health`.
+- The former generic Recommendation and Decision Feedback endpoints are absent
+  from FastAPI route composition; concrete requests return `404`.
+- Supabase bearer token verification in FastAPI when backend Supabase settings
+  are configured.
+- Setup, Dashboard, and scheduled preparation perform no generic Recommendation
+  generation. Flutter contains no generic feed, refresh, or Feedback seam.
+- Intake V1 and First-Run/Setup integrity without LLM:
+  - Authenticated `GET /v1/intake/setup` plus completion/edit through
+    `POST /v1/intake/complete`, both derived from the verified bearer token.
+  - Progressive explicit Flutter Setup with typed guest and authenticated
+    prefill, loading, error, retry, and review states.
+  - Request-id replay, optimistic base revisions, pending/applied intake rows,
+    deterministic UUIDv5 materialized record ids, and convergent reconciliation.
+  - A backfilled monotonic `profiles.setup_revision` guard prevents an older
+    worker from projecting stale profile fields over a newer applied revision.
+  - A service-role-only PostgreSQL RPC uses a per-user transaction advisory lock
+    and atomically applies Habit/commitment/Study/energy-memory projections,
+    the onboarding snapshot, intake state, and profile projection. The current
+    signature has no Goal parameter and Setup leaves notification preferences
+    unchanged.
+  - Optional blanks create no owned row. Named routines remain response-only
+    candidates until cadence confirmation; manual/other-source rows are never
+    archived or removed by Setup, apart from one exact known legacy
+    `Math`/`Room 204`/Monday `08:15`-`09:45` placeholder.
+  - Goal input is rejected; Habit pause/archive, fixed-commitment removal, and one compact
+    constant-period onboarding snapshot upsert remain.
+  - Setup-owned habits are managed through Settings Setup but remain available
+    in Habit Completion when active; generic Habit Management excludes them.
+- Snapshot Aggregator foundation:
+  - `POST /v1/snapshots/generate`.
+  - Authenticated backend snapshot refresh derived from the verified bearer
+    token.
+  - Deterministic `daily` and `weekly` `user_state_snapshots` from recent
+    check-ins, behavioral events, tasks, habits, explicit habit outcomes,
+    focus sessions, schedule items, and memory entries.
+  - Compact summaries with risk flags, next-focus hints, input counts, and
+    evidence references.
+  - Additive `summary.daily_state` and `signals.daily_state` under
+    `explainable-daily-state-v3`, with a strict V2–V5 branch-compatible
+    capture parser, V4/V5 sleep-interval validation, friction and Day Shape
+    sanitization, legacy
+    fallback only when no structured marker exists, and a fixed seven-day state
+    lookback separate from the statistics window.
+  - Explicit Evening/Morning freshness plus `missing`, `partial`, `current`, and
+    `stale` quality. Evening may be current from the target date or previous
+    date; Morning is current only from the target date.
+  - Recovery-first `push`, `steady`, `recover`, and `plan` classification with
+    bounded risks, reasons, field-level evidence, deterministic provenance, no
+    learned-baseline claim, and no persisted capture free text.
+    V3 removes `constrained_capacity` and the Day-Shape gate for `push` while
+    retaining readable V1/V2 snapshots.
+  - Additive action summaries count explicit completed/skipped habit logs and
+    active/completed/abandoned focus sessions with minutes and evidence. They do
+    not change `explainable-daily-state-v3` mode, quality, risks, or reasons.
+    Backend reads paginate complete action-fact windows in stably ordered
+    1,000-row pages rather than accepting a PostgREST-capped first page as the
+    full count.
+  - Best-effort Flutter daily snapshot refresh after canonical capture and every
+    durable task, habit, or focus write.
+- Phase 3 executable actions:
+  - Dashboard tasks support create/edit/complete/postpone/cancel/restore/undo,
+    validated estimates, stable create ids, user scoping, recoverable drafts,
+    exact committed-response-loss reconciliation for every update including
+    undo, and best-effort snapshot refresh.
+  - Habit V1 supports daily, selected ISO weekdays, and weekly targets; manual
+    active/paused/archived lifecycle; explicit completed/skipped outcomes;
+    cadence-aware progress/streaks; and same-day undo. Setup remains owner of its
+    habit definitions/lifecycle while active rows share execution. Outcome
+    writes lock and revalidate current lifecycle/cadence; paginated reads,
+    `started_on`, and date-component math preserve large-account and DST truth.
+    Definition/lifecycle changes reconcile exact owner-scoped mutations after
+    response loss. Outcome/undo fixes its target date before the write,
+    reconciles the exact row or absence, and refreshes that same date.
+  - `/deep-work` provides a real one-active-session focus lifecycle with optional
+    owned task/habit linkage, measured finish/abandon duration, and no implicit
+    target completion. Target validation locks the chosen task/habit row;
+    terminal writes reconcile exact persisted results after response loss;
+    every update to terminal history is rejected; and target deletion is
+    restricted. New rows persist a local start date, with deterministic UTC
+    legacy backfill and shared Flutter/FastAPI fallback.
+  - Flutter and FastAPI enforce parser parity for unknown, explicit-null,
+    coerced, or mismatched `executable-action-v1` envelopes. Flutter dispatches
+    every supported command through a typed injected handler. Phase 8 gives
+    `review_plan` a real synced weekly-review navigation handler without making
+    dispatch itself mutate or generate.
+  - Migration `20260711120000_phase_3_executable_action_schema.sql` adds the
+    necessary task, habit-log, and focus columns/checks/triggers while preserving
+    existing RLS and table grants.
+- Phase 7 scheduled daily preparation backend:
+  - `POST /v1/scheduled/daily-refresh`.
+  - Protected by backend-only `X-Scheduled-Refresh-Token`.
+  - Pins one timezone-aware `run_at`, resolves each onboarded non-guest
+    profile's IANA timezone to its local briefing date, and keeps an explicit
+    `target_date` as a deterministic operator override.
+  - Selects only missing snapshots, missing briefings, or briefings stale
+    against snapshot id/time provenance. Current snapshot/briefing pairs are
+    write-free.
+  - Creates a missing daily snapshot exactly once, reuses an existing snapshot,
+    and generates or refreshes the same `(user_id, briefing_date)` briefing.
+    One bounded post-write check repairs a concurrent snapshot change or
+    reports a briefing-stage failure.
+  - Supports a bounded `profile_ids` UUID filter that still intersects
+    onboarded non-guest eligibility, bounded batch size and concurrency, and
+    per-user `profile_date|snapshot|briefing` failure results. Retired
+    recommendation request fields are rejected as unknown input.
+  - Normal Dashboard GET, capture, task, habit, and focus paths do not invoke
+    scheduled preparation or gain hidden generation.
+  - No notification is sent, no production worker is added, and repository
+    implementation does not claim that a deployed cron/job invokes the endpoint.
+- Phase 4 deterministic briefing service:
+  - Persists one `daily_briefings` row per user and profile-local date under the
+    strict `daily-briefing-v2` contract without Recommendation IDs or feedback
+    ranking.
+  - `GET /v1/briefings/today` remains read-only and distinguishes missing,
+    current, and stale output by comparing source snapshot identity and time.
+  - Deliberate `POST /v1/briefings/generate` derives the user from the bearer
+    principal, refreshes Daily State when needed, and is idempotent unless
+    `force=true` is requested.
+  - Recovery-first deterministic ranking chooses one executable primary action
+    and at most two support actions from open tasks, due habits, and conservative
+    capture fallback. Every target passes `executable-action-v1`; no LLM is used.
+- P7 Recommendation and Decision Feedback retirement:
+  - Removes the generic routes, modules, Today surfaces, scheduler fields,
+    ranking inputs, and tables without a compatibility adapter.
+  - Erases old Briefing, Weekly Review, and Coach content while preserving only
+    content-free append-only usage/audit identity where required.
+  - Keeps Sleep Recommendation and other explicitly independent recommendation
+    concepts unchanged.
+- Phase 8 bounded observational Weekly Review:
+  - Read-only latest and explicit-period GETs resolve one completed
+    profile-local ISO week; deliberate POST persists one stable
+    `weekly-review-v3` identity with no LLM or Feedback facts.
+  - Canonical source fingerprints distinguish missing, current, and stale
+    derived output while completed, carried, skipped, missed, unknown, recovery,
+    and focus facts remain explicit.
+  - Current V3 reviews accept only `proposals=[]`; P7 erases pre-cutover review
+    rows instead of transporting historical proposal arrays.
+- Phase 9 bounded calendar import:
+  - One authenticated `ical_file` source requires exact explicit read/store
+    consent. Creating the source does not import anything.
+  - A deliberate bounded UTF-8 `.ics` upload reconciles stable connection,
+    import, single-event, and recurrence-occurrence identities in dedicated
+    tables with imported/read-only provenance.
+  - Disconnect retains the imported local copy; a separate confirmed delete
+    removes imported events/history only. Manual and Setup-owned
+    `schedule_items` remain unchanged.
+  - There is no provider OAuth/token, arbitrary URL fetch, calendar write,
+    hidden sync, RRULE engine, LLM processing, or calendar-driven ranking.
+- Deadline Planner V1:
+  - Authenticated read-only GET plus explicit proposal, confirm, complete, and
+    cancel routes under `deadline-plan-v1`.
+  - Direct Planner Exam/Assignment entry keeps the selected type fixed. The
+    user supplies deadline, `30..30000` active-preparation minutes, and bounded
+    session/daily preferences; new UI proposals use zero prior credit and do
+    not expose the legacy field.
+  - Once a plan exists, its root kind remains fixed through edit, occurrence,
+    focused replan, and deep-link entry. FastAPI rejects a different proposal
+    kind with the stable early `409` conflict before loading planning context.
+  - New Exams default to a 120-minute daily cap and retain spread-first
+    placement. New one-off Assignments and Assignment Series default to 360
+    minutes and fill the earliest suitable day before advancing. Existing,
+    retained, and manually edited caps are preserved. The server derives the
+    internal allocation policy from immutable kind and includes it only in the
+    planning fingerprint; public V1/RPC shapes remain unchanged.
+  - Each proposal persists at most 120 deterministic dated blocks in an
+    immutable pending revision. It cannot replace the active revision before
+    exact confirmation; first confirm creates the stable managed Phase 3 task.
+    The plan exposes separate latest/current revision counters, and planning is
+    bounded to 366 profile-local calendar days.
+  - Generic task edit/lifecycle/editor paths reject the managed source. Focus
+    may target it while open; planner confirm changes only title/deadline/time,
+    and plan complete/cancel atomically own matching task terminal projection.
+  - Completed focus linked to that task after activation contributes measured
+    progress but never completes the plan. A manual source or one explicitly
+    selected imported event is allowed; imported busy-time use is a separate
+    plan choice that requires one connected, non-deleted current import. There
+    is no inference, provider write, notification, LLM,
+    background sync, scheduled generation, or Dashboard-load generation.
+- Assignment Series V1:
+  - `assignment-series-v1` adds bearer-owned list/detail/proposal/confirm and
+    cancel-future routes under the Deadline Planner boundary.
+  - A new Assignment defaults to 12 finite weekly occurrences and accepts
+    `2..20`; a future-scope edit accepts `1..20`. Weekly instants preserve the
+    profile-local weekday and wall-clock deadline through DST. Each occurrence
+    may start no earlier than the local day after its predecessor's deadline.
+  - One common template stages independent Preparation Plans. Confirmation is
+    one owner-locked transaction; each occurrence keeps independent blocks,
+    progress, managed Task, and single-occurrence replanning.
+  - Editing all future occurrences retains past/completed plans and overwrites
+    future deviations. Future cancellation is atomic. Series projections use
+    forced owner-read RLS, while writes and the request ledger remain
+    service-role-only. No recurrence is unbounded and no LLM is involved.
+- Exam-Week Outlook V1:
+  - `GET /v1/deadline-plans/exam-week-outlook` is bearer-owned and strictly
+    read-only; no table or migration was added.
+  - Active exams activate `exam_week` at 0..7 local days, `watch` at 8..14, or
+    `overdue`. Assignments consume capacity without activating the mode.
+  - The shared Availability engine simulates deterministic remaining gaps
+    normally and with the newest valid Evening V4 sleep window hypothetically
+    protected. Exact fit/risk/warning states expose incomplete inputs, missed
+    work, buffer, pending overlap, and repeated derived sleep shortfall without
+    mutating any revision.
+  - Planner alone renders the card before ordinary attention; Today,
+    Notifications, guest/demo, and background paths do not request or fabricate
+    it.
+- Planner V1:
+  - The central authenticated read-only overview is `planner-overview-v2`;
+    explicit preference,
+    Task/Habit proposal/confirm/cancel, and fixed-commitment commands under
+    `/v1/planner` retain `planner-v1`; guest/demo stays zero-call.
+  - Overview V2 separates all active manual/Setup Habits from open
+    non-Preparation `unscheduled_tasks`, keeps pending creates in action-plan
+    previews, and derives scheduled state only from positive active
+    reservations. Zero-placement and partial-placement minutes stay exact.
+    Every non-create/non-tombstone Task or Habit plan has a current or
+    historical target snapshot; inactive Habit and historical Task plans must
+    be released/cancelled. Required history relations are retained first inside
+    the deterministic 1,000-row bound. A pending create is exempt only in the
+    draft/current-zero/latest-proposed-create lifecycle; the exact cancelled,
+    current-zero/latest-bounded-`1..500`/no-revision/no-attention tombstone is
+    the only terminal absence exception. Released former active plans retain
+    their historical target relation. Public proposal bases are limited to 499;
+    plan/revision counters and confirm/cancel expectations are limited to 500,
+    and active revisions expose only active reservation children.
+  - Strict Task/Habit proposal unions require user-entered scheduling facts.
+    Five-minute Task blocks may split; Habit slots follow daily, selected-
+    weekday, or weekly-target cadence over a bounded four-week preview. Exact
+    unplaced minutes remain visible.
+  - A shared deterministic Availability component combines profile-local
+    time/DST, energy window, current time, Setup/manual commitments, active
+    Planner and Preparation reservations, and separately consented current
+    imported busy time while that import remains current. Deadline Planner
+    reuses this component and preference. Read-time conflicts identify Setup,
+    fixed-commitment, or Calendar origin without duplicating persisted reasons.
+    The 366-day candidate horizon materializes only previous/next read-only
+    spill anchors (at most 368 local days) for cross-midnight checks.
+    Setup recurring commitments may carry inclusive optional semester bounds;
+    the same applicability rule is used across planning, workload, Today, and
+    snapshot facts.
+  - Immutable previews reserve nothing. Owner-locked confirmation atomically
+    creates or updates the target and activates its revision only after target,
+    calendar, fingerprint, and collision revalidation. Conflicts return 409;
+    reads never write or replan.
+  - One-off/weekly fixed commitments are authoritative after deliberate save.
+    Target terminal lifecycle releases future slots; undo/restore returns the
+    target to Unscheduled without reviving old reservations.
+  - `today-overview-v2` adds Task/Habit/commitment blocks while keeping V1
+    available and counting each target only once.
+  - Setup is the primary manual timetable. Planner warns before automatic
+    planning when no current availability source is visible and allows an
+    explicit honest override. Calendar import remains optional and outside
+    onboarding.
+- Study Setup V1:
+  - The revisioned Intake response optionally projects one current
+    `study_setup_profiles` row with focus/recovery rhythm, ordered preparation
+    checklist items, and current/next semester facts. Omission removes the
+    projection atomically; no defaults are fabricated.
+  - Deadline plans always use a configured rhythm; ordinary Planner Tasks use
+    it only after explicit opt-in and Habits never do. Recovery is reserved busy
+    time but not study time or daily preparation capacity.
+  - Rhythm edits invalidate pending Study-bound previews and mark active plans
+    for review without moving reservations. The next-semester course-selection
+    window creates Planner attention only, never a Task, calendar row,
+    notification, or background command.
+- Phase 10 free read-only Coach:
+  - Strict authenticated V4 free-question, response/capability/history,
+    streaming/cancel, and history-delete contracts with guest/mock zero calls;
+    V1-V3 remain readable/accepted only where the compatibility contract says.
+  - Request-scoped OpenAI/Gemini BYOK adapters with inspect/query tools, a
+    deterministic fake provider for normal tests, and an opt-in,
+    development-only `local_codex_oauth` adapter that requires `gpt-5.5` Fast,
+    one required three-tool data MCP, bounded process state, and no fallback.
+    The operator mode uses the same bounded Codex tool contract only inside a
+    distinct peer-UID Unix-socket executor; FastAPI owns neither OAuth nor
+    rootless Docker.
+  - A fresh owner-only SQLite snapshot per turn covering retained relevant
+    product detail plus catalog/relationships/counts/periods/views. Auth,
+    secrets, cross-user, provider, anti-replay, and operational rows are
+    excluded; 50,000 rows/8 MiB fail instead of truncating.
+  - Exactly read-only inspection, immutable SQL, and isolated no-network Python
+    under tool/query/process limits. Internal plots are ephemeral and invisible.
+  - Exact message replay, one pending owner turn, retained local-day question
+    budget, operator-only 5-per-owner and 15-global dispatch budgets,
+    pre-stream busy admission, atomic validated completion, deterministic
+    safety, backend-derived evidence/trace/Fast provenance, and no product
+    mutation/suggestion card.
+  - A follow-up wrapper gives claim, complete, fail, and history delete one
+    owner-first advisory-lock order before existing request/row locks.
+  - Conversation deletion removes message/content projections and tombstones
+    request state while retaining request identities and append-only usage, so
+    it cannot reset budget or permit request reinterpretation.
+- Browser E2E starts FastAPI with local Supabase backend settings and verifies
+  authenticated required-only Setup, retry/edit/review identity and ownership,
+  no post-intake generic Recommendation generation, backend daily snapshot
+  refresh after check-ins, exact Daily State V3 recomputation, core
+  Supabase-backed app writes, current Today/Full Week behavior, absent retired
+  Recommendation/Feedback surfaces, the Phase 8 observational weekly-review
+  contract, and Phase
+  9 calendar import. Phase 10 browser coverage uses the deterministic fake
+  provider; its focused rerun and the subsequent full non-destructive local
+  journey passed in the recorded 2026-07-13 checkout.
+
+Not yet implemented:
+
+- Broad weekly planning or compound Task/schedule/replacement execution;
+  Phase 8 implements only bounded observational review navigation and refresh.
+- A production background job queue or worker.
+- Deployed cron wiring for the scheduler-triggered refresh endpoint.
+- A scalable production operator API-key/provider, billing, and distributed
+  queue. The subscription-backed operator executor is implemented only as a
+  default-off pilot mode and still lacks target-host/live/public acceptance;
+  BYOK also lacks those live gates. Provider failover is deliberately absent.
+- Memory extraction beyond current direct writes.
+- Autonomous weekly planning.
+- Live calendar-provider OAuth, refresh tokens, URL subscriptions, background
+  sync, and provider writes.
+
+## Architectural Principles
+
+- Keep Supabase as the source of truth for auth and user-owned data.
+- Keep current Supabase backend secret keys and legacy service-role JWTs only
+  in backend environments; Flutter receives only a publishable/anon client key.
+- Derive `user_id` on the backend from a verified Supabase bearer token.
+- Never trust request-provided `user_id`.
+- Use RLS on every exposed Supabase table.
+- Prefer deterministic rules, cached summaries, and explicit jobs over live LLM
+  calls.
+- Never call an LLM on dashboard load.
+- Never send full user history to an LLM.
+- Calendar import is optional. It improves coaching quality, but it must not be
+  required to start using the product.
+- New backend work should preserve mock and guest mode.
+- Guest/demo, real-backend, derived, integrated, and model-generated data must
+  have distinct provenance. Never silently replace failed real-user reads with
+  personalized-looking demo data.
+- Every personalized output should carry freshness, evidence or reason, and a
+  data-quality state where history is required.
+- Every production-visible primary action must execute a real command, persist
+  correctly, and expose stale/error/rollback behavior.
+- Derived planning or Coach advice must not create user-owned commitments
+  without confirmation.
+
+## Target Backend Services
+
+These are "agents" in the product sense. Implement them as explicit services,
+repositories, and jobs, not as unconstrained autonomous LLM loops.
+
+| Service | Trigger | Reads | Writes | LLM use |
+| --- | --- | --- | --- | --- |
+| Intake service | First completed onboarding | Sanitized Intake payload, profile | `intake_responses`, `profiles`, `habits`, `schedule_items`, `study_setup_profiles`, energy `memory_entries`, `user_state_snapshots` | None for v1 |
+| Signal aggregator | Daily check-in, task/habit/focus changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `habits`, `habit_logs`, `focus_sessions`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
+| Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, tasks, habits, habit outcomes | `daily_briefings` | None |
+| Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, habits/outcomes, focus, daily snapshots | `weekly_reviews` derived output only | None |
+| Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
+| Deadline planning service | Explicit user proposal/confirmation/lifecycle command | User-entered estimate, profile timezone/energy window, app commitments, confirmed blocks, optional current imported busy time | `deadline_plans`, immutable revisions/blocks, one first-confirm managed task, opaque request identities | None |
+| Coach service | Deliberate authenticated free question | Fresh owner-only SQLite snapshot; OpenAI/Gemini receive bounded inspect/SQL results, while private local Codex uses the inspect/SQL/isolated-Python MCP | Validated `coach_messages`, backend-derived evidence/trace/provenance, request/usage state only | One explicitly selected OpenAI/Gemini user-key or `gpt-5.5` Fast local turn, budgeted; no fallback |
+| Legacy memory selection service | Pre-V3 compatibility call only | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate legacy selection projection; current Coach ignores it and content changes only through its owner | None |
+| Planning service | Explicit user planning request | Tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `coach_messages` | Optional for complex plans |
+| Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
+| Notification generation service | Protected current-day local scheduler run | Explicit delivery consent, profile timezone, current snapshot/briefing, exact completed weekly review | Bounded deduplicated `notifications` rows with strict provenance | None |
+| In-app delivery service | Foreground authenticated Flutter poll | Current consent/category/quiet settings plus one due generated row | At-most-once `in_app_delivered_at` receipt | None |
+
+The intake foundation, retired post-intake Recommendation side effect, first
+authenticated snapshot aggregator endpoint,
+the Phase 3 task/habit/focus execution contracts, scheduler-triggered daily
+refresh endpoint, and deterministic Insights correlation exploration now
+exist. Phase 4's deterministic Daily Briefing service supplies the backend
+decision contract, Phase 5 consumes it in the decision-first Today surface,
+P7 removes the former Phase 6 generic Recommendation/Feedback loop, and the minimal Phase 7
+backend prepares timezone-pinned daily snapshots and briefings through the
+existing protected endpoint. Phase 8 adds a bounded observational Weekly Review
+without adaptation authority. Phase 9 adds the first optional
+consented integration boundary as a user-selected `.ics` import with no
+provider access or writes. Phase 10 adds the controlled Coach boundary without
+changing that deterministic loop. Deployed cron/job wiring, production
+notification delivery, real calendar provider integration, hosted BYOK release
+acceptance, and live acceptance of the implemented default-off operator
+executor remain absent and must not be inferred from callable endpoints or
+repository deployment templates. See
+`docs/daily-briefing-implementation-plan.md` for the current product contract
+and phase sequence, and
+`docs/phase-3-executable-actions-contract.md` for the completed action contract.
+
+## User Start Flow
+
+The user should not start with an empty dashboard and should not be forced to
+connect a calendar. The required intake path should stay under three minutes;
+detail can be added progressively. The intended first-run flow is:
+
+1. Register, sign in, or continue as guest.
+2. Complete a short guided intake using explicit answers only.
+3. Describe the typical weekday and choose the best energy window.
+4. Optionally add named routines, fixed commitments, or Study Setup.
+5. Configure Reminder consent and delivery preferences separately in Settings.
+6. Optionally connect a calendar later.
+7. Land on Today without hidden Recommendation generation.
+
+The app must not create fallback habits or timetable blocks for blank
+answers. Existing routines collected during intake should remain candidates
+until the user confirms their cadence. First-day output must not imply a learned
+personal baseline.
+
+## User Operating Loop
+
+The complete acceptance path is defined in
+`docs/daily-briefing-implementation-plan.md`. Backend and Flutter work should
+support this sequence:
+
+```text
+first intake
+  -> conservative starting briefing
+  -> short morning calibration
+  -> one executable primary action
+  -> passive task/habit/focus feedback during the day
+  -> evening shutdown and provisional tomorrow preview
+  -> returning-morning correction
+  -> weekly review only after enough real outcomes exist
+```
+
+Capability should mature with evidence:
+
+- Start: use only explicit intake and current calibration.
+- First week: use recency, action outcomes, and simple workload/recovery flags.
+- Two-plus weeks: show only emerging patterns with sample size and confidence.
+- One-plus month: introduce personal baselines, weekly adaptation, and stronger
+  ranking.
+- Later: integrations reduce capture effort; controlled Coach explains or stages
+  changes after the deterministic loop is useful.
+
+No stage may claim causation, diagnosis, or a stable learned baseline before the
+required evidence exists.
+
+### Intake Questions
+
+Use structured answers rather than free text wherever possible.
+
+Required fields:
+
+- Typical weekday shape.
+- Best energy window.
+
+Optional fields:
+
+- Display name.
+- Existing named routines, initially as candidates.
+- Known fixed commitments.
+- Study Setup focus rhythm and semester detail.
+
+Focus areas, Goals, friction points, coaching style, Reminder preferences, and
+free-form context are not Intake fields. Reminder delivery settings remain an
+independent Settings-owned contract.
+
+### Calendar Policy
+
+Calendar import is a quality booster, not an onboarding gate.
+
+The first bounded implementation is:
+
+- Optional explicit `ical_file` consent after the first useful dashboard.
+- Deliberate bounded file import into dedicated connection/import/event tables.
+- User-visible, separate disconnect and imported-data deletion controls.
+- Imported/read-only provenance and no LLM processing of calendar content.
+- No provider OAuth, URL fetch, provider write, hidden sync, or automatic
+  schedule/briefing mutation.
+
+Deadline planning is a separate explicit product action, not a side effect of
+calendar import. One event may prefill a proposal only after the user selects
+it; the user still chooses exam/assignment, deadline, and preparation estimate.
+Using imported busy intervals is an independent per-plan boolean. Confirmed
+blocks are app-owned dated reservations, never source-calendar writes.
+
+`schedule_items` continues to represent stable user routines and app-authored
+planned blocks. A live-provider follow-up must keep credentials, cursors, and
+webhooks backend-only and preserve the same explicit provenance/control rules.
+
+## Data Model Direction
+
+The current canonical schema already has useful tables:
+
+- `profiles`
+- `daily_logs`
+- `behavioral_events`
+- `tasks`
+- `schedule_items`
+- `notifications`
+- `coach_messages`
+- `memory_entries`
+- `ai_insights`
+- `skillset_profiles`
+- `notification_preferences`
+- `habits`, `habit_logs`, `focus_sessions`
+- `coach_requests`, `coach_usage_events`, `coach_memory_selections`
+- `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, and the
+  backend-only `deadline_plan_request_identities`
+
+`profiles.setup_revision` stores the latest Setup revision projected onto the
+profile. It starts at zero, is backfilled from applied `intake-v1` history, and
+may advance only monotonically.
+
+Migration `20260710180000_atomic_intake_v1_setup_apply.sql` defines
+`apply_intake_v1_setup_revision`. Execute is restricted to `service_role`. The
+function locks by user with `pg_advisory_xact_lock`, validates the claimed
+canonical intake row and ownership metadata, and applies every Setup projection
+inside one transaction. It performs no generic Recommendation generation.
+
+Migration `20260711120000_phase_3_executable_action_schema.sql` completes the
+Phase 3 storage contract. It adds bounded task estimates and terminal
+timestamps; makes `habit_logs.status` (`completed` or `skipped`) authoritative
+and consistent with `value`; and adds focus status, optional task/habit linkage,
+measured terminal duration, and update timestamps. Database constraints,
+ownership triggers, a partial unique index, restricted FKs, and an all-update
+terminal-history guard enforce exact task/focus shapes, available same-user
+targets, and at most one active focus session. Focus target validation locks the
+selected task/habit row. Missing legacy focus `metadata.entry_date` values are
+backfilled deterministically from the UTC date of `started_at`. Habit outcomes
+lock their owned habit and validate active lifecycle plus selected ISO weekday
+at write time.
+Existing RLS policies and table grants remain in force. Positive legacy values
+normalize to completion. The migration deliberately refuses ambiguous legacy
+habit logs whose missing status is paired with `value <= 0`; inspect and resolve
+those rows rather than inventing an intentional skip.
+
+The Intake V1 foundation and Phase 0C revision contract provide the Setup state:
+
+### `intake_responses`
+
+Purpose: preserve typed Setup revisions, make retries/edit concurrency explicit,
+and support future schema versions without losing applied intake history.
+
+Implemented columns:
+
+- `id uuid primary key default gen_random_uuid()`
+- `user_id uuid not null references profiles(id) on delete cascade`
+- `version text not null default 'intake-v1'`
+- `request_id uuid not null`
+- `base_revision int not null`
+- `revision int not null`
+- `state text not null check (state in ('pending', 'applied'))`
+- `responses jsonb not null`
+- `completed_at timestamptz not null default now()`
+- `metadata jsonb not null default '{}'::jsonb`
+- `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+
+Unique indexes:
+
+- `(user_id, version, request_id)` for idempotent request replay.
+- `(user_id, version, revision)` for one ordered revision per user/version.
+
+Access:
+
+- User can read own rows.
+- User should not update old intake history directly.
+- Backend service-role can insert and update after token verification.
+
+### `user_state_snapshots`
+
+Purpose: store compact user state that Coach, planning, and memory flows can use
+without reading full history or building huge prompts.
+
+Implemented columns:
+
+- `id uuid primary key default gen_random_uuid()`
+- `user_id uuid not null references profiles(id) on delete cascade`
+- `scope text not null check (scope in ('onboarding', 'daily', 'weekly'))`
+- `period_key text not null`
+- `summary jsonb not null`
+- `signals jsonb not null default '{}'::jsonb`
+- `source text not null default 'backend'`
+- `generated_at timestamptz not null default now()`
+- `metadata jsonb not null default '{}'::jsonb`
+
+Indexes:
+
+- `(user_id, scope, generated_at desc)`
+- `(user_id, period_key)`
+- Unique `(user_id, scope, period_key)` for atomic backend snapshot upserts.
+
+Access:
+
+- User can read own snapshots if the UI needs them.
+- Writes should be backend-owned.
+
+### `weekly_reviews`
+
+Purpose: persist one bounded deterministic review for a completed
+profile-local ISO week without mixing derived output into generic snapshots or
+mutating user-owned records during generation.
+
+Implemented identity and bounds:
+
+- unique `(user_id, period_key)`;
+- exact Monday `week_start` and Sunday `week_end` consistent with `IYYY-Www`;
+- bounded timezone, narrative, facts, an exactly empty proposal array, no more
+  than 40 evidence references, provenance, and SHA-256 source fingerprint;
+  every V3 row stores `[]`;
+- `insufficient|partial|sufficient` data quality separate from freshness;
+- authenticated owner/admin SELECT only, service-role writes, forced RLS.
+
+The review GET computes missing/current/stale truth without writing. Deliberate
+generation upserts only the derived facts row. Weekly Review has no proposal,
+confirmation, mutation, or historical proposal transport path after P7.
+
+### Later Tables
+
+`daily_briefings`, `weekly_reviews`, the bounded Phase 9
+calendar tables, the Phase 10 Coach request/usage/selection tables, and the
+Deadline Planner plan/revision/block/request tables are
+implemented after their owning contracts proved the persistence boundary. Do
+not add these remaining tables
+until their owning phase needs them:
+- `backend_jobs` for durable idempotent jobs and retries.
+- provider-account, credential, cursor, or webhook tables for live calendar
+  sync.
+- `memory_candidates` if memory extraction needs review before promotion to
+  `memory_entries`.
+
+## Setup Read And Completion Flow
+
+Endpoints:
+
+```text
+GET /v1/intake/setup
+POST /v1/intake/complete
+Authorization: Bearer <supabase_access_token>
+```
+
+`GET` returns the newest `intake-v1` typed row and derives the user from the
+bearer principal. Normally this is the latest applied revision, including stable
+setup item keys and review lifecycle. If the newest revision is `pending`, the
+endpoint exposes that exact payload and request id so the client can resume the
+same operation rather than edit or create another revision.
+
+`POST` handles both initial completion and later edits:
+
+1. Verify the bearer token through the existing FastAPI auth dependency.
+2. Derive `user_id` from the verified principal.
+3. Validate `request_id`, `base_revision`, and the typed intake payload with
+   strict Pydantic models after stripping supported retired personalization
+   keys; reject `responses.goals`.
+4. Replay an already-applied matching request id, or reject a stale/conflicting
+   base revision instead of appending another completion.
+5. Persist the next revision as `pending` and derive stable UUIDv5 ids for every
+   setup item from user, item kind, and stable item key.
+6. Build materialization only from the claimed row's canonical stored responses:
+   cadence-confirmed active/paused habits, active fixed commitments, optional
+   Study Setup, and the best-energy memory. Candidate routines remain only in
+   `responses`.
+7. Call the service-role-only atomic Setup RPC. Its transaction-scoped per-user
+   advisory lock serializes competing workers. Its Goal-free signature
+   reconciles only server-owned Setup habits, schedule/Study rows, and energy memory;
+   upserts `(user, onboarding, setup:intake-v1)`; marks the intake applied; and
+   advances the profile revision, completion time, and explicit display name.
+8. Preserve all manual/other-source rows. The only narrow legacy cleanup is an
+   omitted, unmarked onboarding row exactly matching `Math`, `Room 204`, Monday
+   `08:15`-`09:45`; other unmarked onboarding rows are not claimed by Setup. An
+   applied replay is side-effect free except that the newest applied revision
+   may repair a missing profile projection.
+9. Return the applied revision and compact onboarding snapshot summary without
+   generating derived advice.
+
+Flutter keeps all 4xx failures editable; 409 additionally recommends reloading
+the newest server state. Network/transport errors, 5xx responses, and invalid
+success envelopes are ambiguous, so the exact submitted request is locked for
+unchanged retry or explicit reload.
+
+No LLM is required for v1 intake. Free-form context is not accepted or stored.
+
+## Generic Recommendation Retirement
+
+The former generic Recommendation flow is retired. There is no current
+Recommendation service, persistence table, Flutter feed, refresh command, or
+scheduled generation stage. The independent Insights
+`GET /v1/insights/sleep-recommendation` contract, ordinary Coach advice,
+`ai_insights.recommendation`, memory type `recommendation`, and skillset are not
+part of that retired flow.
+
+## Coach Flow
+
+Implemented authenticated endpoints:
+
+```text
+GET /v1/coach/capabilities
+POST /v1/coach/respond
+POST /v1/coach/respond/stream
+GET /v1/coach/history
+DELETE /v1/coach/history
+Authorization: Bearer <supabase_access_token>
+```
+
+Context-options and memory-selection endpoints remain only for older clients.
+Current Flutter does not call them.
+
+Current behavior:
+
+1. Derive the owner from the verified Supabase bearer token. For non-safety
+   work, admit the explicitly selected provider before claiming a retry-safe V4
+   identity bound to request id, exact message, and provider. Enforce one
+   pending owner turn and the applicable local/global budgets.
+2. Preserve V1-V3 request/response/history parsing for compatibility, but expose
+   no fixed Today, Patterns, Focus, Review, horizon, Focus-session, prompt, or
+   memory-selection choice in the current product. The legacy newest pair is
+   `controlled-coach-prompt-v3`/`coach-context-v3`.
+3. Build a fresh immutable owner-only SQLite snapshot from the retained relevant
+   Account Export sources. Include detail text and a catalog/count/period/
+   relationship layer; exclude auth, credentials, provider internals,
+   anti-replay/usage/selection ledgers, operational state, and other owners.
+   The current pair is `free-coach-agent-prompt-v5` with
+   `personal-snapshot-v3`; pre-P7 free-agent content is erased while required
+   content-free request/usage identities remain.
+   Fail rather than truncate beyond 10,000 rows per table, 50,000 total, or
+   8 MiB.
+4. Start the explicitly selected agent only after deliberate send,
+   deterministic pre-safety, and pre-stream admission. OpenAI/Gemini BYOK receives bounded
+   `inspect_data`/immutable-SQL `query_data` results but never SQLite or Python.
+   Local/operator Codex receives one required stdio MCP with those tools plus
+   no-network, non-root, read-only-container `run_python`; the operator process
+   lives behind a strict one-use Unix-socket reservation. Allow at most 12 tools
+   and 180 seconds; SQL and Python have shorter limits.
+5. Let the model answer directly, combine tools, test a hypothesis, correct a
+   premise, state missing information, or ask a concise question. Treat all
+   stored free text and calendar content as untrusted data.
+6. Validate model-owned reply/uncertainty/safety only. Derive evidence
+   source/count/period, available SQL/Python/inspection trace, limitations,
+   provider/model/tier provenance, and snapshot size from backend execution
+   records.
+7. Stream only `started`, allowlisted lifecycle `activity`, and one
+   `completed|failed`; cancellation terminates work and cleans temporary files.
+   The non-streaming route awaits the same service.
+8. Atomically persist the bounded answer, evidence, trace, provenance,
+   user/assistant pair, request state, and usage. No structured suggestion,
+   plot, script, prompt, raw CLI stream, or mutation command is stored.
+9. Delete conversation/evidence/trace content while retaining tombstones and
+   append-only usage/dispatch accounting so deletion cannot reset budget or
+   request identity.
+
+The first test provider is deliberately `local_codex_oauth`. When explicitly
+enabled in development, FastAPI invokes the current Linux/WSL user's already
+authenticated Codex CLI without an application API key. Each developer runs
+their own `codex login`; OAuth files never enter Flutter, Supabase, Git, `.env`,
+or application logs. This same-user agentic subprocess is a local testing
+adapter, not a production isolation/deployment design. The complete implemented
+boundary is `docs/phase-10-controlled-coach-plan.md`.
+Every real turn requires `gpt-5.5`, `service_tier="fast"`, and
+`fast_mode=true`. Do not default to Spark, another model, or the standard
+service tier merely because Codex CLI supplies the local OAuth bridge. A
+reported/configured mismatch is an honest failed capability.
+
+The pilot-only `operator_codex_pilot` path is a different composition: one
+Uvicorn worker connects to a separately sandboxed `coach-executor` UID over a
+peer-authenticated Unix socket. One-use reservations, a 240-second lease, a
+durable user-independent UTC-day budget plus owner-linked dispatch ledger,
+startup reconciliation, and exact 5-per-owner/15-global limits prevent queue
+fan-out, account-deletion quota reset, and ambiguous redispatch.
+Busy returns pre-SSE HTTP 429 with bounded `Retry-After`; Flutter retries only
+after an explicit user action. This is not an automatic fallback or a scalable
+production-provider claim.
+
+## LLM Cost Control
+
+Use these rules before adding any model provider:
+
+- No LLM calls on dashboard load.
+- No LLM calls for simple CRUD, check-ins, or deterministic projections.
+- Do not serialize full history into the prompt. Put relevant retained data in
+  the ephemeral owner-only snapshot and let the agent query only what it needs.
+- Keep deterministic `user_state_snapshots` for non-Coach product workflows;
+  the Coach snapshot is per-turn and is never reused.
+- Bound Coach snapshot rows/bytes, tool count, SQL/Python results, answer size,
+  and turn time even when the retained period is complete.
+- Use idempotency keys for jobs that could retry.
+- Track LLM usage per user before enabling broad access.
+- Keep per-user, concurrency, timeout, input, context, and output caps even when
+  local subscription access rather than an API bill supplies the model.
+- Prefer small/cheap models for wording and extraction.
+- Use larger models only for complex coach or weekly planning tasks.
+- Cache or persist generated outputs.
+- Add feature flags for every LLM-backed path.
+
+## Current Implementation Checkpoint
+
+The current Deadline slice includes deterministic `exam-plan-health-v1` GET
+and read-only preview endpoints. A single service-role snapshot RPC removes the
+old list-page/torn-read risk and feeds the shared Availability allocator with a
+120-block plan bound, Study Focus/Recovery, account and plan caps, all confirmed
+consumers, exact Focus credit, current account-owned Planner Calendar authority,
+and DST-safe local occurrences. Health is a projection only: no scheduler job,
+background write, push, alarm, automatic replan, or LLM dependency is
+implemented.
+
+The slice also includes explicit `multi-exam-plan-v1` balancing. The user
+chooses one active Exam and reviews an exact deterministic simulation. The
+backend tries retain-plus-supplement, then target-only redistribution, then a
+proof-bounded minimal-cardinality search over additional active Exams while
+Assignments and every other confirmed consumer stay fixed. A one-plan change
+uses the existing Deadline proposal lifecycle; two to eight changes persist as
+one private batch with atomic confirm, retry-safe cancel, stale context CAS, and
+guards against every competing single-plan proposal/replan/confirm/complete/
+cancel mutation. The CAS includes locked learning permission, pilot flag, and
+active Exam timing provenance when learned timing participated. This is not an
+optimizer job, scheduler, notification source, automatic replan, Calendar
+writer, or LLM feature.
+
+Private batch rows are derived orchestration metadata. Existing Deadline
+revisions and blocks remain the user-content projection, so this slice leaves
+`account-export-v6` and `personal-snapshot-v3` exclude that orchestration
+history as well as the retired Recommendation and Decision Feedback tables.
+
+The current repository builds on completed Phase 0 product integrity,
+Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
+Phase 4's persisted deterministic briefing contract, the retired historical
+Phase 5 briefing consumer now superseded by Today Overview, the P7 retirement
+of the former Phase 6 generic Recommendation/Feedback loop, the minimal Phase 7
+scheduled preparation backend, and Phase 8's bounded observational Weekly
+Review, Phase 9's bounded `.ics` import, and
+Phase 10 Controlled Coach, Notification Delivery V1's local foreground path,
+Deadline Planner V1, central Planner V1 with Today Overview V2, and Study Setup
+V1's optional focus/recovery and semester projection. The Coach keeps the
+deterministic standalone loop as the source of truth and uses request-scoped
+OpenAI/Gemini BYOK, the development-only local Codex OAuth adapter, and the
+default-off pilot operator executor plus deterministic fake-provider test seam fixed in
+`docs/phase-10-controlled-coach-plan.md`. The next slice must be selected from a
+separately verified product need; do not generalize this checkpoint into a
+production provider or autonomous agent platform by default.
+
+### Completed Slice 0A: Honest Capture
+
+- Implemented: `/daily-check-in` redirects to the canonical lightweight capture
+  flow; the fixed page and `saveDefaultCheckIn()` data source are removed.
+- Implemented: mood, energy, sleep, and stress begin unset and require explicit
+  user selection. An optional context note remains attached to the check-in and
+  is not silently promoted to durable memory.
+- Implemented: uncollected legacy placeholder fields are cleared rather than
+  surviving the canonical upsert as apparently measured data.
+- Implemented: one typed draft drives guest and Supabase stores. Guest saves are
+  readable on return and replace the same local day; later auth migration reuses
+  the canonical Supabase writer.
+- Implemented: Supabase upserts the daily log and replaces same-day
+  current-state events linked through `daily_log_id`. The original complete V1
+  form wrote four; Phase 1 generalizes this to a dynamic maximum of four.
+- Implemented: failed writes preserve the draft, retry reuses the stable capture
+  id, and in-flight duplicate submits are ignored.
+- Implemented: non-functional Lifestyle Entry and Reflection Note tiles were
+  removed from Quick Action.
+- Implemented: mapper, guest-store, widget, and browser smoke assertions use
+  distinctive values instead of checking row existence or defaults only.
+
+### Historical Slice 0B: Source And Surface Truth
+
+- Retired by P7: the former typed generic Recommendation feed and deliberate
+  refresh behavior described in this historical slice no longer exist.
+- Implemented: dashboard snapshots carry explicit origin and direct nullable
+  stored values. Proxy wellness/recovery scores, fake steps/sleep/screen-time/
+  hydration metrics, activity charts, and recommendation-derived task copy are
+  removed.
+- Implemented: dashboard tasks initialize from persisted status and roll back
+  optimistic status changes when a write fails. Schedule UI renders only real
+  commitments.
+- Implemented: local guest sessions are persistently labeled `Local demo`, stay
+  off authenticated snapshot APIs, read their local canonical check-in, and do
+  not expose Supabase-only Habit controls.
+- Implemented: Coach and the former placeholder Deep Work preview were removed
+  from productive routes, Settings was reduced to durable behavior, and
+  compatibility links redirected to working surfaces. Phase 3 later replaced
+  the Deep Work placeholder with a real authenticated focus-session flow.
+- Implemented: the Inbox preserves original notification fields and source
+  read state, distinguishes empty from error, and exposes Open only for a
+  strict allowlist of implemented internal `action_url` targets. Notification
+  Lifecycle V1 adds owner-scoped, retry-safe read/unread/dismiss tombstones
+  independently of delivery. Notification Delivery V1 later adds separate
+  fail-closed foreground consent, deterministic recovery and exact-week
+  generation, a local runner, and acknowledged in-app banners. The redundant
+  generic current-briefing banner is retired; there is still no push/system or
+  deployed delivery channel.
+- Verified with mapper, repository, provider, widget, route-capability,
+  notification-target, and browser smoke coverage.
+
+### Completed Slice 0C: First-Run And Setup Integrity
+
+- Implemented: typical weekday and best energy are the only required answers;
+  display name, routines, timetable detail, and Study Setup are progressive and
+  optional. Weekly timetable blocks support optional inclusive semester dates
+  and duplication across weekdays; calendar import remains a separate optional
+  Settings flow.
+- Implemented: `responses.goals` is rejected; other supported retired
+  focus/friction/style/Reminder/context keys are stripped from legacy payloads,
+  and blank optional answers create no fallback
+  Habit, schedule item, or memory row.
+- Implemented: named routines are typed candidates in the intake response until
+  cadence is explicitly confirmed; candidates do not become active daily habits.
+- Implemented: guest and authenticated Setup re-entry use a typed prefilled read
+  model with loading, error, retained draft, and retry states.
+- Implemented: `request_id`, `base_revision`, pending/applied revisions,
+  deterministic UUIDv5 ids, and ownership-scoped reconciliation make completion,
+  replay, and edit converge without duplicates or changes to manual rows.
+- Implemented: a per-user advisory-locked, service-role-only database RPC commits
+  the full Setup projection atomically; an exact legacy placeholder cleanup does
+  not broaden ownership of other unmarked onboarding rows.
+- Implemented: Settings links to durable review/edit actions for activated
+  Setup Habits and fixed commitments, including pause, restore, and removal
+  behavior. Goals have no schema or active product surface. Setup-owned habits remain
+  completable through Habit Completion but are excluded from generic Habit
+  Management edits.
+- Implemented: mock/demo auth boot remains local across reload, while 4xx,
+  conflict/reload, and ambiguous exact-retry states preserve honest save status.
+
+### Completed Slice 1: Lightweight Daily Capture And Stress Taxonomy
+
+- Implemented separate typed Evening Shutdown and Morning Calibration flows.
+- Implemented one same-day ownership merge under
+  `daily_logs.metadata.captures`: replacing Evening preserves Morning and vice
+  versa, while unrelated metadata survives the mapper.
+- Implemented exact numeric projection with Morning energy precedence, Evening
+  mood/stress ownership, Morning sleep ownership, and no fabricated focus
+  minutes or optional text.
+- Implemented independent bounded Morning sleep quality in capture metadata,
+  mirrored onto existing Morning-origin events without expanding the
+  four-event maximum.
+- Implemented a dynamic maximum of four deterministic mood/energy/stress/sleep
+  events with capture-kind metadata and linkage to the single daily row.
+- Implemented guest V5 JSON with legacy V1–V4 read, friction sanitization, and
+  best-effort authenticated migration compatibility; guest/mock paths remain
+  off Supabase and FastAPI.
+- Implemented capture-date snapshot refresh plus backend metadata-date filtering
+  over a timezone-tolerant UTC read window.
+- Implemented direct nullable Dashboard mapping for capture presence, focus
+  band, and stress source/controllability. Historical Day Shape is ignored. It does not infer Daily
+  Mode, ranking, causation, or a learned baseline.
+
+### Completed Slice 2: Explainable Daily State
+
+- Implemented `summary.daily_state` and `signals.daily_state` under current
+  `explainable-daily-state-v3` without schema changes.
+- Implemented a strict V2–V5 capture parser that validates capture identity,
+  enums, numbers, timestamps, and numeric projections while ignoring retired
+  friction keys. Legacy numeric rows are read only when no structured marker
+  exists; malformed structured data never regains trust through projected
+  columns.
+- Implemented a fixed seven-day state lookback independent of the requested
+  statistical window. Evening target-day or previous-day capture and Morning
+  target-day capture form the current-state cadence.
+- Implemented explicit `missing`, `partial`, `current`, and `stale` quality;
+  bounded taxonomy, recovery, capacity, workload, and calibration risks;
+  machine-stable reasons with field-level evidence; and deterministic
+  provenance without capture free text or learned-baseline claims.
+- Implemented recovery-first `push`, `steady`, `recover`, and `plan`
+  classification. Missing, partial, and stale inputs remain conservative, and
+  stress, sleep, energy, workload, and Tasks remain inputs. `push` requires an
+  active Task; no friction or Day Shape risk/reason/evidence is emitted.
+  Very low current sleep quality may select recovery despite sufficient
+  duration; moderately low quality prevents push.
+- Preserved `snapshot-aggregator-v1`, same-period atomic upsert, guest/mock
+  locality, best-effort Flutter refresh, and the Phase 0C
+  Setup contract. Metadata records the Daily State contract and lookback;
+  top-level `summary.risk_flags` aliases current Daily State risks,
+  `summary.window_risk_flags` retains window-aggregate flags, and
+  `recommended_next_focus` is derived recovery-first from mode.
+
+### Completed Slice 3: Executable Action And Habit Contracts
+
+- Implemented reliable `executable-action-v1` targets for task, habit, focus,
+  and capture commands. Flutter and FastAPI reject unknown fields, invalid
+  kind/command/target combinations, and unsupported routes. Planning's
+  `review_plan` was explicitly unavailable in Phase 3 until Phase 8 supplied
+  its real navigation surface; the reserved `recovery` kind has no executable
+  command yet.
+- Implemented owner-scoped task create/edit/complete/postpone/cancel/restore and
+  direct undo with validation, stable create ids, retained drafts, confirmation
+  for terminal actions, exact requested-field/timestamp reconciliation after an
+  ambiguous response from every update including undo, and snapshot refresh
+  after durable writes.
+- Implemented Habit V1 daily, selected-weekday, and weekly-target cadence;
+  explicit completed/skipped/open/missed outcomes; cadence-aware progress and
+  streaks; same-day undo; and separate manual versus Setup-owned lifecycle
+  authority. Database locking closes pause/archive/cadence races; paginated
+  outcome reads beginning 370 calendar days before today and local `started_on`
+  keep calendar math DST-safe. Manual definition/lifecycle updates use exact
+  response-loss readback; outcome/undo captures one target date and proves the
+  exact row or absence before refreshing that same day.
+- Implemented a real one-active-session focus lifecycle with optional owned
+  task or active-habit linkage, bounded planned duration, measured finish or
+  abandon duration, locked target validation, exact terminal response-loss
+  reconciliation, all-update terminal-history rejection, restricted target
+  deletion, deterministic local/legacy start-day snapshot attribution, and no
+  implicit target completion.
+- Added deterministic habit-outcome and focus-session snapshot summaries while
+  preserving the exact Phase 2 Daily State result. See
+  `docs/phase-3-executable-actions-contract.md` for the complete matrix.
+
+### Completed Slice 4: Deterministic Briefing Service
+
+- Implemented a FastAPI-owned deterministic service that ranks one executable
+  primary action plus at most two support actions from Phase 2 state, Phase 3
+  action contracts, and current owned records. P7 advances this persistence to
+  `daily-briefing-v2` without Recommendation or Feedback inputs.
+- `GET /v1/briefings/today` reads only and distinguishes current, stale,
+  missing, and error states. Normal Dashboard load must not generate a briefing.
+- `POST /v1/briefings/generate` is deliberate, authenticated, idempotent for
+  its user/local date, and use no LLM.
+- Includes mode, bounded reason, time/capacity note, provenance, freshness,
+  evidence references, and strictly validated `executable-action-v1` targets.
+- Added `daily_briefings` persistence for stable local-date identity, stale
+  detection, morning availability, and exact database assertions.
+- Kept the decision-first Today/Dashboard redesign and feedback controls in
+  Phase 5; Phase 4 proves the backend briefing contract first.
+
+### Completed Slice 5: Decision-First Today Dashboard
+
+Historical note: the visible briefing-first presentation was superseded on
+2026-07-21 by `today-overview-v1` and then additively extended by
+`today-overview-v2`. The app consumes the read-only
+streak/progress/agenda/task/habit overview with Planner blocks documented in
+`docs/today-overview-v1-contract.md`. P7 later retired the generic
+Recommendation/Feedback consumer and erased its historical content.
+
+- Historical implementation used a strict Flutter briefing parser and
+  authenticated repository/provider boundary; current Flutter no longer owns a
+  briefing or Recommendation surface.
+- Normal Dashboard load calls read-only GET only and preserves loading,
+  missing, current, stale, error, and local-demo truth.
+- Places Daily Mode, data quality, capacity note, reason, primary action, and at
+  most two support actions above direct nullable check-in metrics.
+- Disables stale actions until deliberate `Adjust today`, whose POST sends only
+  `force=true`; missing state offers deliberate first generation.
+- Dispatches current targets through the existing exhaustive Phase 3 handler
+  boundary; Phase 8 later adds the real synced `review_plan` navigation handler.
+- Adds model/repository/widget tests and browser assertions for read-only load,
+  persisted identity, deliberate adjustment, and real action dispatch.
+
+### Completed Slice 6: Complete Today Week Agenda
+
+- Adds the strict read-only `today-week-agenda-v1` route for the current
+  profile-local Monday-through-Sunday week, always with seven ordered dates.
+- Loads Setup, Preparation, current Calendar import, actual Focus sessions,
+  Planner Tasks, materialized Habit slots/outcomes, and fixed commitments
+  through dedicated owner-filtered bounded reads. Each source is independently
+  `current|unavailable`; profile/timezone authority alone fails the whole route.
+- Returns server-derived local dates/wall-clock strings and stable occurrence
+  ids. It never reuses Planner Overview or the bounded Deadline list and never
+  writes, generates, confirms, or moves product state.
+- Replaces the former direct Flutter Setup/Deadline two-source/rating merge.
+  Guest/mock is zero-call; the authenticated accordion loads only when opened.
+- Adds current-start-context actions, date-safe Habit behavior, partial-source
+  UI, a two/two-and-a-half-card snapped mobile strip, and seven columns only
+  above the 208-pixel-per-card threshold.
+- Standardizes every information disclosure on a real 44×44 semantics/focus
+  target around a visible 24×24 frame and separates accordion expansion from
+  its information button.
+
+### Completed Slice 7: Scheduled Daily Preparation Backend
+
+- Extended `POST /v1/scheduled/daily-refresh` rather than adding a worker or a
+  second privileged boundary. The endpoint remains protected by the backend-only
+  scheduled refresh token.
+- Captures one aware run instant and resolves each eligible profile's local date
+  from its stored IANA timezone. Invalid timezones fail only that profile; an
+  explicit target date remains a deterministic operator/test override.
+- Selects missing daily snapshots, missing briefings, and snapshot-provenance-
+  stale briefings. Current pairs are skipped.
+- Reuses existing snapshots, generates a missing snapshot once, upserts one
+  stable daily briefing identity, and performs one bounded convergence retry if
+  the source snapshot changes during persistence.
+- Supports bounded UUID `profile_ids` targeting without bypassing onboarded
+  non-guest eligibility. Per-user result envelopes expose selection reason,
+  local date, snapshot/briefing status and ids, and a bounded failure stage while
+  allowing the rest of the batch to continue.
+- Preserves deterministic no-LLM output, GET-only Dashboard load, deliberate
+  user adjustment, and ordinary-write boundaries. It sends no notifications,
+  installs no production worker, and does not establish deployed cron wiring.
+
+### Completed Slice 8: Bounded Observational Weekly Review
+
+- Added one strict `weekly-review-v3` contract over an explicit completed
+  profile-local ISO week. Latest/period GET is read-only; deliberate generation
+  upserts one stable `(user_id, period_key)` derived review.
+- Added exact bounded task, habit, focus, and recovery-day facts with
+  explicit unknown/limitation states. A canonical SHA-256 source fingerprint
+  makes changed evidence or targets stale without a hidden write.
+- Current V3 reviews accept only `proposals=[]`; P7 erases pre-cutover review
+  rows instead of carrying historical proposal arrays forward.
+- Added the real synced `/weekly-review` surface and `review_plan` navigation.
+  It renders facts, freshness, data quality, and deliberate refresh only; it
+  has no confirmation or mutation surface.
+- Added backend-owned `weekly_reviews` persistence with bounded JSON, exact ISO
+  period checks, forced RLS, authenticated owner/admin reads, and service-role
+  writes.
+
+The complete fact, compatibility, freshness, and verification contract lives
+in `docs/phase-8-weekly-review-contract.md`.
+
+### Completed Slice 9: Bounded Calendar File Import
+
+- Added the strict `calendar-import-v1` boundary for one optional authenticated
+  `ical_file` source. `calendar-import-consent-v1` is explicit and independent
+  of Setup's calendar-interest answer.
+- Added retry-safe connection and import identities plus deterministic event
+  reconciliation over a bounded profile-local window. Persisted fields are
+  whitelisted; event reads are paginated, stable, and side-effect free.
+- The later stabilization cutover exposes `calendar-import-v2`, binds new
+  imports to profile timezone revision, and excludes any non-current planning
+  status from Planner busy time while retaining V1 history.
+- Timed, all-day, explicitly materialized recurrence occurrences, duplicate
+  identity, cancellation, invalid component, and unsupported recurrence states
+  remain explicit. Phase 9 does not invent a recurrence expansion engine.
+- Added separate confirmed disconnect and imported-data deletion semantics.
+  Disconnect retains a visibly stale/read-only local copy; delete removes only
+  integration rows and preserves every manual or Setup-owned schedule row.
+- Added no provider OAuth, credentials, URL fetch, provider mutation,
+  background sync, snapshot/briefing input, LLM processing, or staged-block
+  application.
+
+The exact consent, import, identity, parser, privacy, and verification boundary
+lives in `docs/phase-9-calendar-import-contract.md`.
+
+### Deadline Planner V1: Explicit Preparation Plans
+
+- Adds strict read-only collection/detail GET plus explicit proposal, confirm,
+  complete, and cancel commands under `/v1/deadline-plans`.
+- Keeps the original user-entered estimate/prior credit on the plan and stores
+  later inputs as immutable proposed/active/superseded revisions.
+- Keeps the root Exam/Assignment kind immutable across every later revision;
+  Flutter renders it read-only and FastAPI rejects tampering before allocation.
+- Derives at most 120 deterministic, timezone-aware blocks and honest
+  unscheduled minutes inside a 366-day horizon. A pending proposal cannot
+  replace the active revision; proposal edits use the latest revision while
+  complete/cancel require the current active revision.
+- Creates one managed open Phase 3 task only on first confirmation. Completed
+  post-activation focus linked to that task contributes measured progress and a
+  completion suggestion, never an implicit completion. Generic task mutation is
+  blocked; later confirm and terminal projection remain planner-owned.
+- Accepts only a manual deadline or one explicitly selected current imported
+  event. Optional imported busy-time use is plan-local, read-only, and requires
+  a connected source with a non-null current import.
+- Uses forced-RLS backend-owned persistence and one global retry ledger; plan,
+  revision, and block rows enter Account Export while the ledger is omitted.
+- Keeps the strict seven-day preparation summary compatible and exposes a
+  separate current-date `preparation-workload-detail-v1` read only after
+  deliberate expansion. It groups owner-scoped active blocks by plan and opens
+  existing review/replanning UI without choosing or mutating a plan.
+- Adds no title inference, calendar/provider write, notification, LLM,
+  background sync, scheduler job, or hidden generation.
+
+The exact contract and required verification live in
+`docs/deadline-planner-v1-contract.md`. Do not claim a current-checkout browser,
+local migration, remote, or installed-device pass without running that boundary.
+
+### Planner V1: Central Explicit Planning
+
+- Replaced Inbox in the five-target shell with Planner; Inbox remains available
+  from Settings.
+- Replaced the redundant Settings shell target with the gated Coach target.
+  Settings remains available from the top-right Today control, Settings-owned
+  routes select no unrelated shell item, and a disabled Coach gate exposes no
+  Coach destination or Settings fallback.
+- Added a strict seven-day overview ordered as Add new, Needs attention, days,
+  Ongoing preparation, Unscheduled, and collapsed history.
+- Added direct Task, Habit, Exam, Assignment, and fixed-commitment create flows.
+  Task/Habit edits retain target versions and ambiguous writes retain exact
+  drafts for retry.
+- Extracted shared deterministic availability from Deadline Planner and added
+  bounded Task splitting and Habit cadence slots without automatic movement,
+  inferred durations, LLM planning, or calendar writes.
+- Added forced-RLS additive persistence, backend-only request identity, and
+  owner-locked atomic commands. Existing Tasks, Habits, and Deadline Plans stay
+  unscheduled/unmigrated.
+- Added the parallel read-only `today-overview-v2` contract for Planner agenda
+  blocks and exact no-double-count progress while preserving the V1 endpoint.
+
+The exact behavior, schema, routes, copy, and verification boundary live in
+`docs/planner-v1-contract.md`.
+
+### Completed Slice 10: Free Read-Only Coach Data Agent
+
+- Added strict authenticated message-only `coach-request-v4`,
+  `coach-response-v4`, `coach-capabilities-v5`, `coach-history-v4`, and an SSE
+  lifecycle stream while retaining readable V1-V3 response history.
+- Removed current fixed mode, horizon, Focus-session, prompt-starter, selected
+  memory, and structured suggestion surfaces. Guest/mock remains zero-call.
+- Added one fresh owner-only SQLite snapshot per turn with retained relevant
+  product detail, catalog, relationships, counts, periods, and helper views.
+  Auth, credentials, cross-user, anti-replay, and operational rows are excluded;
+  50,000 rows/8 MiB fail rather than truncate.
+- Added request-scoped OpenAI/Gemini BYOK with bounded catalog inspection and
+  immutable SQL tool results. Local/operator Codex additionally use one
+  required per-turn stdio MCP with those tools and isolated Python. Its Python
+  image has no network or secrets, runs non-root with read-only root/snapshot,
+  and bounds temp space, CPU, RAM, PIDs, output, and time. Internal plots are
+  ephemeral.
+- Added backend-derived conservative snapshot-source coverage and compact tool
+  trace. Inspection alone adds no row coverage, SQL returned-row counts stay
+  separate, and arbitrary Python is attributed to the full snapshot. The model
+  cannot invent source coverage, SQL/Python execution, limitations, or
+  provenance.
+- Requires explicit `gpt-5.5` Fast configuration on the local Codex OAuth
+  adapter; model/tier mismatch fails with no fallback. Standard tests use a fake.
+- Bounds one pending owner turn, 20 non-operator questions per profile-local
+  day, 5 operator questions per UTC day, 15 global operator dispatches per UTC
+  day, 12 tools, 180 seconds, SQL/Python sublimits, reply size, replay,
+  cancellation, safety, and concurrency.
+- Adds pre-stream admission, exact busy/`Retry-After` behavior, one-use
+  executor reservations, peer-UID framing, durable dispatch reconciliation,
+  and a separate executor/rootless-Docker secret boundary.
+- Persists one atomic user/assistant pair plus backend-derived source
+  coverage/trace/provenance, retains request/usage identity across deletion, and
+  stores no prompt, script, plot, or raw CLI stream.
+- Hardens persisted safety-call provenance plus canonical profile role and
+  onboarding authority. Application roles cannot self-promote, delete/recreate
+  the canonical profile, use a legacy role fallback, or opt into backend
+  workflows by writing onboarding completion.
+- Exact current and dated Coach verification evidence lives in
+  [Current Verified Baseline](verification.md#current-verified-baseline) and
+  [Verification History](verification-history.md), respectively. Live-provider
+  results are machine/account-specific; remote/production state and another
+  developer's account remain unverified.
+
+The detailed implementation order and acceptance criteria live in
+`docs/phase-10-controlled-coach-plan.md`.
+
+### Retired Slice: Controlled Recommendation Refresh
+
+This historical slice was removed by P7 together with the generic feed,
+Recommendation persistence, scheduler fields, and Decision Feedback. No current
+route or Flutter surface implements it.
+
+### Completed Slice: Snapshot Aggregator
+
+- Implemented: authenticated `POST /v1/snapshots/generate` creates or refreshes
+  `daily` and `weekly` `user_state_snapshots` from recent check-ins,
+  behavioral events, tasks, habits, explicit habit outcomes, focus
+  sessions, schedule items, and memory entries.
+- Implemented: snapshots stay compact and avoid reading full user history.
+- Implemented: backend tests cover the strict capture parser, every taxonomy
+  code, malformed/future metadata, current/stale/local-day boundaries, all four
+  modes and precedence conflicts, sensitive-text exclusion, exact evidence,
+  fixed state lookback, idempotent daily/weekly refresh, request `user_id`
+  rejection, and user scoping.
+- Implemented: the canonical Supabase-backed daily check-in triggers daily
+  snapshot refresh best-effort after a successful write.
+- Implemented: every successful or exactly reconciled real task, habit, or
+  focus mutation triggers daily snapshot refresh best-effort without rolling
+  back the durable write if refresh fails. Focus uses its persisted local start
+  date rather than the terminal wall-clock date.
+- Implemented: habit execution upserts an explicit completed or skipped
+  `habit_logs` outcome and supports same-day undo.
+- Implemented: Quick Action habit management can create, edit, pause, restore,
+  archive, and inspect cadence-aware progress and streaks for manual habits;
+  active Setup-owned habits remain executable without transferring definition
+  ownership out of Settings Setup.
+- Implemented: scheduler-triggered timezone-pinned daily snapshot and briefing
+  preparation for onboarded non-guest profiles, with bounded targeting,
+  idempotent current/missing/stale behavior, and per-user failure isolation.
+- Implemented locally: explicit in-app consent, deterministic current-day
+  generation, owner-locked timezone/quiet/category/cap/dedupe guards, the local
+  runner, and acknowledged foreground Flutter delivery. Still open: deployed
+  cron/job wiring and every push, browser, Android, background-mobile, email, or
+  provider delivery channel. Durable Inbox rows alone imply none of them.
+
+### Completed Slice: E2E Expansion
+
+- Implemented: browser E2E starts FastAPI with local Supabase backend settings.
+- Implemented: the smoke covers revisioned Setup completion/replay/edit,
+  concurrent same-request convergence, candidate cadence, exact ownership
+  metadata and stable ids, preservation of manual rows, onboarding snapshots,
+  absence of post-intake generic Recommendations, backend-refreshed daily
+  snapshots after check-ins, exact Daily State V3 partial/current/recovery state
+  and stale-risk removal after edit, and core
+  direct app writes.
+- Implemented: the guest/mock widget smoke stays fast and separate.
+- Implemented: exact database assertions cover task
+  create/edit/postpone/undo/complete/restore/cancel/restore; manual and Setup-owned
+  habit complete/skip/undo without duplicate logs; and focus start/finish/abandon
+  with owned linkage and no target mutation. Those assertions plus
+  committed-response-loss for habit/task create, habit
+  outcome/undo, task completion/undo, and focus start/finish are encoded in the
+  smoke. Negative lifecycle/range/cadence writes include terminal-focus
+  `updated_at`. The Phase 7 portion also proves targeted scheduled preparation
+  and a write-free retry. Phase 8 adds bounded weekly review, and Phase 9 adds
+  bounded calendar-import ownership, retry, pagination, and deletion boundaries.
+  Phase 10 source adds fake-provider response/replay/safety/history/memory/RLS/UI
+  assertions without a live account.
+  The combined Phase 3 through Phase 9 journey passed non-destructively in the
+  2026-07-13 Phase 9 implementation checkout. Later changes must establish their
+  own current-checkout pass before claiming E2E.
+
+### Completed Slice: Controlled Snapshot Triggers
+
+- Implemented: successful real task create/edit/status/deadline writes call the
+  daily snapshot refresh best-effort.
+- Implemented: habit definition/lifecycle and completed/skipped/undo writes call
+  the same daily snapshot refresh best-effort. Outcome/undo captures its target
+  date before awaiting persistence and refreshes that same date.
+- Implemented: focus start/finish/abandon writes call the same daily snapshot
+  refresh best-effort for persisted `metadata.entry_date`, with `started_at`
+  UTC-date fallback for legacy/invalid rows.
+- Implemented: `POST /v1/scheduled/daily-refresh` prepares deterministic daily
+  snapshots and persisted briefings for each selected profile-local date.
+- Current snapshot/briefing pairs stay write-free; missing/stale pairs converge
+  on the existing daily identities with no Dashboard-load generation. Retired
+  Recommendation fields are rejected.
+- Preserve guest/mock mode and keep failures best-effort for the user write.
+- Do not introduce a production worker, LLM provider, or dashboard-load
+  generation for this slice.
+
+## Out Of Scope For The Next Slice
+
+- Hidden or opaque adaptation, mutation of original briefing reasons,
+  or an unbounded personalization score.
+- Changing the Phase 2 mode, freshness, evidence, or recovery-first rules as a
+  side effect of briefing work.
+- Changing Phase 3 task, habit, focus, action-target, or snapshot-refresh
+  semantics as a side effect of ranking them.
+- Generating a briefing or generic Recommendations during normal Dashboard reads or
+  ordinary task, habit, focus, or capture writes.
+- Expanding `review_plan` beyond bounded review navigation into autonomous or
+  compound plan mutation.
+- Restoring the canned Coach, direct Flutter Coach writes, or persisting its
+  placeholder response.
+- Any model integration other than the explicit OpenAI/Gemini user-key adapters,
+  development-only `local_codex_oauth`, and deterministic fake behind the
+  provider seam.
+- An operator API key, OpenRouter/other provider, automatic API-key fallback,
+  provider failover, hosted-readiness claim before the public gates, or claim
+  that a local subscription adapter is production-ready.
+- Any Coach tool beyond the required read-only inspection/SQL/isolated-Python
+  set; direct Supabase credentials, writable database access, host shell/web/
+  apps/plugins/sub-agents, unbounded snapshots, automatic memory promotion, or
+  executable Coach suggestions.
+- Live calendar-provider OAuth, URL fetch, incremental/background sync,
+  provider writes, and hidden or automatic calendar-derived time blocks.
+- Autonomous weekly plan rewrites or applying review proposals without explicit
+  confirmation.
+- Vector search.
+- Background workers unless implementation cannot stay simple without them.
+- Remote production database claims without direct inspection.

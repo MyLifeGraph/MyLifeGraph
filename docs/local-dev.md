@@ -1,13 +1,192 @@
 # Local Development
 
+This remains the authority for supported workstation and loopback workflows.
+The intended Vercel + hosted Supabase + VPS FastAPI/Coach pilot, including
+public signup, HTTPS, `systemd`, release tags, and signed Android delivery, is
+owned by `docs/vps-pilot-release-plan.md`. Repository-side provider, VPS,
+release, signing, backup, environment/key, and adult-participation artifacts
+exist, but the commands below are still workstation-only and prove no live
+infrastructure. Do not use `APP_ENV=development`,
+`--reload`, `tmux`, or the local Codex start command as an Internet-facing
+deployment shortcut.
+
+The inspected hosted target remains staging. No command in this guide creates
+or seeds a real-data pilot project. Current code now supports Supabase
+publishable/secret-key names, exact staging/pilot project-ref binding, and
+pilot crossover denial. Remote key rotation and the real pilot project do not
+exist yet. The staging-only `staging-scenarios-v1` generator is implemented but
+has no confirmed remote-run evidence. Versioned
+`pilot-participation-v1` / `pilot-participation-notice-v1` acceptance and
+persistent staging identity now exist in source;
+their migration/deployment and release evidence remain open.
+
+For a local BYOK-compatible backend, set `COACH_BYOK_PROVIDERS=openai,gemini`;
+do not place OpenAI or Gemini keys in `.env`. Keys arrive per capabilities or
+response request and are not used by history/deletion. Staging/pilot
+Flutter builds require `COACH_SURFACE_ENABLED=true` and an HTTPS
+`AI_SERVICE_BASE_URL`. `render.yaml` and the Vercel build script contain only
+non-secret topology; hosted Supabase backend-key values remain platform
+secrets. The staging debug APK workflow reads GitHub Environment `staging`
+secrets into a mode-0600 temporary define file.
+
+Hosted Flutter sends the current `coach-request-v4`; local same-user Codex may
+retain the message-only V3 compatibility path. Both require exact provider
+selection semantics and never fall back.
+
+The staging Render Blueprint follows `main`, pins the tested Python 3.12.3
+runtime and immutable Frankfurt service region, derives `APP_BUILD_SHA` from
+Render's exact deployed commit, keeps every Coach provider disabled except
+request-scoped BYOK, and checks `/v1/ready`. It is a portability/staging path,
+not the subscription-backed VPS executor.
+
+Hosted Flutter builds use `scripts/write_hosted_flutter_defines.mjs` and fail
+before compiling unless `APP_ENV` is exactly `staging` or `pilot`,
+`USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, a compatible Supabase
+client key is present, and Supabase/FastAPI URLs are credential-free HTTPS
+roots. Exact `APP_BUILD_SHA`, `APP_RELEASE_TAG`, and `PILOT_CONTACT_EMAIL` are
+also required; Settings renders the identity/contact without exposing secrets,
+and hosted Auth includes the contact in its privacy notice. Staging binds to
+`STAGING_SUPABASE_PROJECT_REF` and may temporarily use the legacy anon key;
+pilot additionally requires a distinct
+`PILOT_SUPABASE_PROJECT_REF` and a current `sb_publishable_` key. Neither the
+helper nor CI prints the resulting values.
+The hosted build deliberately does not translate `VITE_*` or `NEXT_PUBLIC_*`
+aliases: Vercel must provide the canonical names so the exact environment,
+project-ref, key-generation, and release-identity checks cannot be bypassed.
+
+## Remote Staging Verification
+
+`npm run verify:staging:remote` is the only supported remote two-user harness.
+It is deliberately separate from local E2E and has no reset, migration, sweep,
+or arbitrary cleanup authority. Preview binds approval to the exact project
+ref, Supabase host, FastAPI host, and expected migration:
+
+```bash
+STAGING_SUPABASE_PROJECT_REF=<exact-project-ref> \
+STAGING_SUPABASE_URL=https://<exact-project-ref>.supabase.co \
+STAGING_AI_SERVICE_BASE_URL=https://<render-service-host> \
+npm run verify:staging:remote
+```
+
+Only the confirmed run additionally receives
+`STAGING_SUPABASE_PUBLISHABLE_KEY` and
+`STAGING_SUPABASE_SECRET_KEY` from the caller environment. The legacy
+`STAGING_PROJECT_REF` and `STAGING_SUPABASE_SERVICE_ROLE_KEY` names remain
+temporary fallbacks; current keys win when both key types are present. An
+optional `PILOT_SUPABASE_PROJECT_REF` makes preview and execution reject an
+equal pilot target. Never place key values in command arguments, chat,
+fixtures, or documentation. Pass the fresh preview fingerprint back exactly:
+
+```bash
+npm run verify:staging:remote -- --confirm staging-target-<fingerprint>
+```
+
+The run creates two unique confirmed Auth users, completes minimal Setup,
+records `pilot-participation-v1` for each verified bearer before product calls,
+persists an owned task, habit, timetable item, Focus session and Daily Capture,
+generates a snapshot and briefing, checks owner/foreign Data API reads plus
+foreign insert/update/delete rejection, checks a foreign FastAPI Focus update,
+checks Today/Planner/Briefing/Coach reads through FastAPI, deletes Coach history
+without a provider key, and finally deletes only its two recorded Auth UUIDs.
+Cleanup is verified through the Auth Admin API. A cleanup failure fails the
+run. No OpenAI or Gemini turn is made.
+
+## Hosted Staging Scenario Fixtures
+
+`npm run seed:staging-scenarios` is the only supported persistent hosted
+fixture command. Its immutable repository allowlist contains only the reviewed
+staging ref `oscrunlndfrecjilojja`; a caller-provided ref cannot authorize a
+different project. It also rejects equality with
+`PILOT_SUPABASE_PROJECT_REF`, binds the URL to the exact project-ref host, and
+requires the `20260819185740` participation schema before mutation.
+
+The versioned manifest contains `fresh-account`, `exam-week`,
+`overdue-tasks`, `sleep-deficit-high-stress`, `existing-coach-history`, and
+`deadline-conflicts`. A lowercase 3-32 character run id makes every synthetic
+email and row identity deterministic. Preview needs no credential:
+
+```bash
+STAGING_SUPABASE_PROJECT_REF=<exact-staging-ref> \
+STAGING_SUPABASE_URL=https://<exact-staging-ref>.supabase.co \
+PILOT_SUPABASE_PROJECT_REF=<exact-pilot-ref-if-assigned> \
+npm run seed:staging-scenarios -- \
+  --run professor-demo \
+  --scenarios fresh-account,exam-week
+```
+
+Preview prints only the target ref/host, scenario ids, exact synthetic emails,
+and a content-bound confirmation. The token is single-use and expires after 15
+minutes. A confirmed run additionally receives
+`STAGING_SUPABASE_SECRET_KEY` (or the bounded legacy staging fallback) and
+`STAGING_SCENARIO_PASSWORD` from the caller environment; never put either value
+in arguments, chat, fixtures, or Git. The password is neither printed nor
+persisted. Rerun the unchanged command with `--confirm <fingerprint>`.
+
+Each run writes an ignored mode-0600 receipt under
+`.tools/staging-scenarios/`. It records only exact scenario ids, emails, and
+Auth UUIDs, including partial progress after a failed run. Cleanup is always a
+separate preview and confirmation:
+
+```bash
+STAGING_SUPABASE_PROJECT_REF=<exact-staging-ref> \
+STAGING_SUPABASE_URL=https://<exact-staging-ref>.supabase.co \
+npm run seed:staging-scenarios -- --cleanup --run professor-demo
+```
+
+The confirmed cleanup requires the backend staging key, rereads every exact
+Auth UUID, refuses ownership-marker drift, deletes only receipt-bound users,
+and verifies each UUID returns `404`. Auth deletion cascades their scenario
+rows. Do not hand-edit a receipt or use this command for participant accounts.
+
+## Android SDK 36 And Wireless Device Setup
+
+Android Focus Protection uses compile/target SDK 36 and minSdk 24. Keep the
+official command-line SDK, Platform Tools, platform 36, and build tools 36 in
+the ignored `.tools/android-sdk`; ignored `apps/mobile/android/local.properties`
+points `sdk.dir` there. The repository tracks the Gradle 8.14 launcher scripts
+and wrapper JAR. Its properties pin the official distribution checksum, and
+`npm run verify:android-release` checks both that checksum and Gradle's
+published wrapper-JAR checksum. The guard parses one unique active value for
+every wrapper property; comments, duplicate keys, and extra properties cannot
+satisfy a pin. Local and GitHub Android verification use Java 21 because the
+pinned Android 36/Robolectric test surface cannot run on Java 17; CI, staging,
+and release workflows share that exact guarded Java pin. Git also preserves LF
+for the Unix launcher, CRLF for the Windows launcher, and treats the JAR as
+binary. Android Studio and Windows ADB are not required.
+
+For Android 11+, enable Developer options and Wireless Debugging, then use the
+`adb pair`, `adb connect`, and `adb reverse` commands in
+`docs/android-focus-protection-v1-contract.md`. Install from WSL with
+`flutter run -d <device-id>`.
+
 This guide is written for a fresh clone. It avoids machine-specific paths and
 does not assume any user-local Codex skills.
 
 ## Prerequisites
 
-- Flutter SDK. Confirm with `flutter --version`.
-- Python 3.11+ for the AI service and static web fallback.
-- Optional: Supabase CLI and Docker for local Supabase work.
+- Flutter 3.44 or newer with Dart 3.12 or newer. Confirm with
+  `flutter --version`.
+- Python 3.12+ for the AI service and static web fallback.
+- Node.js 20+ and npm for browser E2E. Confirm with `node --version` and
+  `npm --version` in the Ubuntu shell.
+- Optional: Supabase CLI and Docker for local Supabase work. Install the real
+  Supabase CLI so `supabase --version` works in the Ubuntu shell; do not rely on
+  a repo-local binary. Confirm Docker with `docker --version`.
+- Optional Phase 10 real-model local path only: a real Codex CLI installed in
+  the same Linux/WSL user account that runs FastAPI. Standard development and
+  tests use the fake provider and do not require Codex or a ChatGPT login.
+
+If Node.js, npm, or Supabase CLI are installed through `nvm`, remember that
+non-interactive agent shells may not source nvm automatically. In that case,
+source nvm before running commands or pass a narrow override such as:
+
+```bash
+PATH=/path/to/nvm/versions/node/vXX/bin:$PATH \
+FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+```
+
+Do not install tool binaries into `.tools/`; `.tools/` is only for ignored local
+runtime state and artifacts.
 
 If Flutter is not on `PATH`, set `FLUTTER_BIN` when running scripts:
 
@@ -33,6 +212,71 @@ http://127.0.0.1:7357
 Choose **Continue as guest**. The default local workflow uses mock data and does
 not need Supabase.
 
+## Complete Local Stack
+
+For the real-data WSL workflow, one supervisor starts or reuses local Supabase,
+verifies that its migration history matches the repository, starts FastAPI,
+runs the protected daily preparation loop, and starts Flutter Web:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
+
+The default is migration inspection-only. If repository files and local
+database history differ, the supervisor exits before reading keys or starting
+app processes. Review the pending SQL and local data first, then opt in only
+when those changes are intended:
+
+```bash
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/start_local_stack.sh
+```
+
+Pending migrations may change or delete local rows even though they do not
+reset the whole database.
+
+The safe default leaves the Coach provider disabled. Standard deterministic
+development may use the fake provider:
+
+```bash
+LOCAL_STACK_COACH_PROVIDER=fake \
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
+
+The equivalent short command is:
+
+```bash
+npm run start:local:coach:fake
+```
+
+The explicitly opt-in real local Coach uses only the current Linux user's
+existing Codex login:
+
+```bash
+LOCAL_STACK_COACH_PROVIDER=local_codex_oauth \
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
+
+The normal one-command form for that mode is:
+
+```bash
+npm run start:local:coach
+```
+
+Plain `npm run start:local` deliberately keeps replies disabled. Existing
+seeded Coach history remains readable in that mode, but sending is unavailable;
+restart with one of the two reply-enabled commands above to test a new turn
+with `student@example.test` or any other locally authenticated, onboarded
+account.
+
+The supervisor binds only to loopback, keeps the service-role key and scheduler
+token out of Flutter and command arguments, writes private logs under
+`.tools/local-stack/`, and leaves Supabase running after Ctrl+C. It never runs a
+database reset. It refuses occupied app ports instead of attaching to unknown
+processes. Run `bash scripts/test_start_local_stack.sh` for the hermetic
+credential-separation and cleanup check.
+
 ## Environment
 
 The root `.env.example` documents the shared local values:
@@ -41,12 +285,34 @@ The root `.env.example` documents the shared local values:
 APP_ENV=development
 USE_MOCK_DATA=true
 SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_ANON_KEY=
+STAGING_SUPABASE_PROJECT_REF=
+PILOT_SUPABASE_PROJECT_REF=
 AI_SERVICE_BASE_URL=http://localhost:8000
+LEARNED_FOCUS_PLANNING_PILOT_ENABLED=false
 ```
 
 The Bash and PowerShell start scripts pass these values into Flutter as Dart
 defines.
+
+`USE_MOCK_DATA=true` is a deliberate whole-product local/demo boundary even if
+the browser still has a Supabase auth session. Setup, Evening Shutdown, Morning
+Calibration, Dashboard, Insights, and the Inbox stay
+local; synced task, habit, and focus commands are unavailable; and snapshot
+refresh is skipped. Set it to `false` to exercise real authenticated
+Supabase/FastAPI sources.
+In mock/demo mode, auth boot also skips remote profile reads/creation and guest
+capture migration, then restores the locally applied Setup name and completion
+state across reloads.
+
+For web auth, allow both local origins in Supabase Auth redirect URLs. An
+installed Android build additionally requires the exact callback
+`com.mylifegraph.app://login-callback/` in the Supabase redirect allowlist;
+signup confirmation, password recovery, and Google OAuth all use that callback
+on Android. The manifest already declares the matching VIEW/BROWSABLE intent
+filter. This repository has no iOS runner and therefore does not claim native
+iOS callback handling.
 
 ## Frontend Script
 
@@ -71,8 +337,32 @@ HOST=0.0.0.0 PORT=8080 scripts/start_frontend.sh
 ```bash
 USE_MOCK_DATA=false \
 SUPABASE_URL=https://your-project.supabase.co \
-SUPABASE_ANON_KEY=your-anon-key \
+SUPABASE_PUBLISHABLE_KEY=your-publishable-key \
 scripts/start_frontend.sh
+```
+
+For the local CLI stack, keep using its generated legacy anon JWT through
+`SUPABASE_ANON_KEY`; the client compatibility resolver supports that local
+path. Do not put backend keys in the root Flutter `.env`.
+
+In `staging`, `pilot`, and `production`, Coach is exposed only when
+`COACH_SURFACE_ENABLED` is exactly `true`, including release builds. In
+`development`, an explicit value wins; otherwise debug/profile enables Coach
+and release disables it. Unknown environment labels fail closed. Exposing the
+Flutter route does not make a provider ready; FastAPI capability remains the
+independent send gate.
+
+`LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` must be supplied to both FastAPI
+and Flutter for the optional learned-timing control to become actionable.
+`scripts/start_frontend.sh` forwards it as a Dart define. The backend reads the
+same environment name. FastAPI and Flutter both force the gate off for pilot;
+Flutter also rejects the reserved production label. The account preference
+remains off by default. A convenient local
+full-stack invocation is:
+
+```bash
+LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true \
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
 ```
 
 Windows PowerShell:
@@ -92,9 +382,21 @@ The AI service is optional for the default mock frontend.
 cd services/ai_service
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install --require-hashes -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
+
+`pyproject.toml` owns direct compatibility ranges. `requirements.txt` is the
+hashed runtime lock, while local development and CI use the hashed
+`requirements-dev.txt` lock so pytest and Ruff are installed explicitly. The
+isolated analysis image separately owns exact direct inputs in
+`coach_analysis/requirements.in` and a complete hashed
+`coach_analysis/requirements.txt` lock.
+Installations use `--require-hashes` and therefore fail closed if an artifact
+does not match the reviewed lock. The canonical lock-update procedure is in
+`services/ai_service/README.md`; it requires Python 3.12, pinned
+`pip-tools==7.5.1`, an explicit `--upgrade`, review, and the normal verification
+gates.
 
 Health check:
 
@@ -102,26 +404,1193 @@ Health check:
 curl http://localhost:8000/v1/health
 ```
 
-Recommendation preview:
+Authenticated product routes require a verified bearer token; backend Supabase
+settings are required for real token verification and persisted workflows. The
+former generic Recommendation and Decision Feedback routes are not composed
+and return `404`. In real backend mode,
+successful Intake V1 completion or edit does not generate a generic
+Recommendation; that former feed and its refresh boundary are retired. Read
+the newest Setup row with:
 
 ```bash
-curl -X POST http://localhost:8000/v1/recommendations/preview \
-  -H 'Content-Type: application/json' \
-  -d '{}'
+curl http://localhost:8000/v1/intake/setup \
+  -H 'Authorization: Bearer <supabase_access_token>'
 ```
+
+The normal result is the latest applied revision. If the newest row is pending,
+the response includes that exact payload and request id so the client can retry
+the same save; it must not be edited into a different request.
+
+For a first save, use `base_revision=0` and keep the same `request_id` when
+retrying after a timeout:
+
+```bash
+curl -X POST http://localhost:8000/v1/intake/complete \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"weekday_shape":"school_or_work","best_energy_window":"morning","routines":[{"key":"33333333-3333-4333-8333-333333333333","title":"Walk after lunch","status":"candidate","cadence_confirmed":false,"frequency":null,"target":null}],"fixed_commitments":[]},"metadata":{"client":"curl"}}'
+```
+
+For an edit, load Setup first, send its `revision` as the next request's
+`base_revision`, and use a new request id. Candidate routines must not include
+frequency/target values until cadence is explicitly confirmed.
+
+The Flutter save state distinguishes known rejection from an unknown result.
+Client validation and HTTP 4xx responses leave the draft editable; 409 also
+offers `Reload saved setup`. A timeout, transport failure, 5xx, or invalid
+success envelope locks the exact submitted draft and request id for unchanged
+retry or explicit reload.
+
+```bash
+curl -X POST http://localhost:8000/v1/snapshots/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"scope":"daily","window_days":7}'
+```
+
+The snapshot endpoint also accepts `"scope":"weekly"` and an optional
+`"target_date":"YYYY-MM-DD"`. It derives the user from the bearer token and
+uses the backend service-role key only inside FastAPI.
+
+Daily and weekly responses add `summary.daily_state` and
+`signals.daily_state` under `explainable-daily-state-v3`. `window_days` remains
+the statistics window; the Daily State parser always loads a separate fixed
+seven-day lookback. Evening is current on the target date or previous date,
+while Morning is current only on the target date. The resulting quality is
+`missing`, `partial`, `current`, or `stale`, and recovery safeguards precede
+`plan`, `push`, and the conservative `steady` fallback.
+
+V2–V5 capture metadata is trusted only after strict identity, branch-
+compatibility, enum, numeric, timestamp, sleep-interval, and projection checks;
+friction and Day Shape keys are ignored. A malformed structured row never falls back to its
+projected numeric columns. Numeric legacy fallback is available only when the
+row has no structured capture marker. The source remains
+`snapshot-aggregator-v1`; metadata records
+`daily_state_contract_version=explainable-daily-state-v3` and
+`state_lookback_days=7`. Top-level `summary.risk_flags` aliases the current
+Daily State codes, while the older statistics-window flags remain separately in
+`summary.window_risk_flags`. `recommended_next_focus` is derived recovery-first
+from the mode.
+
+Phase 3 adds neutral execution facts to snapshot responses. Explicit
+completed/skipped habit outcomes appear under
+`summary.habits.outcome_counts` and `signals.habit_outcome_counts`; focus status
+counts and planned/actual minutes appear under `summary.focus_sessions`, with
+signal status counts under `signals.focus_session_status_counts`. Input counts
+and bounded evidence references include both tables. Those additions do not
+alter `summary.daily_state` or `signals.daily_state`. FastAPI paginates both
+action-fact tables in stably ordered 1,000-row pages until the window is
+complete.
+Every successful or exactly reconciled real task, habit, or focus write requests
+a daily snapshot refresh best-effort. Habit outcome/undo captures one target
+date before awaiting persistence, uses that date for exact reconciliation, and
+refreshes the same date. New focus rows persist the local start
+`metadata.entry_date`; legacy/invalid metadata uses the UTC calendar date of
+persisted `started_at` in both Flutter and FastAPI. Finish/abandon does not
+retarget a new session to its terminal day. Refresh failure does not roll back
+the durable write, and ordinary action writes do not generate recommendations.
+
+Authenticated real-data mode exposes owner-scoped task
+create/edit/complete/postpone/cancel/restore/undo, Habit V1 daily execution at
+`/habit-completion`, manual habit lifecycle at `/habits`, and the real
+one-active-session focus flow at `/deep-work`. Focus may link one owned task or
+active habit and never completes that target implicitly. Guest/mock users do
+not receive these synced commands. Every task update including undo and every
+manual habit definition/lifecycle update reconciles committed response loss
+only by exact owner-scoped requested-field/timestamp readback. Habit
+outcome/undo proves the exact row or its absence; focus finish/abandon proves
+the exact terminal result. Habit reads paginate history beginning 370 calendar
+days before today and use `started_on` with DST-safe calendar arithmetic. The
+ranking-independent action envelope has strict Flutter/FastAPI parser parity,
+including explicit-null metadata-field rejection, and is documented in
+`docs/phase-3-executable-actions-contract.md`.
+
+Personal Learning is separately authenticated and deterministic:
+
+```text
+GET   /v1/learning/preferences
+PATCH /v1/learning/preferences
+POST  /v1/learning/focus-reflections/clear
+GET   /v1/insights/personal-patterns
+GET   /v1/insights/sleep-recommendation
+```
+
+Individual reflection rows use authenticated owner RLS directly from Flutter
+only after a Focus session is terminal. Settings updates and bulk clearing go
+through FastAPI's retry-safe owner-locked commands. Both Insights GET routes use
+profile-timezone 90-day windows and write nothing. Sleep Recommendation has an
+independent response/error boundary and requires 30 eligible Morning-plus-rated-
+Focus days before it can be ready. With analysis disabled, neither route loads
+Focus or Capture evidence. See
+`docs/personal-learning-v1-contract.md`.
+
+Read a current pattern without changing history:
+
+```bash
+curl http://localhost:8000/v1/insights/personal-patterns \
+  -H 'Authorization: Bearer <supabase_access_token>'
+
+curl http://localhost:8000/v1/insights/sleep-recommendation \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+The E2E runner enables the learned-timing development gate by default so it can
+prove a mature free window and a busy-window Setup fallback. Normal local
+startup remains fail-closed unless the environment flag is set.
+
+Phase 4 wraps only the strict executable targets in persisted deterministic
+briefings. Read without side effects using:
+
+```bash
+curl http://localhost:8000/v1/briefings/today \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Deliberately generate or refresh today's profile-local briefing using:
+
+```bash
+curl -X POST http://localhost:8000/v1/briefings/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"force":false}'
+```
+
+The former Phase 6 Decision Feedback endpoints and generic Recommendation
+endpoints are retired. Requests to those paths return `404`; use the independent
+Insights Sleep Recommendation or ordinary Coach advice only for their owning
+workflows.
+
+Phase 8 weekly review reads the latest completed profile-local ISO week without
+generation:
+
+```bash
+curl http://localhost:8000/v1/weekly-reviews/latest \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+An explicit period read is also side-effect free:
+
+```bash
+curl http://localhost:8000/v1/weekly-reviews/2026-W28 \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Replace `2026-W28` with the `period_key` returned by `latest`; V2 accepts only
+the latest completed profile-local ISO week.
+
+Deliberately generate or refresh that completed week with:
+
+```bash
+curl -X POST http://localhost:8000/v1/weekly-reviews/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"period_key":"2026-W28","force":false}'
+```
+
+The generate request uses that same latest completed `period_key`.
+
+The response preserves `not_ready`, missing, current, or stale truth. Generation
+persists one backend-owned facts-only review with `proposals=[]`. Historical
+proposal arrays remain transport-readable but Flutter and Coach hide them, and
+no Weekly Review action can apply them. The V2 facts have no Goal counter.
+Guest/mock does not call this API or fabricate a local review.
+
+Phase 9 calendar import is also authenticated and optional. Read the current
+connection state without importing:
+
+```bash
+curl http://localhost:8000/v1/calendar-integrations \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Create consent separately from import:
+
+```bash
+curl -X POST http://localhost:8000/v1/calendar-integrations/connections \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"11111111-1111-4111-8111-111111111111","source_kind":"ical_file","source_label":"Work calendar","consent":{"consent_version":"calendar-import-consent-v1","read_calendar_events":true,"store_event_basics":true,"provider_writes":false,"llm_processing":false}}'
+```
+
+Connection alone reads no file and creates no event. Deliberate import sends a
+new stable request id plus bounded UTF-8 iCalendar text to
+`POST /v1/calendar-integrations/connections/{connection_id}/imports`. Keep the
+same request id and exact bytes for an ambiguous retry. Prefer the Flutter file
+picker for manual testing instead of putting a large `.ics` body on a command
+line.
+
+`GET /v1/calendar-integrations/connections/{connection_id}/events` is paginated
+and side-effect free.
+Disconnect and imported-data deletion require separate confirmations:
+
+```text
+POST   /v1/calendar-integrations/connections/{connection_id}/disconnect
+DELETE /v1/calendar-integrations/connections/{connection_id}/imported-data?request_id=<uuid>
+```
+
+Disconnect retains the local read-only event copy and rejects future imports.
+Delete is permitted only after disconnect and removes integration event/import
+rows without touching `schedule_items` or any source calendar. Onboarding does
+not ask for calendar interest; any legacy Setup interest value never creates
+consent. The slice has no OAuth token, provider
+URL, provider write, background sync, LLM processing, or automatic
+snapshot/briefing input. See `docs/phase-9-calendar-import-contract.md`.
+
+Deadline Planner V1 is a separate authenticated, explicit workflow. Read the
+collection without generation:
+
+```bash
+curl http://localhost:8000/v1/deadline-plans \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+The Planner exam-window projection is also GET-only:
+
+```bash
+curl http://localhost:8000/v1/deadline-plans/exam-week-outlook \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+It returns `exam-week-outlook-v1` from bearer-owned plans, Availability, and
+valid Capture V4/V5 sleep facts. Repeating or opening this GET must leave plan,
+revision, block, task, Daily Log, and Notification rows unchanged.
+
+Create a manual staged proposal with one stable client plan id and request id:
+
+```bash
+curl -X POST http://localhost:8000/v1/deadline-plans/proposals \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"11111111-1111-4111-8111-111111111111","plan_id":"22222222-2222-4222-8222-222222222222","base_revision":0,"kind":"exam","title":"Statistics exam","deadline_at":"2026-08-20T09:00:00+02:00","estimated_total_minutes":480,"credited_prior_minutes":0,"preferred_session_minutes":50,"max_daily_minutes":100,"planning_start_on":"2026-07-20","buffer_days":2,"source_kind":"manual","use_calendar_availability":false}'
+```
+
+The current Flutter Exam and Assignment entries always send zero prior credit;
+the field remains on the V1 wire only so existing plan revisions stay readable.
+
+Finite weekly Assignments use the additive strict routes:
+
+```text
+GET  /v1/deadline-plans/assignment-series
+GET  /v1/deadline-plans/assignment-series/{series_id}
+POST /v1/deadline-plans/assignment-series/proposals
+POST /v1/deadline-plans/assignment-series/{series_id}/confirm
+POST /v1/deadline-plans/assignment-series/{series_id}/cancel-future
+```
+
+A new `assignment-series-v1` proposal uses one shared per-occurrence estimate,
+an aware next deadline, and `remaining_occurrences` in `2..20`; Flutter
+defaults it to 12. Confirmation is one whole-series transaction. Editing the
+future scope uses the current `latest_revision` and `1..20`, retaining
+past/completed plans while replacing future deviations.
+
+The proposal persists immutable staged blocks and leaves the active revision
+unchanged. Inspect it with
+`GET /v1/deadline-plans/{plan_id}`. Confirm only after review:
+
+```bash
+curl -X POST \
+  http://localhost:8000/v1/deadline-plans/22222222-2222-4222-8222-222222222222/confirm \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"33333333-3333-4333-8333-333333333333","expected_revision":1}'
+```
+
+First confirmation creates the stable managed task; later confirmed revisions
+retain it and may change only its title/deadline/update projection while open.
+Generic Task edit/lifecycle/editor paths must reject that managed source and
+redirect to `/preparation-plans`; focus may still target the open task. Complete
+or cancel a plan through the corresponding
+`/{plan_id}/complete|cancel` POST with a new request id. Completion requires an
+active plan and its expected `current_revision`. Cancellation accepts either an
+active plan's `current_revision` or a still-draft plan's `latest_revision`; a
+draft discard creates or changes no managed task. Replanning instead sends the
+returned `latest_revision` as `base_revision`. Keep the exact body for an
+ambiguous retry. The same id with another operation, revision, or payload is a
+conflict. Active-plan complete/cancel and the matching task
+`done`/`cancelled` timestamp projection commit atomically. The local deadline
+day may be no more than 366 days after `planning_start_on`.
+
+An event-derived proposal uses `source_kind=calendar_event` and must include the
+explicitly selected current `source_calendar_event_id` and lowercase source
+fingerprint. `use_calendar_availability` independently controls whether current
+imported busy intervals constrain that proposal. Enabling it requires a
+connected source, no imported-data deletion, and a non-null current import;
+otherwise the proposal conflicts instead of assuming an empty calendar.
+Neither choice writes to the source calendar. Flutter exposes this at
+`/preparation-plans`; guest/mock is zero-call. See
+`docs/deadline-planner-v1-contract.md`.
+
+For the daily briefing endpoint, `force=false` returns an already-current
+persisted briefing unchanged. Missing
+or stale output refreshes the daily snapshot and upserts the same
+`(user_id, briefing_date)` identity. `force=true` deliberately recomputes it.
+
+In authenticated real mode, Dashboard consumes this contract above metrics.
+Normal page load calls GET only. Missing state offers explicit generation;
+`Adjust today` sends `{"force":true}`; stale actions remain visible but disabled
+until that succeeds. Guest/mock shows an explicit local-demo boundary and never
+calls either privileged briefing endpoint or fabricates a personalized plan.
+
+When FastAPI is running and Flutter is in real backend mode, a successful daily
+capture calls the daily snapshot endpoint best-effort with the capture's
+explicit local `target_date`. `/daily-check-in` redirects to the canonical
+Evening Shutdown at `/quick-mood-check-in`; the separate short
+`/morning-calibration` route captures sleep duration, an independent required
+1–10 estimated sleep quality, and current energy. The retired Day Shape input is
+not displayed or written. Evening first
+requires an intended local sleep start and a `300..720` minute target on the
+15-minute grid. Morning then records editable aware estimated start/wake
+instants and displays their derived `Estimated sleep duration`. If
+FastAPI is down, the durable Supabase capture still succeeds and the snapshot
+refresh is skipped by the client. Normal capture does not generate
+recommendations or create or change a plan. Guest/mock capture remains local.
+
+Evening and Morning writes merge into one `(user_id, entry_date)` `daily_logs`
+row. Phase 1 stores its bounded structured state under
+`metadata.capture_version=daily-capture-v5` and
+`metadata.captures.evening|morning`. Direct numeric columns remain compatible:
+Morning energy takes precedence when present, while mood and stress come from
+Evening and sleep comes from Morning. The writer reconciles the linked current
+mood, energy, stress, and sleep events without duplicates and mirrors relevant
+capture metadata onto those events. Sleep quality remains additive Morning
+metadata mirrored onto the existing Morning-origin events, so the maximum stays
+four. Raw planned/estimated clocks, target, and source Evening identity stay in
+Daily Log metadata and are not copied into event metadata, Daily State, Coach,
+or Notification content. Blank Evening reflection and blocker answers stay
+absent and do not create other product records. The active form no longer
+shows or newly writes tomorrow priority; an existing saved value survives an
+otherwise valid edit. Evening has no primary/additional friction selection and
+no longer writes the retired `gentle_tomorrow` field. Legacy V2–V4 captures remain
+readable, but friction and Day Shape keys are ignored. Older opposite branches
+may remain explicit compatibility branches until that branch is edited.
+Complete V4 writes remain accepted during rollout, but a V5 container is never
+downgraded and V5 Morning rejects `day_shape`.
+
+Backend-only Supabase configuration for the AI service:
+
+```env
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SECRET_KEY=
+SUPABASE_SERVICE_ROLE_KEY=<local service-role key from supabase status>
+SUPABASE_TIMEOUT_SECONDS=10
+SCHEDULED_REFRESH_TOKEN=<local scheduler token>
+```
+
+Current hosted environments use `SUPABASE_SECRET_KEY`; the local CLI continues
+to provide `SUPABASE_SERVICE_ROLE_KEY`, and a staging migration may temporarily
+retain it. When both are configured, the current key wins. Keep both names only
+in the FastAPI service environment. Do not add them to the root Flutter `.env`,
+browser runtime configuration, or committed files. A hosted backend also needs
+the exact non-secret staging/pilot ref variables described above. Keep
+`SCHEDULED_REFRESH_TOKEN` backend-only for local scheduler invocations and
+tests.
+
+The scheduler-triggered daily preparation endpoint is intentionally not a
+Flutter client endpoint:
+
+```bash
+curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
+  -H 'X-Scheduled-Refresh-Token: <local scheduler token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"window_days":7,"limit":100}'
+```
+
+The backend captures one UTC `run_at`, resolves one local `briefing_date` from
+each eligible profile's IANA timezone, and prepares the exact-date daily snapshot
+and persisted briefing. Missing snapshots are generated; existing snapshots are
+reused when only the briefing is missing; stale briefings are refreshed against
+the matching snapshot; and current snapshot/briefing pairs are skipped without
+changing ids or timestamps. `target_date` is optional and should be used only as
+an explicit backfill override; it cannot be combined with
+`include_notifications=true`.
+
+For a bounded operational retry, a token holder can restrict the request to at
+most 20 UUIDs:
+
+```bash
+curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
+  -H 'X-Scheduled-Refresh-Token: <local scheduler token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"profile_ids":["11111111-1111-4111-8111-111111111111"],"window_days":7,"limit":1}'
+```
+
+`profile_ids` narrows selection only; it does not bypass the onboarded non-guest
+eligibility checks. The response carries the batch `run_at` plus per-user local
+date, selection reason, snapshot and briefing ids/statuses, and a sanitized
+failure stage. Snapshot, briefing, or timezone failure for one profile does not
+stop other selected profiles. Retired recommendation scheduler fields are
+strictly rejected.
+
+The supported local stack runner sends
+`include_notifications=true` every 15 minutes. Only separately consented real
+accounts can receive fixed deterministic recovery or exact completed-week rows;
+a current briefing alone creates no generic Today reminder. The database
+revalidates timezone, quiet hours, category flags, daily cap, and dedupe. An
+open Flutter app acknowledges an eligible row before showing a foreground
+banner.
+Missing/stale Phase 7 preparation remains independent of consent, while a fully
+current profile is selected for a notification-only runner pass only with active
+in-app consent so consent-off current rows do not exhaust the bounded batch.
+Dashboard loads remain GET-only, and this repository still contains no deployed
+cron, push, browser, Android, email, or background-mobile delivery wiring.
+
+Manage the separate foreground permission at Settings -> In-app reminders.
+Setup never reads or changes Reminder consent/preferences. A manual local one-shot
+uses the same safe runner payload:
+
+```bash
+cd services/ai_service
+python -m app.ops.local_daily_refresh --once
+```
+
+## Phase 10 Free Read-Only Coach
+
+The exact implemented contract is
+`docs/phase-10-controlled-coach-plan.md`. Coach is disabled by default.
+Standard tests use the deterministic fake provider. The real local adapter uses
+the developer's existing Codex CLI OAuth login rather than an OpenAI API key.
+Each developer or project partner performs these steps inside the Linux/WSL
+account that will run FastAPI:
+
+```bash
+codex --version
+codex login
+codex login status
+docker version
+```
+
+Do not copy `~/.codex`, `auth.json`, browser tokens, service-role keys, or
+another developer's `.env`. The current agent contract is stricter than the
+legacy Coach: every real turn requires exactly `gpt-5.5`,
+`service_tier="fast"`, and `fast_mode=true`. Another model, missing Fast CLI
+support, or a tier/model rejection leaves the provider honestly unavailable.
+There is no explicit alternative-model or standard-tier fallback.
+
+Build the pinned analysis image explicitly before a presentation:
+
+```bash
+npm run prepare:coach-analysis
+```
+
+`npm run start:local:coach` checks the image revision and builds it when it is
+missing or stale. A first/stale build requires registry/network access; ordinary turns
+run the resulting image with networking disabled.
+
+The active backend-only settings are:
+
+```env
+APP_ENV=development
+USE_MOCK_DATA=false
+COACH_PROVIDER=local_codex_oauth
+LOCAL_CODEX_ENABLED=true
+LOCAL_CODEX_BIN=codex
+LOCAL_CODEX_MODEL=gpt-5.5
+COACH_AGENT_TIMEOUT_SECONDS=180
+COACH_ANALYSIS_DOCKER_BIN=docker
+COACH_ANALYSIS_IMAGE=mylifegraph-coach-analysis:1
+LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
+LOCAL_CODEX_GLOBAL_CONCURRENCY=2
+```
+
+Safe defaults remain `COACH_PROVIDER=disabled` and
+`LOCAL_CODEX_ENABLED=false`. These are FastAPI settings, not Flutter Dart
+defines. The timeout is fixed at 180 seconds by the V2 capabilities contract.
+A turn also has at most 12 tools, five seconds per SQL query, 30 seconds per
+Python call, 50,000 snapshot rows, and 8 MiB of sanitized source data.
+
+For deterministic local automation instead, configure:
+
+```env
+COACH_PROVIDER=fake
+COACH_FAKE_PROVIDER_ENABLED=true
+```
+
+Use `npm run start:local:coach` for a real local turn or
+`npm run start:local:coach:fake` for fixed test replies. Both use real local
+Supabase data and current persisted history. Never enable the fake provider in
+production or present its response as a real model answer.
+
+For each real V3 question FastAPI creates a fresh owner-only SQLite snapshot.
+The snapshot includes retained relevant product detail from Setup, Daily
+Capture, Tasks, Habits, Focus/reflections, Planner, Preparation, Calendar,
+Weekly Reviews, Insights, Memories, and current Coach history. It
+excludes other owners, authentication data, email/role/provider identity,
+credentials, anti-replay ledgers, usage ledgers, memory-selection ledgers, and
+purely operational state. The Account Export ceilings apply without silent
+truncation: 10,000 rows per table, 50,000 total, and 8 MiB.
+
+Codex runs in an ephemeral read-only empty workspace with ignored user
+configuration/rules, an allowlisted non-secret environment, and one required
+per-turn stdio MCP server. Exactly these tools are enabled:
+
+- `inspect_data` for catalog, coverage, periods, relationships, and views;
+- `query_data` for one bounded read-only SQLite `SELECT`/`WITH`; and
+- `run_python` for a no-network, non-root, read-only Docker sandbox with only
+  the personal snapshot mounted.
+
+Python includes Pandas, NumPy, SciPy, Statsmodels, and Matplotlib. Internal plots
+can help the model, but at most one is returned internally and it is deleted
+with the temporary turn and never appears in the response/UI. The response's
+`evidence` field is conservative snapshot-source coverage: inspection alone
+adds no row coverage, SQL source counts/periods describe the full accessed
+snapshot source while trace row counts describe returned rows, and successful
+Python records full-snapshot read scope. Setup notes, calendar text, memories,
+prior messages, query values, and Python output are untrusted data, never
+instructions.
+
+Standard pytest/Flutter/browser verification uses the fake provider. The
+committed live smoke is skipped by default and is per-machine:
+
+```bash
+cd services/ai_service
+RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
+  tests/test_local_codex_smoke.py
+```
+
+Run it only after the real settings are enabled, the image exists, and
+`codex login status` succeeds for the same Linux user. A valid live claim must
+show strict explicit `gpt-5.5` selection with no fallback, reject any different
+reported model, configure Fast explicitly, require MCP startup, and complete a
+complex synthetic-data question with multiple data tools and matching
+trace/source-scope provenance. Current Codex JSONL may omit the selected-model
+field; preserve that as `model_reported=null` instead of inventing a report.
+The smoke must print no prompt, token, OAuth state, personal answer, or raw CLI
+stream. A result applies only to the tested machine, CLI, login, account, image,
+and date. It does not exercise FastAPI persistence or Flutter; deterministic
+API/browser tests cover those paths separately.
+
+This adapter is suitable for development, demo, and low local concurrency. It
+is not a hosted provider or mobile-to-Codex bridge and remains unavailable in
+exact `staging`/`pilot`; `APP_ENV=production` is itself invalid and fails
+startup.
+
+All Coach endpoints require the normal Supabase bearer token. Capability and
+history are read-only:
+
+```bash
+curl http://localhost:8000/v1/coach/capabilities \
+  -H 'Authorization: Bearer <supabase_access_token>'
+curl http://localhost:8000/v1/coach/history \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+The current request has only id and free question:
+
+```bash
+curl -X POST http://localhost:8000/v1/coach/respond \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"contract_version":"coach-request-v3","request_id":"11111111-1111-4111-8111-111111111111","message":"What changed in my focus consistency this semester?"}'
+```
+
+For the same turn over SSE:
+
+```bash
+curl -N -X POST http://localhost:8000/v1/coach/respond/stream \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"contract_version":"coach-request-v3","request_id":"22222222-2222-4222-8222-222222222222","message":"Which study-time assumption is least supported by my data?"}'
+```
+
+The stream emits `started`, allowlisted `activity`, then `completed` or
+`failed`. Closing the connection cancels the turn and cleans its snapshot,
+scripts, images, and temporary files. The visible activity is not model
+reasoning.
+
+Retry an ambiguous result with the exact message and request id. Editing the
+message requires a new id. Completed replay returns the persisted response
+without another model call; failed and deleted ids remain terminal. Only one
+turn may be pending for an owner, and by default at most 20 new questions start
+per profile-local day. Tool calls do not consume extra question budget.
+
+`DELETE /v1/coach/history` remains body-free. It deletes conversation content
+and V3/V4 evidence/trace detail while retaining usage, operator dispatch
+accounting, and request tombstones, so it does not restore either budget.
+Legacy V1-V3 request/history,
+context-options, and memory-selection endpoints remain only for older clients;
+the current Flutter Coach does not call or display them.
+
+## Stored Inbox Lifecycle
+
+A real authenticated account reads its visible Inbox rows directly through
+Supabase and sends lifecycle mutations through FastAPI:
+
+```bash
+curl -X POST \
+  http://localhost:8000/v1/notifications/<notification_id>/actions \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"contract_version":"notification-lifecycle-v1","request_id":"11111111-1111-4111-8111-111111111111","command":"mark_read","expected_updated_at":"2026-07-14T08:30:00Z"}'
+```
+
+Use exactly `mark_read`, `mark_unread`, or `dismiss`. Retry an ambiguous result
+with the unchanged request id, command, and expected timestamp. A definite
+`409` requires reloading the Inbox state. Dismiss keeps a tombstone and hides it
+from normal reads. This endpoint does not generate, schedule, or deliver a
+notification; existing reminder settings are not delivery consent. See
+`docs/notification-lifecycle-v1-contract.md`.
+
+## Revisioned Account Controls
+
+With FastAPI and the matching Supabase project configured, a real account can
+update its IANA timezone, export bounded JSON, and permanently delete itself:
+
+```bash
+curl -X PATCH http://localhost:8000/v1/account/profile \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "contract_version":"account-profile-update-v2",
+    "request_id":"11111111-1111-4111-8111-111111111111",
+    "expected_revision":1,
+    "timezone":"Europe/Berlin"
+  }'
+
+curl -X PATCH http://localhost:8000/v1/account/preparation-budget \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "contract_version":"account-preparation-budget-update-v2",
+    "request_id":"22222222-2222-4222-8222-222222222222",
+    "expected_revision":1,
+    "daily_preparation_budget_minutes":120
+  }'
+
+curl http://localhost:8000/v1/account/export \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Permanent deletion additionally requires
+`20260713233000_v1_account_delete.sql` and exact `DELETE` confirmation. Exercise
+it only with an intentionally disposable local account. The verified bearer
+session must contain a recognized, non-refresh Supabase `amr` authentication
+timestamp no more than 15 minutes old; otherwise FastAPI returns `403` before
+the RPC. A successful call deletes the Auth user and every canonical owned
+product row and cannot be undone. See `docs/v1-account-controls-contract.md`.
+Do not run a live deletion merely to verify a non-destructive checkout.
+
+Export first validates the complete bounded envelope. Web uses a browser
+download, desktop opens a cancellable save-location dialog, and Android uses
+the platform share sheet so the user chooses the destination. The app deletes
+its dedicated Android source file best-effort after handoff and before the next
+export, but the share plugin or operating system may retain a protected cache
+copy until its own cleanup. The source contains an iOS share branch, but there
+is no iOS runner or installed-iOS acceptance claim. An export is not a
+transaction-wide point-in-time database snapshot or a restore format.
+
+The response revision from each PATCH is the expected revision for its next
+change. A `409` means reload the current profile projection; do not invent a
+new expected revision or change the payload behind an existing request id.
+
+## Stabilization Write Paths
+
+With the two `20260729` stabilization migrations applied, authenticated Capture
+writes must use FastAPI rather than direct Data API DML:
+
+```bash
+curl -X PUT \
+  http://localhost:8000/v1/daily-capture/2026-07-29/evening \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d @daily-capture-evening.json
+```
+
+The file must contain the complete strict `daily-capture-write-v1` request,
+including one stable UUID request id, the last-read branch identity or `null`,
+and a complete current `daily-capture-v5` branch. A complete V4 branch is also
+accepted during the rolling client upgrade. A `409` is a same-branch CAS or
+request-fingerprint conflict and requires a read/review. Reusing the same
+request id with a changed body is intentionally unsupported.
+
+Calendar imports use `calendar-import-v2` and carry the profile timezone and
+timezone revision read before import. Only an import with
+`planning_status = current` contributes Planner busy time. See
+`docs/stabilization-consistency-contract.md` for the exact cutover boundary.
+
+## Android Builds
+
+Debug builds use the normal Android debug signing path. Distributable release
+builds deliberately fail unless ignored `apps/mobile/android/key.properties`
+contains all four values below and `storeFile` resolves to a private keystore,
+or CI supplies the complete `ANDROID_KEY*` environment set:
+
+```properties
+storePassword=<secret>
+keyPassword=<secret>
+keyAlias=<alias>
+storeFile=<path-to-keystore>
+```
+
+Neither file belongs in Git. The repository never falls back to the debug key
+for a release. `.github/workflows/pilot-release-apk.yml` builds only from an
+annotated pilot RC tag contained in `main`, verifies the signing certificate,
+and uploads a held checksummed candidate. It does not publish/install it and
+cannot run positively without the protected keystore secrets. See
+`apps/mobile/android/RELEASE_SIGNING.md`. Installing a release also requires
+the remote Supabase redirect allowlist entry described above.
 
 ## Supabase
 
-Supabase is optional for mock mode. To work on local Supabase you need the
-Supabase CLI and Docker:
+The additive `exam-plan-health-v1` snapshot migration has a dedicated
+physically isolated check:
+
+```bash
+scripts/lib/exam_plan_health_migration_harness.sh
+```
+
+It applies the full chain only to a labeled RAM-only Postgres container, runs
+the feature pgTAP contract, and verifies normal local migration history did not
+change. It does not replace `scripts/verify_supabase_local.sh`, does not apply
+to the normal database, and conveys no remote-state claim.
+
+The additive `multi-exam-plan-v1` migration has its own full-chain library
+check at `scripts/lib/multi_exam_plan_migration_harness.sh`. The repository
+`scripts/verify_supabase_local.sh` gate sources and invokes that check after
+validating the exact normal local target; the library file is not a standalone
+operator command.
+
+It runs the 104-assertion Multi-Exam pgTAP contract twice against one labeled
+RAM-only Postgres container, including independent sessions that prove direct
+Task and Habit writes cannot pass a concurrently held Proposal or Confirm owner
+lock. The second pass proves committed fixtures, helper objects, and optional
+test extension state were cleaned. The harness then cleans its container and
+proves the normal local migration history is byte-identical before and after.
+Passing it neither applies pending
+SQL to the normal database nor authorizes a reset, remote mutation, or deploy.
+Inspect installed Supabase CLI help before any surrounding CLI command; use the
+repository harness as written rather than reconstructing flags.
+
+The Recommendation-retirement harness runs the complete chain on pinned
+Supabase PostgreSQL `15.8.1.085` and `17.6.1.113`, regardless of the normal
+local major. The PG17 lane models OID 10 as a separate bootstrap superuser and
+runs migrations as a non-superuser `postgres` role with `CREATEROLE`. It
+verifies PostgreSQL 16+'s automatic ADMIN-only role-creator membership, the
+complete pgTAP corpus, a full owner/ACL-preserving restore into a second PG17
+RAM-only target, and one deletion replay. Both images must already exist
+locally; verification does not silently install or upgrade Postgres. Fresh
+database CI explicitly pulls both pinned compatibility tags before running this
+gate; the normal Supabase start's separate PG17 image is not accepted as an
+implicit substitute.
+
+The release backup workflow is intentionally narrower than this cross-version
+development proof: both disposable restore/reference templates pin PostgreSQL
+major 17 to match the hosted pilot generation, and restore verification rejects
+a source/target major mismatch. A future hosted-major change is separate
+compatibility work and requires a new real restore rehearsal.
+The encrypted payload includes the complete hosted `auth,storage` managed
+schema as well as the official custom-schema diff. Only the disposable restore
+workflow may replace its empty managed schemas from that capture. It clears the
+base image's transient creator defaults before application objects are created,
+then verifies effective ACL/RLS/RPC authority from catalogs. The independent
+schema-reference digest also compares ACL statements and remains strict, with only reviewed optional
+legacy removal and associative-parenthesis normalization for named legacy
+`CHECK` constraints.
+
+Supabase is optional for mock mode. To work on local Supabase you need the real
+Supabase CLI and Docker available in the Ubuntu shell.
+
+Start or reuse the local stack, then inspect repository files against the local
+database history:
 
 ```bash
 supabase start
-supabase db reset
+HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 \
+supabase migration list --local
 ```
 
-Read `docs/supabase-current-state.md` first. The migrations currently do not
-fully create every app-facing CamelCase table expected by the Flutter app.
+Repository scripts stop when either side differs and do not apply pending SQL
+by default. After reviewing the migration and affected local rows, apply it and
+verify the resulting history with:
+
+```bash
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
+```
+
+That wrapper does not replay successful Docker pull progress. It stores raw
+`supabase start` output in a mode-`0600` temporary file, prints one success
+marker, and on failure prints only a bounded sanitized tail before removing the
+raw file. Use that bounded failure output for diagnosis; it does not weaken the
+CLI exit-status or migration-history gate.
+
+Browser E2E uses the same bounded start-log behavior. The running-target guard
+and explicit isolated compatibility-image requests share one allowlist for
+only the exact official `public.ecr.aws/supabase/postgres:<tag>` and
+`ghcr.io/supabase/postgres:<tag>` forms; changing the CLI mirror does not permit
+another GHCR namespace.
+
+This explicit opt-in may change or delete local rows. It must not be described
+as non-destructive merely because it avoids `db reset`.
+
+After normal migration history matches, `verify:db` also runs the Goal-removal
+migration harness in a separately labelled, RAM-only Postgres container with no
+normal Supabase volume. Goal and Recommendation lock-timeout/role-guard checks,
+Coach limit checks, backup archive checks, and safety source scans use baseline
+runner text tools, so no database verification or recovery path requires an
+optional `rg` installation. Inside that process the exact database name is
+`mylifegraph_goal_removal_migration_test`. The harness initializes a fresh
+schema only through `20260804102409` with `migration up --db-url`, loads filled
+fixtures, applies the original and follow-up Goal migrations separately, proves
+the five-second writer-lock timeout and full rollback in two sessions, retries
+successfully, and runs its dedicated pgTAP file. Its trap removes only the
+ownership-labelled disposable container. It compares the normal local migration
+history before and after every isolated stage.
+
+The harness deliberately does not use `db reset --db-url` or create another
+database in the normal cluster: Supabase CLI `2.107.0` can classify a loopback
+reset URL as the ordinary local stack and recreate the wrong database. Normal
+verification has no reset authority. The complete backup, guarded reset,
+physical-isolation, recovery, and rollback contract is
+`docs/local-database-safety.md`.
+
+Read `docs/supabase-current-state.md` first. The Phase 3 runtime requires the
+local schema to include:
+
+```text
+20260711120000_phase_3_executable_action_schema.sql
+```
+
+Weekly Review additionally requires:
+
+```text
+20260712210000_phase_8_weekly_reviews.sql
+20260712211500_phase_8_weekly_review_provenance_guard.sql
+```
+
+These migrations create forced-RLS backend-owned `weekly_reviews` persistence
+and require its deterministic provenance keys to match the source fingerprint.
+Authenticated users can read only their own review rows; only service role can
+write them.
+
+Goal retirement additionally requires the immutable original migration and its
+additive dependency/locking repair:
+
+```text
+20260804150153_remove_goals_and_make_weekly_review_observational.sql
+20260804192406_harden_goal_removal_dependencies.sql
+```
+
+Finite Assignment Series additionally requires:
+
+```text
+20260810092841_finite_assignment_series_v1.sql
+```
+
+The final persisted-kind guard additionally requires:
+
+```text
+20260812212833_deadline_plan_kind_guard.sql
+```
+
+It retains the public service-role Deadline Plan proposal signature while
+making a draft or active root's stored kind authoritative at the database RPC
+boundary.
+
+Calendar import additionally requires the Phase 9 migration listed in
+`docs/supabase-current-state.md`. It creates dedicated backend-owned
+`calendar_connections`, `calendar_imports`, and `calendar_events` plus four
+service-role-only atomic lifecycle operations. Its follow-up guard adds the
+minimal fingerprint-free `calendar_request_identities` registry and reliable
+HTTP 409 conflict semantics. Apply both only after reviewing the SQL and local
+rows, using the explicit `APPLY_MIGRATIONS=true` workflow above. Do not reset
+the local database merely to install them.
+
+Deadline Planner additionally requires the migration listed in
+`docs/supabase-current-state.md`. It creates forced-RLS backend-owned plan,
+revision, block, and request-identity tables plus service-role-only atomic
+mutation RPCs. Review and apply it through the same explicit migration workflow;
+do not encode dated blocks as recurring `schedule_items`.
+
+The central Planner additionally requires:
+
+```text
+20260722120000_planner_v1.sql
+20260722234000_setup_commitment_validity_guards.sql
+20260723120000_study_setup_v1.sql
+20260723200707_optimize_canonical_rls_policies.sql
+```
+
+It adds read-only owner projections plus service-role-only, owner-locked
+preference, proposal/confirm/cancel, and commitment commands. Existing Tasks,
+Habits, Deadline Plans, and Setup commitments are not migrated into Action
+Plans. Review and apply it through the same explicit workflow; a normal Planner
+GET must never create a revision or reservation.
+The Study migration adds its optional forced-RLS Intake projection and
+recovery-aware Planner/Deadline reservation guards. Existing plans remain
+zero-recovery and are never replanned by migration.
+
+Controlled Coach additionally requires:
+
+```text
+20260713200000_phase_10_controlled_coach.sql
+20260713213000_phase_10_coach_lock_order_guard.sql
+20260713220000_phase_10_coach_safety_provenance_guard.sql
+20260713223000_phase_10_profile_privilege_guard.sql
+20260713224500_phase_10_role_authority_guard.sql
+20260713230000_phase_10_onboarding_eligibility_guard.sql
+20260728120000_coach_longitudinal_context_v1.sql
+20260728160000_free_read_only_coach_agent_v1.sql
+20260815075711_coach_byok_provider_v1.sql
+20260815082606_coach_byok_completion_dispatch_v1.sql
+20260819185740_pilot_participation_v1.sql
+20260819203000_coach_operator_pilot_v1.sql
+20260820120000_coach_terminal_replay_probe_v1.sql
+20260820150000_pilot_participation_rls_gate_v1.sql
+20260820170000_account_deletion_recovery_v2.sql
+20260820183000_account_deletion_prepared_pending_guard_v2.sql
+20260820190000_hosted_database_contract_v1.sql
+20260820193000_coach_operator_utc_budget_v1.sql
+20260820194500_coach_operator_budget_period_v1.sql
+20260820200000_account_deletion_replayer_role_guard_v2.sql
+```
+
+It creates backend-owned Coach request, usage, and memory-selection state;
+hardens message/memory RLS and grants; and installs the service-role-only atomic
+claim, complete, fail, select/deselect, and history-delete RPCs. Apply it with
+the same reviewed, explicit `APPLY_MIGRATIONS=true` workflow. Migrations may
+change or delete local rows. History deletion intentionally retains request
+tombstones and usage rows.
+The follow-up guard keeps the public RPC signatures but makes
+claim/complete/fail acquire the same owner advisory lock before their existing
+inner bodies, matching history deletion and avoiding inverse lock order.
+The remaining guards persist exact provider-call truth for safety redirects;
+block application-role profile insertion, role/provider changes, deletion, and
+onboarding projection changes; and remove legacy `"User"` fallback from role
+authority. Authenticated profile edits are limited to non-authority fields;
+service role and the atomic Intake apply RPC retain the required backend
+projection authority. The expected current migration boundary is maintained in
+`docs/supabase-current-state.md`. Its contract-neutral cleanup keeps the legacy
+public role-helper identity but delegates to canonical role truth, preserves
+Account Delete and Coach V3 behavior, and adds no application authority. The
+preceding additive scheduled-Focus migration follows the Coach
+prompt migration and adds immutable planned-source provenance plus service-only
+V2 lifecycle/projection RPCs. The longitudinal Coach
+migration keeps exact V2 scope parameters and fixed-mode history compatible.
+The free-agent migration admits message-only V3 claims and V2 responses, stores
+backend-derived evidence, bounded tool trace/count, and service-tier truth,
+extends history deletion, and retains V1/V2 behavior. The July English-prompt
+migration admits V1/V2 free-agent prompt provenance and exposes the
+service-role-only rolling-safe V4 claim. The preceding three
+planning guards bind additive timing outside strict V1 payloads, keep
+confirmation timestamps monotone under clock skew, and record actual Setup
+allocation fallback without discarding learned evidence. The earlier Personal
+Learning migration adds the forced-RLS reflection, preference, and
+request-identity boundaries; its learned-planning follow-up adds immutable
+Planner/Deadline evidence provenance. A historical Recommendation follow-up
+installed atomic current-feed replacement; P7 later removes that RPC and table.
+The current operator migration then adds V4 Coach constraints, the V8 claim/V3
+completion writers, and a forced-RLS service-role-only append-only dispatch
+ledger with serialized global budget and startup reconciliation. It has not
+been applied to the normal local database merely because the file exists;
+normal verification remains inspection-only unless the user explicitly opts
+into `APPLY_MIGRATIONS=true` after reviewing local rows.
+The earlier small account-export grant gives
+only `service_role` the `lifestyle_entries` read authority required by the
+existing Account Export V1 table set. The account-delete
+migration installs the service-role-only full-account delete transaction; it
+removes restrict-linked focus history before the Auth/profile/product cascade
+without changing normal task or habit deletion. The later Notification
+migration adds the service-role-only lifecycle RPC and retry ledger without
+delivery behavior.
+The final privilege guard covers every repo-owned product and ledger table:
+`anon` receives no table authority, authenticated users lose `TRUNCATE`,
+`REFERENCES`, and `TRIGGER` while intended table-specific DML remains, and the
+four backend projections stay read-only. Optional legacy tables are frozen,
+future public tables created by `postgres` inherit fail-closed application-role
+defaults, and the installed Auth triggers continue firing even though their
+security-definer functions are no longer reusable by application or service
+roles. The migration also adds the Notification-ledger child index and six
+`NOT VALID` timestamp-order checks; those checks protect new or updated rows
+without claiming that pre-existing remote rows have been validated.
+On 2026-07-13 real local PostgreSQL parallel claim/completion/deletion smokes
+completed without deadlock or timeout and converged on the expected message,
+usage, and deletion state. This is local concurrency evidence, not remote
+project verification.
+
+The earlier Phase 3 migration adds bounded task fields, explicit habit outcomes, and the real
+focus lifecycle. Its checks/triggers enforce exact task/focus shapes, lock and
+revalidate active selected-weekday habit eligibility and selected focus targets,
+reject every update to a terminal focus row, restrict linked-target deletion,
+and permit one active focus session. It backfills a missing legacy focus
+`metadata.entry_date` from the UTC date of `started_at`, normalizes positive
+legacy habit values to completion, and rejects ambiguous legacy rows with
+missing status and `value <= 0`; inspect and resolve those rows rather than
+fabricating an intentional skip. Existing table RLS/grants remain.
+
+The earlier `20260710180000_atomic_intake_v1_setup_apply.sql` migration installs
+the service-role-only
+`apply_intake_v1_setup_revision` RPC. It serializes apply per user with a
+transaction advisory lock. The current removal migration replaces that
+signature with a Goal-free one and atomically reconciles only Habits,
+schedule/Study rows, the best-energy memory, the canonical onboarding snapshot,
+applied intake state, and profile projection. During schedule reconciliation it
+removes only the exact unmarked legacy onboarding placeholder `Math`,
+`Room 204`, Monday `08:15`-`09:45`; other manual or unmarked onboarding rows are
+preserved.
+
+The canonical app schema is snake_case. Legacy CamelCase tables are only used as
+optional migration sources when they already exist. If a completely fresh
+normal local database is explicitly required for manual chain verification,
+perform the guarded reset as a separate operation. First preview the exact
+target without changing data:
+
+```bash
+npm run db:reset:local
+```
+
+Then run only the content-bound execution command printed by that preview. It
+first creates and restore-verifies a full backup and rechecks target drift. Once
+that separate reset completes, run `npm run verify:db` without `RESET_DB=true`.
+Ordinary verification and E2E reject the reset flag.
+
+For local Supabase-backed app testing:
+
+1. Run `supabase start`.
+2. Confirm that `migration list --local` matches. If it does not, review the
+   SQL and local data before using `APPLY_MIGRATIONS=true`. A deliberately fresh
+   database uses the separate guarded reset workflow above, never verification
+   or E2E reset authority.
+3. Run `supabase status` and copy the local anon key into `.env`.
+4. Set `USE_MOCK_DATA=false`, `SUPABASE_URL=http://127.0.0.1:54321`, and
+   `SUPABASE_ANON_KEY=<local anon key>`.
+5. Start the frontend with `scripts/start_frontend.sh`.
+6. Smoke test registration or sign-in, required-only Setup, Setup re-entry/edit/
+   review, required-only Evening Shutdown, Morning Calibration with separate
+   duration and quality on the same local date, Evening re-entry/edit without
+   losing Morning state, task
+   create/edit/postpone/undo/complete/restore/cancel/restore, manual and
+   Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
+   target, Today Overview streak/progress arithmetic, all four agenda source
+   categories, Today versus all Tasks, Today Habits, the `Beat yesterday`
+   check-in inset, direct Weekly Review navigation plus the independently
+   expandable Full week section; Full week must show seven profile-local days,
+   seven categories/partial sources,
+   current actions, and the responsive snapped strip,
+   bounded facts-only Weekly Review
+   with deliberate refresh and no adjustment controls, Inbox (`/alerts`), real
+   Deep Work, and Controlled Coach capability,
+   free-question stream, safe activity/cancel, evidence/trace/provenance,
+   readable history, no fixed-mode controls, and confirmed history deletion
+   with a fake provider.
+
+Do not infer remote Supabase state from local migrations. Verify the remote
+project through the Supabase dashboard, CLI, or connector before using it for
+real data.
+
+## Demo Data
+
+For local Supabase-backed product exploration, seed repeatable demo accounts:
+
+```bash
+npm run seed:demo
+```
+
+Equivalent direct command:
+
+```bash
+bash scripts/seed_demo_data.sh
+```
+
+The script:
+
+- starts the local Supabase stack if needed;
+- reads the local service-role key from `supabase status -o env` without
+  printing it;
+- refuses to run unless the API URL is `http://127.0.0.1:54321` or
+  `http://localhost:54321`;
+- deletes and recreates only the four confirmed local demo Auth users through
+  the full-account cascade, so a rerun also resets immutable local retry and
+  usage ledgers (and signs out an open demo session);
+- keeps `onboarding@example.test` incomplete in `Europe/Berlin` and verifies
+  that every owner-content and retry-ledger table is empty apart from the
+  Auth-created profile and neutral notification/Personal Learning preference
+  projections;
+- writes one typed applied Setup revision per populated user with a stable
+  request UUID
+  and intentionally empty optional Setup-owned collections, while leaving
+  separately seeded `demo_seed` objects non-Setup-owned;
+- replaces their base demo app rows, then enriches `student@example.test`
+  through the real FastAPI service classes with current snapshots/briefings,
+  Weekly Review, Personal Learning, Calendar Import, Preparation
+  Plans, foreground notification consent, conditional recovery/weekly
+  generation, and fake-provider Coach persistence;
+- verifies the student coverage and realistic Capture bounds before reporting
+  success: 43 profile-local V4 days, estimated sleep between 7 hours 15 minutes
+  and 8 hours 30 minutes, sleep quality `6..9`, energy `5..8`, stress `3..8`,
+  and no abrupt synthetic daily jumps. The verification passes each persisted
+  `capture_version` into the shared precise-sleep parser, so container/branch
+  mismatches fail the demo seed instead of being interpreted as valid sleep
+  evidence. It also requires 36 rated Focus days, stable `09–13` evidence, and
+  at least 90% reflection coverage. This enrichment requires
+  `services/ai_service/.venv`, or an equivalent `PYTHON_BIN`.
+
+Demo logins:
+
+| Scenario | Email | Password |
+| --- | --- | --- |
+| Fresh Setup | `onboarding@example.test` | `DemoPass123!` |
+| Student focus | `student@example.test` | `DemoPass123!` |
+| Busy worker | `worker@example.test` | `DemoPass123!` |
+| Recovery builder | `recovery@example.test` | `DemoPass123!` |
+
+Override the local demo password for a fresh seed run with:
+
+```bash
+DEMO_PASSWORD='AnotherLocalPassword123!' npm run seed:demo
+```
+
+After seeding, start Flutter in real local mode:
+
+```bash
+USE_MOCK_DATA=false \
+SUPABASE_URL=http://127.0.0.1:54321 \
+SUPABASE_ANON_KEY=<local anon key from supabase status> \
+FLUTTER_BIN=/path/to/flutter \
+scripts/start_frontend.sh
+```
+
+Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
+Dashboard, Inbox, Insights, and Habits across scenarios. The student account is
+the broad manual product fixture: Today, all three Habit cadences, resumable
+Deep Work, a facts-only Weekly Review, stable Personal Learning,
+Calendar Import, active and staged Preparation Plans, capacity, notification
+consent, and Coach history are pre-populated. Today's Morning exists while
+Evening remains deliberately open, so that capture can be completed manually.
+Mutate these freely and rerun the seed to restore them. Coach
+sending remains disabled unless FastAPI is deliberately started with a ready
+provider; the stored demo turns use the deterministic fake provider and imply
+no live model connection.
+For the two-origin live presentation setup, Coach cleanup/preflight, and timed
+rehearsal, follow `docs/presentation-demo-2026-07-30.md`. Seeding recreates the
+four Auth users and invalidates their sessions, so do not seed again after the
+presentation tabs sign in.
+The seed does not create the retired generic Recommendation or Decision
+Feedback records. The independent Sleep Recommendation remains computed from
+eligible Capture and Focus evidence rather than seeded feed rows.
+
+Automated local preflight without resetting the database:
+
+```bash
+npm run verify:db
+```
+
+The verification script runs Supabase with telemetry disabled, redacts keys
+and database credentials from output, requires matching migration history, and
+runs the isolated transition harness plus complete pgTAP suite. It does not
+read Flutter client configuration or repeat Flutter tests.
+
+Full local backup with a physical restore rehearsal:
+
+```bash
+npm run db:backup:local
+```
+
+`npm run db:reset:local` is a non-destructive reset preview. A reset executes
+only when its fresh target/content token is passed back with `RESET_DB=true` to
+that same dedicated wrapper; it automatically creates another verified backup
+first. See `docs/local-database-safety.md` for the exact two-phase command and
+recovery procedure.
 
 ## Verification
 
@@ -139,7 +1608,175 @@ AI service:
 ```bash
 cd services/ai_service
 python -m compileall app
+./.venv/bin/python -m pytest
 ```
+
+All fast non-destructive checks from the repository root:
+
+```bash
+FLUTTER_BIN=/path/to/flutter npm run verify:fast
+```
+
+This includes the complete Flutter and FastAPI suites. `npm run verify` and
+`scripts/verify.sh` remain compatible aliases. Use `npm run verify:web` for a
+debug web build,
+`npm run verify:affected -- --base-ref <task-base-ref>` with the commit captured
+before the task for conservative path selection, and `npm run verify:full` for
+fast, database, web, and full browser gates. The affected selector fails closed
+without that base; `HEAD` alone covers only current working-tree changes and
+misses task changes already committed after work began.
+
+Run the fast documentation-only gate with:
+
+```bash
+npm run verify:docs
+```
+
+Non-destructive local Supabase preflight:
+
+```bash
+npm run verify:db
+```
+
+The command starts or reuses the repository's local Supabase stack, verifies
+that repository and database migration history match, and does not reset or
+apply migrations. A mismatch fails with instructions before pgTAP runs.
+
+After reviewing pending SQL and local data, the explicit application path is:
+
+```bash
+APPLY_MIGRATIONS=true npm run verify:db
+```
+
+That operation may change or delete local rows.
+
+Create a restore-verified local archive before broad data work:
+
+```bash
+npm run db:backup:local
+```
+
+Preview an explicitly intended local reset without changing data:
+
+```bash
+npm run db:reset:local
+```
+
+The preview prints the only acceptable follow-up command. Its fresh token is
+bound to the exact local container, counts, database size, migration, and WAL
+position. The executing wrapper restore-verifies a full backup, refuses target
+drift, and invokes only `supabase db reset --local`. It requires Supabase CLI
+and Docker in the same shell. Detailed safety, recovery, and coherent source
+rollback steps live in `docs/local-database-safety.md`.
+
+For details on what each script verifies and what is still not automated, read
+`docs/verification.md`.
+
+Browser E2E:
+
+```bash
+npm install
+npx playwright install chromium
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
+```
+
+The smoke is the serial critical-wiring suite: one independently provisioned
+and cleaned-up spec for each of `setup-onboarding`,
+`auth-capture-today`, `planner-confirm`, and `coach`. The full command runs all
+eight independent specs and additionally covers `exam-week-outlook`,
+`notification-lifecycle`, `account-controls`, and `personal-learning`.
+Detailed HTTP, RLS, replay, and database-constraint invariants remain verified
+by pytest and pgTAP; the two restored journeys keep the narrower contract
+checks required to prove their visible Flutter behavior. Parallel workers
+remain disabled until the specs have proven state independence.
+
+This is the normal non-reset path. It requires repository and local database
+migration history to match and never applies pending SQL automatically. It
+writes only run-unique test data to the local stack. `RESET_DB=true` is rejected
+before a database command runs; E2E has no reset branch. Every split spec owns
+its account and exact `finally` cleanup. After reviewing pending SQL and local
+rows, `APPLY_MIGRATIONS=true` is the separate opt-in; it may change or delete
+those rows.
+
+For a narrow Coach diagnosis, choose a fresh unique run id:
+
+```bash
+E2E_JOURNEY=coach \
+E2E_RUN_ID=<new-unique-e2e-run-id> \
+FLUTTER_BIN=/path/to/flutter \
+bash scripts/e2e_web.sh
+```
+
+This mode runs only `coach.spec.mjs` with its own confirmed account, minimal
+Setup prerequisite, and exact cleanup. The run id must be fresh; reuse fails
+closed against the run-specific artifact directory even after cleanup. Any
+other current journey name can be selected the same way. A focused run is a
+diagnostic aid, never a substitute for the full command above.
+
+Exact current results live in
+[Current Verified Baseline](verification.md#current-verified-baseline).
+Documented browser assertions are not a pass claim for a later checkout.
+
+If browser E2E genuinely needs a fresh normal local database, complete the
+separate guarded reset workflow first, then run the ordinary E2E command without
+`RESET_DB=true`. Do not combine destructive setup with the browser runner.
+
+The E2E script starts local Supabase, the FastAPI service with its deterministic
+fake Coach provider, and Flutter Web on `http://127.0.0.1:7357`. The smoke
+runs the four critical UI journeys; the full gate runs all eight. Each journey
+owns a fresh confirmed account and exact cleanup. The browser layer proves only
+user-visible cross-stack wiring. Detailed validation, retry, RLS, privilege,
+and database-constraint coverage stays in the feature-specific Flutter,
+pytest, and pgTAP suites listed in
+[Browser E2E](verification.md#browser-e2e).
+
+By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
+service overrides:
+
+```bash
+AI_SERVICE_PORT=8001
+AI_SERVICE_BASE_URL=http://127.0.0.1:8001
+AI_SERVICE_PYTHON=/path/to/python
+AI_SERVICE_START=false
+SCHEDULED_REFRESH_TOKEN=<token configured in the reused FastAPI process>
+```
+
+By default the script always starts FastAPI from the current checkout. It does
+not reuse an already-running service on the same port; stop that service or set
+`AI_SERVICE_PORT` to a free port. Use `AI_SERVICE_START=false` only when you
+intentionally want to reuse a compatible FastAPI process that is already running
+with local `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings. Because the
+smoke exercises Phase 7, a reused process must also use the same
+`SCHEDULED_REFRESH_TOKEN` supplied to the script. If a reused process is meant
+to exercise Coach, it must also use the fake-provider settings above; standard
+E2E must not contact a live Codex account.
+
+The local service-role key is used only inside FastAPI and the Node E2E process
+for local test setup and assertions. It is not passed to Flutter.
+The standard Flutter start pre-enables Semantics. The Node runner waits for a
+real `flt-semantics` node in the explicit pre-enabled mode; the slower
+placeholder/button fallback is reserved for manually started builds. Browser
+E2E builds and statically serves profile-mode Flutter Web by default so
+independent Playwright contexts do not share a debug DWDS connection while
+development-only gates remain available. `FLUTTER_WEB_MODE=debug` and
+`release` are diagnostic overrides. Each run
+records its exact created Auth UUIDs and removes only those users through the
+loopback local Admin API in `finally`. A cleanup failure fails an otherwise
+passing run, and an earlier test error remains primary if both fail. Old E2E
+accounts are never swept by a normal run; `npm run e2e:cleanup:local` previews
+the separate fingerprint-confirmed local cleanup.
+
+Logs, screenshots, traces, and timing artifacts are run-specific under
+`.tools/e2e/runs/<run-id>/`. A failing split spec retains its Playwright trace
+and screenshot below the `playwright/` child. Supabase, FastAPI, Flutter,
+Semantics, journeys, Auth cleanup, runner, and process-cleanup
+timings are emitted as structured `[e2e:timing]` records, with one additional
+`[e2e:test-timing]` record per split spec.
+
+This automated browser smoke covers the manual Supabase-backed smoke path for
+the listed screens. Keep manual testing for flows not listed in
+`docs/verification.md`.
 
 ## Troubleshooting
 
@@ -148,7 +1785,41 @@ python -m compileall app
   whether the app is already running.
 - A `HEAD /` request may not prove the Flutter web-server is broken. Test with
   a normal browser request or `curl http://127.0.0.1:7357/`.
-- If Supabase auth buttons fail, confirm `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-  and provider redirect URLs.
+- If Supabase auth buttons fail, confirm `SUPABASE_URL`, the current
+  `SUPABASE_PUBLISHABLE_KEY` or local legacy `SUPABASE_ANON_KEY`, the exact
+  hosted project ref, and provider redirect URLs.
 - If real Supabase reads return empty data, confirm the authenticated user and
   expected tables exist.
+- If `scripts/verify_supabase_local.sh` cannot connect to Docker, rerun it in an
+  environment with Docker socket access.
+- If `scripts/verify_supabase_local.sh` says Supabase CLI is missing, install
+  the real Supabase CLI in Ubuntu so `supabase --version` works.
+- If `scripts/e2e_web.sh` says Node.js is missing, install real Node.js in
+  Ubuntu so `node --version` works.
+- If `scripts/e2e_web.sh` says Playwright is missing, run `npm install`.
+- If Playwright cannot find a browser, run `npx playwright install chromium` or
+  set `CHROME_BIN=/path/to/chrome`.
+- If E2E preflight or database assertions say migration history or required
+  fields differ, inspect `supabase migration list --local`, the pending SQL,
+  and affected local rows. Re-run with `APPLY_MIGRATIONS=true` only when those
+  changes are intended. If destroying the normal local database is explicitly
+  intended, stop E2E and use the separate preview/token/verified-backup reset
+  workflow in `docs/local-database-safety.md`.
+- If the Phase 3 migration refuses a legacy habit log with missing status and
+  `value <= 0`, inspect that local row and decide its real outcome before
+  retrying. The migration deliberately will not reinterpret it as a skip;
+  positive legacy values are safely normalized to completion.
+- If the AI service exits early during E2E, inspect
+  `.tools/e2e/runs/<run-id>/ai-service.log` and confirm
+  `services/ai_service` dependencies are installed. If the log says the
+  address is already in use, stop the stale service or set
+  `AI_SERVICE_PORT` to a free port.
+- If the local Coach reports that its provider is
+  unavailable, run `codex --version` and `codex login status` as the same Linux
+  user that runs FastAPI. Do not troubleshoot by opening or copying the Codex
+  auth file. An unavailable explicitly configured model is not permission to
+  fall back silently.
+- If Flutter Web exits early during E2E, inspect
+  `.tools/e2e/runs/<run-id>/flutter-web.log`.
+- Chromium WebGL performance warnings during E2E are expected in headless/local
+  runs.

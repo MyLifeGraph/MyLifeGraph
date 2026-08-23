@@ -1,0 +1,6 @@
+# Copy to ignored android/key.properties for a local signed release build.
+# Never commit the real file or keystore.
+storeFile=/absolute/path/to/private-upload-keystore.jks
+storePassword=<private-store-password>
+keyAlias=<private-key-alias>
+keyPassword=<private-key-password>

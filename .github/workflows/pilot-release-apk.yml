@@ -1,0 +1,192 @@
+name: Signed pilot release APK
+
+on:
+  push:
+    tags:
+      - 'v*-pilot.*-rc.*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-pilot-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify signed pilot APK
+    runs-on: ubuntu-latest
+    environment: pilot-release
+    timeout-minutes: 30
+    steps:
+      - name: Check out immutable tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify annotated main tag
+        run: |
+          [[ "$GITHUB_REF_TYPE" == "tag" ]]
+          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-pilot\.(0|[1-9][0-9]*)-rc\.(0|[1-9][0-9]*)$ ]]
+          [[ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" == "tag" ]]
+          [[ "$(git rev-list -n 1 "$GITHUB_REF_NAME")" == "$GITHUB_SHA" ]]
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          [[ -z "$(git status --porcelain=v1)" ]]
+
+      - name: Install checksum-pinned SBOM generator
+        run: |
+          set -Eeuo pipefail
+          curl --disable --silent --show-error --fail --location \
+            --output "$RUNNER_TEMP/syft.tar.gz" \
+            https://github.com/anchore/syft/releases/download/v1.50.0/syft_1.50.0_linux_amd64.tar.gz
+          printf '%s  %s\n' \
+            bf7b29ff57f06da30918266a0e1c2885a8f99784798d1bdb1628886aa015d788 \
+            "$RUNNER_TEMP/syft.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file "$RUNNER_TEMP/syft.tar.gz" \
+            --directory "$RUNNER_TEMP" syft
+          [[ "$($RUNNER_TEMP/syft version -o json | jq -r .version)" == '1.50.0' ]]
+
+      - name: Generate CycloneDX source SBOM
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/mylifegraph-release" "$RUNNER_TEMP/syft-cache"
+          SYFT_CHECK_FOR_APP_UPDATE=false \
+          SYFT_CACHE_DIR="$RUNNER_TEMP/syft-cache" \
+            "$RUNNER_TEMP/syft" scan dir:. \
+              --source-name MyLifeGraph \
+              --source-version "$GITHUB_REF_NAME" \
+              --exclude './.git/**' \
+              --output "cyclonedx-json=$RUNNER_TEMP/mylifegraph-release/MyLifeGraph-${GITHUB_REF_NAME}.cdx.json"
+          jq -e \
+            '.bomFormat == "CycloneDX" and .metadata.component.name == "MyLifeGraph" and (.components | length > 0)' \
+            "$RUNNER_TEMP/mylifegraph-release/MyLifeGraph-${GITHUB_REF_NAME}.cdx.json" >/dev/null
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install pinned Android SDK components
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: 3.44.0
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/mobile
+        run: |
+          flutter pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.yaml pubspec.lock
+
+      - name: Verify fail-closed Android release boundary
+        run: |
+          npm run verify:android-release
+          cd apps/mobile
+          flutter analyze
+          flutter test \
+            test/app_config_environment_test.dart \
+            test/auth_recovery_test.dart \
+            test/coach_credentials_test.dart
+
+      - name: Derive deterministic Android version
+        id: identity
+        run: node scripts/android_release_identity.mjs "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Decode private signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          umask 077
+          [[ -n "$ANDROID_KEYSTORE_BASE64" ]]
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/mylifegraph-upload.jks"
+          [[ -s "$RUNNER_TEMP/mylifegraph-upload.jks" ]]
+
+      - name: Prepare protected pilot defines
+        env:
+          APP_ENV: pilot
+          USE_MOCK_DATA: 'false'
+          COACH_SURFACE_ENABLED: 'true'
+          APP_BUILD_SHA: ${{ github.sha }}
+          APP_RELEASE_TAG: ${{ github.ref_name }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          PILOT_SUPABASE_PROJECT_REF: ${{ vars.PILOT_SUPABASE_PROJECT_REF }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          PILOT_CONTACT_EMAIL: ${{ vars.PILOT_CONTACT_EMAIL }}
+          APP_PUBLIC_ORIGIN: ${{ vars.APP_PUBLIC_ORIGIN }}
+          TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+          AI_SERVICE_BASE_URL: ${{ vars.AI_SERVICE_BASE_URL }}
+        run: node scripts/write_hosted_flutter_defines.mjs "$RUNNER_TEMP/mylifegraph-pilot-defines.json"
+
+      - name: Build signed release APK
+        working-directory: apps/mobile
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/mylifegraph-upload.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: >-
+          flutter build apk --release
+          --build-name='${{ steps.identity.outputs.build_name }}'
+          --build-number='${{ steps.identity.outputs.build_number }}'
+          --dart-define-from-file="$RUNNER_TEMP/mylifegraph-pilot-defines.json"
+
+      - name: Verify signer and write artifact metadata
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+          BUILD_NAME: ${{ steps.identity.outputs.build_name }}
+          BUILD_NUMBER: ${{ steps.identity.outputs.build_number }}
+        run: |
+          set -Eeuo pipefail
+          apk='apps/mobile/build/app/outputs/flutter-apk/app-release.apk'
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          [[ -s "$apk" && -x "$apksigner" && -n "$EXPECTED_CERT_SHA256" ]]
+          signer_output="$($apksigner verify --print-certs "$apk")"
+          mapfile -t signer_digests < <(
+            printf '%s\n' "$signer_output" |
+              awk -F': ' '/certificate SHA-256 digest/ {print tolower($2)}'
+          )
+          [[ "${#signer_digests[@]}" -eq 1 ]]
+          actual="${signer_digests[0]}"
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d ':')"
+          [[ "$actual" =~ ^[0-9a-f]{64}$ && "$actual" == "$expected" ]]
+          mkdir -p "$RUNNER_TEMP/mylifegraph-release"
+          cp "$apk" "$RUNNER_TEMP/mylifegraph-release/MyLifeGraph-${RELEASE_TAG}.apk"
+          cd "$RUNNER_TEMP/mylifegraph-release"
+          sbom="MyLifeGraph-${RELEASE_TAG}.cdx.json"
+          [[ -s "$sbom" ]]
+          sha256sum "MyLifeGraph-${RELEASE_TAG}.apk" "$sbom" > SHA256SUMS
+          sbom_sha256="$(sha256sum "$sbom" | awk '{print $1}')"
+          jq -n \
+            --arg release_tag "$RELEASE_TAG" \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg build_name "$BUILD_NAME" \
+            --arg build_number "$BUILD_NUMBER" \
+            --arg signing_certificate_sha256 "$actual" \
+            --arg source_sbom_sha256 "$sbom_sha256" \
+            '{schema_version:"mylifegraph-android-artifact-v1",release_tag:$release_tag,release_sha:$release_sha,build_name:$build_name,build_number:$build_number,signing_certificate_sha256:$signing_certificate_sha256,source_sbom_sha256:$source_sbom_sha256}' \
+            > release-metadata.json
+
+      - name: Upload verified signed candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: MyLifeGraph-${{ github.ref_name }}-signed
+          path: ${{ runner.temp }}/mylifegraph-release/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove signing and define material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/mylifegraph-upload.jks"
+          rm -f "$RUNNER_TEMP/mylifegraph-pilot-defines.json"
+          rm -f "$RUNNER_TEMP/syft.tar.gz"
+          rm -f "$RUNNER_TEMP/syft"

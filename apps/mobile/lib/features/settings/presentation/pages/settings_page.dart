@@ -1,13 +1,29 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/coach_credentials_providers.dart';
+import '../../../../core/capabilities/app_surface_capabilities.dart';
+import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/theme/theme_mode_provider.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/app_theme_selection_provider.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
+import '../../../focus_protection/application/focus_protection_gateway.dart';
+import '../../../coach/application/coach_credentials_controller.dart';
+import '../../../coach/domain/coach.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
+import '../../domain/account_settings.dart';
+import '../providers/account_settings_providers.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -17,497 +33,805 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  String _name = 'Demo Coach User';
-  String _email = 'demo@personal-coach.local';
-  String _timezone = 'Europe/Berlin';
-  final bool _guestMode = true;
-  bool _weeklyReview = true;
-  bool _dailyReminders = true;
-  bool _sleepAlerts = true;
-  bool _screenTimeAlerts = true;
-  bool _deadlineAlerts = true;
-  bool _memoryEnabled = true;
-  bool _biometricLock = false;
-  double _coachIntensity = 0.65;
-  String _coachTone = 'Balanced';
-  final int _timetableBlocks = 1;
+  bool _isSigningOut = false;
+  bool _isSavingTimezone = false;
+  bool _isSavingPreparationBudget = false;
+  bool _isExporting = false;
+  bool _isDeleting = false;
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(appThemeModeProvider);
-    final lightModeEnabled = themeMode == ThemeMode.light;
     final session = ref.watch(authControllerProvider).valueOrNull;
+    AppConfig? config;
+    try {
+      config = ref.watch(appConfigProvider);
+    } on StateError {
+      // Standalone widget tests and embedded previews may intentionally omit
+      // global bootstrap. A real app always supplies AppConfig; diagnostics
+      // stay secondary and fail closed when that owner is absent.
+      config = null;
+    }
     final profile = session?.profile;
-    final displayName = profile?.name ?? _name;
-    final displayEmail = profile?.email ?? _email;
-    final isGuestMode = session?.isGuestSession ?? _guestMode;
-    final roleLabel =
-        profile?.role.databaseValue ?? (isGuestMode ? 'guest' : 'user');
+    final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+    final themeSelection = ref.watch(appThemeSelectionProvider);
+    final androidFocusProtection =
+        ref.watch(focusProtectionPlatformSupportedProvider);
+    final syncedAccount =
+        session?.isAuthenticated == true && capabilities.canUseSyncedExecution;
+    final profileTimezone = capabilities.isLocalDemo && profile != null
+        ? 'Device local (${DateTime.now().timeZoneName})'
+        : profile?.timezone;
 
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.xl,
-            ),
-            sliver: SliverList.list(
-              children: [
-                _SettingsHeader(lightModeEnabled: lightModeEnabled),
-                const SizedBox(height: AppSpacing.xl),
-                _ProfileSummary(
-                  name: displayName,
-                  email: displayEmail,
-                  status: roleLabel,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _SettingsPanel(
-                  title: 'Preferences',
-                  children: [
-                    _SettingToggleRow(
-                      icon: lightModeEnabled
-                          ? Icons.light_mode_outlined
-                          : Icons.dark_mode_outlined,
-                      title: 'Light mode',
-                      subtitle: 'Dark remains the default on app start.',
-                      valueLabel: lightModeEnabled ? 'Light' : 'Dark',
-                      value: lightModeEnabled,
-                      onChanged: (value) {
-                        ref
-                            .read(appThemeModeProvider.notifier)
-                            .setLightMode(value);
-                        _showSnack(
-                          value
-                              ? 'Light mode enabled for this session.'
-                              : 'Dark mode restored.',
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _SettingsPanel(
-                  title: 'Account',
-                  children: [
-                    _SettingActionRow(
-                      icon: Icons.person_outline,
-                      title: 'Profile',
-                      subtitle: 'Name, email and timezone',
-                      onTap: _openProfileEditor,
-                    ),
-                    _SettingActionRow(
-                      icon: Icons.key_outlined,
-                      title: 'Google login',
-                      subtitle: isGuestMode
-                          ? 'Prepared for Supabase OAuth'
-                          : 'Connected for this session',
-                      onTap: _connectGoogle,
-                    ),
-                    _SettingActionRow(
-                      icon: Icons.mail_outline,
-                      title: 'Email preferences',
-                      subtitle: _emailPreferenceSummary,
-                      onTap: _openEmailPreferences,
-                    ),
-                    _SettingActionRow(
-                      icon: Icons.logout_outlined,
-                      title: 'Sign out',
-                      subtitle: isGuestMode
-                          ? 'Leave guest session'
-                          : 'Return to auth screen',
-                      onTap: _signOut,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _SettingsPanel(
-                  title: 'Your data',
-                  children: [
-                    _DataGrid(
-                      stats: [
-                        const _DataStat('11', 'Daily logs'),
-                        _DataStat('$_timetableBlocks', 'Timetable blocks'),
-                        _DataStat(_memoryEnabled ? '4' : '0', 'Memory entries'),
-                        const _DataStat('2', 'Insights'),
-                        const _DataStat('17', 'Notifications'),
-                        const _DataStat('4', 'Coach messages'),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _FullWidthAction(
-                      icon: Icons.file_download_outlined,
-                      label: 'Export data',
-                      onTap: _exportData,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    _FullWidthAction(
-                      icon: Icons.storage_outlined,
-                      label: 'Edit timetable setup',
-                      filled: true,
-                      onTap: _openTimetableSetup,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _SettingsPanel(
-                  title: 'App controls',
-                  children: [
-                    _SettingActionRow(
-                      icon: Icons.notifications_none,
-                      iconColor: const Color(0xFFFFA72F),
-                      title: 'Alert rules',
-                      subtitle: 'Sleep, screen time, deadlines',
-                      onTap: _openAlertRules,
-                    ),
-                    _SettingActionRow(
-                      icon: Icons.smart_toy_outlined,
-                      iconColor: const Color(0xFFFFA72F),
-                      title: 'Coach behavior',
-                      subtitle: 'Tone and reminder intensity',
-                      onTap: _openCoachBehavior,
-                    ),
-                    _SettingActionRow(
-                      icon: Icons.lock_outline,
-                      iconColor: const Color(0xFFFFA72F),
-                      title: 'Privacy',
-                      subtitle: 'Memory and stored context',
-                      onTap: _openPrivacy,
-                    ),
-                    _SettingActionRow(
-                      icon: Icons.shield_outlined,
-                      iconColor: const Color(0xFFFFA72F),
-                      title: 'Security',
-                      subtitle: 'Supabase Auth later',
-                      onTap: _openSecurity,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String get _emailPreferenceSummary {
-    if (_weeklyReview && _dailyReminders) {
-      return 'Weekly review and reminders';
-    }
-    if (_weeklyReview) {
-      return 'Weekly review only';
-    }
-    if (_dailyReminders) {
-      return 'Reminders only';
-    }
-    return 'Email updates paused';
-  }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
-  }
-
-  Future<void> _openProfileEditor() async {
-    final nameController = TextEditingController(text: _name);
-    final emailController = TextEditingController(text: _email);
-    final timezoneController = TextEditingController(text: _timezone);
-    final result = await showModalBottomSheet<_ProfileDraft>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: _SettingsColors.panel(context),
-      builder: (context) {
-        return _SettingsSheet(
+    return AppPage(
+      title: 'Settings',
+      subtitle: 'Profile, planning, connections, and account',
+      actions: const [AppHeaderActions(settingsSelected: true)],
+      children: [
+        const AppSectionHeader(
           title: 'Profile',
+          description: 'Your identity, timezone, and account type.',
+        ),
+        AppCard(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SheetField(label: 'Name', controller: nameController),
-              _SheetField(label: 'Email', controller: emailController),
-              _SheetField(label: 'Timezone', controller: timezoneController),
+              _ProfileValue(label: 'Name', value: profile?.name),
+              _ProfileValue(label: 'Email', value: profile?.email),
+              _ProfileValue(label: 'Timezone', value: profileTimezone),
+              _ProfileValue(
+                label: 'Account',
+                value: session == null
+                    ? null
+                    : session.isGuestSession
+                        ? 'Local guest'
+                        : 'Synced account',
+                isLast: true,
+              ),
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(
-                      _ProfileDraft(
-                        nameController.text.trim(),
-                        emailController.text.trim(),
-                        timezoneController.text.trim(),
-                      ),
-                    );
-                  },
-                  child: const Text('Save profile'),
+                child: OutlinedButton.icon(
+                  onPressed: syncedAccount && !_isSavingTimezone
+                      ? _chooseTimezone
+                      : null,
+                  icon: _isSavingTimezone
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(AppIcons.publicOutlined),
+                  label: Text(
+                    syncedAccount
+                        ? 'Change timezone'
+                        : 'Local dates follow this device',
+                  ),
                 ),
+              ),
+              if (!syncedAccount) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  capabilities.isLocalDemo
+                      ? 'Guest/demo capture dates use this device clock; no account timezone is stored.'
+                      : 'Timezone changes are available only for a synced account.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+        ),
+        const AppSectionHeader(
+          title: 'Planning and learning',
+          description: 'Routines, Focus support, and preparation preferences.',
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(AppIcons.tuneOutlined),
+            title: const Text('Setup and commitments'),
+            subtitle: const Text(
+              'Review routine candidates, study setup, and fixed commitments.',
+            ),
+            trailing: const Icon(AppIcons.chevronRight),
+            onTap: () => context.push('${AppRoutes.onboarding}?edit=1'),
+          ),
+        ),
+        if (syncedAccount && androidFocusProtection)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const ValueKey('focus-protection-setting-entry'),
+              leading: const Icon(AppIcons.lockOutline),
+              title: const Text('Focus protection'),
+              subtitle: const Text(
+                'Optionally block selected apps and silence normal notifications during synced Focus sessions.',
+              ),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: () => context.push(AppRoutes.focusProtection),
+            ),
+          ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            key: const ValueKey('personal-learning-setting-entry'),
+            enabled: syncedAccount,
+            leading: const Icon(AppIcons.psychologyAltOutlined),
+            title: const Text('Personal learning'),
+            subtitle: Text(
+              syncedAccount
+                  ? 'Control Focus reflection prompts, transparent pattern analysis, and optional new-plan timing.'
+                  : 'Available only for a synced account.',
+            ),
+            trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
+            onTap: syncedAccount
+                ? () => context.push(AppRoutes.personalLearning)
+                : null,
+          ),
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            key: const ValueKey('daily-preparation-budget-setting'),
+            enabled: syncedAccount && !_isSavingPreparationBudget,
+            leading: _isSavingPreparationBudget
+                ? const SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(AppIcons.speedOutlined),
+            title: const Text('Daily preparation budget'),
+            subtitle: Text(
+              !syncedAccount
+                  ? 'Available only for a synced account.'
+                  : profile?.dailyPreparationBudgetMinutes == null
+                      ? 'Not set. Existing per-plan limits still apply.'
+                      : '${_formatMinutes(profile!.dailyPreparationBudgetMinutes!)} total per day across confirmed preparation plans.',
+            ),
+            trailing: syncedAccount && !_isSavingPreparationBudget
+                ? const Icon(AppIcons.editOutlined)
+                : null,
+            onTap: syncedAccount && !_isSavingPreparationBudget
+                ? _chooseDailyPreparationBudget
+                : null,
+          ),
+        ),
+        const AppSectionHeader(
+          title: 'Tools and connections',
+          description: 'Inbox, reminders, calendar import, and optional tools.',
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            key: const ValueKey('settings-inbox-entry'),
+            leading: const Icon(AppIcons.inboxOutlined),
+            title: const Text('Inbox'),
+            subtitle: const Text(
+              'Read saved notifications and manage their read or dismissed state.',
+            ),
+            trailing: const Icon(AppIcons.chevronRight),
+            onTap: () => context.push(AppRoutes.alerts),
+          ),
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(AppIcons.notificationsActiveOutlined),
+            title: const Text('In-app reminders'),
+            subtitle: Text(
+              syncedAccount
+                  ? 'Allow banners while the app is open and choose what may appear.'
+                  : 'In-app banners are available only for a synced account.',
+            ),
+            trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
+            onTap: syncedAccount
+                ? () => context.push(AppRoutes.notificationSettings)
+                : null,
+          ),
+        ),
+        if (capabilities.canShowCoachSurface) const _CoachByokSettingsCard(),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(AppIcons.calendarMonthOutlined),
+            title: const Text('Calendar import (optional)'),
+            subtitle: const Text(
+              'Import a selected .ics file as a read-only local copy.',
+            ),
+            trailing: const Icon(AppIcons.chevronRight),
+            onTap: () => context.push(AppRoutes.calendarIntegration),
+          ),
+        ),
+        const AppSectionHeader(
+          title: 'Account and appearance',
+          description: 'Export, deletion, device theme, and sign-out.',
+        ),
+        if (config?.requiresPilotParticipation == true)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const ValueKey('pilot-privacy-notice-setting-entry'),
+              leading: const Icon(AppIcons.lockOutline),
+              title: const Text('Pilot privacy notice'),
+              subtitle: const Text(
+                'Review adult participation, data processing, export, and deletion information.',
+              ),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: () => context.push(AppRoutes.pilotPrivacyNotice),
+            ),
+          ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              ListTile(
+                enabled: syncedAccount && !_isExporting && !_isDeleting,
+                leading: _isExporting
+                    ? const SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(AppIcons.downloadOutlined),
+                title: const Text('Export data'),
+                subtitle: Text(
+                  syncedAccount
+                      ? 'Save or share a JSON copy of your account data.'
+                      : 'Available only for a synced account.',
+                ),
+                onTap: syncedAccount && !_isExporting && !_isDeleting
+                    ? _exportData
+                    : null,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                enabled: syncedAccount && !_isDeleting && !_isExporting,
+                leading: _isDeleting
+                    ? const SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        AppIcons.deleteForeverOutlined,
+                        color: syncedAccount
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                      ),
+                title: const Text('Delete account'),
+                subtitle: Text(
+                  syncedAccount
+                      ? 'Permanently delete your account and owned data. Requires a sign-in within the last 15 minutes.'
+                      : 'A local guest has no synced account to delete.',
+                ),
+                onTap: syncedAccount && !_isDeleting && !_isExporting
+                    ? _confirmDeleteAccount
+                    : null,
               ),
             ],
           ),
-        );
-      },
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            key: const ValueKey('appearance-setting-entry'),
+            leading: Icon(_appearanceIcon(themeSelection)),
+            title: const Text('Appearance'),
+            subtitle: Text(
+              '${_appearanceLabel(themeSelection)} · Saved on this device.',
+            ),
+            trailing: const Icon(AppIcons.chevronRight),
+            onTap: _chooseAppearance,
+          ),
+        ),
+        if (config != null)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const ValueKey('build-identity-setting'),
+              leading: const Icon(AppIcons.infoOutline),
+              title: const Text('Build identity'),
+              subtitle: Text(
+                '${config.environment} · '
+                '${config.appReleaseTag.isEmpty ? 'development' : config.appReleaseTag} · '
+                '${config.appBuildSha.isEmpty ? 'development' : config.appBuildSha.length <= 12 ? config.appBuildSha : config.appBuildSha.substring(0, 12)}',
+              ),
+            ),
+          ),
+        AppCard(
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isSigningOut ? null : _signOut,
+              icon: _isSigningOut
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(AppIcons.logoutOutlined),
+              label: const Text('Sign out'),
+            ),
+          ),
+        ),
+      ],
     );
+  }
 
-    if (result == null) {
+  Future<void> _chooseTimezone() async {
+    final profile = ref.read(authControllerProvider).valueOrNull?.profile;
+    if (profile == null) return;
+    final timezone = await showDialog<String>(
+      context: context,
+      builder: (context) => _TimezoneDialog(current: profile.timezone),
+    );
+    if (!mounted || timezone == null || timezone == profile.timezone) return;
+    final accountRepository = ref.read(accountSettingsRepositoryProvider);
+    final authController = ref.read(authControllerProvider.notifier);
+    setState(() => _isSavingTimezone = true);
+    try {
+      final saved = await accountRepository.updateTimezone(
+        timezone,
+        expectedRevision: profile.timezoneRevision,
+      );
+      authController.updateProfileTimezone(
+        saved.timezone,
+        revision: saved.revision,
+      );
+      await ref.read(projectionRefreshCoordinatorProvider).timezoneChanged();
+      if (mounted) {
+        _showMessage('Timezone updated to ${saved.timezone}.');
+      }
+    } on AccountTimezoneRejectedException {
+      if (mounted) {
+        _showMessage(
+          'Timezone was not recognized. Choose another IANA timezone.',
+        );
+      }
+    } on AccountProfileUpdateOutcomeUnknownException {
+      if (mounted) {
+        _showMessage(
+          'Timezone update could not be confirmed. Select the same timezone again to retry safely, or sign in again to verify it before choosing another.',
+        );
+      }
+    } on AccountSettingConflictException {
+      if (mounted) {
+        _showMessage(
+          'Timezone changed elsewhere. Reload Settings and try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not update the timezone. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingTimezone = false);
+    }
+  }
+
+  Future<void> _chooseDailyPreparationBudget() async {
+    final profile = ref.read(authControllerProvider).valueOrNull?.profile;
+    if (profile == null) return;
+    final choice = await showDialog<_PreparationBudgetChoice>(
+      context: context,
+      builder: (_) => _PreparationBudgetDialog(
+        current: profile.dailyPreparationBudgetMinutes,
+      ),
+    );
+    if (!mounted ||
+        choice == null ||
+        choice.minutes == profile.dailyPreparationBudgetMinutes) {
       return;
     }
-
-    setState(() {
-      _name = result.name.isEmpty ? _name : result.name;
-      _email = result.email.isEmpty ? _email : result.email;
-      _timezone = result.timezone.isEmpty ? _timezone : result.timezone;
-    });
-    _showSnack('Profile updated.');
-  }
-
-  Future<void> _connectGoogle() async {
+    final repository = ref.read(accountSettingsRepositoryProvider);
+    final authController = ref.read(authControllerProvider.notifier);
+    setState(() => _isSavingPreparationBudget = true);
     try {
-      await ref.read(authControllerProvider.notifier).signInWithGoogle();
+      final saved = await repository.updateDailyPreparationBudget(
+        choice.minutes,
+        expectedRevision: profile.preparationBudgetRevision,
+      );
+      authController.updateDailyPreparationBudget(
+        saved.minutes,
+        revision: saved.revision,
+      );
+      await ref
+          .read(projectionRefreshCoordinatorProvider)
+          .preparationBudgetChanged();
+      if (mounted) {
+        _showMessage(
+          saved.minutes == null
+              ? 'Account-wide preparation budget removed.'
+              : 'Daily preparation budget set to '
+                  '${_formatMinutes(saved.minutes!)}.',
+        );
+      }
+    } on AccountPreparationBudgetRejectedException {
+      if (mounted) {
+        _showMessage('Choose 25 to 480 minutes in five-minute steps.');
+      }
+    } on AccountPreparationBudgetUpdateOutcomeUnknownException {
+      if (mounted) {
+        _showMessage(
+          'The budget update could not be confirmed. Retry the same value or sign in again before choosing another.',
+        );
+      }
+    } on AccountSettingConflictException {
+      if (mounted) {
+        _showMessage(
+          'Preparation budget changed elsewhere. Reload Settings and try again.',
+        );
+      }
     } catch (_) {
-      _showSnack('Enable Google OAuth in Supabase first.');
+      if (mounted) {
+        _showMessage('Could not update the preparation budget. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingPreparationBudget = false);
     }
-  }
-
-  Future<void> _signOut() async {
-    await ref.read(authControllerProvider.notifier).signOut();
-    if (mounted) {
-      context.go(AppRoutes.auth);
-    }
-  }
-
-  Future<void> _openEmailPreferences() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _SettingsColors.panel(context),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) => _SettingsSheet(
-            title: 'Email preferences',
-            child: Column(
-              children: [
-                _SheetSwitch(
-                  title: 'Weekly review',
-                  subtitle: 'Send a summary of patterns and completed tasks.',
-                  value: _weeklyReview,
-                  onChanged: (value) {
-                    setState(() => _weeklyReview = value);
-                    setSheetState(() {});
-                  },
-                ),
-                _SheetSwitch(
-                  title: 'Daily reminders',
-                  subtitle: 'Send nudges for alerts and check-ins.',
-                  value: _dailyReminders,
-                  onChanged: (value) {
-                    setState(() => _dailyReminders = value);
-                    setSheetState(() {});
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openAlertRules() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _SettingsColors.panel(context),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) => _SettingsSheet(
-            title: 'Alert rules',
-            child: Column(
-              children: [
-                _SheetSwitch(
-                  title: 'Sleep debt warnings',
-                  subtitle: 'Warn when recovery drops below your usual range.',
-                  value: _sleepAlerts,
-                  onChanged: (value) {
-                    setState(() => _sleepAlerts = value);
-                    setSheetState(() {});
-                  },
-                ),
-                _SheetSwitch(
-                  title: 'Screen time nudges',
-                  subtitle: 'Flag high screen-time days before focus blocks.',
-                  value: _screenTimeAlerts,
-                  onChanged: (value) {
-                    setState(() => _screenTimeAlerts = value);
-                    setSheetState(() {});
-                  },
-                ),
-                _SheetSwitch(
-                  title: 'Deadline warnings',
-                  subtitle: 'Create focus prompts before due dates.',
-                  value: _deadlineAlerts,
-                  onChanged: (value) {
-                    setState(() => _deadlineAlerts = value);
-                    setSheetState(() {});
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openCoachBehavior() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _SettingsColors.panel(context),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) => _SettingsSheet(
-            title: 'Coach behavior',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'Calm', label: Text('Calm')),
-                    ButtonSegment(value: 'Balanced', label: Text('Balanced')),
-                    ButtonSegment(value: 'Direct', label: Text('Direct')),
-                  ],
-                  selected: {_coachTone},
-                  onSelectionChanged: (selection) {
-                    setState(() => _coachTone = selection.first);
-                    setSheetState(() {});
-                  },
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  'Reminder intensity',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Slider(
-                  value: _coachIntensity,
-                  onChanged: (value) {
-                    setState(() => _coachIntensity = value);
-                    setSheetState(() {});
-                  },
-                ),
-                Text(
-                  '${(_coachIntensity * 100).round()}%',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openPrivacy() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _SettingsColors.panel(context),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) => _SettingsSheet(
-            title: 'Privacy',
-            child: Column(
-              children: [
-                _SheetSwitch(
-                  title: 'Personal memory',
-                  subtitle: 'Allow coach to use stored context.',
-                  value: _memoryEnabled,
-                  onChanged: (value) {
-                    setState(() => _memoryEnabled = value);
-                    setSheetState(() {});
-                  },
-                ),
-                const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      setState(() => _memoryEnabled = false);
-                      setSheetState(() {});
-                      _showSnack('Memory disabled and hidden locally.');
-                    },
-                    child: const Text('Clear local memory'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openSecurity() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _SettingsColors.panel(context),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) => _SettingsSheet(
-            title: 'Security',
-            child: Column(
-              children: [
-                _SheetSwitch(
-                  title: 'Biometric app lock',
-                  subtitle: 'Prepared for mobile secure storage.',
-                  value: _biometricLock,
-                  onChanged: (value) {
-                    setState(() => _biometricLock = value);
-                    setSheetState(() {});
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openTimetableSetup() async {
-    context.go('${AppRoutes.onboarding}?edit=1');
   }
 
   Future<void> _exportData() async {
-    final payload = const JsonEncoder.withIndent('  ').convert({
-      'profile': {
-        'name': _name,
-        'email': _email,
-        'timezone': _timezone,
-        'guestMode': _guestMode,
-      },
-      'preferences': {
-        'themeMode': ref.read(appThemeModeProvider).name,
-        'weeklyReview': _weeklyReview,
-        'dailyReminders': _dailyReminders,
-        'coachTone': _coachTone,
-        'coachIntensity': _coachIntensity,
-      },
-      'alertRules': {
-        'sleep': _sleepAlerts,
-        'screenTime': _screenTimeAlerts,
-        'deadlines': _deadlineAlerts,
-      },
-    });
+    final accountRepository = ref.read(accountSettingsRepositoryProvider);
+    final exportSaver = ref.read(accountExportSaverProvider);
+    final sharePositionOrigin = _sharePositionOrigin();
+    setState(() => _isExporting = true);
+    try {
+      final export = await accountRepository.exportAccount();
+      if (!mounted) return;
+      final result = await exportSaver.save(
+        suggestedName: _exportFileName(DateTime.now().toUtc()),
+        export: export,
+        sharePositionOrigin: sharePositionOrigin,
+      );
+      if (!mounted) return;
+      _showMessage(
+        switch (result) {
+          AccountExportSaveResult.saved => 'Account export saved.',
+          AccountExportSaveResult.shared =>
+            'Account export handoff opened on this device.',
+          AccountExportSaveResult.cancelled =>
+            'Export cancelled. No destination was selected.',
+          AccountExportSaveResult.shareDismissed =>
+            'Share dismissed. No destination was selected; the platform may retain a temporary protected cache copy until cleanup.',
+        },
+      );
+    } on AccountExportTooLargeException {
+      if (mounted) {
+        _showMessage(
+          'The current export cannot include this much data. Nothing was exported; remove data only if you already intended to, then try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not export account data. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
 
-    await showDialog<void>(
+  Rect? _sharePositionOrigin() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final expectedUserId =
+        ref.read(authControllerProvider).valueOrNull?.profile.id;
+    if (expectedUserId == null) {
+      _showMessage('Your account identity is unavailable. Sign in again.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => const _DeleteAccountDialog(),
+        ) ??
+        false;
+    if (!mounted || !confirmed) return;
+    final accountRepository = ref.read(accountSettingsRepositoryProvider);
+    final authController = ref.read(authControllerProvider.notifier);
+    final authNotice = ref.read(authNoticeProvider.notifier);
+    setState(() => _isDeleting = true);
+    try {
+      await authController.prepareAccountDeletion();
+      if (ref.read(authControllerProvider).valueOrNull?.profile.id !=
+          expectedUserId) {
+        throw const AccountSettingsAccessException(
+          'Your account changed before deletion could start.',
+        );
+      }
+      final result = await accountRepository.deleteAccount(
+        expectedUserId: expectedUserId,
+      );
+      if (!result.journalDurable) {
+        authController.enterAccountDeletionRecovery(result);
+        authNotice.state = const AuthNotice(
+          'Deletion is paused before the recovery journal was confirmed. Retry from the deletion recovery screen; your account stays signed in for that retry.',
+          isError: true,
+        );
+        if (mounted) setState(() => _isDeleting = false);
+        return;
+      }
+      authNotice.state = AuthNotice(
+        result.isCompleted
+            ? 'Account and saved synced data deleted.'
+            : 'Deletion was durably accepted and will finish in the background.',
+      );
+    } on AccountRecentAuthenticationRequiredException {
+      if (mounted) {
+        _showMessage(
+          'For safety, sign out and sign in again, then return here to delete the account.',
+        );
+        setState(() => _isDeleting = false);
+      }
+      return;
+    } on AccountDeletionOutcomeUnknownException {
+      try {
+        final recovery = await authController.retryAccountDeletion();
+        authNotice.state = AuthNotice(
+          recovery?.journalDurable == true
+              ? 'Deletion was durably accepted. Finish sign-out from the recovery screen.'
+              : 'Deletion could not yet be confirmed. Retry the same request from the recovery screen.',
+          isError: recovery?.journalDurable != true,
+        );
+      } catch (_) {
+        authNotice.state = const AuthNotice(
+          'Deletion could not yet be confirmed. Reopen the app while signed in to retry the same request.',
+          isError: true,
+        );
+      }
+      if (mounted) setState(() => _isDeleting = false);
+      return;
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not delete the account. You remain signed in.');
+      }
+      if (mounted) setState(() => _isDeleting = false);
+      return;
+    }
+    try {
+      await authController.finalizeDeletedAccount(
+        coachCredentialsAlreadyCleared: true,
+      );
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          'The account was deleted and this device was signed out. Sign-out on another active device could not be confirmed.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<void> _chooseAppearance() async {
+    final current = ref.read(appThemeSelectionProvider);
+    final selected = await showDialog<AppThemeId>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Export data'),
-        content: SingleChildScrollView(
-          child: SelectableText(payload),
+      builder: (_) => _AppearanceDialog(current: current),
+    );
+    if (!mounted || selected == null || selected == current) return;
+    final controller = ref.read(appThemeSelectionProvider.notifier);
+    final saved = await controller.select(selected);
+    if (!saved && mounted) {
+      _showMessage('Could not save the appearance setting. Try again.');
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+  }
+
+  Future<void> _signOut() async {
+    final authController = ref.read(authControllerProvider.notifier);
+    setState(() => _isSigningOut = true);
+    try {
+      await authController.signOut();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not sign out. Try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSigningOut = false);
+      }
+    }
+  }
+}
+
+class _CoachByokSettingsCard extends ConsumerStatefulWidget {
+  const _CoachByokSettingsCard();
+
+  @override
+  ConsumerState<_CoachByokSettingsCard> createState() =>
+      _CoachByokSettingsCardState();
+}
+
+class _CoachByokSettingsCardState
+    extends ConsumerState<_CoachByokSettingsCard> {
+  final _openAiController = TextEditingController();
+  final _geminiController = TextEditingController();
+
+  @override
+  void dispose() {
+    _openAiController.dispose();
+    _geminiController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    late final CoachCredentials credentials;
+    try {
+      credentials = ref.watch(coachCredentialsProvider);
+    } on StateError {
+      return AppCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: const Icon(AppIcons.forumOutlined),
+          title: const Text('Coach'),
+          subtitle: const Text('Read-only Coach and provider keys.'),
+          trailing: const Icon(AppIcons.chevronRight),
+          onTap: () => context.push(AppRoutes.coach),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+      );
+    }
+    final selected = credentials.provider;
+    final isByok = const {
+      CoachProviderName.openai,
+      CoachProviderName.gemini,
+    }.contains(selected);
+    final input = selected == CoachProviderName.gemini
+        ? _geminiController
+        : _openAiController;
+    final hasKey = selected != null && isByok && credentials.hasKey(selected);
+    final subtitle = selected == CoachProviderName.operatorCodexPilot
+        ? 'Project Coach selected; no personal API key required.'
+        : isByok
+            ? 'Personal API-key provider selected.'
+            : 'Choose Project Coach or use your own API key.';
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: ExpansionTile(
+        key: const ValueKey('settings-coach-provider'),
+        leading: const Icon(AppIcons.forumOutlined),
+        title: const Text('Coach'),
+        subtitle: Text(subtitle),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
+        children: [
+          DropdownButtonFormField<CoachProviderName>(
+            key: const ValueKey('coach-provider-selection'),
+            initialValue: selected,
+            decoration: const InputDecoration(
+              labelText: 'Coach mode',
+              hintText: 'Choose a mode',
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: CoachProviderName.operatorCodexPilot,
+                child: Text('Project Coach'),
+              ),
+              DropdownMenuItem(
+                value: CoachProviderName.openai,
+                child: Text('Use my OpenAI key'),
+              ),
+              DropdownMenuItem(
+                value: CoachProviderName.gemini,
+                child: Text('Use my Gemini key'),
+              ),
+            ],
+            onChanged: credentials.busy
+                ? null
+                : (value) {
+                    if (value != null) {
+                      ref.read(coachCredentialsProvider.notifier).select(value);
+                    }
+                  },
+          ),
+          if (selected == CoachProviderName.operatorCodexPilot) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'The project VPS creates a temporary read-only snapshot of your '
+              'app data. Restricted Coach tools send your question and only '
+              'the results they query to the shared pilot Codex account. It '
+              'has limited shared capacity: '
+              'up to 5 turns per account and 15 dispatched turns in total per '
+              'UTC day. Busy or unavailable never falls back to your key.',
+            ),
+          ] else if (isByok) ...[
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              key: ValueKey('coach-key-${selected!.code}'),
+              controller: input,
+              obscureText: true,
+              enableSuggestions: false,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: hasKey ? 'Replacement API key' : 'API key',
+                helperText: hasKey
+                    ? 'A tested key is saved on this device.'
+                    : 'No key is saved for this provider.',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                FilledButton(
+                  key: const ValueKey('coach-key-test-save'),
+                  onPressed: credentials.busy
+                      ? null
+                      : () async {
+                          final saved = await ref
+                              .read(coachCredentialsProvider.notifier)
+                              .testAndSave(selected, input.text);
+                          if (saved && context.mounted) {
+                            input.clear();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Provider key tested and saved.'),
+                              ),
+                            );
+                          }
+                        },
+                  child: Text(hasKey ? 'Test and replace' : 'Test and save'),
+                ),
+                if (hasKey)
+                  OutlinedButton(
+                    key: const ValueKey('coach-key-delete'),
+                    onPressed: credentials.busy
+                        ? null
+                        : () => ref
+                            .read(coachCredentialsProvider.notifier)
+                            .delete(selected),
+                    child: const Text('Delete key'),
+                  ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'Select a mode explicitly. The app never switches providers '
+              'after an error.',
+            ),
+          ],
+          if (credentials.error case final error?) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              error,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => context.push(AppRoutes.coach),
+              child: const Text('Open Coach'),
+            ),
+          ),
+          Text(
+            'Personal provider requests may cost money. Relevant results from '
+            'your read-only Coach query are sent only to the mode you select. '
+            'On web, personal keys exist only in this tab and are cleared by '
+            'reload.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -515,536 +839,452 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-class _SettingsHeader extends StatelessWidget {
-  const _SettingsHeader({required this.lightModeEnabled});
+String _exportFileName(DateTime utcNow) {
+  String two(int value) => value.toString().padLeft(2, '0');
+  return 'mylifegraph-export-${utcNow.year}-${two(utcNow.month)}-'
+      '${two(utcNow.day)}.json';
+}
 
-  final bool lightModeEnabled;
+String _formatMinutes(int minutes) {
+  final hours = minutes ~/ 60;
+  final remainder = minutes % 60;
+  if (hours == 0) return '$minutes min';
+  if (remainder == 0) return '${hours}h';
+  return '${hours}h ${remainder}m';
+}
+
+String _appearanceLabel(AppThemeId id) => switch (id) {
+      AppThemeId.dark => 'Dark',
+      AppThemeId.light => 'Light',
+      AppThemeId.space => 'Space',
+    };
+
+String _appearanceDescription(AppThemeId id) => switch (id) {
+      AppThemeId.dark => 'Calm dark default',
+      AppThemeId.light => 'Bright neutral',
+      AppThemeId.space => 'Animated violet and cyan',
+    };
+
+IconData _appearanceIcon(AppThemeId id) => switch (id) {
+      AppThemeId.dark => AppIcons.darkModeOutlined,
+      AppThemeId.light => AppIcons.lightModeOutlined,
+      AppThemeId.space => AppIcons.autoAwesomeRounded,
+    };
+
+class _AppearanceDialog extends StatelessWidget {
+  const _AppearanceDialog({required this.current});
+
+  final AppThemeId current;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'APP SETTINGS',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      letterSpacing: 4,
-                    ),
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Choose appearance'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final id in AppThemeId.values) ...[
+              _AppearanceOption(
+                id: id,
+                selected: current == id,
+                onTap: () => Navigator.of(context).pop(id),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Settings',
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontSize: 48,
-                      height: 1,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Account, data, privacy, appearance, and integrations.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: _SettingsColors.mutedText(context),
-                      height: 1.55,
-                    ),
-              ),
+              if (id != AppThemeId.values.last)
+                const SizedBox(height: AppSpacing.sm),
             ],
-          ),
+          ],
         ),
-        const SizedBox(width: AppSpacing.md),
-        _IconTile(icon: lightModeEnabled ? Icons.light_mode : Icons.dark_mode),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
       ],
     );
   }
 }
 
-class _ProfileSummary extends StatelessWidget {
-  const _ProfileSummary({
-    required this.name,
-    required this.email,
-    required this.status,
+class _AppearanceOption extends StatelessWidget {
+  const _AppearanceOption({
+    required this.id,
+    required this.selected,
+    required this.onTap,
   });
 
-  final String name;
-  final String email;
-  final String status;
+  final AppThemeId id;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsSurface(
-      child: Row(
-        children: [
-          Icon(
-            Icons.person_outline,
-            color: Theme.of(context).colorScheme.primary,
-            size: 34,
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: Theme.of(context).textTheme.titleLarge),
-                Text(email, style: Theme.of(context).textTheme.bodyLarge),
-              ],
-            ),
-          ),
-          _StatusPill(label: status),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsPanel extends StatelessWidget {
-  const _SettingsPanel({
-    required this.title,
-    required this.children,
-  });
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SettingsSurface(
+    final previewTokens = AppTheme.resolve(id).extension<AppVisualTokens>()!;
+    final swatches = [
+      previewTokens.background,
+      previewTokens.surfaceInteractive,
+      previewTokens.brand,
+    ];
+    final label = _appearanceLabel(id);
+    final description = _appearanceDescription(id);
+    return AppSurface(
+      key: ValueKey('appearance-option-${id.name}'),
+      variant: AppSurfaceVariant.interactive,
+      selected: selected,
+      semanticLabel: '$label, $description',
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.lg),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingActionRow extends StatelessWidget {
-  const _SettingActionRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.iconColor,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SettingRowShell(
-      onTap: onTap,
-      child: Row(
-        children: [
-          _SmallIconBox(icon: icon, color: iconColor),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: _RowText(title: title, subtitle: subtitle)),
-          const Icon(Icons.chevron_right),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingToggleRow extends StatelessWidget {
-  const _SettingToggleRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.valueLabel,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String valueLabel;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SettingRowShell(
-      onTap: () => onChanged(!value),
-      child: Row(
-        children: [
-          Expanded(child: _RowText(title: title, subtitle: subtitle)),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
-            decoration: BoxDecoration(
-              color: _SettingsColors.button(context),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: _SettingsColors.border(context)),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Text(valueLabel, style: Theme.of(context).textTheme.labelLarge),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DataGrid extends StatelessWidget {
-  const _DataGrid({required this.stats});
-
-  final List<_DataStat> stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
-          children: stats.map((stat) {
-            final width = (constraints.maxWidth - AppSpacing.md) / 2;
-            return SizedBox(
-              width: width,
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: _SettingsColors.row(context),
-                  borderRadius: BorderRadius.circular(18),
-                ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppIconBadge(icon: _appearanceIcon(id)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(label, style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
-                      stat.value,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    Text(
-                      stat.label,
+                      description,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
               ),
-            );
-          }).toList(),
-        );
-      },
+              if (selected) ...[
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(AppIcons.check, size: 20),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ExcludeSemantics(
+            child: Wrap(
+              spacing: AppSpacing.xs,
+              children: [
+                for (final swatch in swatches)
+                  Container(
+                    width: 32,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: swatch,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(
+                        color: context.visualTokens.focus,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _FullWidthAction extends StatelessWidget {
-  const _FullWidthAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.filled = false,
-  });
+class _TimezoneDialog extends StatefulWidget {
+  const _TimezoneDialog({required this.current});
 
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool filled;
+  final String current;
+
+  @override
+  State<_TimezoneDialog> createState() => _TimezoneDialogState();
+}
+
+class _TimezoneDialogState extends State<_TimezoneDialog> {
+  static const _customValue = '__custom_iana_timezone__';
+  String? _selected;
+  late final TextEditingController _customController;
+
+  @override
+  void initState() {
+    super.initState();
+    final curated = isSupportedAccountTimezone(widget.current);
+    _selected = curated ? widget.current : _customValue;
+    _customController = TextEditingController(
+      text: curated ? '' : widget.current,
+    );
+  }
+
+  @override
+  void dispose() {
+    _customController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: filled
-              ? _SettingsColors.row(context)
-              : _SettingsColors.button(context),
-          borderRadius: BorderRadius.circular(18),
-          border: filled
-              ? null
-              : Border.all(color: _SettingsColors.border(context)),
-        ),
-        child: Row(
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Account timezone'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon),
-            const SizedBox(width: AppSpacing.md),
-            Text(label, style: Theme.of(context).textTheme.titleMedium),
+            DropdownButtonFormField<String>(
+              initialValue: _selected,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'IANA timezone',
+                helperText:
+                    'Used for local dates, briefings, reviews, and budgets.',
+              ),
+              items: [
+                for (final timezone in supportedAccountTimezones)
+                  DropdownMenuItem(value: timezone, child: Text(timezone)),
+                const DropdownMenuItem(
+                  value: _customValue,
+                  child: Text('Enter another IANA timezone…'),
+                ),
+              ],
+              onChanged: (value) => setState(() => _selected = value),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'New rule-based proposals and recurring commitments use this timezone. Existing preparation reservations keep their saved instants; imported calendar files do not refresh automatically.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (_selected == _customValue) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _customController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Custom IANA timezone',
+                  hintText: 'Africa/Johannesburg',
+                  helperText: 'The account service validates the zone.',
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: !isValidAccountTimezone(_selectedTimezone)
+              ? null
+              : () => Navigator.of(context).pop(_selectedTimezone.trim()),
+          child: const Text('Save timezone'),
+        ),
+      ],
     );
   }
+
+  String get _selectedTimezone =>
+      _selected == _customValue ? _customController.text : _selected ?? '';
 }
 
-class _SettingsSurface extends StatelessWidget {
-  const _SettingsSurface({required this.child});
+class _PreparationBudgetChoice {
+  const _PreparationBudgetChoice(this.minutes);
 
-  final Widget child;
+  final int? minutes;
+}
+
+class _PreparationBudgetDialog extends StatefulWidget {
+  const _PreparationBudgetDialog({required this.current});
+
+  final int? current;
+
+  @override
+  State<_PreparationBudgetDialog> createState() =>
+      _PreparationBudgetDialogState();
+}
+
+class _PreparationBudgetDialogState extends State<_PreparationBudgetDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.current?.toString() ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: _SettingsColors.panel(context),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: _SettingsColors.border(context), width: 2),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _SettingRowShell extends StatelessWidget {
-  const _SettingRowShell({
-    required this.child,
-    required this.onTap,
-  });
-
-  final Widget child;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: _SettingsColors.row(context),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: child,
+    final minutes = int.tryParse(_controller.text.trim());
+    final valid = minutes != null && isValidDailyPreparationBudget(minutes);
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Daily preparation budget'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Set the most preparation time you want reserved per day across all confirmed exam and assignment plans.',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'This is a transparent rule, not an AI estimate. Existing reservations are not changed; days above a new lower budget are marked Needs review.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              key: const ValueKey('daily-preparation-budget-input'),
+              controller: _controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Total preparation minutes per day',
+                helperText: '25–480 minutes, in five-minute steps.',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final preset in const [60, 120, 180, 240, 360, 480])
+                  ChoiceChip(
+                    label: Text(_formatMinutes(preset)),
+                    selected: minutes == preset,
+                    onSelected: (_) {
+                      _controller.text = '$preset';
+                      setState(() {});
+                    },
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _SmallIconBox extends StatelessWidget {
-  const _SmallIconBox({required this.icon, this.color});
-
-  final IconData icon;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: _SettingsColors.button(context),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Icon(
-        icon,
-        color: color ?? Theme.of(context).colorScheme.primary,
-      ),
-    );
-  }
-}
-
-class _IconTile extends StatelessWidget {
-  const _IconTile({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(
-        color: _SettingsColors.iconTile(context),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: _SettingsColors.border(context), width: 2),
-      ),
-      child: Icon(
-        icon,
-        color: Theme.of(context).colorScheme.primary,
-        size: 34,
-      ),
-    );
-  }
-}
-
-class _RowText extends StatelessWidget {
-  const _RowText({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (widget.current != null)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(
+              const _PreparationBudgetChoice(null),
+            ),
+            child: const Text('Remove budget'),
+          ),
+        FilledButton(
+          onPressed: valid
+              ? () => Navigator.of(context).pop(
+                    _PreparationBudgetChoice(minutes),
+                  )
+              : null,
+          child: const Text('Save budget'),
+        ),
       ],
     );
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label});
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
 
-  final String label;
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _confirmationController = TextEditingController();
+
+  @override
+  void dispose() {
+    _confirmationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+    final confirmed = _confirmationController.text == 'DELETE';
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Delete account permanently?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This permanently deletes the synced account and owned data. This action cannot be undone. For safety, you must have signed in within the last 15 minutes.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _confirmationController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Type DELETE to confirm',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
       ),
-      decoration: BoxDecoration(
-        color: _SettingsColors.pill(context),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: confirmed ? () => Navigator.of(context).pop(true) : null,
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
+          child: const Text('Delete account'),
+        ),
+      ],
     );
   }
 }
 
-class _SettingsSheet extends StatelessWidget {
-  const _SettingsSheet({
-    required this.title,
-    required this.child,
-  });
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.lg,
-          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.lg),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetField extends StatelessWidget {
-  const _SheetField({
+class _ProfileValue extends StatelessWidget {
+  const _ProfileValue({
     required this.label,
-    required this.controller,
+    required this.value,
+    this.isLast = false,
   });
 
   final String label;
-  final TextEditingController controller;
+  final String? value;
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
+    final displayValue = value?.trim();
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: TextField(
-        controller: controller,
-        decoration: InputDecoration(labelText: label),
+      padding: EdgeInsets.only(bottom: isLast ? 0 : AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 88,
+            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+          Expanded(
+            child: Text(
+              displayValue == null || displayValue.isEmpty
+                  ? 'Not available'
+                  : displayValue,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ),
+        ],
       ),
     );
   }
-}
-
-class _SheetSwitch extends StatelessWidget {
-  const _SheetSwitch({
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      value: value,
-      onChanged: onChanged,
-      title: Text(title),
-      subtitle: Text(subtitle),
-      contentPadding: EdgeInsets.zero,
-    );
-  }
-}
-
-class _DataStat {
-  const _DataStat(this.value, this.label);
-
-  final String value;
-  final String label;
-}
-
-class _ProfileDraft {
-  const _ProfileDraft(this.name, this.email, this.timezone);
-
-  final String name;
-  final String email;
-  final String timezone;
-}
-
-class _SettingsColors {
-  const _SettingsColors._();
-
-  static bool _light(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.light;
-
-  static Color panel(BuildContext context) =>
-      _light(context) ? const Color(0xFFFFFFFF) : const Color(0xFF122329);
-
-  static Color row(BuildContext context) =>
-      _light(context) ? const Color(0xFFEAF1F0) : const Color(0xFF202B32);
-
-  static Color button(BuildContext context) =>
-      _light(context) ? const Color(0xFFF7FAFA) : const Color(0xFF0D121A);
-
-  static Color iconTile(BuildContext context) =>
-      _light(context) ? const Color(0xFFE7F4F1) : const Color(0xFF15242A);
-
-  static Color pill(BuildContext context) =>
-      _light(context) ? const Color(0xFFE0E9E7) : const Color(0xFF2A323C);
-
-  static Color border(BuildContext context) =>
-      _light(context) ? const Color(0xFFD4E1DF) : const Color(0xFF2A424A);
-
-  static Color mutedText(BuildContext context) =>
-      _light(context) ? const Color(0xFF607078) : const Color(0xFFA8B5BE);
 }

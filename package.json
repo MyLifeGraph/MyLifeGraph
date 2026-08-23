@@ -1,0 +1,38 @@
+{
+  "name": "mylifegraph-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:local": "bash scripts/start_local_stack.sh",
+    "prepare:coach-analysis": "bash scripts/prepare_coach_analysis_image.sh",
+    "start:local:coach": "LOCAL_STACK_COACH_PROVIDER=local_codex_oauth bash scripts/start_local_stack.sh",
+    "start:local:coach:fake": "LOCAL_STACK_COACH_PROVIDER=fake bash scripts/start_local_stack.sh",
+    "verify": "npm run verify:fast",
+    "verify:fast": "bash scripts/verify_fast.sh",
+    "verify:db": "bash scripts/verify_supabase_local.sh",
+    "verify:web": "bash scripts/verify_web.sh",
+    "verify:staging:remote": "node scripts/verify_staging_remote.mjs",
+    "verify:vps": "python3 -m unittest discover -s deploy/vps/tests -p 'test_*.py'",
+    "verify:android-release": "node --test scripts/android_release_identity.test.mjs scripts/check_android_release_config.test.mjs && node scripts/check_android_release_config.mjs",
+    "verify:vercel-release": "bash -n scripts/vercel_build.sh && node --test scripts/verify_vercel_build_identity.test.mjs scripts/write_web_csp.test.mjs scripts/vercel_build_config.test.mjs",
+    "verify:backup": "python3 -m unittest discover -s deploy/backup/tests -p 'test_*.py'",
+    "seed:staging-scenarios": "node scripts/generate_staging_scenarios.mjs",
+    "configure:pilot-participation": "node scripts/configure_pilot_participation_gate.mjs",
+    "verify:affected": "bash scripts/verify_affected.sh",
+    "verify:full": "npm run verify:fast && npm run verify:db && npm run verify:web && npm run e2e:web:full",
+    "verify:docs": "node --test scripts/check_docs_consistency.test.mjs && node scripts/check_docs_consistency.mjs",
+    "verify:visual": "node --test scripts/check_frontend_visual_contract.test.mjs && node scripts/check_frontend_visual_contract.mjs",
+    "verify:local-stack": "bash scripts/test_local_supabase_migrations.sh && bash scripts/test_start_local_stack.sh",
+    "verify:supabase": "npm run verify:db",
+    "db:backup:local": "bash scripts/backup_local_supabase.sh",
+    "db:reset:local": "bash scripts/reset_local_supabase.sh",
+    "e2e:web": "npm run e2e:web:full",
+    "e2e:web:smoke": "E2E_SUITE=smoke bash scripts/e2e_web.sh",
+    "e2e:web:full": "E2E_SUITE=full bash scripts/e2e_web.sh",
+    "e2e:cleanup:local": "bash scripts/cleanup_local_e2e_users.sh",
+    "seed:demo": "bash scripts/seed_demo_data.sh"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

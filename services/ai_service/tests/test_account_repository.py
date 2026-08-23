@@ -1,0 +1,604 @@
+import asyncio
+from datetime import UTC, datetime
+
+import httpx
+import pytest
+
+from app.clients.supabase import SupabaseResponseTooLargeError
+from app.repositories.account_repository import (
+    AccountDeletionOutcomeUnknownError,
+    AccountExportSourceTooLargeError,
+    AccountExportTable,
+    AccountPersistenceError,
+    AccountPreparationBudgetUpdateOutcomeUnknownError,
+    AccountParticipationOutcomeUnknownError,
+    AccountProfileUpdateOutcomeUnknownError,
+    StoredPreparationBudget,
+    StoredPilotParticipation,
+    StoredTimezone,
+    SupabaseAccountRepository,
+)
+
+NOW = datetime(2026, 7, 29, 12, tzinfo=UTC)
+
+
+class Client:
+    def __init__(self) -> None:
+        self.update_rows = [{"timezone": "America/New_York"}]
+        self.select_rows: dict[str, list[dict[str, object]]] = {}
+        self.rpc_result: object = {
+            "deleted": True,
+            "not_found": False,
+            "user_id": "owner-1",
+        }
+        self.update_calls = []
+        self.select_calls = []
+        self.rpc_calls = []
+        self.update_error: Exception | None = None
+        self.select_error: Exception | None = None
+        self.rpc_error: Exception | None = None
+        self.rpc_outcomes: list[object | Exception] = []
+
+    async def update(self, table: str, *, values, params):
+        self.update_calls.append((table, values, params))
+        if self.update_error is not None:
+            raise self.update_error
+        return self.update_rows
+
+    async def select(self, table: str, *, params, max_response_bytes=None):
+        self.select_calls.append((table, params, max_response_bytes))
+        if self.select_error is not None:
+            raise self.select_error
+        return self.select_rows.get(table, [])
+
+    async def rpc(self, function: str, *, params):
+        self.rpc_calls.append((function, params))
+        if self.rpc_outcomes:
+            outcome = self.rpc_outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+        if self.rpc_error is not None:
+            raise self.rpc_error
+        return self.rpc_result
+
+
+def _http_error(
+    status_code: int = 500,
+    *,
+    code: str | None = None,
+) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "http://test/rest/v1/rpc/delete_account_v1")
+    payload = {"message": "secret"}
+    if code is not None:
+        payload["code"] = code
+    response = httpx.Response(
+        status_code,
+        request=request,
+        json=payload,
+    )
+    return httpx.HTTPStatusError(
+        "secret upstream detail",
+        request=request,
+        response=response,
+    )
+
+
+def _timezone_kwargs() -> dict[str, object]:
+    return {
+        "user_id": "owner-1",
+        "request_id": "00000000-0000-4000-8000-000000000001",
+        "request_fingerprint": "a" * 64,
+        "expected_revision": 4,
+        "timezone": "America/New_York",
+        "now": NOW,
+    }
+
+
+def _budget_kwargs(minutes: int | None = 120) -> dict[str, object]:
+    return {
+        "user_id": "owner-1",
+        "request_id": "00000000-0000-4000-8000-000000000002",
+        "request_fingerprint": "b" * 64,
+        "expected_revision": 6,
+        "minutes": minutes,
+        "now": NOW,
+    }
+
+
+def test_timezone_update_calls_owner_locked_v2_rpc_and_returns_projection() -> None:
+    client = Client()
+    client.rpc_result = {
+        "contract_version": "account-profile-v2",
+        "timezone": "America/New_York",
+        "revision": 5,
+        "updated_at": NOW.isoformat(),
+        "replayed": False,
+    }
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(repository.update_timezone(**_timezone_kwargs()))
+
+    assert result == StoredTimezone(
+        timezone="America/New_York",
+        revision=5,
+        updated_at=NOW,
+        replayed=False,
+    )
+    assert client.rpc_calls == [
+        (
+            "apply_account_timezone_v2",
+            {
+                "p_user_id": "owner-1",
+                "p_request_id": "00000000-0000-4000-8000-000000000001",
+                "p_request_fingerprint": "a" * 64,
+                "p_expected_revision": 4,
+                "p_timezone": "America/New_York",
+                "p_now": NOW.isoformat(),
+            },
+        ),
+    ]
+    assert client.update_calls == []
+
+
+def test_pilot_participation_calls_exact_idempotent_rpc() -> None:
+    client = Client()
+    client.rpc_result = {
+        "contract_version": "pilot-participation-v1",
+        "notice_version": "pilot-participation-notice-v1",
+        "accepted_at": NOW.isoformat(),
+        "replayed": False,
+    }
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        repository.accept_pilot_participation(
+            user_id="owner-1",
+            notice_version="pilot-participation-notice-v1",
+        ),
+    )
+
+    assert result == StoredPilotParticipation(
+        notice_version="pilot-participation-notice-v1",
+        accepted_at=NOW,
+        replayed=False,
+    )
+    assert client.rpc_calls == [
+        (
+            "accept_pilot_participation_v1",
+            {
+                "p_user_id": "owner-1",
+                "p_notice_version": "pilot-participation-notice-v1",
+            },
+        ),
+    ]
+
+
+def test_pilot_participation_replays_response_loss_and_rejects_bad_shape() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {
+            "contract_version": "pilot-participation-v1",
+            "notice_version": "pilot-participation-notice-v1",
+            "accepted_at": NOW.isoformat(),
+            "replayed": True,
+        },
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        repository.accept_pilot_participation(
+            user_id="owner-1",
+            notice_version="pilot-participation-notice-v1",
+        ),
+    )
+    assert result is not None and result.replayed is True
+    assert client.rpc_calls[0] == client.rpc_calls[1]
+
+    client.rpc_result = {"accepted": True}
+    client.rpc_outcomes = []
+    with pytest.raises(AccountParticipationOutcomeUnknownError):
+        asyncio.run(
+            repository.accept_pilot_participation(
+                user_id="owner-1",
+                notice_version="pilot-participation-notice-v1",
+            ),
+        )
+
+
+def test_timezone_update_returns_missing_and_rejects_mismatched_result() -> None:
+    client = Client()
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+    client.rpc_error = _http_error(404, code="PT404")
+    assert (
+        asyncio.run(repository.update_timezone(**_timezone_kwargs())) is None
+    )
+
+    client.rpc_error = None
+    client.rpc_result = {
+        "contract_version": "account-profile-v2",
+        "timezone": "UTC",
+        "revision": 5,
+        "updated_at": NOW.isoformat(),
+        "replayed": False,
+    }
+    with pytest.raises(AccountProfileUpdateOutcomeUnknownError, match="determined"):
+        asyncio.run(repository.update_timezone(**_timezone_kwargs()))
+
+
+def test_timezone_update_response_loss_replays_exact_request() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {
+            "contract_version": "account-profile-v2",
+            "timezone": "America/New_York",
+            "revision": 5,
+            "updated_at": NOW.isoformat(),
+            "replayed": True,
+        },
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(repository.update_timezone(**_timezone_kwargs()))
+
+    assert result is not None and result.replayed is True
+    assert len(client.rpc_calls) == 2
+    assert client.rpc_calls[0] == client.rpc_calls[1]
+
+
+@pytest.mark.parametrize("minutes", [120, None])
+def test_preparation_budget_uses_owner_scoped_atomic_rpc(minutes: int | None) -> None:
+    client = Client()
+    client.rpc_result = {
+        "contract_version": "account-preparation-budget-v2",
+        "daily_preparation_budget_minutes": minutes,
+        "revision": 7,
+        "updated_at": NOW.isoformat(),
+        "replayed": False,
+    }
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(repository.update_preparation_budget(**_budget_kwargs(minutes)))
+
+    assert result == StoredPreparationBudget(
+        minutes=minutes,
+        revision=7,
+        updated_at=NOW,
+        replayed=False,
+    )
+    assert client.rpc_calls == [
+        (
+            "apply_account_preparation_budget_v2",
+            {
+                "p_user_id": "owner-1",
+                "p_request_id": "00000000-0000-4000-8000-000000000002",
+                "p_request_fingerprint": "b" * 64,
+                "p_expected_revision": 6,
+                "p_daily_preparation_budget_minutes": minutes,
+                "p_now": NOW.isoformat(),
+            },
+        ),
+    ]
+
+
+def test_preparation_budget_response_loss_replays_exact_idempotent_rpc() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {
+            "contract_version": "account-preparation-budget-v2",
+            "daily_preparation_budget_minutes": 180,
+            "revision": 7,
+            "updated_at": NOW.isoformat(),
+            "replayed": True,
+        },
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(repository.update_preparation_budget(**_budget_kwargs(180)))
+
+    assert result is not None and result.minutes == 180 and result.replayed
+    assert len(client.rpc_calls) == 2
+    assert client.rpc_calls[0] == client.rpc_calls[1]
+    assert client.select_calls == []
+
+
+def test_preparation_budget_invalid_result_is_explicitly_unknown() -> None:
+    client = Client()
+    client.rpc_result = {"wrong": 120}
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(
+        AccountPreparationBudgetUpdateOutcomeUnknownError,
+        match="determined",
+    ):
+        asyncio.run(repository.update_preparation_budget(**_budget_kwargs()))
+
+
+def test_preparation_budget_distinguishes_missing_profile_from_missing_rpc() -> None:
+    missing_profile = Client()
+    missing_profile.rpc_error = _http_error(404, code="PT404")
+    repository = SupabaseAccountRepository(  # type: ignore[arg-type]
+        missing_profile,
+    )
+    assert (
+        asyncio.run(repository.update_preparation_budget(**_budget_kwargs()))
+        is None
+    )
+
+    missing_rpc = Client()
+    missing_rpc.rpc_error = _http_error(404, code="PGRST202")
+    repository = SupabaseAccountRepository(missing_rpc)  # type: ignore[arg-type]
+    with pytest.raises(AccountPersistenceError, match="unavailable"):
+        asyncio.run(repository.update_preparation_budget(**_budget_kwargs()))
+    assert len(missing_rpc.rpc_calls) == 1
+    assert missing_rpc.select_calls == []
+
+
+def test_timezone_update_response_loss_has_explicit_unknown_failed_replay() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        ValueError("invalid response"),
+        _http_error(),
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(AccountProfileUpdateOutcomeUnknownError, match="determined"):
+        asyncio.run(repository.update_timezone(**_timezone_kwargs()))
+
+
+def test_export_query_always_has_exact_owner_filter_and_stable_page() -> None:
+    client = Client()
+    client.select_rows["daily_logs"] = [{"id": "log-1", "user_id": "owner-1"}]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+    table = AccountExportTable(
+        name="daily_logs",
+        owner_column="user_id",
+        select="id,user_id,entry_date",
+        cursor_column="id",
+        watermark_column="created_at",
+    )
+
+    rows = asyncio.run(
+        repository.list_export_rows(
+            user_id="owner-1",
+            table=table,
+            after_cursor="log-500",
+            not_after="2026-07-13T12:00:00+00:00",
+            limit=500,
+            max_response_bytes=8192,
+        ),
+    )
+
+    assert rows == [{"id": "log-1", "user_id": "owner-1"}]
+    assert client.select_calls == [
+        (
+            "daily_logs",
+            {
+                "select": "id,user_id,entry_date",
+                "user_id": "eq.owner-1",
+                "order": "id.asc",
+                "created_at": "lte.2026-07-13T12:00:00+00:00",
+                "limit": "500",
+                "id": "gt.log-500",
+            },
+            8192,
+        ),
+    ]
+
+
+def test_export_maps_a_stream_response_bound_without_retaining_the_page() -> None:
+    client = Client()
+    client.select_error = SupabaseResponseTooLargeError("bounded")
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+    table = AccountExportTable(
+        name="daily_logs",
+        owner_column="user_id",
+        select="*",
+        cursor_column="id",
+        watermark_column="created_at",
+    )
+
+    with pytest.raises(AccountExportSourceTooLargeError, match="byte bound"):
+        asyncio.run(
+            repository.list_export_rows(
+                user_id="owner-1",
+                table=table,
+                after_cursor=None,
+                not_after="2026-07-13T12:00:00+00:00",
+                limit=25,
+                max_response_bytes=8192,
+            ),
+        )
+
+
+def test_export_watermark_is_owner_scoped_and_stream_bounded() -> None:
+    client = Client()
+    client.select_rows["daily_logs"] = [
+        {"user_id": "owner-1", "created_at": "2026-07-13T12:00:00+00:00"},
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+    table = AccountExportTable(
+        name="daily_logs",
+        owner_column="user_id",
+        select="*",
+        cursor_column="id",
+        watermark_column="created_at",
+    )
+
+    watermark = asyncio.run(
+        repository.get_export_watermark(
+            user_id="owner-1",
+            table=table,
+            max_response_bytes=4096,
+        ),
+    )
+
+    assert watermark == "2026-07-13T12:00:00+00:00"
+    assert client.select_calls == [
+        (
+            "daily_logs",
+            {
+                "select": "user_id,created_at",
+                "user_id": "eq.owner-1",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+            4096,
+        ),
+    ]
+
+
+def test_delete_uses_one_atomic_rpc_without_a_fallible_success_readback() -> None:
+    client = Client()
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    asyncio.run(
+        repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+    )
+
+    assert client.rpc_calls == [
+        (
+            "delete_account_v1",
+            {"p_user_id": "owner-1", "p_confirmation": "DELETE"},
+        ),
+    ]
+    assert client.select_calls == []
+
+
+def test_delete_treats_not_found_as_idempotent_convergence() -> None:
+    client = Client()
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    client.rpc_result = {
+        "deleted": False,
+        "not_found": True,
+        "user_id": "owner-1",
+    }
+    asyncio.run(
+        repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+    )
+    assert client.select_calls == []
+
+
+def test_delete_invalid_rpc_owner_uses_ambiguous_readback() -> None:
+    client = Client()
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    client.rpc_outcomes = [
+        {"deleted": True, "not_found": False, "user_id": "other-owner"},
+        {"deleted": False, "not_found": True, "user_id": "owner-1"},
+    ]
+    asyncio.run(
+        repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+    )
+
+
+def test_delete_response_loss_converges_when_profile_is_absent() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {"deleted": False, "not_found": True, "user_id": "owner-1"},
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    asyncio.run(
+        repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+    )
+
+    assert client.rpc_calls == [
+        (
+            "delete_account_v1",
+            {"p_user_id": "owner-1", "p_confirmation": "DELETE"},
+        ),
+    ] * 2
+    assert client.select_calls == []
+
+
+def test_delete_invalid_response_and_5xx_converge_when_profile_is_absent() -> None:
+    for error in [ValueError("invalid JSON"), _http_error(503)]:
+        client = Client()
+        client.rpc_outcomes = [
+            error,
+            {"deleted": False, "not_found": True, "user_id": "owner-1"},
+        ]
+        repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+        asyncio.run(
+            repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+        )
+
+        assert len(client.rpc_calls) == 2
+        assert client.select_calls == []
+
+
+def test_delete_response_loss_never_treats_an_mvcc_profile_read_as_non_commit() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        httpx.ReadError("replay response lost"),
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(AccountDeletionOutcomeUnknownError, match="determined"):
+        asyncio.run(
+            repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+        )
+
+    assert client.select_calls == []
+
+
+def test_delete_response_loss_has_explicit_unknown_outcome_on_failed_readback() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        _http_error(),
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(AccountDeletionOutcomeUnknownError, match="determined"):
+        asyncio.run(
+            repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+        )
+
+
+def test_delete_response_loss_rejects_an_invalid_replay_owner() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {"deleted": True, "not_found": False, "user_id": "other-owner"},
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(AccountDeletionOutcomeUnknownError, match="determined"):
+        asyncio.run(
+            repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+        )
+
+
+def test_delete_known_rpc_error_does_not_attempt_ambiguous_readback() -> None:
+    client = Client()
+    client.rpc_error = _http_error(409)
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(AccountPersistenceError, match="could not be completed"):
+        asyncio.run(
+            repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+        )
+
+    assert client.select_calls == []
+
+
+def test_repository_maps_upstream_details_to_sanitized_error() -> None:
+    client = Client()
+    client.rpc_error = _http_error(400)
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(AccountPersistenceError) as captured:
+        asyncio.run(
+            repository.delete_account(user_id="owner-1", confirmation="DELETE"),
+        )
+
+    assert "secret" not in str(captured.value)

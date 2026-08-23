@@ -1,0 +1,12 @@
+{
+  "schema_version": "mylifegraph-codex-cli-v1",
+  "version": "0.148.0",
+  "platform": "x86_64-unknown-linux-musl",
+  "asset_name": "codex-package-x86_64-unknown-linux-musl.tar.gz",
+  "asset_sha256": "8c790500af2ba6e74ce4948fe26c651ac1f77f6dbb005b47c8d26ff711146262",
+  "source_url": "https://github.com/openai/codex/releases/download/rust-v0.148.0/codex-package-x86_64-unknown-linux-musl.tar.gz",
+  "checksum_source_url": "https://github.com/openai/codex/releases/download/rust-v0.148.0/codex-package_SHA256SUMS",
+  "expected_version_output": "codex-cli 0.148.0",
+  "install_root": "/opt/mylifegraph/codex",
+  "verified_utc_date": "2026-08-20"
+}

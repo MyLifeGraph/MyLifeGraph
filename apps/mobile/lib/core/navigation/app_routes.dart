@@ -3,11 +3,26 @@ class AppRoutes {
 
   static const dashboard = '/dashboard';
   static const auth = '/auth';
+  static const passwordRecovery = '/auth/recovery';
+  static const pilotPrivacyNotice = '/pilot/privacy';
+  static const pilotParticipation = '/pilot/participation';
+  static const accountDeletionRecovery = '/account/deletion-recovery';
   static const onboarding = '/onboarding';
   static const settings = '/settings';
+  static const notificationSettings = '/settings/notifications';
+  static const focusProtection = '/settings/focus-protection';
+  static const personalLearning = '/settings/personal-learning';
+  static const calendarIntegration = '/settings/integrations/calendar';
+  static const preparationPlans = '/preparation-plans';
+  static const planner = '/planner';
+  static const plannerReplan = '/planner/replan';
   static const insights = '/insights';
   static const quickAction = '/quick-action';
   static const quickMoodCheckIn = '/quick-mood-check-in';
+  static const morningCalibration = '/morning-calibration';
+  static const habitCompletion = '/habit-completion';
+  static const habitManagement = '/habits';
+  static const weeklyReview = '/weekly-review';
   static const alerts = '/alerts';
   static const notifications = '/notifications';
   static const dailyCheckIn = '/daily-check-in';
