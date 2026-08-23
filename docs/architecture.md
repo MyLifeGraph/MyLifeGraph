@@ -74,7 +74,13 @@ self-registration remains available without an invitation or user allowlist,
 but requires a versioned 18-or-older self-attestation without date-of-birth
 storage. Participants may use their own real data; a separate synthetic-only
 staging project and fail-closed scenario generator must never write fixtures to
-the real-data pilot project.
+the real-data pilot project. Vercel Web builds bind the application identity to
+the exact provider-supplied Git commit: Production must be protected `main`
+with `main-<SHA>`, while Preview must remain staging with `preview-<SHA>`.
+Annotated tags separately bind immutable Android, VPS, and release-manifest
+artifacts; they are not prerequisites for an ordinary protected-`main` Web
+deployment. The build passes only an explicit public-value allowlist to
+Flutter, never backend or provider secrets.
 OpenAI/Gemini BYOK remains request-scoped. The implemented shared operator
 Codex mode is an explicit provider choice with its own quota, concurrency,
 disclosure, and kill switch, never a failure fallback. Hosted Codex uses a

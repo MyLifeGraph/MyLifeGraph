@@ -57,8 +57,11 @@ in the repository.
 
 Hosted builds accept only the repository's canonical Flutter environment
 names. `VITE_*` and `NEXT_PUBLIC_*` variables are not implicit aliases. Pilot
-production builds additionally bind `main`, the exact source SHA, and an
-annotated RC tag before Flutter compilation begins.
+production builds derive their release identity from Vercel's protected
+`main` commit SHA before Flutter compilation begins. Preview builds use the
+same exact provider-SHA binding with an explicit staging identity. Annotated
+RC/final tags remain the authority for immutable Android, VPS, and release
+artifacts; an ordinary Vercel build from protected `main` does not require one.
 
 The intended first hosted pilot uses Vercel for Flutter Web, hosted Supabase
 for Auth/Postgres, and a separately operated HTTPS FastAPI/Coach service on a

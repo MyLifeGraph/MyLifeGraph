@@ -16,8 +16,29 @@ test('Vercel build uses an immutable official Flutter archive', () => {
   assert.doesNotMatch(build, /command -v flutter/);
   assert.doesNotMatch(build, /git clone/);
   assert.match(build, /\/tmp\/\*\|\/var\/tmp\/\*\|\/home\/\*/);
+  assert.match(build, /readonly VERCEL_BUILD_UID="\$\{EUID\}"/);
+  assert.match(
+    build,
+    /tool[^\n]*'node'[^\n]*resolved[^\n]*'\/node24\/bin\/node'/,
+  );
+  assert.match(
+    build,
+    /\/node24\|\/node24\/bin\) parent_owner_trusted='true'/,
+  );
+  assert.match(build, /tool_uid[^\n]*== '0'/);
+  assert.doesNotMatch(
+    build,
+    /(?:git|curl|sha256sum|tar)[^\n]*VERCEL_BUILD_UID/,
+  );
+  assert.match(build, /node_version[^\n]*--version/);
+  assert.match(build, /\^v24\\\./);
   assert.match(build, /PATH='\/usr\/local\/bin:\/usr\/bin:\/bin'/);
   assert.match(build, /verify_vercel_build_identity\.mjs/);
+  assert.match(build, /APP_BUILD_SHA="\$\{VERCEL_GIT_COMMIT_SHA-\}"/);
+  assert.match(build, /APP_RELEASE_TAG="main-\$\{APP_BUILD_SHA\}"/);
+  assert.match(build, /APP_RELEASE_TAG="preview-\$\{APP_BUILD_SHA\}"/);
+  assert.match(build, /APP_ENV='pilot'/);
+  assert.match(build, /APP_ENV='staging'/);
   assert.doesNotMatch(build, /VITE_|NEXT_PUBLIC_|RESOLVED_SUPABASE/);
   assert.match(build, /pub get --enforce-lockfile/);
   assert.match(build, /--no-web-resources-cdn --csp/);

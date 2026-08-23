@@ -225,6 +225,39 @@ void main() {
         supabaseUrl: '',
         aiServiceBaseUrl: 'https://coach.example.org',
         useMockData: false,
+        appBuildSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        appReleaseTag: 'main-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ).validateReleaseIdentityConfiguration(),
+      returnsNormally,
+    );
+    expect(
+      () => const AppConfig(
+        environment: 'staging',
+        supabaseUrl: '',
+        aiServiceBaseUrl: 'https://coach-staging.example.org',
+        useMockData: false,
+        appBuildSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        appReleaseTag: 'preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ).validateReleaseIdentityConfiguration(),
+      returnsNormally,
+    );
+    expect(
+      () => const AppConfig(
+        environment: 'pilot',
+        supabaseUrl: '',
+        aiServiceBaseUrl: 'https://coach.example.org',
+        useMockData: false,
+        appBuildSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        appReleaseTag: 'main-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      ).validateReleaseIdentityConfiguration(),
+      throwsStateError,
+    );
+    expect(
+      () => const AppConfig(
+        environment: 'pilot',
+        supabaseUrl: '',
+        aiServiceBaseUrl: 'https://coach.example.org',
+        useMockData: false,
         appBuildSha: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         appReleaseTag: 'latest',
       ).validateReleaseIdentityConfiguration(),

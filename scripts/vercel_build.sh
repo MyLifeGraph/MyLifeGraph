@@ -16,9 +16,37 @@ readonly MLG_FLUTTER_ARCHIVE="${MLG_FLUTTER_CACHE_ROOT}/flutter-${FLUTTER_VERSIO
   printf 'Vercel build error: VERCEL must be exactly 1.\n' >&2
   exit 1
 }
+
+# Vercel owns the Git/ref identity. Do not require operators to copy a mutable
+# commit SHA or a synthetic release label into project environment variables.
+readonly APP_BUILD_SHA="${VERCEL_GIT_COMMIT_SHA-}"
+case "${VERCEL_ENV-}:${VERCEL_GIT_COMMIT_REF-}" in
+  production:main)
+    APP_ENV='pilot'
+    APP_RELEASE_TAG="main-${APP_BUILD_SHA}"
+    ;;
+  preview:*)
+    APP_ENV='staging'
+    APP_RELEASE_TAG="preview-${APP_BUILD_SHA}"
+    ;;
+  *)
+    APP_ENV=''
+    APP_RELEASE_TAG=''
+    ;;
+esac
+USE_MOCK_DATA='false'
+COACH_SURFACE_ENABLED='true'
+readonly APP_ENV APP_RELEASE_TAG USE_MOCK_DATA COACH_SURFACE_ENABLED
+
+# Vercel's version-managed Node 24 binary is owned by its unprivileged build
+# user at the provider path /node24/bin/node. Only that exact resolved binary
+# gets a narrow build-UID exception. Git, curl, sha256sum, and tar remain
+# root-only. Every trusted tool must also stay outside checkout/temp/home roots
+# and use non-group/world-writable files and parent directories.
+readonly VERCEL_BUILD_UID="${EUID}"
 for tool in node git curl sha256sum tar; do
   resolved="$(command -v -- "${tool}" 2>/dev/null || true)"
-  [[ "${resolved}" == /* && -x "${resolved}" ]] || {
+  [[ "${resolved}" == /* && -f "${resolved}" && -x "${resolved}" ]] || {
     printf 'Vercel build error: required system tool is unavailable: %s.\n' "${tool}" >&2
     exit 1
   }
@@ -31,7 +59,14 @@ for tool in node git curl sha256sum tar; do
   esac
   tool_uid="$(/usr/bin/stat -c '%u' -- "${resolved}")"
   tool_mode="$(/usr/bin/stat -c '%a' -- "${resolved}")"
-  [[ "${tool_uid}" == '0' && "${tool_mode}" =~ ^[0-7]{3,4}$ ]] || {
+  tool_owner_trusted='false'
+  if [[ "${tool_uid}" == '0' ]]; then
+    tool_owner_trusted='true'
+  elif [[ "${tool}" == 'node' && "${resolved}" == '/node24/bin/node' &&
+    "${tool_uid}" == "${VERCEL_BUILD_UID}" ]]; then
+    tool_owner_trusted='true'
+  fi
+  [[ "${tool_owner_trusted}" == 'true' && "${tool_mode}" =~ ^[0-7]{3,4}$ ]] || {
     printf 'Vercel build error: system tool ownership is invalid: %s.\n' "${tool}" >&2
     exit 1
   }
@@ -43,7 +78,16 @@ for tool in node git curl sha256sum tar; do
   while [[ -n "${tool_parent}" ]]; do
     parent_uid="$(/usr/bin/stat -c '%u' -- "${tool_parent}")"
     parent_mode="$(/usr/bin/stat -c '%a' -- "${tool_parent}")"
-    [[ "${parent_uid}" == '0' && "${parent_mode}" =~ ^[0-7]{3,4}$ ]] || {
+    parent_owner_trusted='false'
+    if [[ "${parent_uid}" == '0' ]]; then
+      parent_owner_trusted='true'
+    elif [[ "${tool}" == 'node' && "${resolved}" == '/node24/bin/node' &&
+      "${parent_uid}" == "${VERCEL_BUILD_UID}" ]]; then
+      case "${tool_parent}" in
+        /node24|/node24/bin) parent_owner_trusted='true' ;;
+      esac
+    fi
+    [[ "${parent_owner_trusted}" == 'true' && "${parent_mode}" =~ ^[0-7]{3,4}$ ]] || {
       printf 'Vercel build error: system tool parent ownership is invalid: %s.\n' "${tool}" >&2
       exit 1
     }
@@ -59,6 +103,12 @@ for tool in node git curl sha256sum tar; do
 done
 PATH='/usr/local/bin:/usr/bin:/bin'
 export PATH
+
+node_version="$(/usr/bin/env -i PATH=/usr/bin:/bin "${NODE_BIN}" --version)"
+[[ "${node_version}" =~ ^v24\.[0-9]+\.[0-9]+$ ]] || {
+  printf 'Vercel build error: provider Node major differs from the project pin.\n' >&2
+  exit 1
+}
 
 build_home="$(mktemp -d /tmp/mylifegraph-vercel-home.XXXXXX)"
 readonly VERCEL_BUILD_HOME="${build_home}"

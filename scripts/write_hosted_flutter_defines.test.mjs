@@ -141,6 +141,28 @@ test('pilot builds require current keys and reject staging crossover', () => {
       }),
     /must be distinct/,
   );
+
+  const buildSha = pilotEnvironment.APP_BUILD_SHA;
+  assert.equal(
+    hostedFlutterDefines({
+      ...pilotEnvironment,
+      APP_RELEASE_TAG: `main-${buildSha}`,
+    }).APP_RELEASE_TAG,
+    `main-${buildSha}`,
+  );
+  for (const releaseIdentity of [
+    `preview-${buildSha}`,
+    `main-${'b'.repeat(40)}`,
+  ]) {
+    assert.throws(
+      () =>
+        hostedFlutterDefines({
+          ...pilotEnvironment,
+          APP_RELEASE_TAG: releaseIdentity,
+        }),
+      /APP_RELEASE_TAG/,
+    );
+  }
 });
 
 test('hosted defines reject insecure and credential-bearing endpoints', () => {

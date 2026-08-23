@@ -43,9 +43,15 @@ Hosted Flutter builds use `scripts/write_hosted_flutter_defines.mjs` and fail
 before compiling unless `APP_ENV` is exactly `staging` or `pilot`,
 `USE_MOCK_DATA=false`, `COACH_SURFACE_ENABLED=true`, a compatible Supabase
 client key is present, and Supabase/FastAPI URLs are credential-free HTTPS
-roots. Exact `APP_BUILD_SHA`, `APP_RELEASE_TAG`, and `PILOT_CONTACT_EMAIL` are
-also required; Settings renders the identity/contact without exposing secrets,
-and hosted Auth includes the contact in its privacy notice. Staging binds to
+roots. On Vercel the build script derives `APP_BUILD_SHA` exactly from
+`VERCEL_GIT_COMMIT_SHA`, maps Production `main` to `APP_ENV=pilot` with
+`APP_RELEASE_TAG=main-<SHA>`, and maps Preview branches to `APP_ENV=staging`
+with `APP_RELEASE_TAG=preview-<SHA>`. It also fixes mock mode off and the Coach
+surface on instead of trusting mutable project values for those non-secret
+release controls. Other hosted artifact workflows must provide an exact SHA
+and pilot release tag themselves. `PILOT_CONTACT_EMAIL` remains required;
+Settings renders the identity/contact without exposing secrets, and hosted
+Auth includes the contact in its privacy notice. Staging binds to
 `STAGING_SUPABASE_PROJECT_REF` and may temporarily use the legacy anon key;
 pilot additionally requires a distinct
 `PILOT_SUPABASE_PROJECT_REF` and a current `sb_publishable_` key. Neither the

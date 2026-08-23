@@ -35,8 +35,13 @@ export function hostedFlutterDefines(environment = process.env) {
   const releaseTag = requiredReleaseValue(
     'APP_RELEASE_TAG',
     environment.APP_RELEASE_TAG,
-    /^v[0-9]+\.[0-9]+\.[0-9]+-pilot\.[0-9]+(?:-rc\.[0-9]+)?$/,
+    /^(?:v[0-9]+\.[0-9]+\.[0-9]+-pilot\.[0-9]+(?:-rc\.[0-9]+)?|(?:main|preview)-[0-9a-f]{40})$/,
   );
+  validateHostedReleaseIdentity({
+    appEnvironment: target.appEnvironment,
+    buildSha,
+    releaseIdentity: releaseTag,
+  });
   const appPublicOrigin = requireHttpsBaseUrl(
     'APP_PUBLIC_ORIGIN',
     environment.APP_PUBLIC_ORIGIN,
@@ -68,6 +73,26 @@ export function hostedFlutterDefines(environment = process.env) {
       environment.AI_SERVICE_BASE_URL,
     ),
   };
+}
+
+function validateHostedReleaseIdentity({
+  appEnvironment,
+  buildSha,
+  releaseIdentity,
+}) {
+  const sourceIdentity = /^(main|preview)-([0-9a-f]{40})$/.exec(
+    releaseIdentity,
+  );
+  if (!sourceIdentity) return;
+  const expectedChannel = appEnvironment === 'pilot' ? 'main' : 'preview';
+  if (
+    sourceIdentity[1] !== expectedChannel ||
+    sourceIdentity[2] !== buildSha
+  ) {
+    throw new Error(
+      'APP_RELEASE_TAG must match the hosted environment and APP_BUILD_SHA.',
+    );
+  }
 }
 
 function requiredReleaseValue(name, value, pattern) {
