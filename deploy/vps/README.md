@@ -54,6 +54,50 @@ The expected layout is:
   0.148.0/bin/codex
 ```
 
+## Fast path before the domain exists
+
+The domain is not needed for repository verification, release-candidate
+creation, Android signing preparation, the VPS user/filesystem bootstrap, or a
+held offline candidate. It becomes mandatory for the stable app/API origins,
+public TLS, CORS, Supabase Auth callbacks, the SMTP sender, CAPTCHA, and final
+phone/browser acceptance.
+
+Complete these domain-independent gates first:
+
+1. Start from a clean commit that is intended for protected `main`, capture it
+   as the task base, run the focused VPS/backup/Android/Vercel gates, and then
+   run `npm run verify:affected -- --base-ref <captured-task-base>`. Do not tag
+   or describe the result as deployed merely because local checks pass.
+2. Keep `OPERATOR_CODEX_PILOT_ENABLED=false` in both host environment files.
+   BYOK OpenAI/Gemini remains independently available; the shared provider is
+   not a fallback for an invalid or absent user key.
+3. Prepare a secret-free inventory naming the intended VPS, the distinct
+   staging and pilot Supabase project refs, release owner, backup owner, Codex
+   account/quota owner, Android signing certificate fingerprint, and the
+   planned `app`, `api`, and sender hostnames. Store actual keys only in their
+   protected target environments.
+4. Resolve the non-domain prerequisites: an Ubuntu 24.04 host meeting
+   `bin/preflight_host.sh`, a distinct pilot Supabase project with current
+   publishable/secret keys, the S3 Object-Lock/KMS deletion journal, encrypted
+   off-host Restic storage plus heartbeat, the private Android keystore, and
+   the public-registration privacy decision. SMTP, CAPTCHA, Google OAuth, and
+   their final redirects can be selected now but require the real domain for
+   acceptance.
+5. Record the account/terms and privacy go/no-go for subscription-backed
+   Project Coach. Repository packaging is deliberately default-off and is not
+   evidence that the account permits a multi-user hosted service.
+
+After the domain is registered, follow this shortest safe order: configure
+recoverable DNS ownership and the three hostname roles; finish the separate
+pilot Supabase/Auth/SMTP/CAPTCHA/OAuth configuration and restore proof;
+bootstrap the VPS with the shared provider still off; install and preflight the
+held immutable RC; prove DNS/TLS; pass the executor-only Codex login,
+permission, image, and live multi-tool smoke; enable the shared provider using
+the staged sequence below; then promote the exact Vercel, VPS, and Android
+artifacts and run public/physical-device acceptance. The full evidence and
+stop conditions remain authoritative in
+`docs/vps-pilot-release-plan.md#ordered-execution-checklist`.
+
 ## Privileged bootstrap (`ops`)
 
 Run these steps only from a second, proven SSH session. Replace every example
@@ -153,9 +197,11 @@ observed successfully; adding it is a separate irreversible-cache decision.
 Only an annotated RC tag on protected `main` is a source authority. GitHub must
 additionally protect the pilot RC/final tag patterns from arbitrary creation,
 update, and deletion and restrict the `pilot-release` environment to those
-protected tags with the other developer as required reviewer. These are
-external settings gates; the repository's tag-to-main checks are defense in
-depth, not proof that signing secrets cannot reach modified workflow code.
+protected tags. No second reviewer account is mandatory; creation is limited
+to named release owners and the workflow's source-identity guards remain
+fail-closed. These are external settings gates; the repository's tag-to-main
+checks are defense in depth, not proof that signing secrets cannot reach
+modified workflow code.
 
 1. From the clean tagged checkout, run
    `bin/build_source_bundle.sh <rc-tag> <output-directory>`. It rejects a
@@ -248,6 +294,33 @@ depth, not proof that signing secrets cannot reach modified workflow code.
 `bin/rollback_release.sh <tag>` is the explicit manual rollback path and has the
 same health proof. It rejects a target below either irreversible hosted schema
 boundary. Tags and artifacts are never moved or overwritten.
+
+## Staged shared-provider enablement
+
+The two committed host templates intentionally start with
+`OPERATOR_CODEX_PILOT_ENABLED=false`. Enable Project Coach only after the
+account/terms and privacy decisions are recorded and every preceding held-
+candidate gate has passed:
+
+1. Leave the API flag false. Install the manifest-pinned Codex CLI, authenticate
+   only as `coach-executor`, build the release-bound analysis image, and pass
+   `bin/verify_permissions.sh` plus the sanitized login/capability checks.
+2. Set the flag to `true` only in `/etc/mylifegraph/executor.env`, restart the
+   executor socket/service in a controlled maintenance window, and run the
+   committed synthetic multi-tool live provider smoke as that exact user. A
+   failed model, Fast, MCP, image, login, or tool-trace check returns the flag
+   to false and stops this path.
+3. After that direct provider evidence passes, set the flag to `true` in
+   `/etc/mylifegraph/api.env`, restart the API, and verify that authenticated
+   capabilities advertise `operator_codex_pilot` while core health/readiness
+   remain independent.
+4. Run the authenticated HTTPS/SSE acceptance turn, quota/busy/replay checks,
+   and an invalid-BYOK check proving zero shared-provider dispatch before
+   exposing the client artifact to participants.
+
+Both flags must describe the same final enabled state. The API flag is the
+immediate public kill switch; after setting it false and restarting the API,
+stop the executor socket/service as defense in depth.
 
 ## Kill switches and expected behavior
 

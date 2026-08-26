@@ -60,6 +60,14 @@ def _auth_capture(config: dict[str, object]) -> str:
 
 
 class BackupArtifactTests(unittest.TestCase):
+    def test_protected_environment_has_no_mandatory_reviewer_dependency(
+        self,
+    ) -> None:
+        readme = (BACKUP_ROOT / "README.md").read_text()
+
+        self.assertIn("No second reviewer account is mandatory", readme)
+        self.assertNotIn("independent required reviewer", readme)
+
     def test_sources_parse_and_backup_script_never_uses_dry_run(self) -> None:
         for path in sorted(BIN_ROOT.glob("*.sh")):
             result = _run("bash", "-n", str(path))
