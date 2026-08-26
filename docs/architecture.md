@@ -101,15 +101,18 @@ implementation work, privileged host boundaries, release policy, operating
 budget, capacity assumptions, and go/no-go gates live only in
 `docs/vps-pilot-release-plan.md` until their owning contracts are changed.
 
-The inspected hosted project remains staging. A distinct pilot project will
-own real participant Auth/data only after an authorized inventory and setup.
+The authorized 2026-08-26 assignment makes the previously inspected
+`oscrunlndfrecjilojja` project the real-data pilot candidate and the pristine
+`kvdunemnuqcvbhrlfnsh` project staging. The assignment is not deployment
+evidence: the staging migration/bootstrap and both environments' final Auth,
+key, redirect, isolation, and release checks remain open.
 The repository configuration now accepts current Supabase publishable and
 backend secret keys, with current values winning during a bounded legacy-key
 rotation. Hosted Flutter and FastAPI bind exact `staging`/`pilot` environments
 to their separately configured project refs; pilot requires current keys and
 rejects the staging URL or equal refs. PostgreSQL policies and grants continue
-to name database role `service_role`. No remote key rotation or pilot-project
-existence follows from this local compatibility implementation.
+to name database role `service_role`. No remote key rotation or public
+deployment follows from the project assignment.
 
 The repository now implements the first participation seam. Hosted Flutter
 shows `pilot-participation-notice-v1` before account creation/OAuth and persists
@@ -1712,9 +1715,10 @@ independent Sleep Recommendation.
   when the user enables it for that plan, current imported busy intervals as
   deterministic capacity input. It performs no event-title inference or source
   write and adds no notification delivery.
-- The inspected staging project has the complete canonical migration chain but
-  retains legacy CamelCase tables for compatibility. Production remains
-  uninspected and no production migration state is inferred from staging.
+- The inspected pilot candidate has the complete canonical migration chain but
+  retains legacy CamelCase tables for compatibility. The assigned staging
+  project is pristine and has not received application migrations. Neither
+  database inventory proves production Auth settings or deployment.
 - The repository does not contain real Supabase credentials.
 - OpenAI and Gemini have implemented request-local BYOK adapters behind the
   empty-by-default `COACH_BYOK_PROVIDERS` allowlist. They receive only bounded

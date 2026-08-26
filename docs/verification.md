@@ -194,12 +194,36 @@ and 29 unindexed-FK plus 70 unused-index notices are informational. This is
 Staging database evidence only; no application, Auth-setting/provider, VPS,
 Vercel, or public-pilot deployment is claimed.
 
+On 2026-08-26 the user explicitly reassigned that inspected project
+`oscrunlndfrecjilojja` as the real-data pilot candidate and the separately
+created pristine project `kvdunemnuqcvbhrlfnsh` as staging. Fresh direct MCP
+aggregate checks found the pilot candidate still on PostgreSQL 17.6 with the
+exact 69-migration head, one non-scenario Google identity, one profile, two
+Daily Logs, three Schedule Items, zero Scenario users, and no accepted pilot
+participation. Its Security Advisor still has the single leaked-password
+warning. The new staging target has PostgreSQL 17.6, zero users, identities,
+public tables, application migrations, or Storage rows, and zero Advisor
+findings. These were read-only checks; they do not prove identity ownership,
+staging bootstrap, hosted keys/Auth settings, backup/restore, two-user
+isolation, Vercel, VPS, or public release.
+
+The hosted-role source task captured base
+`fcbf76e4201909783c682e0fef7109ff00d4da1b`; its affected selector chose the
+Full lane and passed on 2026-08-26. Flutter analysis and all 1,100 tests passed;
+FastAPI Ruff and 1,681 tests with 2 intentional skips passed; documentation,
+source, debug Web, normal PostgreSQL 17 history, pinned isolated PG15/PG17
+chains, 23-file/475-assertion pgTAP, owner/ACL restore, and deletion replay all
+passed. Browser run `20260826T161609Z-816225` passed all eight independent
+journeys without retry and removed every run-owned Auth identity. This proves
+the local ref-guard/documentation change from the captured base, not the
+pending remote staging bootstrap or any deployment.
+
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
 | Current VPS/backup/Vercel/Android source gates | The captured-base rerun passed on 2026-08-26, including the default-off shared-provider templates and Vercel identity/environment/secret-isolation guards; Docs passed across 96 Markdown files and 82 FastAPI routes. Current evidence includes VPS 16, backup 16, Android 5 plus its static guard, and the earlier checksum-verified Gradle 8.14 `testDebugUnitTest`/`lintDebug` pass. | Templates/unit and local JVM/lint checks only; the observed Vercel failure is provider evidence, but no successful new deployment, VPS, signing-key, APK-device, or physical Focus Protection execution is claimed. |
 | Current Flutter/FastAPI/Web | The 2026-08-26 captured-base Full pass includes Flutter analysis and 1,100 tests, FastAPI Ruff and 1,681 tests/2 skips, and the debug web build. Browser run `20260826T081628Z-98397` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no successful hosted public-origin or real-provider claim. |
-| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs again passed on 2026-08-26, including both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, 23-file/475-assertion final-state pgTAP, and PG17 owner/ACL restore plus deletion replay. The earlier exact ten-file Staging push advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no new remote database operation, encrypted off-host restore/replay, or real-data pilot-project claim. |
-| Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
+| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs again passed on 2026-08-26, including both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, 23-file/475-assertion final-state pgTAP, and PG17 owner/ACL restore plus deletion replay. The pilot candidate has the matching 69-migration head; the assigned staging target is pristine at zero migrations. | Hosted evidence is read-only role-assignment/inventory evidence only; staging bootstrap, encrypted off-host restore/replay, Auth configuration, and real public operation remain unproved. |
+| Historical pre-migration restore | Confirmed PG17.6/59-migration dump from the then-Staging project restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
 
 Product lanes above remain lane-specific evidence; they are not permission to

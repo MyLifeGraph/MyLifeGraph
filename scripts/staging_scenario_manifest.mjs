@@ -4,7 +4,7 @@ export const STAGING_SCENARIO_MANIFEST_VERSION = 'staging-scenarios-v1';
 // replacing a ref is a code review decision; caller-provided environment alone
 // can never make another project seedable.
 export const STAGING_SCENARIO_ALLOWED_PROJECT_REFS = Object.freeze([
-  'oscrunlndfrecjilojja',
+  'kvdunemnuqcvbhrlfnsh',
 ]);
 
 export const STAGING_SCENARIOS = deepFreeze([
