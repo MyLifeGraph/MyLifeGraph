@@ -231,6 +231,20 @@ class VpsArtifactTests(unittest.TestCase):
         self.assertIn("unix:///run/user/<coach-executor-uid>/docker.sock", executor)
         self.assertNotIn("\nCOACH_ANALYSIS_IMAGE=", executor)
 
+    def test_shared_operator_provider_templates_are_default_off(self) -> None:
+        api = (VPS_ROOT / "env/api.env.example").read_text()
+        executor = (VPS_ROOT / "env/executor.env.example").read_text()
+        readme = (VPS_ROOT / "README.md").read_text()
+
+        for environment in [api, executor]:
+            self.assertIn("\nOPERATOR_CODEX_PILOT_ENABLED=false\n", environment)
+            self.assertNotIn("\nOPERATOR_CODEX_PILOT_ENABLED=true\n", environment)
+
+        self.assertIn("## Staged shared-provider enablement", readme)
+        self.assertIn("Leave the API flag false", readme)
+        self.assertIn("Both flags must describe the same final enabled state", readme)
+        self.assertNotIn("other developer as required reviewer", readme)
+
     def test_systemd_and_caddy_preserve_security_boundaries(self) -> None:
         api = (VPS_ROOT / "systemd/mylifegraph-api.service").read_text()
         executor = (VPS_ROOT / "systemd/mylifegraph-coach-executor.service").read_text()

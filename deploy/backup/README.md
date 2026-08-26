@@ -127,12 +127,12 @@ Required protected configuration:
 
 The Restic credentials must reach only the `pilot-backup` environment. The
 VPS users, application, executor, deployment account, Flutter/Vercel builds,
-and professor never receive them. Protect the environment with the two
-developers as owners, an independent required reviewer, no pull-request access
-from forks, and an exact protected-`main` deployment-branch rule. The workflow
-also checks repository/ref/SHA/origin-main/clean-tree identity before any
-secret-bearing step; retain the GitHub environment/ruleset export as external
-evidence.
+and professor never receive them. Protect the environment with named backup
+owners, no pull-request access from forks, and an exact protected-`main`
+deployment-branch rule. No second reviewer account is mandatory; independent
+review remains optional evidence. The workflow also checks repository/ref/SHA/
+origin-main/clean-tree identity before any secret-bearing step; retain the
+GitHub environment/ruleset export as external evidence.
 The repository must use an explicitly off-host Restic backend (`s3`, `sftp`,
 `rest`, `azure`, `gs`, `b2`, or `rclone`); local paths are rejected. Generated
 password and heartbeat-config files must be regular, non-symlink, owner-only

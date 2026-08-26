@@ -122,12 +122,24 @@ ownership. The current follow-up extracts the checksum-verified SDK with
 `--no-same-owner`; it does not broaden Git `safe.directory`. A new successful Production build
 is not claimed until the protected PR merge and live provider verification.
 No successful tagged artifact or VPS/Android deployment is claimed.
+The pre-domain VPS-handoff task captured base
+`bd963d97b6173c096a1ff1bd7bca058aaf6b75f6`; its working-tree selector chose
+the Full lane and passed on 2026-08-26. Flutter analysis and all 1,100 tests
+passed; FastAPI Ruff and 1,681 tests with 2 intentional skips passed; the debug
+Web build, normal PostgreSQL 17 state, pinned isolated PG15/PG17 full chains,
+restore/deletion replay, and all database assertions passed. Browser run
+`20260826T081628Z-98397` passed all eight independent journeys without retry
+and removed every run-owned Auth identity. The same task's focused source gates
+passed 16 VPS tests, 16 backup tests, the Vercel and Android release guards, and
+documentation consistency. This is local default-off deployment/readiness
+evidence only; it does not prove a domain, remote pilot project, target VPS,
+Codex account permission/login, live provider, signed APK, or deployment.
 The former
 2026-08-19 counts belong to the pre-Coach-V4/pre-hosting predecessor and are
 retained only in
 [Verification History](verification-history.md); they do not prove this tree.
 
-Current 2026-08-21 repository evidence includes 15 VPS tests, 15 backup tests,
+Current 2026-08-26 repository evidence includes 16 VPS tests, 16 backup tests,
 3 Vercel-release tests, 5 Android-release tests plus the static Android guard,
 documentation consistency across 96 Markdown files and 82 FastAPI routes, the
 complete Fast suites above, and the debug web build containing the Turnstile
@@ -184,9 +196,9 @@ Vercel, or public-pilot deployment is claimed.
 
 | Lane | Latest recorded evidence | Scope limit |
 | --- | --- | --- |
-| Current VPS/backup/Vercel/Android source gates | The captured-base rerun passed on 2026-08-23, including the Vercel identity/environment/secret-isolation guards; Docs passed across 96 Markdown files and 82 FastAPI routes. Earlier unchanged evidence includes VPS 15, backup 15, Android 5 plus its static guard, and the checksum-verified Gradle 8.14 `testDebugUnitTest`/`lintDebug` pass. | Templates/unit and local JVM/lint checks only; the observed Vercel failure is provider evidence, but no successful new deployment, VPS, signing-key, APK-device, or physical Focus Protection execution is claimed. |
-| Current Flutter/FastAPI/Web | The 2026-08-23 captured-base Full pass includes Flutter analysis and 1,100 tests, FastAPI Ruff and 1,681 tests/2 skips, and the debug web build. Browser run `20260823T164225Z-1487184` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no successful hosted public-origin or real-provider claim. |
-| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs again passed on 2026-08-23, including both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, 23-file/475-assertion final-state pgTAP, and PG17 owner/ACL restore plus deletion replay. The earlier exact ten-file Staging push advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no new remote database operation, encrypted off-host restore/replay, or real-data pilot-project claim. |
+| Current VPS/backup/Vercel/Android source gates | The captured-base rerun passed on 2026-08-26, including the default-off shared-provider templates and Vercel identity/environment/secret-isolation guards; Docs passed across 96 Markdown files and 82 FastAPI routes. Current evidence includes VPS 16, backup 16, Android 5 plus its static guard, and the earlier checksum-verified Gradle 8.14 `testDebugUnitTest`/`lintDebug` pass. | Templates/unit and local JVM/lint checks only; the observed Vercel failure is provider evidence, but no successful new deployment, VPS, signing-key, APK-device, or physical Focus Protection execution is claimed. |
+| Current Flutter/FastAPI/Web | The 2026-08-26 captured-base Full pass includes Flutter analysis and 1,100 tests, FastAPI Ruff and 1,681 tests/2 skips, and the debug web build. Browser run `20260826T081628Z-98397` passed 8/8 journeys without retry and with exact cleanup. | Local browser/fake-provider evidence only; no successful hosted public-origin or real-provider claim. |
+| Current database | Normal PG17 plus pinned RAM-only PG15/PG17 69-migration runs again passed on 2026-08-26, including both 53-assertion transition proofs, hostile pre-role refusal/safe clean retry, real multi-session Coach races, 23-file/475-assertion final-state pgTAP, and PG17 owner/ACL restore plus deletion replay. The earlier exact ten-file Staging push advanced the linked project from 59 to the matching 69-migration head. | Hosted evidence is limited to the explicitly inspected Staging database; no new remote database operation, encrypted off-host restore/replay, or real-data pilot-project claim. |
 | Pre-migration Staging restore | Confirmed PG17.6/59-migration Staging dump restored to disposable PG17.6, advanced to 69, matched strict DDL/ACL reference, and passed role/deletion-recovery postconditions. | Local ignored plaintext rehearsal only; no off-host Restic, Management-API Auth-config inventory, or deletion-journal replay claim. |
 | Historical browser/Android/local-provider/staging | See Verification History and the dated remote staging section below. | Historical evidence only; never a claim about this checkout. |
 
