@@ -23,14 +23,14 @@ import {
   STAGING_SCENARIO_MANIFEST_VERSION,
 } from './staging_scenario_manifest.mjs';
 
-const projectRef = 'oscrunlndfrecjilojja';
+const projectRef = 'kvdunemnuqcvbhrlfnsh';
 const environment = {
   STAGING_SUPABASE_PROJECT_REF: projectRef,
   STAGING_SUPABASE_URL: `https://${projectRef}.supabase.co`,
 };
 const target = stagingScenarioTarget(environment);
 
-test('manifest contains the six immutable reviewable pilot scenarios', () => {
+test('manifest contains the six immutable reviewable staging scenarios', () => {
   assert.equal(STAGING_SCENARIO_MANIFEST_VERSION, 'staging-scenarios-v1');
   assert.deepEqual(
     STAGING_SCENARIOS.map((scenario) => scenario.id),

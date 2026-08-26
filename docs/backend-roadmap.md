@@ -27,8 +27,10 @@ implemented repository preparation from external acceptance; it is not itself
 deployment evidence. The first
 configuration foundation is implemented: current Supabase client/backend key
 names, exact staging/pilot ref binding, pilot current-key enforcement, and
-crossover denial. There is still no remote pilot project, key rotation, or
-deployed operator-provider path in this checkout.
+crossover denial. The authorized 2026-08-26 assignment names
+`oscrunlndfrecjilojja` as the real-data pilot candidate and
+`kvdunemnuqcvbhrlfnsh` as staging. Staging bootstrap, hosted key rotation, and
+the deployed operator-provider path remain open.
 
 The next local pilot foundation is also implemented in repository source:
 `pilot-participation-v1` / `pilot-participation-notice-v1` stores a

@@ -10,15 +10,19 @@ infrastructure. Do not use `APP_ENV=development`,
 `--reload`, `tmux`, or the local Codex start command as an Internet-facing
 deployment shortcut.
 
-The inspected hosted target remains staging. No command in this guide creates
-or seeds a real-data pilot project. Current code now supports Supabase
+The two hosted targets were explicitly reassigned on 2026-08-26: the previously
+inspected project `oscrunlndfrecjilojja` is the real-data pilot candidate, and
+the new pristine project `kvdunemnuqcvbhrlfnsh` is staging. No command in this
+guide creates or seeds the real-data pilot. Current code supports Supabase
 publishable/secret-key names, exact staging/pilot project-ref binding, and
-pilot crossover denial. Remote key rotation and the real pilot project do not
-exist yet. The staging-only `staging-scenarios-v1` generator is implemented but
-has no confirmed remote-run evidence. Versioned
+pilot crossover denial. Staging bootstrap, remote key rotation, and public
+deployment are still open. The staging-only `staging-scenarios-v1` generator
+is implemented but has no confirmed remote-run evidence. Versioned
 `pilot-participation-v1` / `pilot-participation-notice-v1` acceptance and
-persistent staging identity now exist in source;
-their migration/deployment and release evidence remain open.
+persistent staging identity exist in source. The pilot candidate has the
+participation migration but its singleton remains off; the new staging target
+has not yet received the migration chain. Deployment and release evidence
+remain open.
 
 For a local BYOK-compatible backend, set `COACH_BYOK_PROVIDERS=openai,gemini`;
 do not place OpenAI or Gemini keys in `.env`. Keys arrive per capabilities or
@@ -100,8 +104,8 @@ run. No OpenAI or Gemini turn is made.
 ## Hosted Staging Scenario Fixtures
 
 `npm run seed:staging-scenarios` is the only supported persistent hosted
-fixture command. Its immutable repository allowlist contains only the reviewed
-staging ref `oscrunlndfrecjilojja`; a caller-provided ref cannot authorize a
+fixture command. Its immutable repository allowlist contains only the assigned
+staging ref `kvdunemnuqcvbhrlfnsh`; a caller-provided ref cannot authorize a
 different project. It also rejects equality with
 `PILOT_SUPABASE_PROJECT_REF`, binds the URL to the exact project-ref host, and
 requires the `20260819185740` participation schema before mutation.

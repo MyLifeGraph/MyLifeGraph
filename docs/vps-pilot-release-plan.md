@@ -78,7 +78,7 @@ risk without describing the path as approved or generally production-ready.
 | --- | --- | --- |
 | Web client | Flutter Web on Vercel; Hobby only if the current eligibility and limits fit | Vercel receives only public Flutter defines; it never receives Supabase service-role or Codex credentials. Non-commercial eligibility, repository ownership, usage, domain, and rollback limits are release gates. |
 | Android client | Signed release APK for direct distribution | Release signing, the Supabase deep-link redirect, and a physical-device smoke are mandatory. |
-| Identity and data | Existing inspected project remains staging; a distinct hosted project becomes the real-data pilot | No Postgres service is installed on the VPS. A project may remain on Free only while current limits and pause behavior fit; neither environment may be inferred from the other. |
+| Identity and data | The previously inspected project `oscrunlndfrecjilojja` is the real-data pilot candidate; the separately created pristine project `kvdunemnuqcvbhrlfnsh` is staging | No Postgres service is installed on the VPS. A project may remain on Free only while current limits and pause behavior fit; neither environment may be inferred from the other. |
 | Test data | Versioned scenario fixtures only in staging | A fail-closed generator may create targeted synthetic users/data only after an exact staging-project preview and confirmation. It must reject the pilot project and never seed real participant accounts. |
 | Participation | Adults only; normal personal use is allowed | Store a versioned 18-or-older acceptance and notice version/time, not a birth date. Real mood, sleep, stress, study, planning, and Coach data make privacy, deletion, backup, and processor disclosure release gates. |
 | Public domain | Buy one independently controlled low-renewal-cost domain | Use `app.<domain>` for Vercel, `api.<domain>` for the VPS, and a dedicated sender subdomain such as `auth.<domain>`. Continue using the free project-ref `*.supabase.co` endpoints; do not buy the Supabase Custom Domain add-on for this pilot. |
@@ -133,16 +133,17 @@ or intentionally deferred gates close:
 2. An independently controlled domain, DNS, valid HTTPS, custom SMTP, CAPTCHA
    widget/site key, Auth throttles, leaked-password protection, email flows,
    and exact Google web/Android redirects must be selected and verified. The
-   current Staging Security Advisor still reports leaked-password protection
+   current pilot-candidate Security Advisor still reports leaked-password protection
    disabled. No domain/widget exists yet, so local CAPTCHA code is wired only
    to fail-closed hosted variables; no source claim substitutes for creating
    and verifying the real widget/domain.
-3. A distinct real-data pilot Supabase project, current publishable/secret
-   keys, reviewed migrations, RLS/grants, and two-user isolation must be
-   created/applied through an explicitly authorized remote operation. The
-   inspected project remains staging; its explicitly authorized database-only
-   apply now matches the 69-file repository head at `20260820200000`, while its
-   participation gate remains default-off and no app deployment is inferred.
+3. The two Supabase projects are created and assigned, but current
+   publishable/secret keys, staging bootstrap, final RLS/grant verification,
+   and two-user isolation remain explicit release gates. The pilot candidate
+   `oscrunlndfrecjilojja` matches the 69-file repository head at
+   `20260820200000`; the assigned staging target `kvdunemnuqcvbhrlfnsh` is
+   pristine with zero application migrations. The pilot participation gate
+   remains default-off and no app deployment is inferred.
 4. Shared-subscription account/terms and privacy approval plus an executor-user
    Codex login/model/Fast/multi-tool live smoke must pass before the operator
    flag is enabled.
@@ -169,7 +170,8 @@ fail-closed guards.
 
 ### Dated remote Supabase evidence
 
-The authorized staging audit and later read-only planning recheck recorded in
+The authorized historical staging audit, later planning recheck, and the
+2026-08-26 role-reassignment audits recorded in
 [Supabase Current State](supabase-current-state.md)
 own the exact dated migration, RLS, Auth-user, and Google-identity evidence. A
 historical Google identity shows only that Google authentication succeeded at
@@ -177,11 +179,13 @@ least once; it does not prove the current provider toggle, Google credentials,
 public-signup setting, Site URL, redirect allowlist, CAPTCHA, or present
 end-to-end behavior. All of those are release-day checks.
 
-That inspected project remains the staging candidate. It is not promoted in
-place to the real-data pilot merely to avoid creating a second environment.
-The pilot project does not exist as repository evidence until an authorized
-Supabase MCP/dashboard inventory names it and its separate configuration has
-been verified. Repository source and staging rows never prove pilot state.
+The user explicitly reassigned the previously inspected project as the
+real-data pilot candidate and the separately created pristine project as
+staging on 2026-08-26. Direct MCP aggregate evidence found one non-scenario
+Google identity and no staging-scenario users in the pilot candidate; it found
+zero users, application rows, public tables, or migrations in staging. This
+assignment does not prove current Auth settings, keys, deployment, or ownership
+of the one pre-existing identity; those remain separate checks.
 
 ### VPS inventory and capacity evidence
 
@@ -369,14 +373,14 @@ flow; do not invent a CAPTCHA claim for an operation Supabase does not protect.
 
 ### Pilot, staging, and synthetic-fixture isolation
 
-The existing inspected Supabase project remains staging and contains no
-release authority over the future pilot project. The initial environment model
-is:
+The exact assigned environment model is:
 
-- **staging** — synthetic accounts, deterministic fixtures, remote isolation
-  tests, held preview clients, and no participant data;
-- **pilot** — public signup, real participant data, release migrations, custom
-  SMTP, exact production redirects, and no seed command; and
+- **staging (`kvdunemnuqcvbhrlfnsh`)** — synthetic accounts, deterministic
+  fixtures, remote isolation tests, held preview clients, and no participant
+  data;
+- **pilot (`oscrunlndfrecjilojja`)** — public signup, real participant data,
+  release migrations, custom SMTP, exact production redirects, and no seed
+  command; and
 - **local** — disposable local/demo identities owned by the existing local
   safety workflows, never evidence about either hosted project.
 
@@ -1674,8 +1678,8 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 
 - [ ] Buy the independently controlled low-renewal-cost root domain, configure
       recoverable DNS ownership, and keep the paid Supabase Custom Domain off.
-- [ ] Use an authorized Supabase MCP/dashboard inventory to retain the existing
-      target as staging and create/assign a separate real-data pilot project;
+- [x] Use an authorized Supabase MCP inventory to assign the existing inspected
+      target as pilot and the separately created pristine target as staging;
       record both exact refs without copying credentials into evidence.
 - [ ] Back up and separately restore-verify before remote migration.
 - [ ] Audit/apply the exact reviewed migrations with explicit authorization.

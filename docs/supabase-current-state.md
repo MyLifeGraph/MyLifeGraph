@@ -131,9 +131,9 @@ Rows created by the new explicit-provider path use `coach-response-v4` with
 stopped at V3 before the later deployment recorded separately below.
 
 This document primarily captures repository state; a live remote database must
-never be inferred from migration source alone. One explicitly inspected staging
-target is recorded below as dated evidence. Production remains uninspected, and
-the repository contains no credentials.
+never be inferred from migration source alone. Historical staging evidence and
+the authorized 2026-08-26 hosted-role reassignment are recorded below as dated
+evidence. The repository contains no credentials.
 
 ## Confirmed Staging State (2026-08-15)
 
@@ -191,6 +191,11 @@ pilot project. No second pilot project, project ref, Auth configuration,
 publishable/secret key, row, or migration has been created or inspected by that
 decision. Assigning or creating it is a future authorized remote operation;
 repository documentation must not infer it from the staging target.
+
+That 2026-08-19 assignment was superseded by the explicitly authorized hosted
+role reassignment recorded below on 2026-08-26. The dated facts in this section
+remain historical evidence and are not rewritten as if the later decision had
+already occurred.
 
 The repository now supports current `SUPABASE_PUBLISHABLE_KEY` and
 `SUPABASE_SECRET_KEY` configuration while retaining legacy anon/service-role
@@ -328,6 +333,44 @@ silently presented as a clean advisor result. This is database-migration
 evidence for the staging project only: it does not deploy FastAPI/Flutter,
 prove Auth/provider configuration, substitute for two-user hosted isolation,
 or describe the distinct future real-data pilot project.
+
+## Authorized Hosted Role Reassignment (2026-08-26)
+
+The user explicitly assigned the previously inspected project
+`oscrunlndfrecjilojja` as the real-data pilot candidate and the separately
+created project `kvdunemnuqcvbhrlfnsh` as staging. This reverses the earlier
+environment assignment without changing either project ref or rewriting any
+historical migration evidence.
+
+A fresh direct project-scoped MCP aggregate audit of the pilot candidate found
+PostgreSQL 17.6, all 69 repository migration versions through
+`20260820200000`, one Auth user with one Google identity, zero users carrying
+the `staging-scenarios-v1` ownership marker, one canonical profile, two Daily
+Logs, three Schedule Items, and zero Tasks, Coach Messages, Deadline Plans,
+Storage buckets, or Storage objects. No profile has yet recorded
+`pilot-participation-v1`. The fresh Security Advisor still reports exactly one
+warning: leaked-password protection is disabled. The aggregate audit exposed no
+email, UUID, name, content, timestamp, key, or credential. Final assignment of
+the existing identity to a participant still requires operator confirmation
+that it belongs to the intended owner; no row was deleted or changed.
+
+The new staging target's direct read-only MCP audit found PostgreSQL 17.6,
+zero application migrations, zero public tables, zero Auth users/identities,
+zero Storage rows, and no Security or Performance Advisor findings. Its 23 Auth
+relations are provider-managed base tables, not application data. It is
+therefore pristine enough for the exact 69-file initial bootstrap, but no
+migration has been applied and no staging fixture has been created.
+
+The direct Supabase account MCP exposes project create/read/pause/restore
+lifecycle tools but no project rename, database-password reset, or database-
+credential retrieval tool. Password creation/reset and any cosmetic dashboard
+rename are therefore explicit manual dashboard actions; credentials must not be
+sent through MCP SQL, chat, logs, or repository files. The repository's
+staging-scenario allowlist now names only `kvdunemnuqcvbhrlfnsh`, so the pilot
+candidate cannot be made seedable through caller-provided environment values.
+This role assignment is not evidence of current keys, Auth provider settings,
+SMTP/CAPTCHA, redirects, backup/restore, two-user isolation, Vercel, VPS, or a
+public release.
 
 ## Runtime Activation
 
@@ -1762,7 +1805,7 @@ See `docs/verification.md` for the current automation boundary.
 ## Important Caveat
 
 The canonical Flutter code now targets snake_case tables. Legacy CamelCase
-tables remain present in the inspected staging project for compatibility, but
+tables remain present in the inspected pilot candidate for compatibility, but
 new product code must not add dependencies on them.
 
 Before relying on `USE_MOCK_DATA=false`, confirm that the target Supabase
