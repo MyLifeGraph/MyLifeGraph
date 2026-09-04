@@ -245,3 +245,20 @@ Do not use destructive Git commands to clean a worktree. Package managers may
 change lockfiles; review and report those changes instead of discarding them.
 Do not push, deploy, open a pull request, mutate remote state, or perform a
 destructive action without explicit authorization.
+
+### Confirmation Before Updating Main
+
+Before every push or merge targeting local or remote `main`, finish the
+candidate and verification first, then explicitly ask the user to confirm the
+concrete update. Name the repository, current `main` commit, proposed commit,
+operation, and check results. Wait for an affirmative response before changing
+`main`; a general implementation or publishing request is not that confirmation.
+One confirmation may cover an explicitly described local fast-forward and its
+matching remote push. If either commit changes, obtain a new confirmation.
+
+A pull request is optional. Required GitHub checks, administrator enforcement,
+the force-push prohibition, and branch deletion protection remain mandatory.
+Prepare and check candidates on a working branch; the complete manual CI run
+documented in `docs/verification.md` supports promotion without a pull request.
+The confirmation is an agent workflow requirement, not a GitHub-enforced chat
+approval. Do not create a pull request unless the user asks for one.

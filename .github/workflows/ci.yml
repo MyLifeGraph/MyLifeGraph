@@ -38,7 +38,15 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [[ "$EVENT_NAME" == "schedule" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            {
+              echo "web=true"
+              echo "db=true"
+              echo "full_e2e=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$EVENT_NAME" == "schedule" ]]; then
             {
               echo "web=false"
               echo "db=false"
@@ -70,7 +78,7 @@ jobs:
 
       - name: Verify source, documentation, and visual contracts
         env:
-          DOCS_BASE_REF: ${{ github.event.pull_request.base.sha }}
+          DOCS_BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
         run: npm run verify:source
 
   flutter:

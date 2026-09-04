@@ -1641,6 +1641,13 @@ deployment, and source checks with Node.js and Python. Both the source group
 inside `verify:fast` and the CI `docs-visual` job use this entry point; it does
 not require Flutter, a database stack, or live credentials.
 
+For promotion to `main`, prepare a working-branch candidate and run the complete
+manual GitHub workflow with `gh workflow run ci.yml --ref <candidate-branch>`.
+After all required checks pass on its exact SHA, ask for explicit user
+confirmation before the `main` push or merge. Pull requests are optional;
+force-push and deletion protection remain enabled. See
+[CI gates](verification.md#continuous-integration-gates) and `AGENTS.md`.
+
 Run the fast documentation-only gate with:
 
 ```bash

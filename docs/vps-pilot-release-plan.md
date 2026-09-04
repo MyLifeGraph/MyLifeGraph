@@ -740,9 +740,8 @@ integration authority through implementation rather than creating a second
 partially integrated branch stack:
 
 1. Keep the verified documentation baseline and every local VPS-pilot
-   implementation slice on `new_backend_gh`. Use focused, independently
-   testable commits even though they will later appear in one accumulated pull
-   request.
+   implementation slice on `new_backend_gh`. Preserve focused, independently
+   testable commits for the later promotion.
 2. Do not deploy, tag, or configure Vercel production from
    `new_backend_gh`. It remains an implementation branch, not a release
    authority.
@@ -755,11 +754,12 @@ partially integrated branch stack:
    Vercel-provided SHA of protected `main`; Preview must remain staging and use
    its exact provider SHA. If either condition cannot be proven, stop before
    the remote merge.
-5. Open or update one deliberate final promotion pull request from
-   `new_backend_gh` into `main`. Review the entire accumulated diff, its
-   focused commit sequence, release documentation, and green merge-candidate
-   gates; do not force-push or rewrite either branch.
-6. Once that pull request is merged, make protected `main` the sole release
+5. Review the entire accumulated diff, its focused commit sequence, release
+   documentation, and green candidate gates. Ask the user to confirm the exact
+   update before pushing or merging into `main`. A verified fast-forward is
+   sufficient; a pull request is optional and requires a user request. Do not
+   force-push or rewrite either branch.
+6. Once that candidate is integrated, make protected `main` the sole release
    authority. Vercel may build that exact SHA normally. Create RC/final tags
    only from a verified `main` SHA for the immutable Android/VPS/artifact set,
    and map the accepted Vercel deployment at the same SHA into its manifest.
@@ -773,13 +773,17 @@ partially integrated branch stack:
 
 Configure `main` so that:
 
-- direct pushes, force pushes, and deletion are blocked;
-- pull requests are required, but no approval from another developer or GitHub
-  account is mandatory;
-- required current CI checks must pass against the merge candidate;
-- any optional approval becomes stale after relevant changes;
-- unresolved conversations block merge; and
+- pull requests are optional and verified direct pushes are permitted;
+- required current CI checks must pass against the exact candidate commit;
+- force pushes and branch deletion remain blocked;
+- unresolved conversations block an optional pull-request merge; and
 - administrators remain subject to the rules and do not routinely bypass them.
+
+Agents must ask for fresh user confirmation before each `main` push or merge,
+after presenting the concrete target/candidate commits and check results. This
+is the repository workflow in `AGENTS.md`, not a GitHub chat-approval feature.
+The complete manual CI workflow allows a working-branch candidate to obtain
+all required checks before a confirmed fast-forward, without opening a PR.
 
 Independent review remains useful for high-risk release changes and can be
 performed by a separate reviewer or independent agent. It is release evidence,
@@ -810,8 +814,8 @@ evidence.
 Release identity is deliberately two-stage so tags do not depend on artifacts
 that do not yet exist:
 
-1. After the complete pilot branch is promoted into `main` through the final
-   reviewed pull request and the source/CI gates pass, create one immutable
+1. After the complete pilot branch passes the source/CI gates and is promoted
+   into `main` with explicit user confirmation, create one immutable
    annotated RC tag such as
    `v0.1.0-pilot.1-rc.1` on the exact `main` SHA. Never move or reuse it.
 2. Publish a source manifest for that RC: Git SHA/tag, current contract and
@@ -855,7 +859,7 @@ full applied database identity; an older compatible app rollback is accepted
 only when its complete prefix still exists unchanged in the DB-ahead history.
 
 The VPS is not automatically deployed from a mutable branch. Vercel may treat
-`main` as its Production Branch and build when a pull request merges. The
+`main` as its Production Branch and build when that branch is updated. The
 repository verifier accepts that Web build only when Vercel reports Production,
 the configured repository, ref `main`, and one exact SHA shared by Vercel,
 `HEAD`, `APP_BUILD_SHA`, and the `main-<SHA>` source identity. Preview is
@@ -1134,7 +1138,7 @@ local executor probe sends only an aggregate heartbeat.
   the evaluation window; apply security updates in a scheduled window and
   prove service health after any required reboot.
 - Update Codex CLI, Python locks, or the analysis image only through a separate
-  compatibility/security pull request and repeat the live provider/sandbox
+  independently reviewed compatibility/security change and repeat the live provider/sandbox
   gates. Never let a global auto-update silently change the evaluated runtime.
 - Record Caddy, Docker, Codex source/version/checksum/path, Python, OS package
   baseline, and analysis-image digest in the release manifest/SBOM.
@@ -1445,9 +1449,9 @@ until target-host measurements pass.
   secret-leakage tests pass.
 - `git diff --check` passes and staged, unstaged, and untracked files are
   reviewed.
-- The single accumulated promotion pull request preserves the focused local
-  commit sequence, is approved and green against protected `main`, and any
-  merge-triggered Vercel build proves its exact protected-`main` SHA identity
+- Promotion preserves the focused local commit sequence, has explicit user
+  confirmation and green checks against protected `main`, and any Vercel build
+  triggered by updating `main` proves its exact protected-`main` SHA identity
   before compilation.
 - Environment guards reject staging/pilot project-ref crossover, the synthetic
   scenario generator rejects the pilot target, and the hosted publishable/

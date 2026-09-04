@@ -843,7 +843,19 @@ hosted workflow:
 - schema/database paths add a fresh local migration chain and pgTAP;
 - Auth, routing, schema, core/configuration, unknown, or cross-stack changes add
   full browser E2E; and
-- scheduled/manual workflow runs execute full browser E2E.
+- scheduled workflow runs execute full browser E2E;
+- manual workflow runs execute every required check, including Web and Database,
+  so a candidate can be verified without a pull request.
+
+For a user-requested promotion without a PR, push the candidate to its working
+branch and run `gh workflow run ci.yml --ref <candidate-branch>`. Inspect the
+completed run and the required checks on the exact candidate SHA. Manual and
+scheduled documentation checks compare against `origin/main`; PR runs retain
+their exact PR base SHA. Required checks and administrator enforcement stay
+enabled when the PR requirement is removed. Once verification is complete,
+ask the user to confirm the current/proposed `main` commits and intended
+fast-forward or merge, following `AGENTS.md`. Do not update `main` before that
+confirmation, and ask again if the candidate or target changes.
 
 Fresh hosted runners obtain an empty local stack through normal startup. CI does
 not set `RESET_DB=true` and cannot call the guarded reset execution path. A local
