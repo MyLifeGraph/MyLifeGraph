@@ -812,6 +812,7 @@ class PlannerHabitSlot {
 class PlannerRevision {
   const PlannerRevision({
     required this.revision,
+    required this.timezone,
     required this.state,
     required this.targetKind,
     required this.targetOperation,
@@ -962,7 +963,7 @@ class PlannerRevision {
         'Planner revision target is inconsistent.',
       );
     }
-    _text(json['timezone'], 'timezone', max: 100);
+    final timezone = _text(json['timezone'], 'timezone', max: 100);
     _enumText(
       json['best_energy_window'],
       'best_energy_window',
@@ -993,6 +994,7 @@ class PlannerRevision {
     }
     return PlannerRevision(
       revision: revision,
+      timezone: timezone,
       state: state,
       targetKind: target.kind,
       targetOperation: target.operation,
@@ -1019,6 +1021,7 @@ class PlannerRevision {
   }
 
   final int revision;
+  final String timezone;
   final String state;
   final String targetKind;
   final String targetOperation;

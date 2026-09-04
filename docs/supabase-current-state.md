@@ -1619,6 +1619,12 @@ public owner-data table or export/snapshot wire shape.
 
 ## Local Verification Workflow
 
+`supabase/tests/deadline_plan_limit_test.sql` exercises the installed proposal
+RPCs in a rollback-only fixture: a two-occurrence Series at 49 open plans leaves
+no partial root, revision, or replay identity; the fiftieth single plan succeeds,
+its exact replay remains valid at the cap, and another new plan is rejected.
+The existing schema and 50-open-plan limit are unchanged.
+
 When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 

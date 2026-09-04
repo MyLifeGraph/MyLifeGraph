@@ -1636,6 +1636,11 @@ fast, database, web, and full browser gates. The affected selector fails closed
 without that base; `HEAD` alone covers only current working-tree changes and
 misses task changes already committed after work began.
 
+`npm run verify:source` runs just the shared documentation, visual, shell,
+deployment, and source checks with Node.js and Python. Both the source group
+inside `verify:fast` and the CI `docs-visual` job use this entry point; it does
+not require Flutter, a database stack, or live credentials.
+
 Run the fast documentation-only gate with:
 
 ```bash

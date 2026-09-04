@@ -84,8 +84,12 @@ Flutter app
 ```
 
 Flutter may write only the explicitly granted user-owned records whose current
-contracts permit direct Data API mutation, such as daily capture and supported
-manual Task, Habit, schedule, and focus lifecycles. The `goals` table has been
+contracts permit direct Data API mutation, such as supported manual Task,
+Habit, schedule, and focus lifecycles. Authenticated Daily Capture uses the
+FastAPI-owned branch-write boundary described in
+[Stabilization](stabilization-consistency-contract.md#daily-capture-write-authority);
+Flutter has no direct Daily Log or Behavioral Event write authority. Guest
+Capture remains local. The `goals` table has been
 removed; there is no active Goal mutation or evaluation path. Canonical profile
 identity and authorization, Setup application, notifications, Coach messages,
 backend projections, retry ledgers, and planning confirmation are backend-owned.

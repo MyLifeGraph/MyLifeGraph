@@ -1,7 +1,10 @@
 import asyncio
 from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 
 from app.api.deps.auth import Principal, get_token_verifier
 from app.api.deps.services import get_planner_service
@@ -11,13 +14,56 @@ from app.models.planner import (
     PlannerOverviewResponse,
     PlannerPreferencesResponse,
 )
-from app.services.planner_service import PlannerConflictError
+from app.services.planner_service import PlannerConflictError, PlannerService
+from app.services.planner_errors import DeadlinePlanConflictError
+from app.services.today_planner_read_context import TodayPlannerReadContextFactory
 from tests.api_test_dependencies import override_dependency
 
 
 class Verifier:
     async def verify(self, token: str):
         return Principal(user_id="planner-user") if token == "planner-token" else None
+
+
+@pytest.mark.parametrize("shared_context", [False, True])
+def test_deadline_read_conflict_uses_the_existing_planner_http_problem(
+    shared_context: bool,
+) -> None:
+    detail = "Deadline plan count exceeds the V1 response bound."
+    deadlines = SimpleNamespace(
+        list_plans=AsyncMock(side_effect=DeadlinePlanConflictError(detail)),
+    )
+    repository = SimpleNamespace(
+        load_overview_context=AsyncMock(return_value=None),
+    )
+    contexts = (
+        TodayPlannerReadContextFactory(repository=repository, deadline_plans=deadlines)
+        if shared_context
+        else None
+    )
+    service = PlannerService(
+        repository=repository,
+        deadline_plans=deadlines,
+        read_context_factory=contexts,
+    )
+
+    async def request():
+        app = create_app()
+        override_dependency(app, get_token_verifier, Verifier())
+        override_dependency(app, get_planner_service, service)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            return await client.get(
+                "/v1/planner/overview",
+                headers={"Authorization": "Bearer planner-token"},
+            )
+
+    response = asyncio.run(request())
+    assert response.status_code == 409
+    assert response.json() == {"detail": detail}
+    deadlines.list_plans.assert_awaited_once_with(user_id="planner-user")
 
 
 class Service:

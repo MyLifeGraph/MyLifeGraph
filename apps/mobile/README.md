@@ -251,9 +251,19 @@ card can open existing review/replan navigation but never creates a preview,
 changes a plan, adds a Today item, or generates a Notification. Guest/demo makes
 no outlook request.
 
+Assignment Series failures stay visible even before the new series exists in
+the feed. Definite rejection retains editable values; an unknown result offers
+only the identical retry, survives the page's reload controls, and blocks new
+Preparation changes until resolved. This retry state remains route-local.
+
 The primary Planner read is `planner-overview-v2`; proposal, confirm, cancel,
-and commitment responses stay `planner-v1`. Its separate collapsed `Habits`
-section reports `N active · X unplanned` across manual and Setup-owned Habits,
+and commitment responses stay `planner-v1`. Planner agenda, Preparation times,
+Task deadlines, fixed-commitment editing, and weekly conflict previews use the
+overview's profile timezone. Saved previews retain their revision timezone;
+new wall-time selections reject DST gaps and folds without changing stored
+instants. A Deadline-source conflict leaves Planner on its existing reload-only
+error surface. Its separate collapsed `Habits` section reports
+`N active · X unplanned` across manual and Setup-owned Habits,
 while `Unscheduled Tasks` contains only persisted open non-Preparation Tasks
 without positive active reservations. The read also carries strict
 `task_targets` snapshots for every current open non-Preparation Task, including

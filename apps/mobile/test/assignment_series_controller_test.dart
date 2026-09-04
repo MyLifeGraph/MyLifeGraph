@@ -33,6 +33,14 @@ void main() {
     expect(await controller.confirm(draft), isFalse);
     expect(controller.state.requiresExactRetry, isTrue);
     expect(refreshes, 0);
+    final pending = controller.state.pendingMutation;
+    final error = controller.state.operationError;
+    final reads = repository.reads;
+    await controller.load();
+    controller.clearOperationError();
+    expect(repository.reads, reads);
+    expect(identical(controller.state.pendingMutation, pending), isTrue);
+    expect(identical(controller.state.operationError, error), isTrue);
 
     expect(await controller.retryExact(), isTrue);
     expect(controller.state.requiresExactRetry, isFalse);
@@ -57,10 +65,13 @@ class _SeriesRepository implements AssignmentSeriesRepository {
   final List<Object> confirmResults;
   final List<Object> cancelResults;
   final List<String> confirmRequestIds = [];
+  int reads = 0;
 
   @override
-  Future<AssignmentSeriesFeed> getSeries() async =>
-      AssignmentSeriesFeed([initial]);
+  Future<AssignmentSeriesFeed> getSeries() async {
+    reads += 1;
+    return AssignmentSeriesFeed([initial]);
+  }
 
   @override
   Future<AssignmentSeries> propose({

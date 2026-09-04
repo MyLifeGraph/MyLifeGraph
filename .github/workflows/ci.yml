@@ -64,12 +64,14 @@ jobs:
         with:
           node-version: 20
 
-      - name: Verify documentation and visual contracts
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Verify source, documentation, and visual contracts
         env:
           DOCS_BASE_REF: ${{ github.event.pull_request.base.sha }}
-        run: |
-          npm run verify:docs
-          npm run verify:visual
+        run: npm run verify:source
 
   flutter:
     name: Flutter and Android verification

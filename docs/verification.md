@@ -48,7 +48,48 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
-The current Vercel-build-fix candidate's task base is
+### Targeted maintenance (2026-09-04)
+
+This task captured clean base `71164bb28b13bb5c361af3c466c6f76c00169203`.
+Its working-tree changes share the local/CI source gate, correct Planner
+timezone display/input/conflicts, retain visible Assignment Series exact
+recovery, and translate Deadline-source Planner conflicts. Each code package
+has passed a separate independent review and its focused diagnostics. On
+2026-09-04, `npm run verify:affected -- --base-ref
+71164bb28b13bb5c361af3c466c6f76c00169203` selected and passed the Full lane:
+Flutter analysis and all 1,115 tests; FastAPI Ruff and 1,683 tests with two
+intentional skips; the shared source/documentation/visual gates; and the debug
+Web build. An initial Fast attempt found a banned phrase in an internal code
+comment; its comment-only correction and the complete Full rerun passed.
+
+The normal PostgreSQL 17 migration history matched all 69 repository versions;
+no migration or reset was performed. Pinned isolated PostgreSQL 15 and 17
+full-chain checks and the normal database each passed 486 pgTAP assertions in
+24 files, including the new cap/replay fixture. The PG17 owner/ACL-preserving
+restore and deletion replay also passed. Browser run
+`20260904T213333Z-1058142` passed all eight journeys without retry and completed
+all run-owned Auth and process cleanup. This is evidence over the local
+uncommitted candidate, not a release or deployment. Earlier dated runs below
+do not prove these changed files.
+
+The direct project-scoped Supabase MCP was used for read-only checks on
+`oscrunlndfrecjilojja`: its 69 listed migration versions exactly match the
+repository through `20260820200000`. The Security Advisor reports one warning
+for [disabled leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+The Performance Advisor reports 16 legacy CamelCase RLS-initplan warnings,
+29 unindexed-foreign-key notices, and 70 unused-index notices. These notices
+are not a measured query-performance regression or permission to change indexes.
+The MCP table summary reports RLS enabled for all 66 listed public tables;
+that flag alone does not prove row isolation or least-privilege grants.
+The MCP refused the aggregate SQL inspection with `Insufficient scope`, so
+matching migration identities do not attest live function bodies or grants.
+The separate staging target was not inspected through this project-bound MCP;
+no Vercel MCP was available to inspect current deployments. No remote mutation,
+deployment, provider call, or credential retrieval was performed by this task.
+
+### Earlier recorded evidence
+
+The preceding Vercel-build-fix candidate's task base was
 `3def90d2ed84b0c22c2541329077c8a012c3c3dc`, the protected-`main` result after
 PR #3 removed the standing external-account approval requirement while
 retaining the technical branch protections. That base contains the reviewed
@@ -272,6 +313,7 @@ Use the lowest level that covers the complete change.
 | --- | --- | --- | --- |
 | Docs | `npm run verify:docs` | Documentation tests, links, routes, current versions, owner coverage, current claims, and docs-impact rules. | No |
 | Visual | `npm run verify:visual` | Frontend visual-system tests and source contract. | No |
+| Source | `npm run verify:source` | Shared documentation, visual, shell, deployment, and source contract checks used locally and by CI. | No |
 | Affected | `npm run verify:affected -- --base-ref <task-base-ref>` | Classifies every task path and runs the required gates. | Depends on selected gates; never grants reset authority. |
 | Fast | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:fast` | Docs/visual/source checks, complete Flutter analysis/tests, complete FastAPI checks, and diff hygiene. | No |
 | Web | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:web` | Builds the Flutter debug web bundle. | No |
@@ -437,6 +479,13 @@ compilation, non-mutating Ruff, the complete FastAPI pytest suite, and
 `git diff --check`. Its independent source, Flutter, and backend groups may run
 concurrently.
 
+The source group delegates to `scripts/verify_source.sh`, also exposed as
+`npm run verify:source`. The existing CI `docs-visual` job runs this same entry
+point, including the Vercel/CSP, Turnstile, affected-selection, VPS/backup, and
+local shell-safety tests. This group needs Node.js and Python, but no Flutter
+SDK, live database, provider account, or deployment credentials. Any failed
+check fails the shared entry point and its caller.
+
 For a focused Deadline allocation diagnostic before the selected gate, run:
 
 ```bash
@@ -469,6 +518,14 @@ cd ../../apps/mobile
   test/planner_contract_test.dart \
   test/planner_page_test.dart
 ```
+
+`test/planner_timezone_test.dart` additionally checks profile-local agenda and
+stored-preview clocks, retained and edited timestamps, and gap/fold rejection
+through the real Task and fixed-commitment dialogs. The Planner page suite
+covers profile-local weekly conflict previews including recovery and midnight.
+Backend Planner API regressions exercise the real service and route with both
+direct and shared-context Deadline conflicts, preserving the existing `409`
+status/detail instead of an unhandled `500`.
 
 This pair covers the strict V2 projection and cross-runtime parser, the
 unchanged V1 mutation seam, Planner/Today integration, guest call suppression,
@@ -508,6 +565,12 @@ depend on Codex installation, OAuth, model access, subscription status, or an
 external network call.
 
 ## Local Supabase Verification
+
+`supabase/tests/deadline_plan_limit_test.sql` adds rollback-only execution
+coverage for the existing 50-open-plan cap: Series rejection leaves no partial
+occurrences or retry ledgers, and an exact successful request remains replayable
+at the limit. Flutter Series regressions cover visible errors before a saved
+card exists, retained values, exact retry, and reload/competing-action locks.
 
 The pending Exam Plan Health migration has an additional dedicated
 `scripts/lib/exam_plan_health_migration_harness.sh` path. The harness proves
@@ -773,7 +836,8 @@ replace browser or product verification.
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) defines the current
 hosted workflow:
 
-- `docs-visual` always runs documentation and visual contracts;
+- `docs-visual` always runs the shared source gate, including documentation,
+  visual, shell-safety, deployment, and source contract tests;
 - Flutter/Android and complete FastAPI suites run on pull requests;
 - path classification adds a web build for Flutter changes;
 - schema/database paths add a fresh local migration chain and pgTAP;

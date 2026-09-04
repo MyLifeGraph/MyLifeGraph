@@ -47,6 +47,112 @@ const _berlinProfile = AppProfile(
 void main() {
   final now = DateTime(2026, 7, 18, 10);
 
+  testWidgets('Series retry stays visible while the plan feed loads or fails',
+      (tester) async {
+    final series = AssignmentSeriesResponse.fromJson(assignmentSeriesEnvelope()).series;
+    final seriesRepository = _FakeAssignmentSeriesRepository(
+      series: [series],
+      confirmResults: [
+        StateError('response lost'),
+        AssignmentSeriesResponse.fromJson(assignmentSeriesEnvelope(status: 'active')).series,
+      ],
+    );
+    final plans = _FakeDeadlinePlanRepository();
+    await _pumpPage(
+      tester,
+      repository: plans,
+      assignmentSeriesRepository: seriesRepository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+    await _tap(tester, find.text(series.title));
+    await _tap(tester, find.text('Confirm whole series'));
+    await _tap(tester, find.byKey(const ValueKey('assignment-series-confirm')));
+    expect(find.text('Retry unchanged'), findsOneWidget);
+    final reload = Completer<DeadlinePlanFeed>();
+    plans.nextFeed = reload.future;
+    await tester.ensureVisible(find.byTooltip('Reload preparation plans'));
+    await tester.tap(find.byTooltip('Reload preparation plans'));
+    await tester.pump();
+    expect(find.text('Retry unchanged'), findsOneWidget);
+    expect(find.byKey(ValueKey('assignment-series-${series.id}')), findsNothing);
+    reload.completeError(StateError('plan feed unavailable'));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry unchanged'), findsOneWidget);
+    expect(find.byKey(ValueKey('assignment-series-${series.id}')), findsNothing);
+    await _tap(tester, find.text('Retry unchanged'));
+    expect(seriesRepository.confirmRequestIds, hasLength(2));
+    expect(seriesRepository.confirmRequestIds.toSet(), hasLength(1));
+    expect(find.text('Could not confirm the series save'), findsNothing);
+  });
+
+  for (final ambiguous in [false, true]) {
+    testWidgets('new Series exposes ${ambiguous ? 'unchanged retry' : 'the open-plan limit'}',
+        (tester) async {
+      final seriesRepository = _FakeAssignmentSeriesRepository(
+        proposalErrors: [
+          AppException('Failed request', cause: ApiFailure(
+            kind: ApiFailureKind.response,
+            statusCode: ambiguous ? 503 : 409,
+            responseData: const {'detail': 'You already have 50 open deadline plans.'},
+          )),
+        ],
+        proposalBuilder: (draft) {
+          final raw = assignmentSeriesEnvelope();
+          raw['assignment_series']['series']['id'] = draft.seriesId;
+          raw['assignment_series']['pending_revision']['series_id'] = draft.seriesId;
+          return AssignmentSeriesResponse.fromJson(raw).series;
+        },
+      );
+      await _pumpPage(
+        tester,
+        repository: _FakeDeadlinePlanRepository(),
+        assignmentSeriesRepository: seriesRepository,
+        page: DeadlinePlansPage(initialKind: DeadlinePlanKind.assignment, currentTime: now),
+        size: const Size(320, 900),
+        textScaler: const TextScaler.linear(2),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('assignment-series-title')), 'Weekly algorithms sheet',
+      );
+      await _tap(tester, find.byKey(const ValueKey('assignment-series-next-deadline')));
+      await _tap(tester, find.text('OK'));
+      await _tap(tester, find.text('OK'));
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.byKey(const ValueKey('assignment-series-estimate-1h')));
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.text('Create series preview'));
+      final submitted = seriesRepository.proposalDrafts.single;
+      if (ambiguous) {
+        expect(find.text('Could not confirm the series save'), findsOneWidget);
+        expect(find.text('Review series values'), findsNothing);
+        expect(find.text('Dismiss'), findsNothing);
+        final reads = seriesRepository.reads;
+        await _tap(tester, find.byTooltip('Reload preparation plans'));
+        expect(seriesRepository.reads, reads);
+        expect(find.text('Retry unchanged'), findsOneWidget);
+        final create = find.widgetWithText(FilledButton, 'Plan preparation');
+        await tester.scrollUntilVisible(create, 200, scrollable: _pageScrollable());
+        expect(tester.widget<FilledButton>(create).onPressed, isNull);
+        tester.state<ScrollableState>(_pageScrollable()).position.jumpTo(0);
+        await tester.pumpAndSettle();
+        await _tap(tester, find.text('Retry unchanged'));
+        expect(seriesRepository.proposalRequestIds.toSet(), hasLength(1));
+        expect(seriesRepository.proposalDrafts, [submitted, submitted]);
+        expect(find.text('Could not confirm the series save'), findsNothing);
+        expect(find.text('Entered series values kept'), findsNothing);
+      } else {
+        expect(find.text('Could not update the series'), findsOneWidget);
+        expect(find.text('Close or cancel one open preparation plan before creating another.'), findsOneWidget);
+        expect(find.text('Retry unchanged'), findsNothing);
+        await _tap(tester, find.text('Review series values'));
+        expect(tester.widget<TextField>(
+          find.byKey(const ValueKey('assignment-series-title')),
+        ).controller!.text, submitted.title);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('Exam balance requires explicit target and promises no auto move',
       (tester) async {
     await _pumpPage(
@@ -2607,17 +2713,27 @@ class _FakeAssignmentSeriesRepository implements AssignmentSeriesRepository {
   _FakeAssignmentSeriesRepository({
     this.series = const [],
     this.proposalResult,
+    this.proposalBuilder,
     List<Object>? proposalErrors,
-  }) : proposalErrors = [...?proposalErrors];
+    List<Object>? confirmResults,
+  }) : proposalErrors = [...?proposalErrors],
+       confirmResults = [...?confirmResults];
 
   final List<AssignmentSeries> series;
   final AssignmentSeries? proposalResult;
+  final AssignmentSeries Function(AssignmentSeriesProposalDraft)? proposalBuilder;
   final List<Object> proposalErrors;
+  final List<Object> confirmResults;
   final List<AssignmentSeriesProposalDraft> proposalDrafts = [];
+  final List<String> proposalRequestIds = [];
+  final List<String> confirmRequestIds = [];
+  int reads = 0;
 
   @override
-  Future<AssignmentSeriesFeed> getSeries() async =>
-      AssignmentSeriesFeed(series);
+  Future<AssignmentSeriesFeed> getSeries() async {
+    reads += 1;
+    return AssignmentSeriesFeed(series);
+  }
 
   @override
   Future<AssignmentSeries> propose({
@@ -2625,7 +2741,9 @@ class _FakeAssignmentSeriesRepository implements AssignmentSeriesRepository {
     required AssignmentSeriesProposalDraft draft,
   }) async {
     proposalDrafts.add(draft);
+    proposalRequestIds.add(requestId);
     if (proposalErrors.isNotEmpty) throw proposalErrors.removeAt(0);
+    if (proposalBuilder case final build?) return build(draft);
     if (proposalResult case final result?) return result;
     if (series.isNotEmpty) return series.first;
     throw StateError('Missing assignment series proposal result');
@@ -2636,8 +2754,13 @@ class _FakeAssignmentSeriesRepository implements AssignmentSeriesRepository {
     required String seriesId,
     required String requestId,
     required int expectedRevision,
-  }) =>
-      throw UnimplementedError();
+  }) async {
+    confirmRequestIds.add(requestId);
+    if (confirmResults.isEmpty) throw UnimplementedError();
+    final result = confirmResults.removeAt(0);
+    if (result is AssignmentSeries) return result;
+    throw result;
+  }
 
   @override
   Future<AssignmentSeries> cancelFuture({
@@ -2816,6 +2939,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   final DeadlinePlan? targetedPlan;
   final Object? targetedError;
   final Object? feedError;
+  Future<DeadlinePlanFeed>? nextFeed;
   final List<DeadlinePlanProposalDraft> proposalDrafts = [];
   final List<String> proposalRequestIds = [];
   int feedCalls = 0;
@@ -2834,6 +2958,10 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
 
   @override
   Future<DeadlinePlanFeed> getPlans() async {
+    if (nextFeed case final pending?) {
+      nextFeed = null;
+      return pending;
+    }
     if (feedError case final error?) throw error;
     final index = feedCalls.clamp(0, feeds.length - 1);
     feedCalls++;

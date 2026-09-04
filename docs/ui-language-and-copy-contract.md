@@ -175,6 +175,10 @@ multiple blocks never imply multiple required actions.
 
 ## Planner Copy
 
+Planner Task and fixed-commitment time pickers reject an unresolvable local
+selection with `This time is skipped or repeated by a clock change. Choose
+another time.` Retained values stay visible; no adjusted time is silently saved.
+
 The `exam-plan-health-v1` capacity surface name is `Exam Plan Health`. Its status labels
 are `Healthy capacity`, `Plan soon`, `Capacity shortfall`, and
 `Availability unknown`; status is never communicated by color alone. Use
@@ -247,6 +251,13 @@ proposal that nothing is reserved until the whole series is confirmed once,
 and before a future-wide edit that it deliberately overwrites future
 deviations while preserving older completed work. A partial-failure message
 must say that no partial confirmation was kept.
+
+An unknown Series save instead says `Could not confirm the series save` and
+keeps submitted values locked behind `Retry unchanged`; it must not claim that
+the save failed or offer to discard the unresolved request. Definite rejection
+says `Could not update the series`, uses the existing specific Preparation
+conflict guidance, and keeps entered values available for review. The error is
+visible even when no saved Series card exists.
 
 Daily-cap defaults are presented as editable starting values, never inferred
 effort. A new Exam starts at 120 minutes per day and a new Assignment or weekly

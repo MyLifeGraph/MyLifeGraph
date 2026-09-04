@@ -132,7 +132,7 @@ class AssignmentSeriesController extends StateNotifier<AssignmentSeriesState> {
   final PreparationMutationGate _mutationGate;
 
   Future<void> load() async {
-    if (state.isBusy) return;
+    if (state.isBusy || state.requiresExactRetry) return;
     state = AssignmentSeriesState.loading();
     try {
       final feed = await _repository.getSeries();

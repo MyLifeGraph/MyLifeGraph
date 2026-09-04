@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/time/profile_timezone.dart';
 import '../../../../core/theme/app_category_visuals.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -773,11 +774,13 @@ class PlannerSevenDaySection extends StatelessWidget {
   const PlannerSevenDaySection({
     super.key,
     required this.days,
+    required this.timezone,
     required this.onItemTap,
     this.enabled = true,
   });
 
   final List<PlannerDay> days;
+  final String timezone;
   final ValueChanged<PlannerDayItem> onItemTap;
   final bool enabled;
 
@@ -795,7 +798,11 @@ class PlannerSevenDaySection extends StatelessWidget {
             AppScheduleDayCard(
               localDate: day.localDate,
               items: day.items
-                  .map((item) => _plannerDayItemView(item, enabled: enabled))
+                  .map((item) => _plannerDayItemView(
+                        item,
+                        enabled: enabled,
+                        timezone: timezone,
+                      ))
                   .toList(growable: false),
               emptyLabel: 'No planned or fixed items.',
               onItemTap: (view) => onItemTap(view.payload! as PlannerDayItem),
@@ -809,17 +816,20 @@ class PlannerSevenDaySection extends StatelessWidget {
 AppScheduleDayItem _plannerDayItemView(
   PlannerDayItem item, {
   required bool enabled,
+  required String timezone,
 }) {
   final visual = _visual(item.kind);
+  String clock(DateTime instant) => DateFormat.Hm().format(
+        profileDateTimeAt(instant: instant, timezoneName: timezone),
+      );
   final time = item.allDay
       ? 'All day'
       : item.recoveryMinutes > 0
-          ? '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
-              '${DateFormat.Hm().format(item.endsAt!.toLocal())} focus + '
+          ? '${clock(item.startsAt!)}–'
+              '${clock(item.endsAt!)} focus + '
               '${item.recoveryMinutes} min recovery · reserved until '
-              '${DateFormat.Hm().format(item.reservedEndsAt!.toLocal())}'
-          : '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
-              '${DateFormat.Hm().format(item.endsAt!.toLocal())}';
+              '${clock(item.reservedEndsAt!)}'
+          : '${clock(item.startsAt!)}–${clock(item.endsAt!)}';
   return AppScheduleDayItem(
     id: item.id,
     title: item.title,
@@ -841,11 +851,13 @@ class PlannerPreparationSection extends StatelessWidget {
   const PlannerPreparationSection({
     super.key,
     required this.plans,
+    required this.timezone,
     required this.onOpen,
     this.enabled = true,
   });
 
   final List<PlannerPreparation> plans;
+  final String timezone;
   final ValueChanged<PlannerPreparation> onOpen;
   final bool enabled;
 
@@ -870,7 +882,7 @@ class PlannerPreparationSection extends StatelessWidget {
                   title: Text(plan.title),
                   subtitle: Text(
                     '${_minutes(plan.remainingMinutes)} remaining · '
-                    '${plan.nextBlockStartsAt == null ? 'no next block' : 'next ${DateFormat.MMMd().add_Hm().format(plan.nextBlockStartsAt!.toLocal())}'}',
+                    '${plan.nextBlockStartsAt == null ? 'no next block' : 'next ${DateFormat.MMMd().add_Hm().format(profileDateTimeAt(instant: plan.nextBlockStartsAt!, timezoneName: timezone))}'}',
                   ),
                   trailing: plan.hasPendingPreview
                       ? const Chip(label: Text('Preview'))

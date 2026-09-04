@@ -17,6 +17,58 @@ import 'package:my_life_graph/features/planner/presentation/providers/planner_pr
 import 'support/planner_fixtures.dart';
 
 void main() {
+  for (final overnight in [false, true]) {
+    testWidgets('weekly conflict preview includes ${overnight ? 'midnight' : 'recovery'} in profile time',
+        (tester) async {
+      final backend = _PlannerBackend()
+        ..transformOverview = (overview) {
+          final item = overview['days'][0]['items'][1] as Map<String, dynamic>;
+          if (overnight) {
+            item['starts_at'] = '2026-07-21T21:45:00Z';
+            item['ends_at'] = '2026-07-21T22:15:00Z';
+            item['reserved_ends_at'] = '2026-07-21T22:15:00Z';
+          } else {
+            item['recovery_minutes'] = 30;
+            item['reserved_ends_at'] = '2026-07-21T10:00:00Z';
+          }
+        };
+      await _pumpPlanner(tester, backend: backend);
+      await tester.tap(find.byKey(const ValueKey('planner-add-commitment')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('planner-commitment-title')),
+        'Appointment',
+      );
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Every week').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byType(DropdownButtonFormField<int>));
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(overnight ? 'Wed' : 'Tue').last);
+      await tester.pumpAndSettle();
+      for (final start in [true, false]) {
+        final label = start ? 'Starts *' : 'Ends *';
+        await tester.ensureVisible(find.text(label));
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        Navigator.of(tester.element(find.byType(TimePickerDialog))).pop(
+          TimeOfDay(
+            hour: overnight ? 0 : 11,
+            minute: overnight ? (start ? 5 : 10) : (start ? 45 : 55),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(const ValueKey('planner-commitment-review')));
+      await tester.pumpAndSettle();
+      expect(find.text('Visible plans that need attention:'), findsOneWidget);
+      expect(find.text('• Write report'), findsOneWidget);
+      expect(backend.requests.where((request) => request.method != 'GET'), isEmpty);
+    });
+  }
+
   test('scheduled Planner load is ignored after immediate disposal', () async {
     final uncaughtErrors = <Object>[];
     final backend = _PlannerBackend();
@@ -3447,6 +3499,7 @@ class _PlannerBackend {
                 }).toList(growable: false);
               }
             }
+            transformOverview?.call(overview);
             return handler.resolve(_response(options, overview));
           }
           if (options.path.endsWith('/proposals')) {
@@ -3590,6 +3643,7 @@ class _PlannerBackend {
   final int? confirmedSetupHabitDuration;
   String taskTitle = 'Undated reading';
   String? taskDescription;
+  void Function(Map<String, dynamic>)? transformOverview;
   String taskExpectedUpdatedAt = '2026-07-20T08:00:00Z';
   String taskPriority = 'medium';
   String setupHabitTitle = 'Read';

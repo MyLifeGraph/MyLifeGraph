@@ -297,6 +297,12 @@ translator. The operation catch boundary and existing not-found, conflict, and
 validation statuses/details remain unchanged; repository exceptions still stop
 below `app/api`.
 
+A Deadline projection conflict encountered while assembling the overview is
+translated to the existing Planner `409` problem with its original detail,
+both for direct reads and the shared Today/Planner context. An externally
+inconsistent overfull Deadline projection therefore does not become an
+unhandled `500`; successful overview payloads remain unchanged.
+
 ## Deterministic Availability
 
 One shared availability component is used by Planner Task/Habit proposals and
@@ -543,6 +549,16 @@ cannot be proven. Flutter and FastAPI both verify that every
 matches its interval.
 
 ## Stabilized Time And Client Projection
+
+Flutter renders the rolling agenda and next Preparation times in the overview's
+profile timezone. Task and fixed-commitment editors use that same timezone for
+both retained timestamps and newly selected wall times; the existing strict
+resolver rejects skipped or repeated clock-change times. Preview timestamps
+use the immutable revision's timezone, which Flutter retains from the existing
+wire field. Weekly conflict previews resolve occurrences in the profile zone
+and compare complete reserved intervals, including recovery and midnight
+spillover. These conversions never move stored instants or use device time as
+an account-timezone fallback.
 
 Planner proposals and confirmations bind the current profile
 `timezone_revision`. A timezone edit invalidates open previews and adds

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/time/profile_timezone.dart';
 import '../../domain/planner.dart';
 
 class PlannerPlanPreviewDialog extends StatelessWidget {
@@ -13,6 +14,10 @@ class PlannerPlanPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final revision = plan.pendingRevision!;
+    DateTime local(DateTime instant) => profileDateTimeAt(
+          instant: instant,
+          timezoneName: revision.timezone,
+        );
     return AlertDialog(
       title: const Text('Review plan preview'),
       content: SizedBox(
@@ -63,12 +68,12 @@ class PlannerPlanPreviewDialog extends StatelessWidget {
                   title: Text('${block.plannedMinutes} min'),
                   subtitle: Text(
                     block.recoveryMinutes > 0
-                        ? '${DateFormat.yMMMd().add_Hm().format(block.startsAt.toLocal())} · '
+                        ? '${DateFormat.yMMMd().add_Hm().format(local(block.startsAt))} · '
                             '${block.plannedMinutes} min focus + ${block.recoveryMinutes} min recovery · '
-                            'reserved until ${DateFormat.Hm().format(block.reservedEndsAt.toLocal())}'
+                            'reserved until ${DateFormat.Hm().format(local(block.reservedEndsAt))}'
                         : DateFormat.yMMMd()
                             .add_Hm()
-                            .format(block.startsAt.toLocal()),
+                            .format(local(block.startsAt)),
                   ),
                 ),
               for (final slot in revision.habitSlots)
@@ -108,9 +113,14 @@ class PlannerPlanPreviewDialog extends StatelessWidget {
 }
 
 class PlannerTaskDialog extends StatefulWidget {
-  const PlannerTaskDialog({super.key, required this.initial});
+  const PlannerTaskDialog({
+    super.key,
+    required this.initial,
+    required this.timezone,
+  });
 
   final PlannerTaskDraft? initial;
+  final String timezone;
 
   @override
   State<PlannerTaskDialog> createState() => _TaskDialogState();
@@ -139,7 +149,12 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
       text: initial?.preferredSessionMinutes?.toString(),
     );
     _priority = initial?.priority ?? 'medium';
-    _deadline = initial?.deadlineAt;
+    _deadline = initial?.deadlineAt == null
+        ? null
+        : profileDateTimeAt(
+            instant: initial!.deadlineAt!,
+            timezoneName: widget.timezone,
+          );
     _schedule = initial?.estimatedMinutes != null ||
         initial?.deadlineAt != null ||
         initial?.preferredSessionMinutes != null;
@@ -276,12 +291,20 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
       );
 
   Future<void> _pickDeadline() async {
-    final now = DateTime.now();
+    final now = profileDateTimeAt(
+      instant: DateTime.now(),
+      timezoneName: widget.timezone,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    final current = _deadline;
+    final initialDay = current == null
+        ? DateTime(now.year, now.month, now.day + 1)
+        : DateTime(current.year, current.month, current.day);
     final day = await showDatePicker(
       context: context,
-      firstDate: DateTime(now.year, now.month, now.day),
+      firstDate: initialDay.isBefore(today) ? initialDay : today,
       lastDate: DateTime(now.year + 1, now.month, now.day),
-      initialDate: _deadline ?? now.add(const Duration(days: 1)),
+      initialDate: initialDay,
     );
     if (!mounted || day == null) return;
     final selectedTime = await showTimePicker(
@@ -291,15 +314,23 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
           : TimeOfDay.fromDateTime(_deadline!),
     );
     if (!mounted || selectedTime == null) return;
-    setState(() {
-      _deadline = DateTime(
-        day.year,
-        day.month,
-        day.day,
-        selectedTime.hour,
-        selectedTime.minute,
+    try {
+      final deadline = profileDateTimeFromComponents(
+        year: day.year,
+        month: day.month,
+        day: day.day,
+        hour: selectedTime.hour,
+        minute: selectedTime.minute,
+        timezoneName: widget.timezone,
       );
-    });
+      setState(() {
+        _deadline = deadline;
+        _error = null;
+      });
+    } on ProfileTimezoneException {
+      setState(() => _error =
+          'This time is skipped or repeated by a clock change. Choose another time.');
+    }
   }
 
   void _submit() {
@@ -632,9 +663,14 @@ String _habitCadenceLabel(PlannerHabitDraft habit) =>
     };
 
 class PlannerCommitmentDialog extends StatefulWidget {
-  const PlannerCommitmentDialog({super.key, required this.initial});
+  const PlannerCommitmentDialog({
+    super.key,
+    required this.initial,
+    required this.timezone,
+  });
 
   final PlannerCommitmentDraft? initial;
+  final String timezone;
 
   @override
   State<PlannerCommitmentDialog> createState() => _CommitmentDialogState();
@@ -658,8 +694,18 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
     _title = TextEditingController(text: initial?.title);
     _location = TextEditingController(text: initial?.location);
     _recurrence = initial?.recurrence;
-    _startsAt = initial?.startsAt;
-    _endsAt = initial?.endsAt;
+    _startsAt = initial?.startsAt == null
+        ? null
+        : profileDateTimeAt(
+            instant: initial!.startsAt!,
+            timezoneName: widget.timezone,
+          );
+    _endsAt = initial?.endsAt == null
+        ? null
+        : profileDateTimeAt(
+            instant: initial!.endsAt!,
+            timezoneName: widget.timezone,
+          );
     _weekday = initial?.weekday;
     _weeklyStart = _parseTime(initial?.localStartsAt);
     _weeklyEnd = _parseTime(initial?.localEndsAt);
@@ -781,12 +827,19 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
 
   Future<void> _pickOneOff({required bool start}) async {
     final current = start ? _startsAt : _endsAt;
-    final now = DateTime.now();
+    final now = profileDateTimeAt(
+      instant: DateTime.now(),
+      timezoneName: widget.timezone,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    final initialDay = current == null
+        ? today
+        : DateTime(current.year, current.month, current.day);
     final day = await showDatePicker(
       context: context,
-      firstDate: DateTime(now.year, now.month, now.day),
+      firstDate: initialDay.isBefore(today) ? initialDay : today,
       lastDate: DateTime(now.year + 1, now.month, now.day),
-      initialDate: current ?? now,
+      initialDate: initialDay,
     );
     if (!mounted || day == null) return;
     final value = await showTimePicker(
@@ -796,9 +849,27 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
           : TimeOfDay.fromDateTime(current),
     );
     if (!mounted || value == null) return;
-    final instant =
-        DateTime(day.year, day.month, day.day, value.hour, value.minute);
-    setState(() => start ? _startsAt = instant : _endsAt = instant);
+    try {
+      final instant = profileDateTimeFromComponents(
+        year: day.year,
+        month: day.month,
+        day: day.day,
+        hour: value.hour,
+        minute: value.minute,
+        timezoneName: widget.timezone,
+      );
+      setState(() {
+        if (start) {
+          _startsAt = instant;
+        } else {
+          _endsAt = instant;
+        }
+        _error = null;
+      });
+    } on ProfileTimezoneException {
+      setState(() => _error =
+          'This time is skipped or repeated by a clock change. Choose another time.');
+    }
   }
 
   Future<void> _pickWeekly({required bool start}) async {

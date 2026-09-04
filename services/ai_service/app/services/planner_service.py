@@ -65,6 +65,7 @@ from app.services.planner_builder import (
     build_planner_overview,
 )
 from app.services.planner_errors import (
+    DeadlinePlanConflictError,
     PlannerConflictError,
     PlannerNotFoundError,
     PlannerValidationError,
@@ -761,6 +762,8 @@ class PlannerService:
                 )
         except PlannerPersistenceNotFound as exc:
             raise PlannerNotFoundError(str(exc)) from exc
+        except DeadlinePlanConflictError as exc:
+            raise PlannerConflictError(str(exc)) from exc
         finally:
             if owns_context:
                 assert read_context is not None

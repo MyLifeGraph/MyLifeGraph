@@ -87,6 +87,21 @@ deadlines are database-enforced. The series request ledger is service-role
 only. Authenticated owners may read the series, revisions, and occurrence
 membership but cannot mutate those tables directly.
 
+The existing owner-locked Deadline proposal RPC caps the combined draft/active
+occurrence plans at 50 per account. Series proposals use that same RPC inside
+one transaction, so crossing the cap rolls back the whole series proposal.
+Exact request replays are recognized before the cap check.
+
+Failed Series commands have one identity-bound error surface, including a new
+series absent from the saved feed or a collapsed existing card. A definite
+rejection keeps the entered values editable and reuses the Preparation conflict
+guidance. An unknown result keeps the exact request and submitted values locked
+for `Retry unchanged`; Series reload does not read or discard that identity.
+The existing Preparation action guards also block new single-plan changes
+until the Series outcome is resolved. Successful proposal retry clears its
+retained draft and refreshes the occurrence list. This adds no persistence
+across route disposal or Auth changes.
+
 ## Proposal, Revision, And Confirmation
 
 `deadline-plan-v1` uses immutable revisions:

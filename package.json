@@ -9,6 +9,7 @@
     "start:local:coach:fake": "LOCAL_STACK_COACH_PROVIDER=fake bash scripts/start_local_stack.sh",
     "verify": "npm run verify:fast",
     "verify:fast": "bash scripts/verify_fast.sh",
+    "verify:source": "bash scripts/verify_source.sh",
     "verify:db": "bash scripts/verify_supabase_local.sh",
     "verify:web": "bash scripts/verify_web.sh",
     "verify:staging:remote": "node scripts/verify_staging_remote.mjs",

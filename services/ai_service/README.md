@@ -511,6 +511,11 @@ PATCH  /v1/planner/commitments/{commitment_id}
 POST   /v1/planner/commitments/{commitment_id}/archive
 ```
 
+Overview assembly preserves a Deadline-source conflict as the existing Planner
+HTTP `409` problem and its detail, including the shared Today/Planner read
+context. It does not expose an unhandled `500` or truncate an inconsistent
+Deadline projection to make the overview appear complete.
+
 The V2 overview omits only an individual recurring Habit, Setup, or weekly
 manual fixed-commitment occurrence whose profile-local wall time is ambiguous
 or nonexistent. It retains other valid occurrences and reports one deduplicated

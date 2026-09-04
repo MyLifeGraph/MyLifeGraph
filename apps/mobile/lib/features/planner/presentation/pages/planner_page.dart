@@ -8,6 +8,7 @@ import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/time/profile_timezone.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
@@ -305,6 +306,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     children.add(
       PlannerSevenDaySection(
         days: overview.days,
+        timezone: overview.timezone,
         onItemTap: (item) => _openDayItem(item, overview),
         enabled: state.canMutate,
       ),
@@ -312,6 +314,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     children.add(
       PlannerPreparationSection(
         plans: overview.ongoingPreparation,
+        timezone: overview.timezone,
         onOpen: (plan) => context.push(
           '${AppRoutes.preparationPlans}?plan_id=${plan.planId}',
         ),
@@ -412,7 +415,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         : _currentTaskDraftFor(initial!);
     final draft = await showDialog<PlannerTaskDraft>(
       context: context,
-      builder: (_) => PlannerTaskDialog(initial: retained ?? initial),
+      builder: (_) => PlannerTaskDialog(
+        initial: retained ?? initial,
+        timezone: ref.read(plannerControllerProvider).overview!.timezone,
+      ),
     );
     if (!mounted || draft == null) return;
     _retainTaskDraft(draft);
@@ -984,7 +990,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       );
       final draft = await showDialog<PlannerTaskDraft>(
         context: context,
-        builder: (_) => PlannerTaskDialog(initial: initial),
+        builder: (_) => PlannerTaskDialog(
+          initial: initial,
+          timezone: overview.timezone,
+        ),
       );
       if (!mounted || draft == null) return false;
       _retainedTaskReplacementDrafts[_previewDraftKey(stalePlan)] =
@@ -1158,7 +1167,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         description: item.description,
         priority: item.priority,
         estimatedMinutes: item.estimatedMinutes,
-        deadlineAt: item.deadlineAt?.toLocal(),
+        deadlineAt: item.deadlineAt,
         preferredSessionMinutes: item.preferredSessionMinutes,
         useStudyRhythm: item.useStudyRhythm,
         targetId: item.id,
@@ -1172,7 +1181,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
           description: item.description,
           priority: item.priority,
           estimatedMinutes: item.estimatedMinutes,
-          deadlineAt: item.deadlineAt?.toLocal(),
+          deadlineAt: item.deadlineAt,
           preferredSessionMinutes: item.preferredSessionMinutes,
           useStudyRhythm: item.useStudyRhythm,
           targetId: item.targetId,
@@ -1227,8 +1236,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     }
     final draft = await showDialog<PlannerCommitmentDraft>(
       context: context,
-      builder: (_) =>
-          PlannerCommitmentDialog(initial: _retainedCommitmentDraft),
+      builder: (_) => PlannerCommitmentDialog(
+        initial: _retainedCommitmentDraft,
+        timezone: overview.timezone,
+      ),
     );
     if (!mounted || draft == null) return;
     _retainedCommitmentDraft = draft;
@@ -1414,7 +1425,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         description: item.description,
         priority: item.priority,
         estimatedMinutes: item.estimatedMinutes,
-        deadlineAt: item.deadlineAt?.toLocal(),
+        deadlineAt: item.deadlineAt,
         preferredSessionMinutes: item.preferredSessionMinutes,
         useStudyRhythm: item.useStudyRhythm,
         targetId: item.id,
@@ -1580,12 +1591,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     final draft = await showDialog<PlannerCommitmentDraft>(
       context: context,
       builder: (_) => PlannerCommitmentDialog(
+        timezone: ref.read(plannerControllerProvider).overview!.timezone,
         initial: PlannerCommitmentDraft(
           title: commitment.title,
           location: commitment.location,
           recurrence: commitment.recurrence,
-          startsAt: commitment.startsAt?.toLocal(),
-          endsAt: commitment.endsAt?.toLocal(),
+          startsAt: commitment.startsAt,
+          endsAt: commitment.endsAt,
           weekday: commitment.weekday,
           localStartsAt: commitment.localStartsAt,
           localEndsAt: commitment.localEndsAt,
@@ -1719,23 +1731,53 @@ List<String> _overlappingTitles(
           item.endsAt == null) {
         continue;
       }
+      final starts = profileDateTimeAt(
+        instant: item.startsAt!,
+        timezoneName: overview.timezone,
+      );
+      final ends = profileDateTimeAt(
+        instant: item.reservedEndsAt ?? item.endsAt!,
+        timezoneName: overview.timezone,
+      );
       final overlaps = draft.recurrence == 'one_off'
-          ? draft.startsAt!.isBefore(item.endsAt!.toLocal()) &&
-              draft.endsAt!.isAfter(item.startsAt!.toLocal())
-          : item.startsAt!.toLocal().weekday == draft.weekday &&
-              _minuteOfDate(item.startsAt!.toLocal()) <
-                  _minuteOfString(draft.localEndsAt!) &&
-              _minuteOfDate(item.endsAt!.toLocal()) >
-                  _minuteOfString(draft.localStartsAt!);
+          ? draft.startsAt!.isBefore(ends) && draft.endsAt!.isAfter(starts)
+          : _weeklyCommitmentOverlaps(draft, starts, ends, overview.timezone);
       if (overlaps) titles.add(item.title);
     }
   }
   return titles.toList()..sort();
 }
 
-int _minuteOfDate(DateTime value) => value.hour * 60 + value.minute;
-
-int _minuteOfString(String value) {
-  final parts = value.split(':');
-  return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+bool _weeklyCommitmentOverlaps(
+  PlannerCommitmentDraft draft,
+  DateTime starts,
+  DateTime ends,
+  String timezone,
+) {
+  final startClock = draft.localStartsAt!.split(':');
+  final endClock = draft.localEndsAt!.split(':');
+  final lastDay = DateTime(ends.year, ends.month, ends.day);
+  for (var day = DateTime(starts.year, starts.month, starts.day);
+      !day.isAfter(lastDay);
+      day = DateTime(day.year, day.month, day.day + 1)) {
+    if (day.weekday != draft.weekday) continue;
+    try {
+      DateTime boundary(List<String> clock) => profileDateTimeFromComponents(
+            year: day.year,
+            month: day.month,
+            day: day.day,
+            hour: int.parse(clock[0]),
+            minute: int.parse(clock[1]),
+            timezoneName: timezone,
+          );
+      if (boundary(startClock).isBefore(ends) &&
+          boundary(endClock).isAfter(starts)) {
+        return true;
+      }
+    } on ProfileTimezoneException {
+      // Unresolved recurring occurrences are omitted from availability.
+      continue;
+    }
+  }
+  return false;
 }

@@ -82,6 +82,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   String? _expandedPlanId;
   String? _expandedSeriesId;
   String? _operationPlanId;
+  String? _operationSeriesId;
   String? _selectedBalanceTargetPlanId;
   bool _initialBalanceRequested = false;
   final Map<String, GlobalKey> _planKeys = {};
@@ -210,6 +211,29 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     final healthValue = examPlanHealth.asData?.value;
     final anyMutationBusy =
         state.isBusy || seriesState.isBusy || multiExamState.isBusy;
+    final operationSeriesId =
+        seriesState.pendingMutation?.seriesId ?? _operationSeriesId;
+    final hasInlineSeriesError = !state.isLoading && state.loadError == null &&
+        !widget.focusedReplan && !seriesState.isLoading &&
+        seriesState.loadError == null && seriesState.series.any((series) =>
+            series.id == operationSeriesId && _expandedSeriesId == series.id &&
+            series.displayedRevision != null);
+    final seriesError = seriesState.operationError != null && !hasInlineSeriesError
+        ? AppCard(
+            child: _AssignmentSeriesOperationError(
+              error: seriesState.operationError!,
+              exactRetry: seriesState.requiresExactRetry,
+              isBusy: anyMutationBusy,
+              onRetry: _retryAssignmentSeries,
+              onReload: seriesController.load,
+              onDismiss: seriesController.clearOperationError,
+              onReview: _retainedSeriesDraft == null ? null : () {
+                seriesController.clearOperationError();
+                _openAssignmentSeriesEditor(retainedDraft: _retainedSeriesDraft);
+              },
+            ),
+          )
+        : null;
     final healthSection = _ExamPlanHealthSection(
       value: examPlanHealth,
       onRetry: () => ref.invalidate(examPlanHealthProvider),
@@ -217,6 +241,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     );
     if (state.isLoading) {
       return [
+        if (seriesError != null) seriesError,
         healthSection,
         const AppCard(
           child: Center(
@@ -278,8 +303,8 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           plan: plan,
           expanded: _expandedPlanId == plan.id,
           isBusy: anyMutationBusy,
-          exactRetryLocked:
-              state.requiresExactRetry || multiExamState.requiresExactRetry,
+          exactRetryLocked: state.requiresExactRetry ||
+              seriesState.requiresExactRetry || multiExamState.requiresExactRetry,
           examHealth: _healthForPlan(healthValue, plan.id),
           childBalanceId: childLink?.balanceId,
           childMetadataUnavailable: childMetadataUnavailable,
@@ -314,8 +339,8 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     }
 
     Widget seriesCard(AssignmentSeries series) {
-      final hasInlineError =
-          seriesState.operationError != null && _expandedSeriesId == series.id;
+      final hasInlineError = seriesState.operationError != null &&
+          hasInlineSeriesError && operationSeriesId == series.id;
       return _AssignmentSeriesCard(
         key: ValueKey('assignment-series-${series.id}'),
         series: series,
@@ -337,7 +362,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         onEditOccurrence: (plan) => _openEditor(plan: plan),
         onConfirm: () => _confirmAssignmentSeries(series),
         onCancelFuture: () => _cancelAssignmentSeriesFuture(series),
-        onRetry: seriesController.retryExact,
+        onRetry: _retryAssignmentSeries,
         onReload: () async {
           await Future.wait([controller.load(), seriesController.load()]);
         },
@@ -351,6 +376,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         visiblePlans.where((plan) => plan.isTerminal).toList(growable: false);
 
     final leading = <Widget>[
+      if (seriesError != null) seriesError,
       if (_targetPlanLoading)
         const AppCard(
           child: Row(
@@ -476,6 +502,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
             FilledButton.icon(
               onPressed: anyMutationBusy ||
                       state.requiresExactRetry ||
+                      seriesState.requiresExactRetry ||
                       multiExamState.requiresExactRetry ||
                       sourcePrefill?.isLoading == true
                   ? null
@@ -742,6 +769,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         state.loadError != null ||
         state.isBusy ||
         state.requiresExactRetry ||
+        seriesState.requiresExactRetry ||
         widget.initialKind == DeadlinePlanKind.assignment &&
             (seriesState.isLoading ||
                 seriesState.isBusy ||
@@ -919,6 +947,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     final state = ref.read(deadlinePlanControllerProvider);
     if (state.isBusy ||
         state.requiresExactRetry ||
+        ref.read(assignmentSeriesControllerProvider).requiresExactRetry ||
         _editorOpen ||
         _seriesEditorOpen) {
       return;
@@ -985,7 +1014,11 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     _DeadlineReplanContext replanContext = _DeadlineReplanContext.general,
   }) async {
     final state = ref.read(deadlinePlanControllerProvider);
-    if (state.isBusy || state.requiresExactRetry || _editorOpen) return;
+    if (state.isBusy || state.requiresExactRetry ||
+        ref.read(assignmentSeriesControllerProvider).requiresExactRetry ||
+        _editorOpen) {
+      return;
+    }
     final profileDateSource = ref.read(profileLocalDateSourceProvider);
     final profileTimezone = profileDateSource.timezoneName;
     if (profileTimezone == null) {
@@ -1152,6 +1185,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     setState(() {
       _retainedSeriesDraft = draft;
       _expandedSeriesId = series?.id ?? draft!.seriesId;
+      _operationSeriesId = _expandedSeriesId;
     });
     final saved = await ref
         .read(assignmentSeriesControllerProvider.notifier)
@@ -1196,7 +1230,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         ) ??
         false;
     if (!mounted || !confirmed) return;
-    setState(() => _expandedSeriesId = series.id);
+    setState(() {
+      _expandedSeriesId = series.id;
+      _operationSeriesId = series.id;
+    });
     final saved = await ref
         .read(assignmentSeriesControllerProvider.notifier)
         .confirm(series);
@@ -1229,7 +1266,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         ) ??
         false;
     if (!mounted || !confirmed) return;
-    setState(() => _expandedSeriesId = series.id);
+    setState(() {
+      _expandedSeriesId = series.id;
+      _operationSeriesId = series.id;
+    });
     final saved = await ref
         .read(assignmentSeriesControllerProvider.notifier)
         .cancelFuture(series);
@@ -1239,6 +1279,18 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         _showMessage('Future assignments cancelled; earlier history was kept.');
       }
     }
+  }
+
+  Future<void> _retryAssignmentSeries() async {
+    final controller = ref.read(assignmentSeriesControllerProvider.notifier);
+    final pending = ref.read(assignmentSeriesControllerProvider).pendingMutation;
+    final saved = await controller.retryExact();
+    if (!mounted || !saved) return;
+    if (pending?.kind == AssignmentSeriesMutationKind.proposal &&
+        _retainedSeriesDraft?.seriesId == pending?.seriesId) {
+      setState(() => _retainedSeriesDraft = null);
+    }
+    await ref.read(deadlinePlanControllerProvider.notifier).load();
   }
 
   DeadlinePlan? _planById(List<DeadlinePlan> plans, String? planId) {

@@ -283,6 +283,8 @@ class _AssignmentSeriesEditorSheetState
         ),
         const SizedBox(height: AppSpacing.md),
         DropdownButtonFormField<int>(
+          isExpanded: true,
+          itemHeight: null,
           initialValue: _bufferDays,
           decoration: const InputDecoration(
             labelText: 'Clear days before each due date',
@@ -454,6 +456,73 @@ class _AssignmentSeriesEditorSheetState
   }
 }
 
+class _AssignmentSeriesOperationError extends StatelessWidget {
+  const _AssignmentSeriesOperationError({
+    required this.error,
+    required this.exactRetry,
+    required this.isBusy,
+    required this.onRetry,
+    required this.onReload,
+    required this.onDismiss,
+    this.onReview,
+  });
+
+  final Object error;
+  final bool exactRetry;
+  final bool isBusy;
+  final VoidCallback onRetry;
+  final VoidCallback onReload;
+  final VoidCallback onDismiss;
+  final VoidCallback? onReview;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            exactRetry ? 'Could not confirm the series save' : 'Could not update the series',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            exactRetry
+                ? 'Your submitted values are kept and locked. Retry unchanged to check the result safely.'
+                : deadlinePlanConflictGuidance(error) ?? _errorMessage(error),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              if (exactRetry)
+                OutlinedButton(
+                  onPressed: isBusy ? null : onRetry,
+                  child: const Text('Retry unchanged'),
+                )
+              else ...[
+                OutlinedButton(
+                  onPressed: isBusy ? null : onReload,
+                  child: const Text('Reload series'),
+                ),
+                if (onReview != null && !deadlinePlanMutationSuggestsReload(error))
+                  OutlinedButton(
+                    onPressed: isBusy ? null : onReview,
+                    child: const Text('Review series values'),
+                  ),
+                if (!deadlinePlanMutationSuggestsReload(error))
+                  TextButton(
+                    onPressed: isBusy ? null : onDismiss,
+                    child: const Text('Dismiss'),
+                  ),
+              ],
+            ],
+          ),
+        ],
+      );
+}
+
 class _AssignmentSeriesCard extends StatelessWidget {
   const _AssignmentSeriesCard({
     super.key,
@@ -567,33 +636,13 @@ class _AssignmentSeriesCard extends StatelessWidget {
               ),
             if (operationError != null) ...[
               const SizedBox(height: AppSpacing.md),
-              Text(
-                'The whole-series operation was not completed. No partial confirmation was kept.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  if (exactRetryLocked)
-                    OutlinedButton(
-                      onPressed: isBusy ? null : onRetry,
-                      child: const Text('Retry unchanged'),
-                    )
-                  else
-                    OutlinedButton(
-                      onPressed: isBusy ? null : onReload,
-                      child: const Text('Reload series'),
-                    ),
-                  if (!exactRetryLocked)
-                    TextButton(
-                      onPressed: isBusy ? null : onDismissError,
-                      child: const Text('Dismiss'),
-                    ),
-                ],
+              _AssignmentSeriesOperationError(
+                error: operationError!,
+                exactRetry: deadlinePlanMutationRequiresExactRetry(operationError!),
+                isBusy: isBusy,
+                onRetry: onRetry,
+                onReload: onReload,
+                onDismiss: onDismissError,
               ),
             ],
             const SizedBox(height: AppSpacing.md),

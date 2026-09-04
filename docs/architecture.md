@@ -547,6 +547,10 @@ attention projection. Proposal persistence crosses the repository boundary as
 one validated `PlannerProposalWrite`, so target identity, revision, Task
 blocks, and Habit slots cannot drift as independent dictionaries.
 
+The Planner service translates a Deadline projection conflict into its existing
+HTTP `409` conflict boundary before returning through the route, including
+shared Today/Planner reads. This adds no fallback or partial-success payload.
+
 The atomic read cutover is `planner-overview-v2`; mutation envelopes remain
 `planner-v1`. The pure builder projects all active Habits separately from open
 unscheduled Tasks, plus authoritative current snapshots for every open

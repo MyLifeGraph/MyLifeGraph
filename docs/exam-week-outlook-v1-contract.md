@@ -163,6 +163,11 @@ demand and require no extra Outlook read. Confirming, editing, or cancelling a
 series invalidates/reloads the existing Deadline projection through the normal
 Planner mutation impact, without giving this GET write authority.
 
+A rejected Series proposal at the existing open-plan limit leaves no partial
+occurrences to enter Outlook. The Preparation page keeps unknown Series
+outcomes locked for identical retry; only a proven lifecycle success emits
+the existing Outlook invalidation, while proposal retries remain previews.
+
 ## Deterministic Capacity Simulation
 
 The service reuses the existing bounded Availability engine without persisting
