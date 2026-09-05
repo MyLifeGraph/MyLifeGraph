@@ -48,6 +48,37 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Scoped simplification (2026-09-05)
+
+This task captured clean base `6384f8a7372364bd86de2b1e3bd774aa17dee13f`
+and prepared its code candidate at
+`e75125dc81f708c3725636d5afff12e16151d328` on
+`simplify/maintenance-and-verification`. The seven bounded fixes and subsequent
+Settings-copy correction each completed independent read-only review; review
+findings were corrected and reviewed again before their local commits.
+
+`RESET_DB=false APPLY_MIGRATIONS=false npm run verify:affected -- --base-ref
+6384f8a7372364bd86de2b1e3bd774aa17dee13f` selected Full and passed:
+Flutter analysis and all 1,057 Flutter tests; FastAPI Ruff and 1,683 tests with
+two intentional skips; the shared source/documentation/visual gate; and the
+debug Web build. The first Full attempt found one Account Controls assertion
+affected by unnecessarily reworded budget help. The correction preserved the
+original truthful wording, removed only the obsolete marker promise, and added
+focused assertions before the successful complete rerun.
+
+Normal local history matched all 69 repository migrations. No migration was
+applied to, and no reset performed on, the normal local database. The separate
+Goal, Exam Health, Multi-Exam, and pinned PG15/PG17 transition checks passed.
+The complete pgTAP suite passed 486 assertions in 24 files on each pinned major
+and the normal local database; the PG17 owner/ACL restore and deletion replay
+also passed. Browser run `20260905T070556Z-1355173` passed all eight journeys
+without retry and completed run-owned Auth and process cleanup.
+
+These results supersede the earlier dated entries below for this code
+candidate. They are local evidence, not hosted CI, remote migration, provider,
+or deployment evidence. The final baseline-only documentation update is
+verified separately with Docs and diff hygiene.
+
 ### Targeted maintenance (2026-09-04)
 
 This task captured clean base `71164bb28b13bb5c361af3c466c6f76c00169203`.
