@@ -776,7 +776,7 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 | Zentrale Planung | `planner_preferences`, Action Plans/Revisionen, Task Blocks, Habit Slots, Planner Commitments und technische Request-Identitäten | Planner, Today V2 und gemeinsame Availability |
 | Hinweise | `notifications`, `notification_preferences`, Action-Request-Ledger | Inbox und foreground banners |
 | Coach | `coach_requests`, `coach_usage_events`, `coach_messages`, backend-only `coach_operator_daily_budgets` und `coach_operator_dispatches`; `coach_memory_selections` nur Legacy-Kompatibilität | Availability, V4 Evidence/Trace/Fast-Provenance, gemischte History sowie lokale/globale Budgets |
-| Weitere Projektionen | `ai_insights`, `skillset_profiles` | gespeicherte Notes bzw. ausschließlich gekennzeichnete lokale Demo-Skillset-Anzeige |
+| Weitere Projektionen | `ai_insights`, `skillset_profiles` | gespeicherte Notes und erhaltene Skillset-Zeilen für Export/Coach; die lokale Demo-Skillset-Anzeige liest keine Tabellenzeilen |
 | Gerätelokal | Guest-Check-ins und Theme-Präferenz | Gastmodus bzw. Appearance |
 
 Technische Request- und Usage-Ledger sind keine sichtbaren Features. Sie sorgen

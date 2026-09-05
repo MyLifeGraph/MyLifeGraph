@@ -447,7 +447,7 @@ The app table constants live in
 | `learning_request_identities` | Backend-only global retry/result ledger for exact preference updates and confirmed reflection-history clearing; omitted from Account Export. |
 | `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
 | `habit_logs` | One explicit `completed` or `skipped` outcome per habit/local date, with checked 1/0 compatibility value; open and missed opportunities are derived and progress/streaks are cadence-aware. |
-| `skillset_profiles` | Generated coaching/skill profile snapshots. |
+| `skillset_profiles` | Stored skill projections retained for owner export and Coach snapshots. Flutter's labelled Skillset example is local and does not read this table. |
 | `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured routine/commitment/Study lifecycle items. Supported retired personalization keys are stripped; `responses.goals` is rejected. |
 | `study_setup_profiles` | Optional `study-setup-v1` projection from the current applied Intake revision: focus/recovery rhythm, ordered preparation-item definitions, current/next semester, and Setup revision. Forced owner-read RLS; only the backend writes. |

@@ -362,6 +362,12 @@ write or ranking authority from that removal. The independent
 `recommendation`, Skillset, and ordinary Coach advice remain unchanged. None of
 those preserved concepts may recreate the retired Today feed or feedback API.
 
+Flutter Skillset examples use the shared `isLocalDemo` capability, including
+anonymous-provider sessions, and the local example source directly. A real or
+missing session outside explicit mock mode cannot load the example. There is no
+Flutter Skillset Supabase loader; persisted rows remain in the owner export and
+Coach snapshot catalogs.
+
 ## Export, deletion, logging, and rollout
 
 Account Export includes `focus_session_reflections` and

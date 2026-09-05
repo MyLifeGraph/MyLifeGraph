@@ -593,6 +593,8 @@ contract ambiguity never becomes a success claim.
 Insights shows the Skill profile only in explicitly local/demo mode and labels
 it as example data. Real accounts neither load nor render `skillset_profiles`
 because no trusted producer currently exists.
+The Skillset provider uses the shared local-demo capability and the local
+example source directly; it has no remote loader or repository/service wrapper.
 Real-account Insights loads `personal-patterns-v1` and
 `sleep-recommendation-v1` independently. The Sleep Recommendation card is
 directly below Personal Study Pattern and owns loading, disabled, collecting,
