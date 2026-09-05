@@ -1636,6 +1636,14 @@ fast, database, web, and full browser gates. The affected selector fails closed
 without that base; `HEAD` alone covers only current working-tree changes and
 misses task changes already committed after work began.
 
+For a single runtime, `npm run verify:flutter` runs Flutter dependency
+resolution, analysis, and all Flutter tests; `npm run verify:backend` runs Python
+compilation, Ruff, and all backend tests. The affected selector combines those
+groups with `verify:source` (and Web for Flutter). Only the two existing spacing
+and radius constants receive the same narrow local treatment inside `core`;
+other existing escalation paths still select Full. CI selection and complete
+promotion checks are unchanged.
+
 `npm run verify:source` runs just the shared documentation, visual, shell,
 deployment, and source checks with Node.js and Python. Both the source group
 inside `verify:fast` and the CI `docs-visual` job use this entry point; it does

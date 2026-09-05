@@ -300,10 +300,16 @@ Always retain the commit captured before work began.
 Expected path selection is conservative:
 
 - documentation-only paths select Docs and Visual;
-- ordinary backend paths select Fast;
-- ordinary Flutter paths select Fast and Web;
+- ordinary backend paths select Source and Backend;
+- ordinary Flutter paths select Source, Flutter, and Web;
+- the exact `app_spacing.dart` and `app_radii.dart` files below
+  `apps/mobile/lib/core/constants/` also select Source, Flutter, and Web locally;
 - Auth, routing, core, configuration, schema, mixed-stack, or unknown paths
-  select Full.
+  otherwise retain Full. Adding such a path to a presentation-only change
+  broadens the selection to Full.
+
+These narrower commands apply locally. Path categories and all CI selection
+outputs remain unchanged, including Full E2E for the two core constants.
 
 ## Verification Levels
 
@@ -316,6 +322,8 @@ Use the lowest level that covers the complete change.
 | Source | `npm run verify:source` | Shared documentation, visual, shell, deployment, and source contract checks used locally and by CI. | No |
 | Affected | `npm run verify:affected -- --base-ref <task-base-ref>` | Classifies every task path and runs the required gates. | Depends on selected gates; never grants reset authority. |
 | Fast | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:fast` | Docs/visual/source checks, complete Flutter analysis/tests, complete FastAPI checks, and diff hygiene. | No |
+| Flutter | `npm run verify:flutter` | Flutter dependency resolution, analysis, and the complete Flutter suite. | No |
+| Backend | `npm run verify:backend` | Python compilation, Ruff, and the complete FastAPI suite. | No |
 | Web | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:web` | Builds the Flutter debug web bundle. | No |
 | Database | `npm run verify:db` | Requires matching local migration history, runs the isolated transition harnesses including the pinned PG17 migration/restore/replay lane, then the complete normal-local pgTAP suite. | No |
 | Reviewed migration apply | `APPLY_MIGRATIONS=true npm run verify:db` | Applies reviewed pending local SQL, rechecks history, then runs database verification. | May change or delete local rows. |
@@ -463,6 +471,13 @@ resolution, clean Flutter analysis and the complete Flutter suite, Python
 compilation, non-mutating Ruff, the complete FastAPI pytest suite, and
 `git diff --check`. Its independent source, Flutter, and backend groups may run
 concurrently.
+
+`npm run verify:flutter` and `npm run verify:backend` select just their existing
+group through `scripts/verify_fast.sh --group flutter|backend`. The runner also
+accepts `--group source`; unknown or incomplete arguments fail before any tool
+runs. With no arguments it still runs all three groups. Each selected group
+propagates failure. Runner regression tests use isolated substitute programs
+to prove group selection and failure handling without starting product stacks.
 
 The source group delegates to `scripts/verify_source.sh`, also exposed as
 `npm run verify:source`. The existing CI `docs-visual` job runs this same entry
