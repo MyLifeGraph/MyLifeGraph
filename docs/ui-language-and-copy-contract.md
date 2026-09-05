@@ -372,20 +372,15 @@ says `Early evidence`.
   `Sign in` and `Create account`; synced-feature failures say what is
   unavailable without asking the student to configure Supabase or a backend.
 - Stored Insight rows are called notes unless their individual source proves a
-  narrower AI claim. Planner calls its compact confirmed preparation reservations
-  `7-day preparation load`; it does not combine them with current Task
-  estimates or imply an immutable historical workload. Today does not repeat
-  this workload card.
-- The Preparation Plans page does not repeat a `Your next 7 days` card; it groups
-  compact `Open plans` and `History` accordions instead. Recurring
-  `schedule_items` are labelled `weekly setup commitments`; imported calendar
-  busy time is not shown in that workload. The optional
+  narrower AI claim. Planner and Today have no standalone preparation-workload
+  card. Preparation editors use the summary to read the account budget, without
+  presenting it as a complete availability or historical-workload model.
+- The Preparation Plans page groups compact `Open plans` and `History`
+  accordions. The optional
   `Daily preparation budget` is described as an explicit
   account-wide transparent rule, not an AI estimate or inferred free time.
-  Existing over-budget reservations say `Needs review` because changing the
-  setting does not mutate them. Expanding that date may say `At least N must be
-  redistributed on this date`; this is the exact rule overage, not an automatic
-  choice of plan. `Review plan` navigates to saved details, while `Replan
+  Changing the setting does not mutate existing reservations.
+  `Review plan` navigates to saved details, while `Replan
   remaining time` opens only the selected plan in the focused staged flow. For an active plan with
   no pending preview, its compact review uses `Replan remaining preparation`,
   `Create preview with these values`, and `Change values`. It states that the

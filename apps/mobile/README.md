@@ -167,8 +167,9 @@ Preparation includes canonical current-revision credited and remaining minutes;
 only remaining work can start. Task and Habit actions remain lifecycle/date
 bound, including a fresh profile-date check before Habit navigation.
 Guest/mock builds a local empty week before authenticated transport and makes
-zero product calls. Preparation workload remains in Planner and is no longer
-repeated on Today. The persisted
+zero product calls. Preparation editors read the workload summary for the
+account-wide budget; there is no standalone workload card in Planner or Today.
+The persisted
 deterministic briefing still exists for backend consumers,
 but it is no longer presented as a decision made for the user. Capture itself
 does not create or change a plan. Morning Calibration
@@ -402,10 +403,10 @@ Authenticated real accounts now have:
   finish/abandon;
 - paginated Habit V1 outcome reads starting 370 calendar days before today and
   DST-safe local progress based on persisted `metadata.started_on`; and
-- strict `executable-action-v1` parsing in parity with FastAPI, including
-  unknown-field, non-object metadata and explicit-null metadata-field,
-  non-integer, invalid-date, linkage, and per-command metadata rejection.
-  Unsupported commands are unavailable rather than routed to a no-op.
+- feature-owned command validation and a shared `executable-action-v1` constant
+  for compatible Focus metadata. The unused general action-envelope parser and
+  its isolated tests have been removed; current actions use their owning typed
+  controllers and routes directly.
 
 Every successful real action write refreshes the daily snapshot best-effort.
 An exactly reconciled committed write does too. Habit outcome/undo captures one
@@ -592,6 +593,8 @@ contract ambiguity never becomes a success claim.
 Insights shows the Skill profile only in explicitly local/demo mode and labels
 it as example data. Real accounts neither load nor render `skillset_profiles`
 because no trusted producer currently exists.
+The Skillset provider uses the shared local-demo capability and the local
+example source directly; it has no remote loader or repository/service wrapper.
 Real-account Insights loads `personal-patterns-v1` and
 `sleep-recommendation-v1` independently. The Sleep Recommendation card is
 directly below Personal Study Pattern and owns loading, disabled, collecting,
@@ -665,8 +668,8 @@ The widget test suite covers the auth gate; required-only guest Setup; typed
 prefill, edit, retry, and review behavior; exact same-day Evening/Morning
 merge, persistence, retry, and readback; source-aware Dashboard and Full Week
 states; route capability gates; durable Settings Setup entry; and strict
-notification action routing. Focused domain tests now cover strict action-target
-parsing, task validation/undo, all Habit V1 cadence/outcome calculations, and
+notification action routing. Focused domain tests cover task validation/undo,
+all Habit V1 cadence/outcome calculations, and
 focus lifecycle invariants. Coach tests cover strict V4/V3/V2 capability/history/
 SSE parsing, authenticated requests, guest/mock zero HTTP, retry/cancellation,
 capability/error/rate-limit states, mixed legacy history, visible evidence/

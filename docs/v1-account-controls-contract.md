@@ -149,8 +149,9 @@ before activation.
 After an ambiguous result FastAPI retries the identical request id, expected
 revision, and payload. An exact replay may converge to success; an unresolved
 result returns explicit outcome-unknown `502`. Changing the setting never
-mutates existing plan revisions. A lower value can therefore expose truthful
-`Needs review` overages until the student explicitly replans.
+mutates existing plan revisions. A lower value can therefore produce numeric
+overages in the workload response until the student explicitly replans;
+Settings does not promise a visible overage marker.
 
 The profile field is included in Account Export as part of the existing
 owner-scoped `profiles` row. It grants no new direct profile mutation authority.

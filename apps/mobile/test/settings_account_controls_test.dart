@@ -321,6 +321,11 @@ void main() {
       find.textContaining('transparent rule, not an AI estimate'),
       findsOneWidget,
     );
+    expect(
+      find.textContaining('Existing reservations are not changed.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('marked Needs review'), findsNothing);
     await tester.enterText(
       find.byKey(const ValueKey('daily-preparation-budget-input')),
       '120',

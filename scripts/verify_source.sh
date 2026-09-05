@@ -88,6 +88,7 @@ node --test scripts/seed_demo_contract.test.mjs
 node --test e2e/web/support/local-auth-users.test.mjs
 node --test scripts/cleanup_local_e2e_users.test.mjs
 node --test scripts/verify_affected.test.mjs
+node --test scripts/verify_fast.test.mjs
 node --test scripts/write_hosted_flutter_defines.test.mjs
 node --test scripts/verify_vercel_build_identity.test.mjs
 node --test scripts/write_web_csp.test.mjs

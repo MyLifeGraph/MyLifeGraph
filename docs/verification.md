@@ -48,6 +48,37 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Scoped simplification (2026-09-05)
+
+This task captured clean base `6384f8a7372364bd86de2b1e3bd774aa17dee13f`
+and prepared its code candidate at
+`e75125dc81f708c3725636d5afff12e16151d328` on
+`simplify/maintenance-and-verification`. The seven bounded fixes and subsequent
+Settings-copy correction each completed independent read-only review; review
+findings were corrected and reviewed again before their local commits.
+
+`RESET_DB=false APPLY_MIGRATIONS=false npm run verify:affected -- --base-ref
+6384f8a7372364bd86de2b1e3bd774aa17dee13f` selected Full and passed:
+Flutter analysis and all 1,057 Flutter tests; FastAPI Ruff and 1,683 tests with
+two intentional skips; the shared source/documentation/visual gate; and the
+debug Web build. The first Full attempt found one Account Controls assertion
+affected by unnecessarily reworded budget help. The correction preserved the
+original truthful wording, removed only the obsolete marker promise, and added
+focused assertions before the successful complete rerun.
+
+Normal local history matched all 69 repository migrations. No migration was
+applied to, and no reset performed on, the normal local database. The separate
+Goal, Exam Health, Multi-Exam, and pinned PG15/PG17 transition checks passed.
+The complete pgTAP suite passed 486 assertions in 24 files on each pinned major
+and the normal local database; the PG17 owner/ACL restore and deletion replay
+also passed. Browser run `20260905T070556Z-1355173` passed all eight journeys
+without retry and completed run-owned Auth and process cleanup.
+
+These results supersede the earlier dated entries below for this code
+candidate. They are local evidence, not hosted CI, remote migration, provider,
+or deployment evidence. The final baseline-only documentation update is
+verified separately with Docs and diff hygiene.
+
 ### Targeted maintenance (2026-09-04)
 
 This task captured clean base `71164bb28b13bb5c361af3c466c6f76c00169203`.
@@ -300,10 +331,16 @@ Always retain the commit captured before work began.
 Expected path selection is conservative:
 
 - documentation-only paths select Docs and Visual;
-- ordinary backend paths select Fast;
-- ordinary Flutter paths select Fast and Web;
+- ordinary backend paths select Source and Backend;
+- ordinary Flutter paths select Source, Flutter, and Web;
+- the exact `app_spacing.dart` and `app_radii.dart` files below
+  `apps/mobile/lib/core/constants/` also select Source, Flutter, and Web locally;
 - Auth, routing, core, configuration, schema, mixed-stack, or unknown paths
-  select Full.
+  otherwise retain Full. Adding such a path to a presentation-only change
+  broadens the selection to Full.
+
+These narrower commands apply locally. Path categories and all CI selection
+outputs remain unchanged, including Full E2E for the two core constants.
 
 ## Verification Levels
 
@@ -316,6 +353,8 @@ Use the lowest level that covers the complete change.
 | Source | `npm run verify:source` | Shared documentation, visual, shell, deployment, and source contract checks used locally and by CI. | No |
 | Affected | `npm run verify:affected -- --base-ref <task-base-ref>` | Classifies every task path and runs the required gates. | Depends on selected gates; never grants reset authority. |
 | Fast | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:fast` | Docs/visual/source checks, complete Flutter analysis/tests, complete FastAPI checks, and diff hygiene. | No |
+| Flutter | `npm run verify:flutter` | Flutter dependency resolution, analysis, and the complete Flutter suite. | No |
+| Backend | `npm run verify:backend` | Python compilation, Ruff, and the complete FastAPI suite. | No |
 | Web | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:web` | Builds the Flutter debug web bundle. | No |
 | Database | `npm run verify:db` | Requires matching local migration history, runs the isolated transition harnesses including the pinned PG17 migration/restore/replay lane, then the complete normal-local pgTAP suite. | No |
 | Reviewed migration apply | `APPLY_MIGRATIONS=true npm run verify:db` | Applies reviewed pending local SQL, rechecks history, then runs database verification. | May change or delete local rows. |
@@ -346,8 +385,15 @@ The checker validates:
 - the latest migration owner;
 - documented FastAPI routes and methods;
 - centralization of current checkout evidence;
-- known superseded current-state claims; and
-- changed-code documentation ownership.
+- known superseded current-state claims.
+
+Changed-code documentation ownership is reported separately as non-blocking
+review hints when an owning document is absent from the diff. Review whether
+behavior, contracts, commands, or guarantees actually changed; update affected
+documentation or briefly explain why it is still accurate in the fix report.
+A hint is not a consistency error and does not require a cosmetic document edit.
+Missing registered owners, code/owner version mismatches, broken links, route
+contradictions, and the migration inventory still fail the gate.
 
 The docs-impact checker compares uncommitted local changes with `HEAD` by
 default. CI supplies `DOCS_BASE_REF` so committed pull-request changes are also
@@ -430,37 +476,15 @@ checks, and the complete final-state pgTAP suite. Historical immutable
 Recommendation transition tests remain source evidence but are not current
 product-surface evidence.
 
-`docs/current-contracts.json` is authoritative for exact sources and owners.
-This runbook retains the following compact current coverage because each listed
-boundary explicitly owns verification requirements:
-
-| Boundary | Current version |
-| --- | --- |
-| Account export | `account-export-v6` |
-| Assignment series | `assignment-series-v1` |
-| Calendar import | `calendar-import-v2` |
-| Calendar consent | `calendar-import-consent-v1` |
-| Coach snapshot | `personal-snapshot-v3` |
-| Coach prompt | `free-coach-agent-prompt-v5` |
-| Coach request | `coach-request-v4` |
-| Coach response | `coach-response-v4` |
-| Coach capabilities | `coach-capabilities-v5` |
-| Coach history | `coach-history-v4` |
-| Daily briefing | `daily-briefing-v2` |
-| Daily Capture | `daily-capture-v5` |
-| Daily State | `explainable-daily-state-v3` |
-| Deadline Plan | `deadline-plan-v1` |
-| Exam-Week Outlook | `exam-week-outlook-v1` |
-| Executable action | `executable-action-v1` |
-| Multi-Exam Plan | `multi-exam-plan-v1` |
-| Personal Patterns | `personal-patterns-v1` |
-| Planner mutations | `planner-v1` |
-| Planner overview | `planner-overview-v2` |
-| Preparation workload | `preparation-workload-v1` |
-| Preparation workload detail | `preparation-workload-detail-v1` |
-| Sleep recommendation | `sleep-recommendation-v1` |
-| Today week agenda | `today-week-agenda-v1` |
-| Weekly Review | `weekly-review-v3` |
+The [contract registry](current-contracts.json) is the source for exact current
+versions, code selectors, and their contract, persistence, or operational owners.
+This runbook describes verification coverage rather than maintaining a second
+version table. General READMEs, architecture/product overviews, development and
+verification runbooks, and copy/visual guides are not mandatory locations for
+repeating version identifiers. Their behavioral documentation still needs to
+stay accurate when the behavior it describes changes.
+Operational READMEs that define a compatibility boundary, such as the backup
+journal contract, remain registered owners.
 
 Feature contracts remain the complete wire-format and compatibility authority.
 
@@ -478,6 +502,13 @@ resolution, clean Flutter analysis and the complete Flutter suite, Python
 compilation, non-mutating Ruff, the complete FastAPI pytest suite, and
 `git diff --check`. Its independent source, Flutter, and backend groups may run
 concurrently.
+
+`npm run verify:flutter` and `npm run verify:backend` select just their existing
+group through `scripts/verify_fast.sh --group flutter|backend`. The runner also
+accepts `--group source`; unknown or incomplete arguments fail before any tool
+runs. With no arguments it still runs all three groups. Each selected group
+propagates failure. Runner regression tests use isolated substitute programs
+to prove group selection and failure handling without starting product stacks.
 
 The source group delegates to `scripts/verify_source.sh`, also exposed as
 `npm run verify:source`. The existing CI `docs-visual` job runs this same entry

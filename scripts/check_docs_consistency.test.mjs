@@ -13,7 +13,7 @@ import {
   extractCanonicalVersions,
   extractFastApiRoutesFromTexts,
   findCrossRuntimeContractCoverageErrors,
-  findDocsImpactErrors,
+  findDocsImpactHints,
   findDocumentedRouteErrorsFromTexts,
   findLatestMigrationErrors,
   findMarkdownLinkErrors,
@@ -22,6 +22,7 @@ import {
   findVerificationEvidenceErrors,
   isHistoricalDocument,
   loadCurrentContractsMetadata,
+  runDocumentationChecks,
   validateCurrentContractsMetadata,
 } from './check_docs_consistency.mjs';
 
@@ -363,10 +364,10 @@ test('every named version shared by Flutter and FastAPI is registered', () => {
   );
 });
 
-test('changed product code requires its owning documentation in the same diff', () => {
+test('changed product code names unchanged owning documentation for review', () => {
   const captureCode =
     'apps/mobile/lib/features/quick_action/domain/quick_check_in.dart';
-  const incomplete = findDocsImpactErrors([
+  const incomplete = findDocsImpactHints([
     captureCode,
     'apps/mobile/README.md',
   ]);
@@ -374,7 +375,7 @@ test('changed product code requires its owning documentation in the same diff', 
   assert.match(incomplete[0], /docs\/daily-briefing-implementation-plan\.md/);
 
   assert.deepEqual(
-    findDocsImpactErrors([
+    findDocsImpactHints([
       captureCode,
       'apps/mobile/README.md',
       'docs/daily-briefing-implementation-plan.md',
@@ -386,7 +387,7 @@ test('changed product code requires its owning documentation in the same diff', 
 test('a migration updates migration owners without churning AGENTS.md', () => {
   const migration = 'supabase/migrations/20260101000000_example.sql';
   assert.deepEqual(
-    findDocsImpactErrors([
+    findDocsImpactHints([
       migration,
       'docs/supabase-current-state.md',
       'docs/verification.md',
@@ -394,7 +395,7 @@ test('a migration updates migration owners without churning AGENTS.md', () => {
     [],
   );
 
-  const errors = findDocsImpactErrors([
+  const errors = findDocsImpactHints([
     migration,
     'docs/supabase-current-state.md',
   ]);
@@ -403,7 +404,7 @@ test('a migration updates migration owners without churning AGENTS.md', () => {
   assert.doesNotMatch(errors[0], /AGENTS\.md/);
 });
 
-test('local database safety changes require the complete operational owner set', () => {
+test('local database safety hints retain the complete operational owner set', () => {
   const source = 'scripts/lib/local_supabase_database_safety.sh';
   const owners = [
     'docs/architecture.md',
@@ -413,9 +414,9 @@ test('local database safety changes require the complete operational owner set',
     'docs/verification.md',
   ];
 
-  assert.deepEqual(findDocsImpactErrors([source, ...owners]), []);
+  assert.deepEqual(findDocsImpactHints([source, ...owners]), []);
 
-  const errors = findDocsImpactErrors([
+  const errors = findDocsImpactHints([
     source,
     ...owners.filter((path) => path !== 'docs/local-database-safety.md'),
   ]);
@@ -479,4 +480,14 @@ test('current docs cannot restore reset authority to verification or E2E', () =>
   assert.ok(
     errors.every((error) => /cannot delegate reset authority/.test(error)),
   );
+});
+
+// Exercise result classification over the real repository, without changing it.
+test('documentation impact hints do not become consistency errors', () => {
+  const result = runDocumentationChecks(undefined, {
+    changedFiles: ['services/ai_service/app/api/routes/planner.py'],
+  });
+  assert.equal(result.errors.length, 0, result.errors.join('\n'));
+  assert.ok(result.hints.some((hint) => hint.includes('docs/planner-v1-contract.md')));
+  assert.ok(result.hints.some((hint) => hint.includes('docs/architecture.md')));
 });

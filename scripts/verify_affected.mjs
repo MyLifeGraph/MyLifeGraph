@@ -82,38 +82,56 @@ export function classifyAffectedPaths(paths) {
   );
 
   let classification;
-  let commands;
   if (entries.length === 0) {
     classification = 'none';
-    commands = [];
   } else if (stacks.size > 1) {
     classification = 'mixed';
-    commands = ['verify:full'];
   } else if (
     [...categories].some((category) =>
       escalationCategories.has(category),
     )
   ) {
     classification = [...categories].sort().join('+');
-    commands = ['verify:full'];
   } else if (categories.has('flutter')) {
     classification = 'flutter';
-    commands = ['verify:fast', 'verify:web'];
   } else if (categories.has('backend')) {
     classification = 'backend';
-    commands = ['verify:fast'];
   } else {
     classification = 'docs';
-    commands = ['verify:docs', 'verify:visual'];
   }
 
   return {
     classification,
-    commands,
+    commands: selectLocalCommands(entries, stacks),
     categories: [...categories].sort(),
     stacks: [...stacks].sort(),
     paths: entries,
   };
+}
+
+// These two presentation-only constants keep their conservative CI category.
+const localPresentationPaths = new Set([
+  'apps/mobile/lib/core/constants/app_spacing.dart',
+  'apps/mobile/lib/core/constants/app_radii.dart',
+]);
+
+function selectLocalCommands(entries, stacks) {
+  if (entries.length === 0) return [];
+  if (
+    stacks.size > 1 ||
+    entries.some(({ path, category }) =>
+      escalationCategories.has(category) && !localPresentationPaths.has(path),
+    )
+  ) {
+    return ['verify:full'];
+  }
+  if (stacks.has('flutter')) {
+    return ['verify:source', 'verify:flutter', 'verify:web'];
+  }
+  if (stacks.has('backend')) {
+    return ['verify:source', 'verify:backend'];
+  }
+  return ['verify:docs', 'verify:visual'];
 }
 
 export function selectCiGates(result) {

@@ -1,6 +1,5 @@
 import hashlib
 import json
-from collections.abc import Iterable
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
@@ -14,10 +13,6 @@ from app.models.deadline_plans import (
     DeadlinePlanResponse,
 )
 from app.models.planning_timing import PlanningTimingProvenance
-from app.services.local_time import (
-    resolve_local_datetime,
-    resolve_local_interval,
-)
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanningContext,
 )
@@ -69,16 +64,6 @@ def _timing_preference_from_row(
         fell_back_to_setup=bool(row.get("timing_fell_back_to_setup", False)),
         warning=row.get("timing_warning"),
     )
-
-
-def _valid_clock(value: object) -> bool:
-    if not isinstance(value, str) or len(value) != 5:
-        return False
-    try:
-        parsed = time.fromisoformat(value)
-    except ValueError:
-        return False
-    return parsed.second == 0 and parsed.isoformat(timespec="minutes") == value
 
 
 def _plan_blocks(
@@ -148,119 +133,6 @@ def _plan_blocks(
     return intervals
 
 
-def _busy_intervals_by_day(
-    *,
-    days: list[date],
-    context: DeadlinePlanningContext,
-    zone: ZoneInfo,
-    local_now: datetime,
-) -> dict[date, list[tuple[datetime, datetime]]]:
-    result: dict[date, list[tuple[datetime, datetime]]] = {day: [] for day in days}
-    day_set = set(days)
-    for day in days:
-        if day == local_now.date():
-            rounded_now = _round_up_quarter_hour(
-                local_now + timedelta(minutes=15),
-            )
-            result[day].append(
-                (
-                    resolve_local_datetime(
-                        local_date=day,
-                        local_time=time.min,
-                        zone=zone,
-                        source_id=f"planning-day:{day.isoformat()}",
-                    ),
-                    rounded_now,
-                ),
-            )
-    for item in context.schedule_items:
-        weekday = _int(item.get("weekday"))
-        starts = _time(item.get("starts_at"))
-        ends = _time(item.get("ends_at"))
-        if ends <= starts:
-            continue
-        for day in days:
-            if day.isoweekday() == weekday and recurring_commitment_applies_on(
-                item,
-                day,
-            ):
-                result[day].append(
-                    resolve_local_interval(
-                        local_date=day,
-                        starts_at=starts,
-                        ends_at=ends,
-                        zone=zone,
-                        source_id=f"setup:{item.get('id', weekday)}",
-                    ),
-                )
-    for item in [*context.confirmed_blocks, *context.timed_calendar_events]:
-        starts_at = _datetime(item.get("starts_at")).astimezone(zone)
-        ends_at = _datetime(item.get("ends_at")).astimezone(zone)
-        cursor = starts_at.date()
-        while cursor <= ends_at.date():
-            if cursor in day_set:
-                result[cursor].append((starts_at, ends_at))
-            cursor += timedelta(days=1)
-    for item in context.all_day_calendar_events:
-        starts_on = _date(item.get("starts_on"))
-        ends_on = _date(item.get("ends_on"))
-        cursor = starts_on
-        while cursor < ends_on:
-            if cursor in day_set:
-                result[cursor].append(
-                    (
-                        resolve_local_datetime(
-                            local_date=cursor,
-                            local_time=time.min,
-                            zone=zone,
-                            source_id=f"calendar-all-day:{item.get('id', cursor)}",
-                        ),
-                        resolve_local_datetime(
-                            local_date=cursor + timedelta(days=1),
-                            local_time=time.min,
-                            zone=zone,
-                            source_id=f"calendar-all-day:{item.get('id', cursor)}",
-                        ),
-                    ),
-                )
-            cursor += timedelta(days=1)
-    return {day: _merge_intervals(intervals) for day, intervals in result.items()}
-
-
-def _subtract_intervals(
-    starts_at: datetime,
-    ends_at: datetime,
-    busy: list[tuple[datetime, datetime]],
-) -> list[tuple[datetime, datetime]]:
-    gaps: list[tuple[datetime, datetime]] = []
-    cursor = starts_at
-    for busy_start, busy_end in busy:
-        clipped_start = max(starts_at, busy_start)
-        clipped_end = min(ends_at, busy_end)
-        if clipped_end <= cursor or clipped_start >= ends_at:
-            continue
-        if clipped_start > cursor:
-            gaps.append((cursor, clipped_start))
-        cursor = max(cursor, clipped_end)
-    if cursor < ends_at:
-        gaps.append((cursor, ends_at))
-    return gaps
-
-
-def _merge_intervals(
-    intervals: Iterable[tuple[datetime, datetime]],
-) -> list[tuple[datetime, datetime]]:
-    merged: list[tuple[datetime, datetime]] = []
-    for starts_at, ends_at in sorted(intervals, key=lambda value: value[0]):
-        if ends_at <= starts_at:
-            continue
-        if not merged or starts_at > merged[-1][1]:
-            merged.append((starts_at, ends_at))
-        else:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], ends_at))
-    return merged
-
-
 def _confirmed_preparation_minutes_by_day(
     context: DeadlinePlanningContext,
 ) -> dict[date, int]:
@@ -300,13 +172,6 @@ def _fixed_commitment_minutes(
         else:
             merged[-1] = (merged[-1][0], max(merged[-1][1], ends))
     return sum(ends - starts for starts, ends in merged)
-
-
-def _days(starts_on: date, ends_on: date) -> Iterable[date]:
-    cursor = starts_on
-    while cursor <= ends_on:
-        yield cursor
-        cursor += timedelta(days=1)
 
 
 def _context_fingerprint_input(
@@ -408,57 +273,6 @@ def _calendar_event_has_status_projection(event: dict[str, Any]) -> bool:
         "_connection_imported_data_deleted_at",
         "_import_planning_status",
     }.issubset(event)
-
-
-def _round_up_quarter_hour(value: datetime) -> datetime:
-    rounded = value.replace(second=0, microsecond=0)
-    remainder = rounded.minute % 15
-    if value.second or value.microsecond or remainder:
-        rounded += timedelta(minutes=(15 - remainder) if remainder else 15)
-    return rounded
-
-
-def _ceil_local_five_minutes(value: datetime) -> datetime:
-    rounded = value.replace(second=0, microsecond=0)
-    remainder = rounded.minute % 5
-    if value.second or value.microsecond or remainder:
-        rounded += timedelta(minutes=(5 - remainder) if remainder else 5)
-    return rounded
-
-
-def _floor_local_five_minutes(value: datetime) -> datetime:
-    return value.replace(
-        minute=value.minute - (value.minute % 5),
-        second=0,
-        microsecond=0,
-    )
-
-
-def _safe_fixed_offset_interval(
-    starts_at: datetime,
-    ends_at: datetime,
-    zone: ZoneInfo,
-) -> bool:
-    if ends_at <= starts_at or starts_at.utcoffset() != ends_at.utcoffset():
-        return False
-    return _is_unambiguous_local(starts_at, zone) and _is_unambiguous_local(
-        ends_at,
-        zone,
-    )
-
-
-def _is_unambiguous_local(value: datetime, zone: ZoneInfo) -> bool:
-    naive = value.replace(tzinfo=None)
-    instants = {
-        candidate.astimezone(UTC)
-        for fold in (0, 1)
-        if (candidate := naive.replace(tzinfo=zone, fold=fold))
-        .astimezone(UTC)
-        .astimezone(zone)
-        .replace(tzinfo=None)
-        == naive
-    }
-    return len(instants) == 1
 
 
 def _plan_identity(row: dict[str, Any]) -> DeadlinePlanIdentity:

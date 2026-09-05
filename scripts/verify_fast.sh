@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+groups=(source flutter backend)
+if [[ "$#" -ne 0 ]]; then
+  if [[ "$#" -ne 2 || "$1" != '--group' ]]; then
+    echo 'Usage: verify_fast.sh [--group source|flutter|backend]' >&2
+    exit 64
+  fi
+  case "$2" in
+    source|flutter|backend) groups=("$2") ;;
+    *) echo "Unknown verification group: $2" >&2; exit 64 ;;
+  esac
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
 VERIFY_TMP_DIR="$(mktemp -d /tmp/mylifegraph-verify-fast.XXXXXX)"
@@ -37,15 +49,13 @@ run_backend_checks() {
   "$PYTHON_BIN" -m pytest
 }
 
-run_source_checks >"$VERIFY_TMP_DIR/source.log" 2>&1 &
-source_pid=$!
-run_flutter_checks >"$VERIFY_TMP_DIR/flutter.log" 2>&1 &
-flutter_pid=$!
-run_backend_checks >"$VERIFY_TMP_DIR/backend.log" 2>&1 &
-backend_pid=$!
+for group in "${groups[@]}"; do
+  "run_${group}_checks" >"$VERIFY_TMP_DIR/$group.log" 2>&1 &
+  printf -v "${group}_pid" '%s' "$!"
+done
 
 status=0
-for group in source flutter backend; do
+for group in "${groups[@]}"; do
   pid_variable="${group}_pid"
   pid="${!pid_variable}"
   if ! wait "$pid"; then

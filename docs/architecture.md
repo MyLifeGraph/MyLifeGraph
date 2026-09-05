@@ -528,8 +528,8 @@ and loads its projection only when opened. Full week is the bearer-scoped
 read, not a direct Flutter Supabase/Deadline merge. It returns seven
 server-projected profile-local dates and independent freshness for Setup,
 Preparation, Calendar, actual Focus, Planner Tasks, materialized Habit slots,
-and fixed commitments. Preparation
-workload is not duplicated on Today and remains available in Planner. The exact
+and fixed commitments. Preparation editors retain the workload summary for
+the account budget; Planner and Today have no standalone workload card. The exact
 rules live in
 `docs/today-overview-v1-contract.md`.
 
@@ -726,20 +726,14 @@ Phase 3 keeps simple user-owned mutations in typed Flutter/Supabase boundaries:
   `metadata.entry_date` comes from its captured start instant in the
   authenticated profile timezone.
 
-Flutter and FastAPI share a strict, ranking-independent
-`executable-action-v1` envelope for `open_task`, `complete_task`, `log_habit`,
-`start_focus`, `review_plan`, and `open_capture`. Kind/command/target and bounded
-scalar metadata are validated; unknown combinations are rejected. Flutter and
-FastAPI deliberately reject the same unknown top-level/metadata fields, null or
-non-object metadata, explicit null metadata fields, coercible numbers, invalid
-calendar dates, identifier normalization, duration/linkage bounds, and
-command-specific metadata leakage. The former Flutter briefing dispatcher was
-removed when Today Overview superseded the briefing-first card; current Today
-Task, Habit, Focus, capture, and Weekly Review actions use their owning typed
-controllers and routes directly. Phase 8 gives `review_plan` a real
-authenticated `/weekly-review` navigation
-handler; guest/mock and unsupported sessions stay unavailable, and dispatch
-never generates or mutates. Phase 3 defines executable targets but does not select a primary action,
+FastAPI validates the strict, ranking-independent `executable-action-v1`
+envelope for persisted briefings, including kind/command/target linkage,
+bounded metadata, exact dates, and unsupported-field rejection. Flutter retains
+that version as a named constant for compatible Focus metadata. Its unconsumed
+general parser and former briefing dispatcher have been removed. Current Today
+Task, Habit, Focus, Capture, and Weekly Review controls use their owning typed
+controllers and routes directly. Weekly Review navigation retains its synced
+capability boundary and never generates or mutates. Phase 3 defines executable targets but does not select a primary action,
 persist a briefing, redesign Dashboard as Today, generate recommendations during
 normal writes, or call an LLM. The full contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -877,11 +871,12 @@ active revision. Existing active blocks are never silently moved when the
 setting changes.
 
 The side-effect-free `preparation-workload-v1` read projects seven consecutive
-profile-local dates for Planner. It reports active confirmed preparation
+profile-local dates. Preparation editors use it to read the account budget.
+It reports active confirmed preparation
 reservations and merged weekly `schedule_items` duration as separate facts. It
 deliberately excludes proposed blocks, imported busy rows, live provider state,
-task estimates, and Focus history, so Planner labels the latter as weekly Setup
-commitments and does not present the projection as total free time. Today's
+task estimates, and Focus history. The recurring facts describe weekly Setup
+commitments, not total free time. Today's
 separate lazy `today-week-agenda-v1` read projects the containing
 Monday-to-Sunday calendar week. Its service makes one bounded, owner-filtered
 read per source family for Setup, Preparation, current Calendar import, actual
@@ -902,15 +897,15 @@ hypothetical recurring busy interval from the newest valid Evening V4 plan.
 The Planner-only card opens existing review/replan routes and cannot create or
 confirm a preview. See `docs/exam-week-outlook-v1-contract.md`.
 
-The compatible `preparation-workload-detail-v1` read is requested only after a
-student expands one date from that summary. It accepts only a date in the
+The compatible `preparation-workload-detail-v1` read remains available, but no
+current Flutter surface requests or displays it. It accepts only a date in the
 current profile-local seven-day window and aggregates active blocks by their
 owner-scoped plan id. The response exposes only plan title, date-reserved
 minutes, and block count, with exact sum/budget invariants; it does not return
-block times or calendar content. Planner alone uses this detail boundary.
-Review navigation opens the existing plan, while replanning pushes
+block times or calendar content. Neither workload GET route has mutation or
+LLM authority. Preparation review navigation opens the existing plan, while replanning pushes
 `/planner/replan?plan_id=<uuid>` and isolates that selected plan's existing
-preview/confirmation workflow. Neither GET route has mutation or LLM authority.
+preview/confirmation workflow.
 
 ## Authentication
 
@@ -1163,7 +1158,7 @@ Current responsibilities:
   recent `daily_logs`, `behavioral_events`, `tasks`, `habits`, explicit
   `habit_logs`, `focus_sessions`, `schedule_items`, and `memory_entries` without
   reading full history.
-- Parse the same strict `executable-action-v1` envelope as Flutter so persisted
+- Parse the strict `executable-action-v1` envelope so persisted
   briefings cannot return unknown commands, mismatched target kinds, nested
   metadata, or unsafe routes. `GET /v1/briefings/today` reads that decision and
   deliberate `POST /v1/briefings/generate` ranks or refreshes it.
@@ -1738,7 +1733,7 @@ independent Sleep Recommendation.
   best-effort. The protected scheduled endpoint can prepare profile-local daily
   snapshots and briefings, but there is no deployed cron configuration or
   production background worker in this repository.
-- Focused Flutter/FastAPI tests cover Phase 3 contracts, parser parity, DST-safe
+- Focused Flutter/FastAPI tests cover Phase 3 contracts, Habit parser parity, DST-safe
   calendar math, and focus local-day filtering. The browser smoke contains exact
   task/habit/focus rows; response-loss paths for habit/task create, habit
   outcome/undo, task completion/undo, and focus start/finish; and negative

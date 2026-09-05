@@ -511,8 +511,10 @@ only by exact owner-scoped requested-field/timestamp readback. Habit
 outcome/undo proves the exact row or its absence; focus finish/abandon proves
 the exact terminal result. Habit reads paginate history beginning 370 calendar
 days before today and use `started_on` with DST-safe calendar arithmetic. The
-ranking-independent action envelope has strict Flutter/FastAPI parser parity,
-including explicit-null metadata-field rejection, and is documented in
+ranking-independent action envelope remains strictly validated by FastAPI,
+including explicit-null metadata-field rejection. Flutter retains its shared
+version for compatible Focus metadata and uses feature-owned commands directly.
+The persisted envelope is documented in
 `docs/phase-3-executable-actions-contract.md`.
 
 Personal Learning is separately authenticated and deterministic:
@@ -1635,6 +1637,14 @@ before the task for conservative path selection, and `npm run verify:full` for
 fast, database, web, and full browser gates. The affected selector fails closed
 without that base; `HEAD` alone covers only current working-tree changes and
 misses task changes already committed after work began.
+
+For a single runtime, `npm run verify:flutter` runs Flutter dependency
+resolution, analysis, and all Flutter tests; `npm run verify:backend` runs Python
+compilation, Ruff, and all backend tests. The affected selector combines those
+groups with `verify:source` (and Web for Flutter). Only the two existing spacing
+and radius constants receive the same narrow local treatment inside `core`;
+other existing escalation paths still select Full. CI selection and complete
+promotion checks are unchanged.
 
 `npm run verify:source` runs just the shared documentation, visual, shell,
 deployment, and source checks with Node.js and Python. Both the source group

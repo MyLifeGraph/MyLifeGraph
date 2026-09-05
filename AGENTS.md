@@ -21,6 +21,11 @@ Before the first change:
 5. If later inspection reveals another boundary, pause edits and load its owner
    before continuing.
 
+Read AGENTS.md completely. For other owners, read the sections relevant to the
+change together with their cross-cutting invariants and compatibility rules;
+unrelated feature details need not be reread. Name the selected sections in the
+work note so a reviewer can check the boundary coverage.
+
 For an unclear boundary, first search `docs/` and
 `docs/current-contracts.json` with `rg` for the feature, route, contract, or
 version name. If that search leaves no clear owner set because it finds no
@@ -145,6 +150,13 @@ Documentation is part of the Definition of Done. Keep these owners aligned:
 - Agent workflow or safety: this file.
 - Verification automation, evidence, or gaps: `docs/verification.md`.
 - Cross-runtime version synchronization: `docs/current-contracts.json`.
+
+Update documentation when behavior, contracts, commands, or supported guarantees
+change. A behavior-preserving refactor need not edit already accurate documents;
+briefly explain that conclusion in the fix report and check it in review. The
+docs-impact checker names unchanged owning documents as review hints, not a
+requirement to manufacture documentation diffs. Missing contract documents,
+incorrect versions, broken links, and the migration inventory remain errors.
 
 A Supabase migration normally updates `docs/supabase-current-state.md`,
 `docs/verification.md`, and its feature owner. Update this file only when the
