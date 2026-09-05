@@ -437,37 +437,15 @@ checks, and the complete final-state pgTAP suite. Historical immutable
 Recommendation transition tests remain source evidence but are not current
 product-surface evidence.
 
-`docs/current-contracts.json` is authoritative for exact sources and owners.
-This runbook retains the following compact current coverage because each listed
-boundary explicitly owns verification requirements:
-
-| Boundary | Current version |
-| --- | --- |
-| Account export | `account-export-v6` |
-| Assignment series | `assignment-series-v1` |
-| Calendar import | `calendar-import-v2` |
-| Calendar consent | `calendar-import-consent-v1` |
-| Coach snapshot | `personal-snapshot-v3` |
-| Coach prompt | `free-coach-agent-prompt-v5` |
-| Coach request | `coach-request-v4` |
-| Coach response | `coach-response-v4` |
-| Coach capabilities | `coach-capabilities-v5` |
-| Coach history | `coach-history-v4` |
-| Daily briefing | `daily-briefing-v2` |
-| Daily Capture | `daily-capture-v5` |
-| Daily State | `explainable-daily-state-v3` |
-| Deadline Plan | `deadline-plan-v1` |
-| Exam-Week Outlook | `exam-week-outlook-v1` |
-| Executable action | `executable-action-v1` |
-| Multi-Exam Plan | `multi-exam-plan-v1` |
-| Personal Patterns | `personal-patterns-v1` |
-| Planner mutations | `planner-v1` |
-| Planner overview | `planner-overview-v2` |
-| Preparation workload | `preparation-workload-v1` |
-| Preparation workload detail | `preparation-workload-detail-v1` |
-| Sleep recommendation | `sleep-recommendation-v1` |
-| Today week agenda | `today-week-agenda-v1` |
-| Weekly Review | `weekly-review-v3` |
+The [contract registry](current-contracts.json) is the source for exact current
+versions, code selectors, and their contract, persistence, or operational owners.
+This runbook describes verification coverage rather than maintaining a second
+version table. General READMEs, architecture/product overviews, development and
+verification runbooks, and copy/visual guides are not mandatory locations for
+repeating version identifiers. Their behavioral documentation still needs to
+stay accurate when the behavior it describes changes.
+Operational READMEs that define a compatibility boundary, such as the backup
+journal contract, remain registered owners.
 
 Feature contracts remain the complete wire-format and compatibility authority.
 
