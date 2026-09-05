@@ -127,12 +127,14 @@ open.
   trigger that downgrade. See
   `../../docs/phase-3-executable-actions-contract.md`.
 - FastAPI defines the strict, ranking-independent `executable-action-v1` model
-  in parser parity with Flutter. Both reject unknown top-level/metadata fields,
+  for persisted briefings. It rejects unknown top-level/metadata fields,
   null/non-object metadata, explicit-null metadata fields, numeric coercion,
   invalid ISO dates, command/kind/target/linkage mismatch, unsupported routes,
   and per-command metadata leakage. `review_plan` is a real authenticated
   navigation target for the read-only Weekly Review surface; dispatch never
-  generates or applies a proposal. See
+  generates or applies a proposal. Current Flutter uses feature-owned commands
+  and a shared version constant for compatible Focus metadata, with no general
+  action-envelope parser or dispatcher. See
   `../../docs/phase-3-executable-actions-contract.md`.
 - With backend Supabase settings configured, bearer tokens are verified through
   Supabase Auth. One FastAPI-lifespan-owned `httpx.AsyncClient` is reused for
@@ -1117,7 +1119,7 @@ preferences, no post-Setup generic Recommendation generation, and preservation o
 non-Setup-owned rows. Daily State tests cover strict V2/V3/V4 parsing, explicit
 mixed-branch compatibility, V4 sleep-interval validation, friction sanitization,
 and the V2 output contract. Phase 3 tests cover strict executable
-action parser parity, explicit habit/focus snapshot summaries and local-date
+action parsing, explicit habit/focus snapshot summaries and local-date
 filtering and preservation of Phase 2 Daily State behavior. Phase 4 through
 Phase 7 coverage adds
 strict persisted briefings, profile-local scheduled dates, missing/stale/current

@@ -390,8 +390,8 @@
       "version": "executable-action-v1",
       "sources": [
         {
-          "path": "apps/mobile/lib/features/actions/domain/executable_action_target.dart",
-          "symbol": "contractVersion"
+          "path": "apps/mobile/lib/features/actions/domain/executable_action_contract.dart",
+          "symbol": "executableActionContractVersion"
         },
         {
           "path": "services/ai_service/app/models/executable_actions.py",

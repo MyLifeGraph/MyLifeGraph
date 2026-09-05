@@ -228,11 +228,11 @@ the result honestly `stale`.
 ## Executable Action Boundary
 
 The strict `executable-action-v1` shape is unchanged: a `review_plan` target may
-navigate an authenticated real-data user to `/weekly-review`. The dispatcher
-calls a typed injected handler and propagates failures. Guest/mock and
-unavailable synced sessions remain explicitly unavailable. Dispatching the
-action only opens the review and never generates, confirms, or applies
-anything.
+navigate an authenticated real-data user to `/weekly-review`. Current Flutter
+controls open that route directly through their capability boundary; the
+unused general action parser and dispatcher have been removed. Guest/mock and
+unavailable synced sessions remain explicitly unavailable. Navigation only
+opens the review and never generates, confirms, or applies anything.
 
 Weekly Review is an in-page destination. The shared Back action pops its actual
 pushed origin and falls back to Today for a direct deep link. Navigation alone

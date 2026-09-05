@@ -726,20 +726,14 @@ Phase 3 keeps simple user-owned mutations in typed Flutter/Supabase boundaries:
   `metadata.entry_date` comes from its captured start instant in the
   authenticated profile timezone.
 
-Flutter and FastAPI share a strict, ranking-independent
-`executable-action-v1` envelope for `open_task`, `complete_task`, `log_habit`,
-`start_focus`, `review_plan`, and `open_capture`. Kind/command/target and bounded
-scalar metadata are validated; unknown combinations are rejected. Flutter and
-FastAPI deliberately reject the same unknown top-level/metadata fields, null or
-non-object metadata, explicit null metadata fields, coercible numbers, invalid
-calendar dates, identifier normalization, duration/linkage bounds, and
-command-specific metadata leakage. The former Flutter briefing dispatcher was
-removed when Today Overview superseded the briefing-first card; current Today
-Task, Habit, Focus, capture, and Weekly Review actions use their owning typed
-controllers and routes directly. Phase 8 gives `review_plan` a real
-authenticated `/weekly-review` navigation
-handler; guest/mock and unsupported sessions stay unavailable, and dispatch
-never generates or mutates. Phase 3 defines executable targets but does not select a primary action,
+FastAPI validates the strict, ranking-independent `executable-action-v1`
+envelope for persisted briefings, including kind/command/target linkage,
+bounded metadata, exact dates, and unsupported-field rejection. Flutter retains
+that version as a named constant for compatible Focus metadata. Its unconsumed
+general parser and former briefing dispatcher have been removed. Current Today
+Task, Habit, Focus, Capture, and Weekly Review controls use their owning typed
+controllers and routes directly. Weekly Review navigation retains its synced
+capability boundary and never generates or mutates. Phase 3 defines executable targets but does not select a primary action,
 persist a briefing, redesign Dashboard as Today, generate recommendations during
 normal writes, or call an LLM. The full contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -1164,7 +1158,7 @@ Current responsibilities:
   recent `daily_logs`, `behavioral_events`, `tasks`, `habits`, explicit
   `habit_logs`, `focus_sessions`, `schedule_items`, and `memory_entries` without
   reading full history.
-- Parse the same strict `executable-action-v1` envelope as Flutter so persisted
+- Parse the strict `executable-action-v1` envelope so persisted
   briefings cannot return unknown commands, mismatched target kinds, nested
   metadata, or unsafe routes. `GET /v1/briefings/today` reads that decision and
   deliberate `POST /v1/briefings/generate` ranks or refreshes it.
@@ -1739,7 +1733,7 @@ independent Sleep Recommendation.
   best-effort. The protected scheduled endpoint can prepare profile-local daily
   snapshots and briefings, but there is no deployed cron configuration or
   production background worker in this repository.
-- Focused Flutter/FastAPI tests cover Phase 3 contracts, parser parity, DST-safe
+- Focused Flutter/FastAPI tests cover Phase 3 contracts, Habit parser parity, DST-safe
   calendar math, and focus local-day filtering. The browser smoke contains exact
   task/habit/focus rows; response-loss paths for habit/task create, habit
   outcome/undo, task completion/undo, and focus start/finish; and negative

@@ -280,25 +280,23 @@ Command compatibility:
 | `open_capture` | capture plus implemented route | Open Evening Shutdown or Morning Calibration only |
 
 The briefing-first Flutter consumer originally used an exhaustive
-`ExecutableActionDispatcher` for this mapping. Today Overview later superseded
-that card, so the production-unreachable dispatcher and its isolated tests were
-removed. Current Today Task, Habit, Focus, capture, and Weekly Review controls
-call their owning typed controllers or routes directly and retain explicit
-guest/mock capability handling. The strict envelope remains the persisted
-backend briefing boundary and Flutter parser contract; parsing an envelope does
-not generate, execute, or apply a proposal.
+`ExecutableActionDispatcher`. Today Overview superseded that card; both the
+unreachable dispatcher and the unconsumed general Dart envelope parser, with
+their isolated tests, have been removed. Current Today Task, Habit, Focus,
+Capture, and Weekly Review controls call their owning typed controllers or
+routes directly and retain explicit guest/mock capability handling.
 
-The Flutter and FastAPI parsers intentionally enforce the same boundary:
-unknown top-level or metadata fields, null/non-object metadata, explicit-null
-metadata fields, coercible or fractional numbers, whitespace-normalized
-identifiers, invalid ISO calendar dates, command-specific metadata leakage,
-mismatched kind/target/linkage, and a focus estimate outside 5-240 all fail. The
-two exact capture routes and `target_kind` linkage rules are identical on both
-sides.
+The strict envelope remains the persisted backend briefing boundary. FastAPI
+rejects unknown top-level or metadata fields, null/non-object metadata,
+explicit-null metadata fields, coercible or fractional numbers,
+whitespace-normalized identifiers, invalid ISO calendar dates, command-specific
+metadata leakage, mismatched kind/target/linkage, and a focus estimate outside
+5-240. Unknown commands never become a generic route or enabled no-op.
 
-An unknown command, invalid kind/target combination, unavailable capability,
-or invalid metadata value produces an explicit unsupported result. It never
-maps to a generic route or enabled no-op.
+Flutter keeps the named `executableActionContractVersion` in the Actions domain
+and uses it for the compatible manual Focus `metadata.action_target` write.
+Its value and stored envelope remain unchanged; this shared version does not
+require a second parser without a consumer.
 
 The bounded planning surface and its mutation limits are defined in
 `docs/phase-8-weekly-review-contract.md`. Task/schedule/replacement changes are
@@ -380,8 +378,9 @@ between a Multi-Exam digest check and its atomic commit.
 
 Required focused coverage includes every command and transition; task and focus
 validation; all three habit cadences; scheduled opportunity, completion, skip,
-miss, undo, streak, ISO-week, DST-safe calendar arithmetic, `started_on`, parser
-parity, Setup ownership, action dispatch, user scoping, idempotency, snapshot
+miss, undo, streak, ISO-week, DST-safe calendar arithmetic, `started_on`, Habit
+parser parity, Setup ownership, direct feature commands, strict backend action
+envelopes, user scoping, idempotency, snapshot
 refresh, and guest/mock locality.
 
 Study Focus coverage additionally proves duration priority, configured and

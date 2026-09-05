@@ -6,6 +6,7 @@ import '../../../core/supabase/app_user_resolver.dart';
 import '../../../core/supabase/supabase_tables.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../../../core/utils/local_date.dart';
+import '../../actions/domain/executable_action_contract.dart';
 import '../application/focus_session_controller.dart';
 import '../domain/focus_session.dart';
 
@@ -399,7 +400,7 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
               if (draft.recoveryMinutes > 0)
                 'recovery_minutes': draft.recoveryMinutes,
               'action_target': {
-                'contract_version': 'executable-action-v1',
+                'contract_version': executableActionContractVersion,
                 'id': 'start_focus:$sessionId',
                 'kind': 'focus',
                 'command': 'start_focus',

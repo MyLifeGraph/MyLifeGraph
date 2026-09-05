@@ -226,11 +226,11 @@ Already implemented:
     every update to terminal history is rejected; and target deletion is
     restricted. New rows persist a local start date, with deterministic UTC
     legacy backfill and shared Flutter/FastAPI fallback.
-  - Flutter and FastAPI enforce parser parity for unknown, explicit-null,
-    coerced, or mismatched `executable-action-v1` envelopes. Flutter dispatches
-    every supported command through a typed injected handler. Phase 8 gives
-    `review_plan` a real synced weekly-review navigation handler without making
-    dispatch itself mutate or generate.
+  - FastAPI rejects unknown, explicit-null, coerced, or mismatched
+    `executable-action-v1` envelopes. Flutter retains a shared version constant
+    for compatible Focus metadata; its unused generic parser and dispatcher
+    have been removed. Current controls use feature-owned commands, and Weekly
+    Review navigation does not mutate or generate a review.
   - Migration `20260711120000_phase_3_executable_action_schema.sql` adds the
     necessary task, habit-log, and focus columns/checks/triggers while preserving
     existing RLS and table grants.

@@ -511,8 +511,10 @@ only by exact owner-scoped requested-field/timestamp readback. Habit
 outcome/undo proves the exact row or its absence; focus finish/abandon proves
 the exact terminal result. Habit reads paginate history beginning 370 calendar
 days before today and use `started_on` with DST-safe calendar arithmetic. The
-ranking-independent action envelope has strict Flutter/FastAPI parser parity,
-including explicit-null metadata-field rejection, and is documented in
+ranking-independent action envelope remains strictly validated by FastAPI,
+including explicit-null metadata-field rejection. Flutter retains its shared
+version for compatible Focus metadata and uses feature-owned commands directly.
+The persisted envelope is documented in
 `docs/phase-3-executable-actions-contract.md`.
 
 Personal Learning is separately authenticated and deterministic:

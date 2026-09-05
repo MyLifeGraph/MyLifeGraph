@@ -765,14 +765,13 @@ ExecutableActionTarget
   entry_date, focus_minutes, habit_outcome, route, source, and target_kind
 ```
 
-Flutter and FastAPI already reject unknown fields and incompatible kind,
-command, target, route, estimate, or metadata combinations. Their parsers also
-agree on unknown top-level fields, null/non-object metadata, explicit-null
-metadata fields, numeric coercion, exact ISO dates, focus duration/linkage, and
-command-specific metadata. A briefing must run the same strict validation
-before returning an action. Phase 8 now gives `review_plan` a real synced
-navigation handler to `/weekly-review`; dispatch still never generates or
-applies a proposal. The reserved `recovery` kind has no executable command yet
+FastAPI rejects unknown fields and incompatible kind, command, target, route,
+estimate, or metadata combinations, including null/non-object metadata,
+explicit-null fields, numeric coercion, invalid ISO dates, and focus linkage.
+A briefing must run that strict validation before returning an action. Flutter
+keeps the shared version for compatible Focus metadata, but no longer has a
+consumer for the generic envelope parser. Its current typed controls open
+`/weekly-review` directly without generating or applying a proposal. The reserved `recovery` kind has no executable command yet
 and may not become an enabled no-op.
 
 Suggested endpoints:
@@ -1378,7 +1377,9 @@ Implemented:
 - Added parser-equivalent strict Flutter and FastAPI `executable-action-v1`
   validation, including explicit-null metadata-field rejection, and typed
   Flutter dispatch. `review_plan` remained explicitly unavailable in Phase 3;
-  Phase 8 later supplies its bounded synced navigation surface.
+  Phase 8 later supplies its bounded synced navigation surface. The unused
+  Flutter parser and dispatcher were subsequently removed; backend validation
+  and compatible Focus provenance remain.
 - Added explicit habit-outcome and focus-session snapshot summaries while
   paginating complete backend action windows in stably ordered 1,000-row pages,
   keeping the Phase 2 Daily State output unchanged, and leaving recommendation
@@ -1812,7 +1813,7 @@ and the backend turns trusted current capture state into freshness, quality,
 recovery-first Daily Mode, bounded risks/reasons, evidence, and provenance.
 Tasks, Habit V1, focus sessions, and strict executable action targets now have
 durable and recoverable contracts, including exact ambiguous-write readback,
-locked eligibility, immutable focus history, parser parity, and DST-safe local
+locked eligibility, immutable focus history, strict backend action validation, and DST-safe local
 dates. Explicit habit/focus facts enrich snapshot summaries without changing
 the Phase 2 classifier. Ordinary writes do not rank actions, persist a
 briefing, or call an LLM.
