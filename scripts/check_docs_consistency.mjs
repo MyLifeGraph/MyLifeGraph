@@ -1140,13 +1140,13 @@ export function findStaleClaimErrors(documents) {
   return errors;
 }
 
-export function findDocsImpactErrors(
+export function findDocsImpactHints(
   changedFiles,
   rules = DOCS_IMPACT_RULES,
 ) {
   const normalizedFiles = changedFiles.map(normalizePath);
   const changedSet = new Set(normalizedFiles);
-  const errors = [];
+  const hints = [];
 
   for (const rule of rules) {
     const triggeringFiles = normalizedFiles.filter((path) =>
@@ -1159,8 +1159,8 @@ export function findDocsImpactErrors(
       (path) => !changedSet.has(path),
     );
     if (missingAll.length > 0) {
-      errors.push(
-        `${rule.name}: ${triggeringFiles.join(', ')} changed without required docs ${missingAll.join(', ')}.`,
+      hints.push(
+        `${rule.name}: ${triggeringFiles.join(', ')} changed; review unchanged owning docs ${missingAll.join(', ')}.`,
       );
     }
     const requiredAny = rule.requiredAny ?? [];
@@ -1168,12 +1168,12 @@ export function findDocsImpactErrors(
       requiredAny.length > 0 &&
       !requiredAny.some((path) => changedSet.has(path))
     ) {
-      errors.push(
-        `${rule.name}: ${triggeringFiles.join(', ')} changed without one owning doc (${requiredAny.join(' or ')}).`,
+      hints.push(
+        `${rule.name}: ${triggeringFiles.join(', ')} changed; review an unchanged owning doc (${requiredAny.join(' or ')}).`,
       );
     }
   }
-  return errors;
+  return hints;
 }
 
 function gitOutput(root, args) {
@@ -1242,10 +1242,11 @@ export function runDocumentationChecks(
 
   const impactFiles =
     changedFiles ?? changedFilesForDocsImpact(root, process.env.DOCS_BASE_REF);
-  errors.push(...findDocsImpactErrors(impactFiles));
+  const hints = findDocsImpactHints(impactFiles);
 
   return {
     changedFiles: impactFiles,
+    hints: [...new Set(hints)].sort(),
     errors: [...new Set(errors)].sort(),
     markdownFileCount: markdownFiles.length,
     routeCount: routeInventory.routes.length,
@@ -1255,6 +1256,9 @@ export function runDocumentationChecks(
 function main() {
   try {
     const result = runDocumentationChecks();
+    for (const hint of result.hints) {
+      console.log(`Documentation review hint: ${hint}`);
+    }
     if (result.errors.length > 0) {
       console.error(
         `Documentation consistency check failed with ${result.errors.length} issue(s):`,

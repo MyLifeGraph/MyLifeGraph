@@ -346,8 +346,15 @@ The checker validates:
 - the latest migration owner;
 - documented FastAPI routes and methods;
 - centralization of current checkout evidence;
-- known superseded current-state claims; and
-- changed-code documentation ownership.
+- known superseded current-state claims.
+
+Changed-code documentation ownership is reported separately as non-blocking
+review hints when an owning document is absent from the diff. Review whether
+behavior, contracts, commands, or guarantees actually changed; update affected
+documentation or briefly explain why it is still accurate in the fix report.
+A hint is not a consistency error and does not require a cosmetic document edit.
+Missing registered owners, code/owner version mismatches, broken links, route
+contradictions, and the migration inventory still fail the gate.
 
 The docs-impact checker compares uncommitted local changes with `HEAD` by
 default. CI supplies `DOCS_BASE_REF` so committed pull-request changes are also
