@@ -177,8 +177,9 @@ Full week watches its narrow projection only while its accordion is open.
 `Review your week` keeps its existing navigation and capability boundary but is
 not wrapped in a second accordion.
 Today no longer contains a `More` grouping, saved-signal
-summary, or `7-day preparation load`; the existing workload projection and
-Preparation behavior remain available in Planner. The former generic
+summary, or `7-day preparation load`. Planner also has no standalone workload
+card; Preparation editors retain the summary read for the account budget.
+The former generic
 Recommendation and Decision Feedback accordions are retired rather than hidden
 behind compatibility UI.
 

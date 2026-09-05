@@ -167,8 +167,9 @@ Preparation includes canonical current-revision credited and remaining minutes;
 only remaining work can start. Task and Habit actions remain lifecycle/date
 bound, including a fresh profile-date check before Habit navigation.
 Guest/mock builds a local empty week before authenticated transport and makes
-zero product calls. Preparation workload remains in Planner and is no longer
-repeated on Today. The persisted
+zero product calls. Preparation editors read the workload summary for the
+account-wide budget; there is no standalone workload card in Planner or Today.
+The persisted
 deterministic briefing still exists for backend consumers,
 but it is no longer presented as a decision made for the user. Capture itself
 does not create or change a plan. Morning Calibration

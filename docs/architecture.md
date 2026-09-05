@@ -528,8 +528,8 @@ and loads its projection only when opened. Full week is the bearer-scoped
 read, not a direct Flutter Supabase/Deadline merge. It returns seven
 server-projected profile-local dates and independent freshness for Setup,
 Preparation, Calendar, actual Focus, Planner Tasks, materialized Habit slots,
-and fixed commitments. Preparation
-workload is not duplicated on Today and remains available in Planner. The exact
+and fixed commitments. Preparation editors retain the workload summary for
+the account budget; Planner and Today have no standalone workload card. The exact
 rules live in
 `docs/today-overview-v1-contract.md`.
 
@@ -877,11 +877,12 @@ active revision. Existing active blocks are never silently moved when the
 setting changes.
 
 The side-effect-free `preparation-workload-v1` read projects seven consecutive
-profile-local dates for Planner. It reports active confirmed preparation
+profile-local dates. Preparation editors use it to read the account budget.
+It reports active confirmed preparation
 reservations and merged weekly `schedule_items` duration as separate facts. It
 deliberately excludes proposed blocks, imported busy rows, live provider state,
-task estimates, and Focus history, so Planner labels the latter as weekly Setup
-commitments and does not present the projection as total free time. Today's
+task estimates, and Focus history. The recurring facts describe weekly Setup
+commitments, not total free time. Today's
 separate lazy `today-week-agenda-v1` read projects the containing
 Monday-to-Sunday calendar week. Its service makes one bounded, owner-filtered
 read per source family for Setup, Preparation, current Calendar import, actual
@@ -902,15 +903,15 @@ hypothetical recurring busy interval from the newest valid Evening V4 plan.
 The Planner-only card opens existing review/replan routes and cannot create or
 confirm a preview. See `docs/exam-week-outlook-v1-contract.md`.
 
-The compatible `preparation-workload-detail-v1` read is requested only after a
-student expands one date from that summary. It accepts only a date in the
+The compatible `preparation-workload-detail-v1` read remains available, but no
+current Flutter surface requests or displays it. It accepts only a date in the
 current profile-local seven-day window and aggregates active blocks by their
 owner-scoped plan id. The response exposes only plan title, date-reserved
 minutes, and block count, with exact sum/budget invariants; it does not return
-block times or calendar content. Planner alone uses this detail boundary.
-Review navigation opens the existing plan, while replanning pushes
+block times or calendar content. Neither workload GET route has mutation or
+LLM authority. Preparation review navigation opens the existing plan, while replanning pushes
 `/planner/replan?plan_id=<uuid>` and isolates that selected plan's existing
-preview/confirmation workflow. Neither GET route has mutation or LLM authority.
+preview/confirmation workflow.
 
 ## Authentication
 

@@ -1135,7 +1135,7 @@ class _PreparationBudgetDialogState extends State<_PreparationBudgetDialog> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'This is a transparent rule, not an AI estimate. Existing reservations are not changed; days above a new lower budget are marked Needs review.',
+              'This is a planning rule. Changing it leaves existing reservations unchanged.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.md),

@@ -1483,8 +1483,9 @@ adds `GET /v1/today/overview-v2` with Setup, Planner, Preparation, Calendar,
 Focus, Task, Habit, and fixed-commitment facts. The visible streak card adds a
 narrow latest-check-in read. Weekly Review is a direct capability-gated
 navigation entry. The current calendar week is the only supporting accordion
-and loads only when opened. Preparation workload remains in Planner and is no longer
-duplicated on Today.
+and loads only when opened. Neither Planner nor Today has a standalone
+preparation-workload card; Preparation editors retain the workload summary
+read for the account budget.
 Read `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md`, and
 `docs/study-setup-v1-contract.md` before changing this surface.
 

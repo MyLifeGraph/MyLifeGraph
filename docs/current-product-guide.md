@@ -205,8 +205,9 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
    - der generische Recommendation-Feed und Decision Feedback sind vollständig
      aus der Produktoberfläche entfernt.
 
-`7-day preparation load` ist weiterhin im Planner verfügbar, wird auf Today
-aber nicht mehr zusätzlich angezeigt. `Full week` liest den eigenen
+Eine eigenständige `7-day preparation load`-Karte gibt es weder im Planner noch
+auf Today. Preparation-Editoren lesen die Workload-Zusammenfassung für das
+Account-Budget. `Full week` liest den eigenen
 `today-week-agenda-v1`-Endpunkt erst beim Öffnen; weder Planner Overview noch
 die begrenzte Deadline-Liste dienen als Ersatzquelle. Die Profil-Zeitzone und
 der Server liefern lokale Daten/Uhrzeiten. Preparation- und Task-Blöcke prüfen
@@ -771,7 +772,7 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 | Interne Tagesrangfolge | `user_state_snapshots`, `daily_briefings` | Scheduler, Export, regelbasierte Rangfolge und bei expliziter Frage der temporäre Coach-Snapshot |
 | Wochenreview | `weekly_reviews` | Weekly Review, Reminder und bei expliziter Frage Coach-Snapshot |
 | Kalenderimport | `calendar_connections`, `calendar_imports`, `calendar_events`, technische Request-Identitäten | Calendar, optional Preparation Planner und read-only Coach-Snapshot; nie als Instruktion |
-| Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans, Planner workload, Today Full week, Focus-Fortschritt |
+| Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans mit Budgetabfrage, Planner-Agenda, Today Full week, Focus-Fortschritt |
 | Zentrale Planung | `planner_preferences`, Action Plans/Revisionen, Task Blocks, Habit Slots, Planner Commitments und technische Request-Identitäten | Planner, Today V2 und gemeinsame Availability |
 | Hinweise | `notifications`, `notification_preferences`, Action-Request-Ledger | Inbox und foreground banners |
 | Coach | `coach_requests`, `coach_usage_events`, `coach_messages`, backend-only `coach_operator_daily_budgets` und `coach_operator_dispatches`; `coach_memory_selections` nur Legacy-Kompatibilität | Availability, V4 Evidence/Trace/Fast-Provenance, gemischte History sowie lokale/globale Budgets |

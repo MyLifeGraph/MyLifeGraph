@@ -421,8 +421,8 @@ retains the staged revision for review or cancellation. The user must create a
 fresh preview; the backend does not silently shrink or move blocks.
 
 Lowering or removing a budget never edits an existing active revision. Existing
-dates above a newly lowered budget remain truthful overages marked `Needs
-review`; explicit replanning is the only way to replace them. Qualifying Focus
+dates above a newly lowered budget remain numeric overages in the workload
+response; explicit replanning is the only way to replace them. Qualifying Focus
 time continues to reduce the plan's remaining effort at the next proposal, but
 it does not silently release or rewrite an already confirmed reservation.
 
@@ -432,7 +432,7 @@ consecutive profile-local dates starting today under
 `origin=authenticated_backend`. Each day reports active confirmed preparation
 minutes, distinct active-plan count, nullable remaining account capacity,
 explicit overage, and merged recurring `schedule_items` duration for that ISO
-weekday. The latter is labelled `weekly setup commitments`: it is context, not
+weekday. The recurring duration describes weekly Setup commitments: it is context, not
 part of the preparation-budget arithmetic. A Setup commitment contributes only
 on dates inside its optional inclusive validity range; older and undated rows
 remain unbounded. Proposed blocks, task estimates,
@@ -601,12 +601,11 @@ established single-plan flow. Neither editor renders prior-work input or
 prior-credit summary copy.
 
 Settings exposes the optional account-wide daily budget with explicit
-rule-based copy and no AI claim. Planner shows the authenticated rolling
-seven-day workload, including honest loading, unavailable, over-budget, and
-no-budget states; guest/mock makes zero workload calls. A date with confirmed
-plans can be expanded deliberately. Its independently loaded detail keeps
-loading, failure, and changed-since-summary states visible, lists the
-contributing plans, and states the exact minimum date overage when present.
+rule-based copy and no AI claim. Preparation editors read the authenticated
+workload summary to distinguish a known account budget from unavailable data.
+Planner has no standalone seven-day workload card or expandable workload-day
+detail. The unused widget and its isolated tests have been removed; summary
+and day-detail APIs remain available with their existing strict contracts.
 Today does not call the workload or detail route. Its separate `Full week`
 accordion calls `GET /v1/today/week-agenda`, not the bounded Deadline list.
 `today-week-agenda-v1` projects the current active revision for active and
@@ -627,8 +626,8 @@ requirements, and retry actions remain visible outside the disclosures.
 Student-facing load failures name the unavailable view and next action without
 displaying backend, owner-scope, or contract diagnostics.
 
-`/preparation-plans` itself is grouped into `Open plans` and compact `History`;
-it does not repeat the seven-day workload card. Every plan is an accordion and
+`/preparation-plans` itself is grouped into `Open plans` and compact `History`.
+Every plan is an accordion and
 at most one selected or newly previewed plan is open. Collapsed rows expose only
 status, Exam/Assignment type, title, and a short progress or attention summary.
 Finish-by/timezone, timing rules, learned-timing provenance, progress, blocks,
@@ -972,8 +971,7 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   calendar or AI implication;
 - strict `preparation-workload-detail-v1` parsing, current-seven-day bounds,
   owner/date-scoped active-block aggregation, exact contribution sums/order,
-  cross-owner empty results, read-only retry/error/stale-summary behavior, and
-  direct review/replan navigation without an automatic proposal or mutation;
+  cross-owner empty results and read-only response/error behavior;
 - compact active-plan replanning without an open-time request, exact saved-value
   transfer with a today-normalized historical start, retained active
   reservations until confirmation, stale-source/passed-deadline guards,
