@@ -4,7 +4,7 @@ After=systemd-tmpfiles-setup.service
 
 [Socket]
 ListenStream=/run/mylifegraph-coach/executor.sock
-SocketUser=coach-executor
+SocketUser=mylifegraph-coach
 SocketGroup=mylifegraph-api
 SocketMode=0660
 DirectoryMode=0750

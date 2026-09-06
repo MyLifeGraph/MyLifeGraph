@@ -4,11 +4,25 @@ This directory is the versioned, secret-free deployment contract for the
 single-host pilot. It does not prove that a VPS, DNS record, certificate,
 Supabase project, Codex login, or public deployment currently exists.
 
+For initial Gregor/Matthias/automation accounts before a domain or app
+installation, use [Project access bootstrap](ACCESS.md). It preserves existing
+host `ops` and `agent` accounts. Linux identities are now `mylifegraph-deploy`
+and `mylifegraph-coach`; the `mylifegraph-coach-executor.service`/`.socket` names
+and `coach-executor-v1` protocol remain unchanged. Old host identities require a
+separately reviewed migration, not automatic reuse.
+
+After account acceptance, prepare the [runtime foundation](RUNTIME.md) locally.
+Its separately approved installer adds missing rootless prerequisites, a pinned
+Caddy binary and held service definitions while preserving the existing system
+Docker. Only the Coach's user Docker starts; no application release or sudo
+grant is installed by that stage. The root-owned user-manager cgroup owns the
+aggregate resource limit, including sibling container scopes.
+
 ## Fixed runtime boundary
 
 - `ops` prepares and seals each release directory as
   `root:mylifegraph-release` with no write bits. The release parent and atomic
-  `current`/`previous` symlinks are root-owned. `deploy` can invoke only the
+  `current`/`previous` symlinks are root-owned. `mylifegraph-deploy` can invoke only the
   root-owned promotion helper; it cannot create releases, repoint links, or
   restart units directly.
 - `mylifegraph-build` is a locked, no-home, no-supplementary-group account used
@@ -16,7 +30,7 @@ Supabase project, Codex login, or public deployment currently exists.
   import smoke tests never execute as root.
 - `mylifegraph-api` runs one Uvicorn worker and can read only `api.env`, the
   selected release, and its own bounded state.
-- `coach-executor` runs the subscription-backed provider, owns its isolated
+- `mylifegraph-coach` runs the subscription-backed provider, owns its isolated
   Codex home and rootless Docker daemon, and can read only `executor.env` plus
   the selected release.
 - `caddy` is the only public application process. FastAPI listens on
@@ -111,8 +125,12 @@ identifier before use; never paste a secret into shell history.
    `tmpfiles.d/mylifegraph.conf` creates its separate mode-0710 workspace; the
    account cannot traverse `/srv/mylifegraph/releases` or the private incoming
    directory.
-   Give deploy, API, and executor read-only membership in
-   `mylifegraph-release`; do not grant any of them general sudo. Only deploy
+   If the access bootstrap has completed, verify and reuse those identities
+   instead of recreating them. Runtime accounts have nologin shells; an
+   administrator starts an explicit shell as `mylifegraph-coach` for provider
+   and rootless setup without enabling SSH login.
+   Give mylifegraph-deploy, API, and executor read-only membership in
+   `mylifegraph-release`; do not grant any of them general sudo. Only mylifegraph-deploy
    receives the single audited promotion command from `sudoers.d/`.
 3. Install the reviewed files from `systemd/`, `tmpfiles.d/`, `caddy/`, and
    `sudoers.d/` into their matching system locations. Install
@@ -134,7 +152,7 @@ identifier before use; never paste a secret into shell history.
    release helper suite; never install either from a deploy-writable checkout.
 4. Create `/etc/mylifegraph` as root-owned mode `0751`. Install `api.env` as
    `root:mylifegraph-api` mode `0640`, `executor.env` as
-   `root:coach-executor` mode `0640`, and `caddy.env` as `root:caddy` mode
+   `root:mylifegraph-coach` mode `0640`, and `caddy.env` as `root:caddy` mode
    `0640`. Templates contain names and examples only.
    Before the API can start in `pilot`, create a dedicated AWS S3 bucket with
    versioning and Object Lock enabled and a dedicated KMS key. Give the API
@@ -146,7 +164,7 @@ identifier before use; never paste a secret into shell history.
 5. Install Caddy 2.10 or newer from its supported distribution. This minimum
    is required for the configured request-body limit. Validate with `caddy
    adapt --config /etc/caddy/Caddyfile --validate` before reload.
-6. Install rootless Docker only for `coach-executor`, enable its user service
+6. Install rootless Docker only for `mylifegraph-coach`, enable its user service
    and linger, and verify its socket is exactly
    `/run/user/<executor-uid>/docker.sock`. Do not expose a TCP Docker API and do
    not add the API user to any Docker group.
@@ -158,11 +176,11 @@ identifier before use; never paste a secret into shell history.
    `/usr/local/libexec/mylifegraph/install_codex_cli.py` path and pass that
    root-private archive path; there is no manifest override. The isolated
    installer pins the already-open input inode, verifies digest/archive shape,
-   probes `--version` after dropping to `coach-executor`, rejects symlink or
+   probes `--version` after dropping to `mylifegraph-coach`, rejects symlink or
    mutable pre-existing installs, seals the binary/version tree root-owned
    mode `0555`, and atomically updates `current`. The preceding version is
    retained for rollback.
-8. As `coach-executor`, set `CODEX_HOME` to the isolated directory and perform
+8. As `mylifegraph-coach`, set `CODEX_HOME` to the isolated directory and perform
    the supported interactive ChatGPT login. Never copy another user's OAuth
    files. Run only the sanitized `codex login status` acceptance check.
 9. Configure UFW (or the provider firewall) for SSH and TCP 80/443 only. Prove
@@ -216,7 +234,7 @@ modified workflow code.
    there. Never prepare directly from a deploy-writable directory; replacing
    both archive and manifest together would otherwise bypass transport
    authority.
-3. After `deploy` has independently checked the transported artifacts, `ops`
+3. After `mylifegraph-deploy` has independently checked the transported artifacts, `ops`
    runs `/usr/local/libexec/mylifegraph/prepare_release.sh
    /srv/mylifegraph/incoming/<archive>
    /srv/mylifegraph/incoming/<manifest>`
@@ -262,7 +280,7 @@ modified workflow code.
    after enabling the gate. If migration rollback is
    required, first withdraw every public client and API, then disable and
    attest before restoring the prior schema boundary.
-4. As `coach-executor`, build the exact analysis image from that release using
+4. As `mylifegraph-coach`, build the exact analysis image from that release using
    `scripts/prepare_coach_analysis_image.sh`, with the pinned rootless
    `DOCKER_HOST`. The Dockerfile uses an immutable base digest and a hash-locked
    binary-only Python dependency graph; the path-independent source revision
@@ -274,7 +292,7 @@ modified workflow code.
 5. After every repository, signing, restore, provider, and permission gate has
    passed, run
    `sudo -n /usr/local/libexec/mylifegraph/promote_release.sh <rc-tag>` as
-   `deploy`. The helper derives the one public HTTPS origin from the root-owned
+   `mylifegraph-deploy`. The helper derives the one public HTTPS origin from the root-owned
    `caddy.env`; callers cannot redirect its privileged health probe. It records
    and re-verifies the sealed candidate/prior trees immediately before it
    atomically switches `current`, restarts the narrow units,
@@ -303,7 +321,7 @@ account/terms and privacy decisions are recorded and every preceding held-
 candidate gate has passed:
 
 1. Leave the API flag false. Install the manifest-pinned Codex CLI, authenticate
-   only as `coach-executor`, build the release-bound analysis image, and pass
+   only as `mylifegraph-coach`, build the release-bound analysis image, and pass
    `bin/verify_permissions.sh` plus the sanitized login/capability checks.
 2. Set the flag to `true` only in `/etc/mylifegraph/executor.env`, restart the
    executor socket/service in a controlled maintenance window, and run the

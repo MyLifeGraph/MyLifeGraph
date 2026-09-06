@@ -127,7 +127,7 @@ Flutter Coach
             -> required per-turn coach_data stdio MCP server
             -> inspect_data, query_data, isolated-Docker run_python
        -> operator_codex_pilot: API -> bounded peer-UID Unix socket
-            -> dedicated coach-executor -> pinned Codex + rootless Docker
+            -> dedicated mylifegraph-coach -> pinned Codex + rootless Docker
             -> one-use reservation + durable UTC-day dispatch ledger
   -> schema-validated model text
   -> backend-derived evidence, trace, and provenance
@@ -475,7 +475,7 @@ standard-tier downgrade. User-visible provenance is
 
 The hosted pilot provider is exactly `operator_codex_pilot` with mode
 `operator_subscription_pilot`. FastAPI holds no Codex state and cannot use the
-analysis daemon. It talks only to `coach-executor` over a length-prefixed Unix
+analysis daemon. It talks only to `mylifegraph-coach` over a length-prefixed Unix
 socket. Linux `SO_PEERCRED` admits one configured non-root API UID; the protocol
 accepts only capability, reserve, release, and one-use execute frames with
 fixed byte/deadline/schema bounds. The executor alone owns the pinned Codex

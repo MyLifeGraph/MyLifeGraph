@@ -228,7 +228,7 @@ class VpsArtifactTests(unittest.TestCase):
         ]:
             self.assertNotIn(forbidden, executor)
         self.assertIn("LOCAL_CODEX_EXPECTED_VERSION=0.148.0", executor)
-        self.assertIn("unix:///run/user/<coach-executor-uid>/docker.sock", executor)
+        self.assertIn("unix:///run/user/<mylifegraph-coach-uid>/docker.sock", executor)
         self.assertNotIn("\nCOACH_ANALYSIS_IMAGE=", executor)
 
     def test_shared_operator_provider_templates_are_default_off(self) -> None:
@@ -264,7 +264,7 @@ class VpsArtifactTests(unittest.TestCase):
         )
         self.assertIn("--host 127.0.0.1 --port 8000 --workers 1", api)
         self.assertIn("--no-access-log", api)
-        self.assertIn("User=coach-executor", executor)
+        self.assertIn("User=mylifegraph-coach", executor)
         self.assertIn("/v1/internal/*", caddy)
         self.assertIn(
             "EnvironmentFile=-/srv/mylifegraph/current/"
@@ -290,7 +290,7 @@ class VpsArtifactTests(unittest.TestCase):
         self.assertIn("mylifegraph-disk-monitor.timer", preflight)
         self.assertIn("COACH_EXECUTOR_ALLOWED_API_UID", permissions)
         self.assertIn(
-            "700:coach-executor:coach-executor",
+            "700:mylifegraph-coach:mylifegraph-coach",
             permissions,
         )
         self.assertIn(

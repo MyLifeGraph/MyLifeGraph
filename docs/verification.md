@@ -48,6 +48,124 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Runtime foundation host acceptance (2026-09-06)
+
+The user applied the independently reviewed, root-sealed runtime package on
+`openclaw-01`. Installer SHA256 was
+`5de96e256726ad56166ed8a7de83fc067e454f1f457d0df4e446af9fb1071bc7`;
+the copied manifest SHA256 was
+`27547dc00a2e98e31bec96629c9bfb58a66b59e0f50d08750c8b976766129cef`.
+The installer reported successful completion after its rootless/cgroup capability,
+socket ownership, API/deploy/automation socket-denial and existing-Docker checks.
+Those installer checks are distinguished from the subsequent direct SSH evidence.
+
+Read-only verification as `mylifegraph-agent` independently observed Caddy
+2.11.4, the existing system Docker still active at PID 1200, and Hermes active.
+The Coach user manager was active with `MemoryMax=2147483648`,
+`CPUQuotaPerSecUSec=2s`, and `TasksMax=512`. Its kernel cgroup files contained
+`memory.max=2147483648`, `cpu.max=200000 100000`, and `pids.max=512`, with
+`cpuset cpu io memory pids` available. The running rootless dockerd PID 451065
+belonged to `/user.slice/user-994.slice/user@994.service/app.slice/docker.service`,
+beneath that limited manager. Its user-namespace maps bound inner UID/GID zero
+to host UID 994/GID 980, with the remaining 65,536 IDs starting at 427680.
+The project automation socket connection raised the expected `PermissionError`.
+
+Caddy, API, Coach executor/socket and disk-monitor timer were all inactive and
+disabled. No HTTP/HTTPS or public Docker listener appeared; SSH and the existing
+loopback listeners remained. About 6.6 GiB RAM was available. The independent
+review accepted this scoped interpretation and requested the daemon cgroup
+membership check, which then passed.
+
+This accepts installed runtime foundations and configured aggregate kernel
+limits, not a complete application release or stress proof. Real analysis-image
+execution, per-container resource/network/filesystem isolation, cleanup,
+daemon restart/reboot, provider login, deployment and TLS acceptance remain
+open. This follow-up changes evidence documentation only; Docs and diff hygiene
+cover it, while the prior Full run covers unchanged runtime/application code.
+
+### Runtime foundation preparation (2026-09-06)
+
+The runtime follow-up retains task base
+`3693aeca71f78b9805c9fb953f0c58541d522981`. Read-only VPS inspection confirmed
+the existing Ubuntu Docker engine and an APT simulation with six additions,
+zero upgrades, and zero removals. No runtime package was applied during that
+local preparation phase; the later host acceptance is recorded above.
+
+An independent review/fix/retest loop corrected the rootless executable PATH,
+aggregate limits on the root-owned user-manager cgroup, post-APT venv probing,
+explicit permission-denial detection, startup cleanup coverage, child daemon
+notification and user D-Bus dependencies. The final independent source review
+reported no remaining material finding. Local Ruff, 35 VPS tests and the
+Ubuntu installation rehearsal passed. The rehearsal verifies actual account/
+file permissions, pinned Caddy parsing, preview/stale-confirmation behavior,
+held application files, socket denial and exact no-op replay. Its kernel,
+AppArmor, service-manager and Docker-capability substitutes do not prove live
+rootless startup or cgroup enforcement; those remain target-host acceptance.
+
+`RESET_DB=false APPLY_MIGRATIONS=false npm run verify:affected -- --base-ref
+3693aeca71f78b9805c9fb953f0c58541d522981` selected Full and passed on the corrected
+source: Source/Docs/Visual, 35 VPS tests, 16 backup tests, Flutter analysis and
+1,057 Flutter tests, FastAPI Ruff and 1,683 tests with two intentional skips,
+the Web build, isolated migration/restore/replay checks, and all eight browser
+journeys without retries. The 24-file/486-assertion pgTAP corpus passed on both
+pinned majors and the normal local database. Normal migration history matched;
+no reset or normal-database migration was performed. Browser test-user/process
+cleanup completed. The final evidence-only documentation update is checked with
+Docs and diff hygiene separately. This is runtime preparation evidence only;
+public services, provider login, release installation and remote resource
+enforcement are not claimed.
+
+### Project VPS access acceptance (2026-09-06)
+
+After local preparation below, the user separately approved the package upload
+and ran the root-sealed preview/apply on `openclaw-01`. The applied installer
+SHA256 was `ea549cba80e2997ca1a884ccda8642a6e0a0ba373652b22a096d5d2b4282c0c0`.
+This supersedes the preparation-only host status for the access stage, not the
+application release gates.
+
+A subsequent real SSH connection authenticated as `mylifegraph-agent` using
+its dedicated key with `IdentityAgent=none`, `IdentitiesOnly=yes`,
+`BatchMode=yes`, and strict known-host verification. The observed UID was 1004,
+with only its primary group and `mylifegraph-work` supplementary membership.
+Create/read/delete of an exact temporary workspace file passed and left no file.
+Noninteractive `sudo true` was denied. Directory traversal was denied for
+`/root`, the existing `ops`/`agent` homes, both personal project homes, and the
+API/Coach/deploy private state directories. Writes to the root-managed agent
+authorized-key file, project SSH configuration, and host Docker socket were
+denied. An SSH attempt to `ops` using only the project key was denied.
+
+All seven project accounts were visible through NSS. Gregor, Matthias, deploy,
+API, Coach, and build retained `nologin`; only project automation had a Bash
+shell. Both `hermes-gateway.service` and `ssh.service` reported active. These
+are scoped access checks, not a complete audit of other applications or proof
+of VM-like isolation. No package installation, application service, domain/TLS,
+provider login, rootless Docker setup, or deployment permission is claimed.
+Only the documentation evidence changes in this follow-up require Docs and
+diff hygiene; the previously completed Full run still covers unchanged code.
+
+### Project VPS access preparation (2026-09-06)
+
+This task captured clean base `3693aeca71f78b9805c9fb953f0c58541d522981`.
+The initial project-account bootstrap work was local preparation only. Its separate disposable
+Ubuntu 24.04/OpenSSH rehearsal passed preview non-mutation, stale-confirmation
+denial, real per-user SSH login, private-path/managed-key boundaries, sudo
+denial, no-op replay, later Matthias key enrollment and account-drift refusal.
+The rehearsal substitutes only SSH service reload with SIGHUP; it does not prove
+VPS/systemd installation, provider access or public deployment. The actual VPS
+was not changed during that preparation phase; subsequent access acceptance is
+recorded above.
+
+`RESET_DB=false APPLY_MIGRATIONS=false npm run verify:affected -- --base-ref
+3693aeca71f78b9805c9fb953f0c58541d522981` selected Full and passed: source and
+documentation/visual gates, 25 VPS tests, 16 backup tests, Flutter analysis and
+1,057 Flutter tests, FastAPI Ruff and 1,683 tests with two intentional skips,
+the debug Web build, and all eight browser journeys without retries. Normal
+local migration history matched; no reset or normal-database migration was
+performed. Isolated migration/restore/replay gates and the 24-file/486-assertion
+pgTAP suite on both pinned majors and the normal local database passed. Browser
+test-user and process cleanup completed. The final evidence-only edit to this
+document is checked separately with Docs and diff hygiene.
+
 ### Scoped simplification (2026-09-05)
 
 This task captured clean base `6384f8a7372364bd86de2b1e3bd774aa17dee13f`
@@ -343,6 +461,11 @@ These narrower commands apply locally. Path categories and all CI selection
 outputs remain unchanged, including Full E2E for the two core constants.
 
 ## Verification Levels
+
+Project account/bootstrap unit tests run in `npm run verify:vps` and the Source
+gate. The optional real Ubuntu SSH rehearsal and its exact isolated Docker
+commands are documented in [Project access bootstrap](../deploy/vps/ACCESS.md).
+Neither path uses a VPS, real SSH credentials, database, or provider account.
 
 Use the lowest level that covers the complete change.
 
@@ -903,8 +1026,9 @@ credential-bearing workflows.
 
 - Hosted CI evidence must come from GitHub; repository source or a local run
   proves only that the workflow is defined.
-- VPS/HTTPS/tagged-release, rollback, permission, monitoring, and signed-Android
-  artifacts have static/unit rehearsal coverage only. Their target-host,
+- Project access and runtime foundations have the scoped host acceptance
+  recorded above. Application release, HTTPS, rollback, complete runtime
+  permissions, monitoring, and signed-Android gates remain open. Their
   certificate, signed-secret, physical-device, and promotion gates have no
   current deployment evidence. Static rehearsal binds each release to a
   deterministic analysis-image tag, seals the complete prepared tree, rejects
@@ -922,9 +1046,11 @@ credential-bearing workflows.
   behavior.
 - OpenAI/Gemini BYOK adapters are covered by deterministic HTTP mocks but have
   no live-key turn. The local Codex provider remains development-only. The
-  separate `coach-executor` protocol, admission, permission templates, and
-  deterministic failure paths are implemented, but no target-host UID/socket/
-  rootless-Docker/login smoke or autonomous answer-quality evaluation exists.
+  separate `mylifegraph-coach` protocol, admission, permission templates, and
+  deterministic failure paths are implemented. Target-host identities, rootless
+  startup and aggregate cgroup configuration have foundation acceptance, while
+  real analysis-container, provider, restart/reboot and answer-quality acceptance
+  remain open.
 - Hosted Turnstile acquisition/reset/cancel/error source now covers each
   protected email Auth operation on web and Android, but the real widget,
   domain, Supabase provider/secret, browser, accessibility, and physical-device

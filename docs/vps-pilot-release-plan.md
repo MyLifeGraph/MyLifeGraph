@@ -113,6 +113,21 @@ The current product truth is documented in
 [Current Product Guide](current-product-guide.md), and exact dated test evidence
 lives only in [Current Verified Baseline](verification.md#current-verified-baseline).
 
+The separate account-only bootstrap has now been applied by the administrator
+and accepted over the dedicated project automation SSH connection. The seven
+project identities exist, with personal developer logins still awaiting their
+keys. The existing host accounts were not reused. Exact access evidence is in
+the verification baseline above; runtime, provider, domain and release gates
+remain open.
+
+The administrator subsequently applied the runtime foundation package. The
+separate rootless daemon and its aggregate kernel limits were observed on the
+host, while existing system Docker/Hermes remained active and public/application
+units stayed inactive. This closes foundation installation only. The exact
+namespace/cgroup observations and their limits are recorded in the verification
+baseline; analysis-container behavior, restart/reboot, provider and release
+acceptance remain open.
+
 The earlier code-level blockers are closed in the working tree: hosted Flutter
 can explicitly select Project Coach without a key; V4/CORS/`Retry-After` are
 synchronized; admission precedes SSE; local/global budgets and ambiguous-
@@ -126,10 +141,11 @@ the hosted path never weakens that guard.
 The checkout is still a no-go for public promotion until these non-repository
 or intentionally deferred gates close:
 
-1. `ops` must create the three runtime/deploy users plus the locked
-   `mylifegraph-build` preparation identity, install/configure Caddy and the
-   units, install rootless Docker only for `coach-executor`, apply firewall/SSH
-   policy, and pass permission/reboot/live rollback checks on the actual VPS.
+1. `ops` must complete release/configuration work on the installed runtime
+   foundation, verify the complete permission and analysis-container boundaries,
+   finish the public firewall/TLS policy, and pass restart/reboot/live rollback
+   checks. The separate project identities, held service files, Caddy binary and
+   rootless daemon already exist; they must not be blindly reinstalled.
 2. An independently controlled domain, DNS, valid HTTPS, custom SMTP, CAPTCHA
    widget/site key, Auth throttles, leaked-password protection, email flows,
    and exact Google web/Android redirects must be selected and verified. The
@@ -233,7 +249,7 @@ Signed Android APK -----------------------> Supabase Auth
                   |
                   +--> authenticated bounded Unix socket
                          |
-                  coach-executor (separate UID, no Supabase/app secrets)
+                  mylifegraph-coach (separate UID, no Supabase/app secrets)
                          +--> Codex login state
                          +--> read-only personal snapshot MCP
                          +--> rootless analysis container, no network
@@ -465,7 +481,7 @@ When enabled:
 
 - the provider runs only in an explicit staging/pilot environment with a
   separate fail-closed pilot flag;
-- the Codex login belongs only to the dedicated `coach-executor` user;
+- the Codex login belongs only to the dedicated `mylifegraph-coach` user;
 - login uses the supported headless/device flow where needed;
 - local OAuth state is treated like a password, stored mode 0700, never read by
   the FastAPI UID, copied into the repository, printed, or put in ordinary
@@ -650,10 +666,10 @@ zero secret leakage or busy-budget consumption.
   release-specific tag from the path-independent source revision, load it from
   a generated release environment after mutable host configuration, and keep
   the prior release image for rollback.
-- Run containers rootless only under the dedicated `coach-executor` user.
+- Run containers rootless only under the dedicated `mylifegraph-coach` user.
 - Never expose or mount the rootless daemon socket to FastAPI or an
   Internet-facing container.
-- Implement a separately hardened `coach-executor` `systemd` unit and bounded
+- Implement a separately hardened `mylifegraph-coach` `systemd` unit and bounded
   Unix-socket protocol. Authenticate the FastAPI peer UID; accept no arbitrary
   command, path, environment, mount, image, or model field; bound framing,
   snapshot descriptor, output, trace, deadline, and reservation identity.
@@ -679,7 +695,7 @@ boundary, for:
 
 - an environment-file template containing names but no values;
 - a Caddy site template for the stable API host and SSE behavior;
-- separate FastAPI and `coach-executor` `systemd` service/socket configuration
+- separate FastAPI and `mylifegraph-coach` `systemd` service/socket configuration
   with an explicit filesystem/UID permission matrix;
 - a versioned executor protocol schema and hermetic negative-permission tests;
 - an optional protected scheduler `systemd` service/timer;
@@ -871,6 +887,27 @@ Vercel deployment.
 
 ## VPS Preparation And Privileged Bootstrap
 
+The [runtime foundation package](../deploy/vps/RUNTIME.md) is the second local
+preparation stage after project access. Administrator preview/apply adds only
+allowlisted missing Ubuntu packages, pinned Caddy, trusted helpers, held units
+and the separately owned rootless daemon. It leaves existing system Docker and
+other applications in place. The `mylifegraph-coach` user-manager drop-in owns
+aggregate CPU/memory/task limits; per-analysis limits remain independently
+required. Domain, provider login, exact release/image, sudo delegation, and
+public application startup remain separate operations. This is prepared source,
+not evidence of installation or enforced limits on the VPS.
+
+Start with the account-only [project access bundle](../deploy/vps/ACCESS.md).
+The personal logins are `mylifegraph-gregor` and `mylifegraph-matthias`; automation
+uses `mylifegraph-agent`, never the existing host `agent`. Dedicated technical
+accounts are `mylifegraph-deploy`, `mylifegraph-api`, `mylifegraph-coach`, and
+`mylifegraph-build`. Optional public keys, private homes, and a shared
+non-authoritative workspace are prepared locally. Root-owned input validation,
+host-bound preview confirmation, conflict/drift refusal and project-specific SSH
+rules protect the separate administrator apply. That stage grants no sudo,
+installs no packages, and starts no application. It is not complete host
+isolation or deployment acceptance; legacy usernames are not auto-migrated.
+
 The work is split by authority. Codex or a developer can prepare exact,
 idempotent artifacts and validate user-owned paths. An `ops`/provider
 administrator must perform privileged host changes.
@@ -879,11 +916,11 @@ administrator must perform privileged host changes.
 
 - Reconfirm OS, CPU, RAM, free disk, swap, time synchronization, IPv4/IPv6,
   open ports, and existing services.
-- Create three separate tightly scoped identities: a `deploy` operator that can
+- Create three separate tightly scoped identities: a `mylifegraph-deploy` operator that can
   invoke only one root-owned promotion helper but owns neither releases nor
   symlinks, a `mylifegraph-api` user for
   FastAPI with read-only release access and the backend environment, and a
-  `coach-executor` user for Codex OAuth/rootless containers. Do not run FastAPI
+  `mylifegraph-coach` user for Codex OAuth/rootless containers. Do not run FastAPI
   as `root`, `ops`, the deployment owner, executor, or a general interactive
   developer. Combining API and executor identity is not an acceptable pilot
   exception.
@@ -893,14 +930,14 @@ administrator must perform privileged host changes.
   bounded per-turn temp. `ops` seals prepared trees as
   `root:mylifegraph-release` without write bits; deploy, API, and executor may
   not modify a release.
-- Provide rootless Docker only for `coach-executor`. A host-root daemon or an
+- Provide rootless Docker only for `mylifegraph-coach`. A host-root daemon or an
   API-readable daemon socket leaves the full evaluation profile No-Go.
 - Ensure the executor's rootless daemon and required user-session/linger boundary
   start after reboot without an interactive developer login.
 - Install and enable Caddy from a supported source.
 - Install the release-approved Codex CLI version from its trusted distribution
   source into a root-owned versioned path executable but not writable by
-  `coach-executor`. Verify its expected checksum/signature evidence, disable
+  `mylifegraph-coach`. Verify its expected checksum/signature evidence, disable
   unattended self-update, and configure the executor unit with that absolute
   `LOCAL_CODEX_BIN`; do not reuse a user-global binary from `agent`.
 - Configure the firewall to expose only SSH plus TCP 80/443. Bind FastAPI only
@@ -942,7 +979,7 @@ administrator must perform privileged host changes.
   pre-created virtualenv and detached bytecode cache are build-writable. The
   helper terminates and checks for leftover build-UID processes, then computes the
   complete canonical tree seal and makes the tree root-owned/read-only before
-  returning control to `deploy`.
+  returning control to `mylifegraph-deploy`.
 - The executor user builds or loads the pinned rootless analysis image through
   the reviewed helper and runs its preflight.
 - The executor user proves the configured absolute Codex binary path, exact
@@ -1216,8 +1253,8 @@ backups, the initial contract is:
   checksum-verified and restore-proven is not a successful backup.
 
 Run the scheduled export as a separate non-interactive backup identity or an
-off-host job. Its database/Storage credentials are unreadable by `deploy`,
-`mylifegraph-api`, and `coach-executor`; it cannot alter releases, Codex state,
+off-host job. Its database/Storage credentials are unreadable by `mylifegraph-deploy`,
+`mylifegraph-api`, and `mylifegraph-coach`; it cannot alter releases, Codex state,
 or application configuration. A root-owned wrapper may install or rotate that
 secret but the application process never receives it.
 
@@ -1225,7 +1262,7 @@ Choose the backup execution host in the runbook before release. The preferred
 shape is a named off-host runner with the current Supabase CLI and its own
 isolated container runtime. A VPS-local alternative uses only a matching,
 version-pinned native Postgres client or a separate backup-owned rootless
-runtime. It must never connect to the `coach-executor` Docker socket merely to
+runtime. It must never connect to the `mylifegraph-coach` Docker socket merely to
 make `supabase db dump` work. Record and test the exact choice against the
 official CLI restore procedure.
 
@@ -1301,7 +1338,7 @@ Treat the VPS as rebuildable. Preserve:
   window.
 
 Do not put Codex OAuth state into a general VPS backup. Reauthenticate the
-`coach-executor` user during a rebuild. Caddy certificates can normally be
+`mylifegraph-coach` user during a rebuild. Caddy certificates can normally be
 reissued;
 the DNS and ACME recovery procedure still belongs in the runbook.
 
@@ -1461,7 +1498,7 @@ until target-host measurements pass.
 
 - Exact DNS records, valid TLS, renewal, redirect, firewall, and loopback bind
   are verified.
-- The `deploy`, `mylifegraph-api`, `coach-executor`, and locked no-home
+- The `mylifegraph-deploy`, `mylifegraph-api`, `mylifegraph-coach`, and locked no-home
   `mylifegraph-build` identities and their
   filesystem/socket permission matrix pass without an API/executor same-UID
   exception. Any VPS-local backup identity/credential is isolated from all
@@ -1481,7 +1518,7 @@ until target-host measurements pass.
   the unavailable live mode is documented without weakening deterministic
   coverage.
 - Invalid BYOK proves zero operator-provider dispatch.
-- The exact `coach-executor` user passes Codex login status, analysis-image
+- The exact `mylifegraph-coach` user passes Codex login status, analysis-image
   preflight, and the sanitized committed multi-tool live smoke. The
   `mylifegraph-api` user cannot traverse the Codex home or use the container
   socket, the executor cannot read the API environment, and unauthorized socket
@@ -1697,8 +1734,8 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 
 ### Phase D — VPS bootstrap and held offline candidate
 
-- [ ] Administrator creates and verifies the separate `deploy`,
-      `mylifegraph-api`, `coach-executor`, and locked `mylifegraph-build`
+- [ ] Administrator creates and verifies the separate `mylifegraph-deploy`,
+      `mylifegraph-api`, `mylifegraph-coach`, and locked `mylifegraph-build`
       identities, rootless executor-only
       Docker, firewall, Caddy, directories, secrets, `systemd`, retention,
       updates, and alerts. API/executor same-UID operation is not an exception.
@@ -1712,7 +1749,7 @@ BYOK remains portable because the FastAPI request boundary already owns it.
 - [ ] Deployment owner installs the exact RC artifact and hashed runtime
       dependencies in a release directory without switching the public
       `current` symlink.
-- [ ] `coach-executor` authenticates Codex through the supported flow; API and
+- [ ] `mylifegraph-coach` authenticates Codex through the supported flow; API and
       executor negative-permission checks pass.
 - [ ] Analysis image, executor protocol, direct executor live smoke, permission
       matrix, offline API configuration preflight, daemon-after-reboot behavior,
@@ -1753,7 +1790,7 @@ requires another developer account.
 | Optional independent code/release reviewer | Reviews PRs, full promotion diff, secret boundaries, manifest, and rollback evidence as additional evidence rather than a mandatory account approval. |
 | Supabase/Auth/SMTP owner | Owns distinct staging/pilot refs, publishable/secret-key migration, staging-only fixtures, backup/restore, migrations, RLS/grants, Auth/CAPTCHA, Google, redirects, SMTP/domain delivery, rate limits, and release-day read-only evidence. |
 | VPS/DNS/Caddy owner | Holds privileged `ops` authority and owns host patching, the three service identities, filesystem/Unix-socket permissions, executor-only rootless Docker, firewall, DNS/TLS, Caddy, `systemd`, logs, reboot, and rebuild. |
-| Codex account/quota owner | Confirms terms/account permission, performs only the `coach-executor` login, owns global/per-user budget and provider kill switch, monitors allowance, and can revoke the provider. |
+| Codex account/quota owner | Confirms terms/account permission, performs only the `mylifegraph-coach` login, owns global/per-user budget and provider kill switch, monitors allowance, and can revoke the provider. |
 | Privacy and academic-scope owner | Approves public participation boundary, processor/provider disclosures, retention/deletion, age/scope, consent/legal basis, and any BYOK-only scope reduction. |
 | Android keystore custodian | Creates and secures the keystore, maintains encrypted recovery and access separation, signs/version-codes releases, publishes checksum, and owns forward-fix procedure. |
 | Vercel owner | Confirms plan eligibility/limits, project/repository ownership, Production Branch and environment values, exact SHA-bound build, custom domain, headers, usage monitoring, and rollback. |

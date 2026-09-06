@@ -1,5 +1,22 @@
 # Local Development
 
+Prepare the project-specific VPS access bundle locally with
+`python3 deploy/vps/bin/prepare_access_bundle.py --output /tmp/mylifegraph-access-bundle`.
+The output directory must be new and outside the repository; optional `--key`
+arguments enroll separate public keys for Gregor, Matthias and automation.
+Without keys the bundle is review-only with nologin accounts. No server is
+contacted. The separate administrator preview/apply procedure is documented in
+[Project access bootstrap](../deploy/vps/ACCESS.md). It does not install or
+deploy the app and needs no domain. Existing `ops` and `agent` are preserved.
+
+The next local package is
+`python3 deploy/vps/bin/prepare_runtime_bundle.py --assets /tmp/mylifegraph-runtime-assets --output /tmp/mylifegraph-runtime-bundle`.
+It verifies the separately downloaded artifacts against
+`deploy/vps/manifests/runtime-sources.json` and performs no network/host operation.
+The [runtime foundation guide](../deploy/vps/RUNTIME.md) owns target preview,
+package additions, held services, and rootless acceptance. Existing host Docker
+is not upgraded or replaced. No domain or credentials are needed for preparation.
+
 This remains the authority for supported workstation and loopback workflows.
 The intended Vercel + hosted Supabase + VPS FastAPI/Coach pilot, including
 public signup, HTTPS, `systemd`, release tags, and signed Android delivery, is

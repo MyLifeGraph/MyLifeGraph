@@ -827,7 +827,7 @@ owner-visible request terminal write is confirmed before the private dispatch
 is terminalized; an ambiguous completion/failure response leaves the dispatch
 open for that reconciliation instead of guessing a terminal state.
 
-The `coach-executor` process accepts only bounded capability/reserve/release/
+The `mylifegraph-coach` process accepts only bounded capability/reserve/release/
 execute frames from the configured API UID verified by `SO_PEERCRED`. It owns
 the exact pinned Codex binary, OAuth home, rootless Docker socket, and temporary
 snapshot. The API owns Supabase/application secrets and cannot use either

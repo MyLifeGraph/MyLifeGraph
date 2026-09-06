@@ -6,8 +6,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=coach-executor
-Group=coach-executor
+User=mylifegraph-coach
+Group=mylifegraph-coach
 SupplementaryGroups=mylifegraph-release
 WorkingDirectory=/srv/mylifegraph/current/services/ai_service
 EnvironmentFile=/etc/mylifegraph/executor.env

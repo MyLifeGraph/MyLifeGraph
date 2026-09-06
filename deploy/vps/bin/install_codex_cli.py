@@ -25,7 +25,7 @@ INSTALLER_PATH = Path("/usr/local/libexec/mylifegraph/install_codex_cli.py")
 MANIFEST_PATH = Path("/usr/local/libexec/mylifegraph/manifests/codex-cli.json")
 INCOMING_ROOT = Path("/srv/mylifegraph/incoming")
 INSTALL_ROOT = Path("/opt/mylifegraph/codex")
-EXECUTOR_USER = "coach-executor"
+EXECUTOR_USER = "mylifegraph-coach"
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_BINARY_BYTES = 512 * 1024 * 1024
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
@@ -187,7 +187,7 @@ def _probe_as_executor(binary: Path, manifest: dict[str, str], root: Path) -> No
     try:
         account = pwd.getpwnam(EXECUTOR_USER)
     except KeyError as exc:
-        raise CodexInstallError("coach-executor account does not exist") from exc
+        raise CodexInstallError("mylifegraph-coach account does not exist") from exc
     os.chown(root, 0, account.pw_gid)
     root.chmod(0o750)
     probe_root = root / "probe"

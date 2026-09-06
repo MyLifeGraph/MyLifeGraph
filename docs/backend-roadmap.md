@@ -895,7 +895,7 @@ service tier merely because Codex CLI supplies the local OAuth bridge. A
 reported/configured mismatch is an honest failed capability.
 
 The pilot-only `operator_codex_pilot` path is a different composition: one
-Uvicorn worker connects to a separately sandboxed `coach-executor` UID over a
+Uvicorn worker connects to a separately sandboxed `mylifegraph-coach` UID over a
 peer-authenticated Unix socket. One-use reservations, a 240-second lease, a
 durable user-independent UTC-day budget plus owner-linked dispatch ledger,
 startup reconciliation, and exact 5-per-owner/15-global limits prevent queue

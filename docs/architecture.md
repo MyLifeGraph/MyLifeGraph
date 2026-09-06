@@ -68,6 +68,21 @@ Flutter-to-Supabase authority.
 
 ### VPS Pilot Shape (Repository-Packaged, Not Deployed)
 
+Project access is prepared separately through `deploy/vps/ACCESS.md`. Personal
+`mylifegraph-gregor` and `mylifegraph-matthias` logins and dedicated
+`mylifegraph-agent` automation share only a non-authoritative workspace. Separate
+`mylifegraph-deploy`, `mylifegraph-api`, `mylifegraph-coach`, and
+`mylifegraph-build` identities own the technical roles. Existing host accounts
+are not repurposed. This account-only stage grants no sudo or deployment
+authority and does not promise VM-like host isolation.
+
+The separate runtime foundation package (`deploy/vps/RUNTIME.md`) preserves
+existing system Docker workloads and starts only the Coach's rootless user
+daemon. Its root-owned user-manager cgroup bounds the daemon and all descendant
+container scopes together. Caddy and application units are prepared but remain
+stopped until their configuration and release gates pass. This packaging does
+not change HTTP contracts, provider selection, or data authority.
+
 The accepted pilot direction keeps Flutter Web on Vercel and Auth/Postgres in
 hosted Supabase while placing FastAPI behind Caddy and HTTPS on a VPS. Public
 self-registration remains available without an invitation or user allowlist,

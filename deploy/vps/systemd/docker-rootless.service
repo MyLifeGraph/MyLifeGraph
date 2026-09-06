@@ -1,0 +1,26 @@
+# Installed only as mylifegraph-coach's user docker.service, never system-wide.
+[Unit]
+Description=MyLifeGraph Coach rootless Docker
+Requires=dbus.socket
+After=dbus.socket
+
+[Service]
+Type=notify
+NotifyAccess=all
+Environment=PATH=/usr/local/libexec/mylifegraph:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=DOCKERD=/usr/bin/dockerd
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=slirp4netns
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_DISABLE_HOST_LOOPBACK=true
+ExecStart=/usr/local/libexec/mylifegraph/dockerd-rootless.sh --host=unix://%t/docker.sock --data-root=%h/.local/share/docker --log-driver=local --log-opt=max-size=10m --log-opt=max-file=3
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=90s
+TimeoutStopSec=30s
+Delegate=yes
+KillMode=mixed
+# Aggregate limits are enforced by the root-owned user@UID.service drop-in.
+LimitNOFILE=65536
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=MyLifeGraph Caddy reverse proxy
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/mylifegraph/caddy.env
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+EnvironmentFile=/etc/mylifegraph/caddy.env
+ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

@@ -654,7 +654,7 @@ Der Screen heißt `Coach` und beginnt mit `Ask anything`.
   verlangt exakt `gpt-5.5`, `service_tier="fast"` und aktivierten Fast Mode.
 - Mit explizit ausgewähltem `Project Coach` sendet Flutter keinen Key. FastAPI
   reserviert vor Streambeginn genau einen Slot im getrennten
-  `coach-executor`; nur dieser UID besitzt den Codex-Login und rootless Docker.
+  `mylifegraph-coach`; nur dieser UID besitzt den Codex-Login und rootless Docker.
   Busy liefert `Retry-After` und erfordert manuellen Retry. 5 Turns pro
   Profil-Lokaltag und 15 Dispatches pro UTC-Tag sind sichtbar begrenzt.
 - Fehlen Modell, Fast-Unterstützung, Login, Docker oder Analyse-Image, ist der
