@@ -28,6 +28,18 @@ INSTALL_ROOT = Path("/opt/mylifegraph/codex")
 EXECUTOR_USER = "mylifegraph-coach"
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_BINARY_BYTES = 512 * 1024 * 1024
+PACKAGE_FILES = {
+    "bin/codex": 0o555,
+    "bin/codex-code-mode-host": 0o555,
+    "codex-package.json": 0o444,
+    "codex-path/rg": 0o555,
+    "codex-resources/bwrap": 0o555,
+    "codex-resources/zsh/bin/zsh": 0o555,
+}
+PACKAGE_DIRS = {
+    "bin", "codex-path", "codex-resources",
+    "codex-resources/zsh", "codex-resources/zsh/bin",
+}
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 ASSET = re.compile(r"codex-package-[A-Za-z0-9_.-]+\.tar\.gz")
@@ -158,28 +170,72 @@ def _load_manifest(handle: BinaryIO) -> dict[str, str]:
     return manifest
 
 
-def _extract_binary(
+def _extract_package(
     archive_handle: BinaryIO, manifest: dict[str, str], destination: Path
 ) -> None:
-    expected_member = f"codex-{manifest['platform']}"
+    expected_names = set(PACKAGE_FILES) | PACKAGE_DIRS
     try:
         with tarfile.open(fileobj=archive_handle, mode="r:gz") as archive:
-            members = archive.getmembers()
-            if (
-                len(members) != 1
-                or not members[0].isreg()
-                or members[0].name != expected_member
-                or members[0].size <= 0
-                or members[0].size > MAX_BINARY_BYTES
-            ):
-                _fail("Codex archive must contain exactly the bounded expected binary")
-            source = archive.extractfile(members[0])
-            if source is None:
-                _fail("Codex archive binary is unreadable")
-            with source, destination.open("xb") as target:
-                shutil.copyfileobj(source, target, length=1024 * 1024)
+            members = {}
+            total_bytes = 0
+            for member in archive:
+                if member.name not in expected_names or member.name in members:
+                    _fail("Codex package inventory is invalid")
+                if member.name in PACKAGE_DIRS:
+                    if not member.isdir():
+                        _fail("Codex package directory is invalid")
+                elif not member.isreg() or not 0 < member.size <= MAX_BINARY_BYTES:
+                    _fail("Codex package file is invalid")
+                total_bytes += member.size
+                if total_bytes > MAX_BINARY_BYTES:
+                    _fail("Codex package exceeds the unpacked size limit")
+                members[member.name] = member
+            if set(members) != expected_names:
+                _fail("Codex package inventory is incomplete")
+            if members["codex-package.json"].size > 4096:
+                _fail("Codex package metadata is too large")
+            destination.mkdir(mode=0o755)
+            destination.chmod(0o755)
+            for name in sorted(PACKAGE_DIRS, key=lambda name: (name.count("/"), name)):
+                directory = destination / name
+                directory.mkdir(mode=0o755)
+                directory.chmod(0o755)
+            for name, mode in PACKAGE_FILES.items():
+                source = archive.extractfile(members[name])
+                if source is None:
+                    _fail("Codex package file is unreadable")
+                with source, (destination / name).open("xb") as target:
+                    shutil.copyfileobj(source, target, length=1024 * 1024)
+                (destination / name).chmod(mode)
     except tarfile.TarError as exc:
         raise CodexInstallError("Codex archive is invalid") from exc
+    expected_metadata = {
+        "layoutVersion": 1,
+        "version": manifest["version"],
+        "target": manifest["platform"],
+        "variant": "codex",
+        "entrypoint": "bin/codex",
+        "resourcesDir": "codex-resources",
+        "pathDir": "codex-path",
+    }
+    metadata = json.loads(
+        (destination / "codex-package.json").read_text(), object_pairs_hook=list
+    )
+    if (
+        not isinstance(metadata, list)
+        or len(metadata) != len(expected_metadata)
+        or any(
+            not isinstance(pair, tuple) or len(pair) != 2
+            or pair[0] not in expected_metadata
+            or type(pair[1]) is not type(expected_metadata[pair[0]])
+            or pair[1] != expected_metadata[pair[0]]
+            for pair in metadata
+        )
+        or len({pair[0] for pair in metadata}) != len(expected_metadata)
+    ):
+        _fail("Codex package metadata differs from the approved manifest")
+    for name in PACKAGE_DIRS:
+        (destination / name).chmod(0o555)
     destination.chmod(0o555)
 
 
@@ -193,6 +249,7 @@ def _probe_as_executor(binary: Path, manifest: dict[str, str], root: Path) -> No
     probe_root = root / "probe"
     codex_home = probe_root / ".codex"
     probe_root.mkdir(mode=0o750)
+    probe_root.chmod(0o750)
     codex_home.mkdir(mode=0o700)
     os.chown(probe_root, 0, account.pw_gid)
     os.chown(codex_home, account.pw_uid, account.pw_gid)
@@ -226,8 +283,17 @@ def _probe_as_executor(binary: Path, manifest: dict[str, str], root: Path) -> No
         _fail("Codex binary failed the unprivileged exact-version probe")
 
 
-def _validate_installed_binary(binary: Path, expected_digest: str) -> None:
-    for directory in [binary.parents[1], binary.parent]:
+def _package_digests(root: Path) -> dict[str, str]:
+    digests = {}
+    for name in PACKAGE_FILES:
+        with (root / name).open("rb") as handle:
+            digests[name] = _sha256(handle)
+    return digests
+
+
+def _validate_installed_package(root: Path, expected_digests: dict[str, str]) -> None:
+    # Check known directories before enumerating; never follow an adopted symlink.
+    for directory in [root, *(root / name for name in PACKAGE_DIRS)]:
         info = directory.lstat()
         if (
             not stat.S_ISDIR(info.st_mode)
@@ -235,20 +301,23 @@ def _validate_installed_binary(binary: Path, expected_digest: str) -> None:
             or stat.S_IMODE(info.st_mode) != 0o555
         ):
             _fail("existing Codex version directory is mutable or invalid")
-    info = binary.lstat()
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or info.st_uid != 0
-        or stat.S_IMODE(info.st_mode) != 0o555
-        or info.st_nlink != 1
-    ):
-        _fail("existing Codex binary metadata is invalid")
-    with binary.open("rb") as handle:
-        if _sha256(handle) != expected_digest:
-            _fail("existing Codex binary differs from the verified archive")
+    for name, mode in PACKAGE_FILES.items():
+        info = (root / name).lstat()
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != 0
+            or stat.S_IMODE(info.st_mode) != mode
+            or info.st_nlink != 1
+        ):
+            _fail("existing Codex package file metadata is invalid")
+    inventory = {path.relative_to(root).as_posix() for path in root.rglob("*")}
+    if inventory != set(PACKAGE_FILES) | PACKAGE_DIRS:
+        _fail("existing Codex package inventory is invalid")
+    if _package_digests(root) != expected_digests:
+        _fail("existing Codex package differs from the verified archive")
 
 
-def _install(extracted: Path, manifest: dict[str, str], digest: str) -> Path:
+def _install(extracted: Path, manifest: dict[str, str], digests: dict[str, str]) -> Path:
     INSTALL_ROOT.mkdir(parents=True, exist_ok=True, mode=0o755)
     _safe_parent_chain(INSTALL_ROOT.parent, Path("/opt"), expected_uid=0)
     install_info = INSTALL_ROOT.lstat()
@@ -261,27 +330,20 @@ def _install(extracted: Path, manifest: dict[str, str], digest: str) -> Path:
     version_root = INSTALL_ROOT / manifest["version"]
     binary = version_root / "bin/codex"
     if version_root.exists() or version_root.is_symlink():
-        _validate_installed_binary(binary, digest)
+        _validate_installed_package(version_root, digests)
     else:
         staging = Path(
             tempfile.mkdtemp(prefix=f".{manifest['version']}.", dir=INSTALL_ROOT)
         )
         try:
             os.chown(staging, 0, 0)
-            bin_root = staging / "bin"
-            bin_root.mkdir(mode=0o755)
-            target = bin_root / "codex"
-            with extracted.open("rb") as source, target.open("xb") as output:
-                shutil.copyfileobj(source, output, length=1024 * 1024)
-            os.chown(target, 0, 0)
-            target.chmod(0o555)
-            bin_root.chmod(0o555)
+            shutil.copytree(extracted, staging, dirs_exist_ok=True)
             staging.chmod(0o555)
             staging.replace(version_root)
         finally:
             if staging.exists():
                 shutil.rmtree(staging)
-        _validate_installed_binary(binary, digest)
+        _validate_installed_package(version_root, digests)
     current = INSTALL_ROOT / "current"
     if current.exists() and not current.is_symlink():
         _fail("Codex current path is not a symlink")
@@ -318,6 +380,9 @@ def main() -> int:
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error("installation must run as root")
+    # Private inputs are explicitly 0400; package/probe parent traversal must
+    # not depend on the administrator's inherited (often 0077) umask.
+    os.umask(0o022)
     try:
         if not sys.flags.isolated:
             _fail("installer must run through its isolated Python shebang")
@@ -351,15 +416,16 @@ def main() -> int:
             if digest != manifest["asset_sha256"]:
                 _fail("Codex archive checksum does not match the manifest")
             with tempfile.TemporaryDirectory(
-                prefix="mylifegraph-codex-install-", dir="/tmp"
+                # Codex refuses PATH helpers when CODEX_HOME is beneath /tmp.
+                # Keep the disposable, credential-free probe in a root-created
+                # state directory, never in the real Coach login home.
+                prefix="mylifegraph-codex-install-", dir="/var/lib"
             ) as raw_tmp:
                 temp_root = Path(raw_tmp)
-                extracted = temp_root / "codex"
-                _extract_binary(archive_handle, manifest, extracted)
-                _probe_as_executor(extracted, manifest, temp_root)
-                with extracted.open("rb") as extracted_handle:
-                    binary_digest = _sha256(extracted_handle)
-                binary = _install(extracted, manifest, binary_digest)
+                extracted = temp_root / "package"
+                _extract_package(archive_handle, manifest, extracted)
+                _probe_as_executor(extracted / "bin/codex", manifest, temp_root)
+                binary = _install(extracted, manifest, _package_digests(extracted))
         print(f"Installed verified Codex CLI {manifest['version']} at {binary}")
         return 0
     except (

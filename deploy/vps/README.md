@@ -175,10 +175,17 @@ identifier before use; never paste a secret into shell history.
    `/srv/mylifegraph/incoming` directory. Invoke only the absolute installed
    `/usr/local/libexec/mylifegraph/install_codex_cli.py` path and pass that
    root-private archive path; there is no manifest override. The isolated
-   installer pins the already-open input inode, verifies digest/archive shape,
-   probes `--version` after dropping to `mylifegraph-coach`, rejects symlink or
-   mutable pre-existing installs, seals the binary/version tree root-owned
-   mode `0555`, and atomically updates `current`. The preceding version is
+   installer pins the already-open input inode and verifies the digest plus
+   the exact package layout/metadata. The approved archive contains the CLI,
+   code-mode host, search/sandbox/shell helpers and `codex-package.json`; all
+   are retained in their vendor-relative paths. It probes `--version` after
+   dropping to `mylifegraph-coach`, rejects symlink or mutable pre-existing
+   installs, and verifies every installed file's digest before accepting a
+   repeated installation. Package directories/executables are root-owned mode `0555`,
+   package metadata is `0444`, and creation is independent of the caller's
+   umask. The empty version-probe home lives in a root-created temporary tree
+   under `/var/lib`, because Codex refuses PATH helpers under `/tmp`; it never
+   uses the real Coach login home. It atomically updates the Codex `current` link. The preceding version is
    retained for rollback.
 8. As `mylifegraph-coach`, set `CODEX_HOME` to the isolated directory and perform
    the supported interactive ChatGPT login. Never copy another user's OAuth

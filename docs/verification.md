@@ -48,6 +48,49 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Codex package installer correction and VPS analysis acceptance (2026-09-06)
+
+Task base is `73206e7aeb96fef018e86f54be5522a209fb7339`, the clean protected
+`main` result of PR #8. Its complete manual CI passed all seven jobs; regular
+PR CI passed its five selected jobs and legitimately skipped Web/Database.
+The exact fast-forward succeeded after PR checks appeared in GitHub's rollup.
+The manual run alone had been rejected by branch protection despite passing;
+the manual-CI promotion instructions below are not proof of GitHub acceptance.
+
+The user installed the local annotated RC `v0.1.0-pilot.1-rc.1` from that SHA
+on the VPS through independently checked root-private source inputs. The
+administrator-run analysis acceptance then passed final-path API/Coach imports
+(UIDs 995/994), the release-bound rootless image build and synthetic MCP checks.
+The image revision is
+`4d47a6a1688e4706587f85027a6ebc35a98041e4a15b9b92aa7401e11c067ca9`;
+its host-local image ID is
+`sha256:6179930c000bc64ff45f131713fb768af13e1b34173b9152e5204200161bd245`.
+Observed limits were 512 MiB memory, no swap, one CPU and 64 PIDs, UID 65532,
+no capabilities, no-new-privileges, loopback-only networking and a read-only
+root/snapshot. Host-file/environment access and a network connection were
+denied; the snapshot stayed unchanged. Synthetic error and actual 30.3-second
+timeout cleanup left no analysis containers. Final release-seal verification
+passed; API, Coach executor and Caddy stayed stopped. These are scoped host
+acceptance results, not memory/PID exhaustion, reboot, provider or public tests.
+
+The subsequent genuine Codex archive rehearsal exposed a pre-existing installer
+defect: the pinned `0.148.0` archive contains a package, not a standalone binary.
+The correction on `fix/vps-codex-package-installer` retains the exact version,
+archive checksum and manifest authority, validates the full fixed package and
+metadata, and verifies every installed file before accepting a repeated install.
+Four focused package tests and Ruff pass. A networkless Ubuntu rehearsal with
+the actual official archive passed installation, the unprivileged exact-version
+probe, repeat integrity and restrictive `umask 077`. Sidecar-only tampering was
+rejected with the main binary and `current` symlink inode unchanged. The empty
+probe home uses a disposable root-created `/var/lib` tree to satisfy Codex's
+PATH-helper rules without touching real OAuth state. Independent review passed
+after that correction. The full affected gate against the task base passed:
+39 VPS tests, 16 backup tests, Flutter's 1,057 tests, FastAPI's 1,683 tests
+(two intentional skips), Web, the 24-file/486-assertion final-state pgTAP suite
+on isolated PG15/PG17 and the normal local database, and all eight browser
+journeys without retries. No reset or remote migration ran. The corrected
+installer is staged but has not been installed on the VPS; no login has occurred.
+
 ### Release candidate and local analysis image (2026-09-06)
 
 The reviewed access/runtime work is committed locally as
@@ -1064,7 +1107,15 @@ hosted workflow:
 
 For a user-requested promotion without a PR, push the candidate to its working
 branch and run `gh workflow run ci.yml --ref <candidate-branch>`. Inspect the
-completed run and the required checks on the exact candidate SHA. Manual and
+completed run and the required checks on the exact candidate SHA. Successful
+manual jobs provide test evidence, but do not alone establish that GitHub will
+accept the protected update: confirm that all required contexts also appear
+and satisfy protection in the candidate's status-check rollup. The 2026-09-06
+candidate's manual jobs were omitted from that rollup and its direct push was
+rejected. A separately user-authorized PR supplied eligible PR checks for the
+same candidate; the protected fast-forward then succeeded. If manual checks
+are omitted, obtain PR authorization and run normal PR CI; do not synthesize
+statuses or weaken protection. Manual and
 scheduled documentation checks compare against `origin/main`; PR runs retain
 their exact PR base SHA. Required checks and administrator enforcement stay
 enabled when the PR requirement is removed. Once verification is complete,
