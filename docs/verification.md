@@ -87,8 +87,18 @@ systemd state reads were substituted in the container; real VPS state remains
 separate evidence. Independent source/handoff review passed. The six-file
 flat bundle is staged on the VPS and its outer transport hash matches
 `77516d216ceeb783424749a65493fdd8570e55e6006ee4bfb3dbdf8d94dca55b`.
-No 0.153.4 installation, OAuth login, provider call or service activation on
-the VPS is claimed before the administrator runs that held installation.
+The administrator subsequently ran that exact package successfully: archive,
+payload and prior-state hashes passed, Codex 0.153.4 installed, and the executor
+version pin updated. Independent project-SSH reads confirm `current` points to
+`/opt/mylifegraph/codex/0.153.4`, the version directory/main binary/code-mode
+host are root-owned mode `0555`, and package metadata is root-owned `0444`.
+Installed helper and manifest hashes match the reviewed inputs. API, executor,
+executor socket and Caddy remain inactive; system Docker and Hermes remain
+active, with about 27 GiB disk space free. The privileged installer output is
+the evidence for its version probe/configuration update; the project SSH user
+cannot independently read the protected executor environment. No OAuth login,
+provider call or application activation is claimed. The tool-surface acceptance
+gap above still blocks provider enablement.
 
 ### Codex package installer correction and VPS analysis acceptance (2026-09-06)
 
