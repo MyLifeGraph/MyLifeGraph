@@ -102,6 +102,12 @@ disclosure, and kill switch, never a failure fallback. Hosted Codex uses a
 narrow Unix-socket executor under a separate UID: FastAPI keeps Supabase/app
 secrets and cannot read Codex OAuth or the rootless container socket, while the
 executor receives neither application secrets nor arbitrary commands. The
+Codex adapter uses hash-bound model metadata and explicit tool configuration,
+not feature flags alone, to remove built-in mutation/search capabilities. Its
+three MCP data tools remain the only supported data operations; Codex's visible
+resource helpers gain no file authority because the sole server rejects those
+methods. Reported unauthorized tool events still fail closed.
+The
 repository also contains Caddy, `systemd`, release/rollback, permission,
 monitoring, signed-APK, and encrypted-backup automation; none is target-host or
 public acceptance evidence.

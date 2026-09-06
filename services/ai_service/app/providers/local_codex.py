@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -61,6 +62,10 @@ _COACH_MCP_SERVER_PATH = (
 )
 _COACH_ANALYSIS_CONTEXT_PATH = Path(__file__).resolve().parents[2] / "coach_analysis"
 _COACH_ANALYSIS_REVISION_LABEL = "org.mylifegraph.coach-analysis.revision"
+_TOOL_CATALOG_PATH = (
+    Path(__file__).resolve().parent / "codex_policy" / "gpt-5.5-codex-0.153.4.json"
+)
+_TOOL_CATALOG_SHA256 = "fb47a342c2b76c1cb6816cf02b8ee07c1e3f49892b5c25cebea825a564286436"
 _ANALYSIS_IMAGE_PATTERN = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}",
 )
@@ -607,6 +612,10 @@ class LocalCodexCoachProvider:
             is None
         ):
             return "analysis_image_unavailable"
+        if self._configured_model() != "gpt-5.5":
+            return "unavailable_model"
+        if not _tool_catalog_valid():
+            return "tool_free_unavailable"
         return None
 
     def _resolve_executable(self) -> str | None:
@@ -661,6 +670,7 @@ class LocalCodexCoachProvider:
             "--cd",
             workdir,
         ]
+        argv.extend(_tool_policy_argv())
         model = self._configured_model()
         if model is not None:
             argv.extend(["--model", model])
@@ -752,10 +762,11 @@ class LocalCodexCoachProvider:
             ),
             "-c",
             (
-                f"{server}.env.COACH_ANALYSIS_IMAGE="
+            f"{server}.env.COACH_ANALYSIS_IMAGE="
                 + json.dumps(self._settings.coach_analysis_image)
             ),
         ]
+        argv.extend(_tool_policy_argv())
         if self._settings.coach_analysis_docker_host:
             argv.extend(
                 [
@@ -988,6 +999,33 @@ def _expected_analysis_revision() -> str | None:
         return analysis_image_revision(_COACH_ANALYSIS_CONTEXT_PATH)
     except (OSError, ValueError):
         return None
+
+
+def _tool_catalog_valid() -> bool:
+    try:
+        metadata = _TOOL_CATALOG_PATH.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 131_072:
+            return False
+        return hashlib.sha256(_TOOL_CATALOG_PATH.read_bytes()).hexdigest() == _TOOL_CATALOG_SHA256
+    except OSError:
+        return False
+
+
+def _tool_policy_argv() -> list[str]:
+    # Check on every turn as well as capability: a cached ready result must
+    # never allow a missing or changed policy to reach the provider process.
+    if not _tool_catalog_valid():
+        raise CoachProviderError(
+            "tool_free_unavailable",
+            "The fixed Coach tool configuration is unavailable.",
+            retryable=False,
+        )
+    return [
+        "-c", f"model_catalog_json={json.dumps(str(_TOOL_CATALOG_PATH))}",
+        "-c", 'web_search="disabled"',
+        "-c", "tools.update_plan.enabled=false",
+        "-c", "tools.experimental_request_user_input.enabled=false",
+    ]
 
 
 def _supports_hardened_argv(help_stdout: bytes, exec_help_stdout: bytes) -> bool:

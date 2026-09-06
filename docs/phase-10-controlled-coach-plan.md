@@ -61,14 +61,29 @@ call, or live provider key. Live checks remain separately opt-in and must not
 be claimed unless they were actually run.
 
 The requested VPS CLI upgrade pins Codex 0.153.4 without changing the explicit
-`gpt-5.5`/Fast selection. Offline installation, flag and configuration checks
-are distinct from provider acceptance. Exact-version source review found that
-`shell_tool=false` gates shell/unified-exec registration, but feature disabling
-alone does not prove the model sees only the three Coach MCP tools: model-driven
-ApplyPatch and MCP-resource handlers also exist in 0.148.0. Keep the shared
-provider disabled until the actual permitted tool surface is proven or further
-restricted. Existing strict event rejection and read-only sandboxing remain
-unchanged; the upgrade does not grant additional tool authority.
+`gpt-5.5`/Fast selection. A content-hash-bound copy of the complete selected
+model metadata now disables model-driven shell, apply-patch and tool-search
+capabilities without replacing its reasoning, instruction or service-tier
+metadata. Both Codex response paths additionally disable web search, planning
+and user-input tools. Missing, changed or non-regular profile files fail before
+CLI dispatch, including after cached readiness. Configuration requires the
+documented explicit `gpt-5.5` model. Hosted CLI version pinning remains mandatory;
+the optional local-development version setting is not proof of compatibility
+with another CLI version.
+
+The resulting raw data-agent request has six tools: the three Coach data tools and
+three built-in MCP resource helpers. Only `inspect_data`, `query_data` and
+`run_python` have successful data-operation authority. The sole Coach server
+advertises no resources and rejects resource list/template/read methods,
+including `file://` URIs, without reading files or touching the snapshot/trace.
+Existing strict event rejection and read-only sandboxing remain unchanged;
+resource-helper attempts can fail a turn, and this is not a claim that only
+three tool names are visible. Do not substitute hooks as the security boundary:
+Codex hook errors can fail open. Offline acceptance remains distinct from
+authenticated provider and target-host acceptance; keep the shared provider
+disabled until those gates pass.
+The legacy response path configures no MCP server and retains its separate
+tool-free behavior; it receives the same built-in restrictions.
 
 FastAPI now resolves its Supabase persistence credential from the current
 `SUPABASE_SECRET_KEY` name with a legacy service-role fallback; the current key

@@ -18,6 +18,44 @@ from app.mcp.coach_data_server import CoachDataMcpServer, ToolFailure
 from app.services.coach_snapshot import _write_snapshot
 
 
+def test_resource_helpers_have_no_file_or_snapshot_authority(tmp_path, monkeypatch):
+    server = _server(tmp_path, monkeypatch)
+    sentinel = tmp_path / "host-only.txt"
+    sentinel.write_text("host-only-resource-sentinel")
+    snapshot_before = server._snapshot.read_bytes()
+    trace_before = server._trace.read_bytes() if server._trace.exists() else None
+    calls_before = server._tool_calls
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Resource requests must never reach data tools.")
+
+    for name in ["_inspect", "_query", "_python"]:
+        monkeypatch.setattr(server, name, forbidden)
+    original_open = Path.open
+    def guarded_open(path, *args, **kwargs):
+        if path == sentinel:
+            raise AssertionError("Resource URI must never open its host file.")
+        return original_open(path, *args, **kwargs)
+
+    with monkeypatch.context() as guard:
+        guard.setattr(Path, "open", guarded_open)
+        for method in ["resources/list", "resources/templates/list", "resources/read"]:
+            response = server._dispatch({
+                "jsonrpc": "2.0", "id": 41, "method": method,
+                "params": {"uri": sentinel.as_uri()},
+            })
+            assert response["error"]["code"] == -32601
+            assert "host-only-resource-sentinel" not in json.dumps(response)
+        response = server._dispatch({
+            "jsonrpc": "2.0", "id": 42, "method": "tools/call",
+            "params": {"name": "read_mcp_resource", "arguments": {"uri": sentinel.as_uri()}},
+        })
+        assert response["error"]["code"] == -32602
+    assert server._tool_calls == calls_before
+    assert server._snapshot.read_bytes() == snapshot_before
+    assert (server._trace.read_bytes() if server._trace.exists() else None) == trace_before
+
+
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     payload = chunk_type + data
     return (

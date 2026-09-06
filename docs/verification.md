@@ -48,6 +48,40 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Codex Coach tool authority (2026-09-06)
+
+Task base is `fbdf39500bd55ba9c4f8cc002bdf583e6c0cd6f2`. The VPS has the
+installed CLI 0.153.4 but its application/provider remain held. An actual CLI
+run against a simulated loopback Responses endpoint inside a networkless
+container exposed the old configuration's built-in apply-patch, search,
+request-input and resource tools; the three data tools were deferred behind
+tool search. No account, real model request or personal data was involved.
+Exact-source review rejected PreToolUse hooks as a hard boundary because
+failure cases can continue execution and CLI JSONL omits hook lifecycle events.
+
+The implemented adapter uses the complete selected upstream GPT-5.5 metadata
+with only its apply-patch/shell/tool-search fields changed and its empty
+experimental-tool list retained. Its fixed hash is verified before readiness
+and every dispatch. Actual data-agent wire capture from the implemented adapter contains
+exactly the three data tools plus three resource helpers, with file editing,
+web search, planning and user-input tools absent. The metadata's static model
+manager prevents remote refresh from restoring those fields. The three resource
+helpers remain visible, but the sole Coach server rejects all resource methods;
+the event allowlist has not been expanded.
+A separate actual wire capture for the implemented legacy response path
+contained no model tools, preserving its no-MCP behavior.
+
+Focused provider/MCP verification passed 100 tests with one intentional
+real-image opt-in skip. New checks cover upstream metadata preservation,
+missing/tampered/symlink/oversized/FIFO profiles, cached-readiness invalidation,
+and hostile resource methods including a host-file URI with no file, snapshot,
+trace or data-tool effects. The captured-base selector chose Source and Backend;
+both passed, including 39 VPS tests, 16 backup tests and 1,691 backend tests with
+two intentional skips. It did not select Flutter, Database or Browser for this
+backend-only change. Documentation/diff checks also passed. This
+implementation is local; it has not changed the immutable installed RC, started
+the provider or authenticated Codex. Live response/event acceptance remains open.
+
 ### Requested Codex CLI 0.153.4 upgrade (2026-09-06)
 
 Upgrade base is `15b6b6c66ca44d3a1b655edee36b84c7d79d6f46`, the local

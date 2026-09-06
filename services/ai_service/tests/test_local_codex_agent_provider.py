@@ -1,5 +1,7 @@
 import asyncio
+import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -64,6 +66,30 @@ def test_analysis_image_revision_is_path_independent_and_content_bound(
     assert analysis_image_revision(first) == analysis_image_revision(second)
     (second / "runner.py").write_text("print('changed')\n", encoding="utf-8")
     assert analysis_image_revision(first) != analysis_image_revision(second)
+
+
+def test_fixed_model_catalog_preserves_upstream_model_metadata() -> None:
+    catalog = json.loads(local_codex_module._TOOL_CATALOG_PATH.read_text())
+    assert len(catalog["models"]) == 1
+    model = catalog["models"][0]
+    assert model["slug"] == "gpt-5.5"
+    assert model["apply_patch_tool_type"] is None
+    assert model["shell_type"] == "disabled"
+    assert model["supports_search_tool"] is False
+    assert model["experimental_supported_tools"] == []
+    restored = {
+        **model,
+        "apply_patch_tool_type": "freeform",
+        "shell_type": "unified_exec",
+        "supports_search_tool": True,
+    }
+    # Canonical hash of the full original entry from rust-v0.153.4. Restoring
+    # only tool fields must reproduce all instruction/tier/context metadata.
+    digest = hashlib.sha256(
+        json.dumps(restored, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert digest == "7f58c0111030d056fb293b7280e5352340a48ccf9fe7a62ba59589cbc9618367"
+    assert local_codex_module._tool_catalog_valid()
 
 
 def _settings(**overrides) -> Settings:
@@ -215,6 +241,10 @@ def test_agent_invocation_requires_gpt55_fast_and_only_personal_data_mcp(
     argv, options = runner.calls[-1]
     assert argv[argv.index("--model") + 1] == "gpt-5.5"
     configs = [argv[index + 1] for index, value in enumerate(argv) if value == "-c"]
+    assert f"model_catalog_json={json.dumps(str(local_codex_module._TOOL_CATALOG_PATH))}" in configs
+    assert 'web_search="disabled"' in configs
+    assert "tools.update_plan.enabled=false" in configs
+    assert "tools.experimental_request_user_input.enabled=false" in configs
     assert 'service_tier="fast"' in configs
     assert "features.fast_mode=true" in configs
     assert "mcp_servers.coach_data.required=true" in configs
@@ -301,6 +331,51 @@ def test_capability_fails_honestly_when_fast_mode_is_unavailable() -> None:
 
     assert capability.state == "unavailable"
     assert capability.reason_code == "fast_mode_unavailable"
+
+
+@pytest.mark.parametrize("kind", ["missing", "modified", "symlink", "oversized", "fifo"])
+def test_tool_catalog_failure_prevents_cli_preflight(tmp_path, monkeypatch, kind):
+    original = local_codex_module._TOOL_CATALOG_PATH
+    path = tmp_path / "catalog.json"
+    if kind == "modified":
+        path.write_bytes(original.read_bytes() + b" ")
+    elif kind == "symlink":
+        path.symlink_to(original)
+    elif kind == "oversized":
+        path.write_bytes(b" " * 131_073)
+    elif kind == "fifo":
+        os.mkfifo(path)
+    monkeypatch.setattr(local_codex_module, "_TOOL_CATALOG_PATH", path)
+    runner = AgentRunner()
+    provider = LocalCodexCoachProvider(
+        _settings(), runner=runner, executable_resolver=lambda _: "/usr/bin/codex"
+    )
+    capability = asyncio.run(provider.capability())
+    assert capability.reason_code == "tool_free_unavailable"
+    assert capability.state == "unavailable"
+    assert runner.calls == []
+
+
+def test_cached_readiness_cannot_bypass_changed_tool_catalog(tmp_path, monkeypatch):
+    path = tmp_path / "catalog.json"
+    path.write_bytes(local_codex_module._TOOL_CATALOG_PATH.read_bytes())
+    monkeypatch.setattr(local_codex_module, "_TOOL_CATALOG_PATH", path)
+    runner = AgentRunner()
+    provider = LocalCodexCoachProvider(
+        _settings(), runner=runner, executable_resolver=lambda _: "/usr/bin/codex"
+    )
+    assert asyncio.run(provider.capability()).state == "ready"
+    previous_calls = len(runner.calls)
+    path.write_text("{}")
+    with pytest.raises(CoachProviderError) as result:
+        asyncio.run(provider.respond_agent(
+            prompt="synthetic", snapshot_path=tmp_path / "snapshot.sqlite",
+            trace_path=tmp_path / "trace.jsonl",
+        ))
+    assert result.value.code == "tool_free_unavailable"
+    assert len(runner.calls) == previous_calls
+    with pytest.raises(CoachProviderError):
+        provider._response_argv(str(tmp_path))
 
 
 @pytest.mark.parametrize(

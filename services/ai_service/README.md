@@ -917,6 +917,16 @@ PUBLIC_COACH_OWNER_REQUESTS_PER_MINUTE=12
 PUBLIC_COACH_CONCURRENCY=4
 ```
 
+Codex response paths require explicit `gpt-5.5` and a hash-verified model/tool
+profile from `app/providers/codex_policy/`. They disable built-in file editing,
+shell, web search, planning and user-input tools. The data-agent's raw CLI surface also
+contains three resource helpers; the single Coach MCP server rejects their
+resource methods, so they do not add data or filesystem authority. Missing or
+altered policy files disable readiness and prevent a cached ready state from
+dispatching a turn. The VPS pins CLI 0.153.4; local development's optional
+expected-version setting does not establish compatibility for other versions.
+The legacy response path does not configure an MCP server.
+
 Hosted pilot uses the current `SUPABASE_SECRET_KEY`; local Supabase and staged
 migration may retain `SUPABASE_SERVICE_ROLE_KEY`. When both exist the current
 key wins. Staging may temporarily use the legacy key, while pilot requires a
