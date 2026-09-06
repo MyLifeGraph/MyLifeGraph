@@ -21,7 +21,7 @@ SPEC.loader.exec_module(INSTALLER)
 MANIFEST = json.loads((VPS / "manifests/codex-cli.json").read_text())
 METADATA = {
     "layoutVersion": 1,
-    "version": "0.148.0",
+    "version": "0.153.4",
     "target": "x86_64-unknown-linux-musl",
     "variant": "codex",
     "entrypoint": "bin/codex",

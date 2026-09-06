@@ -64,8 +64,8 @@ The expected layout is:
   tmp/
 /run/mylifegraph-coach/executor.sock
 /opt/mylifegraph/codex/
-  current -> 0.148.0
-  0.148.0/bin/codex
+  current -> 0.153.4
+  0.153.4/bin/codex
 ```
 
 ## Fast path before the domain exists
@@ -113,6 +113,12 @@ stop conditions remain authoritative in
 `docs/vps-pilot-release-plan.md#ordered-execution-checklist`.
 
 ## Privileged bootstrap (`ops`)
+
+The current CLI pin is **0.153.4**, selected from the stable official release
+and bound to the archive checksum in `manifests/codex-cli.json`. Updating it
+also updates `LOCAL_CODEX_EXPECTED_VERSION` in the executor environment;
+keep the resolved UID/socket settings and the disabled provider flag intact.
+The CLI version does not change the Coach's explicit `gpt-5.5`/Fast selection.
 
 Run these steps only from a second, proven SSH session. Replace every example
 identifier before use; never paste a secret into shell history.

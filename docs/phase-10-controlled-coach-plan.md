@@ -60,6 +60,16 @@ gate. Automated tests use deterministic fakes and need no Codex login, network
 call, or live provider key. Live checks remain separately opt-in and must not
 be claimed unless they were actually run.
 
+The requested VPS CLI upgrade pins Codex 0.153.4 without changing the explicit
+`gpt-5.5`/Fast selection. Offline installation, flag and configuration checks
+are distinct from provider acceptance. Exact-version source review found that
+`shell_tool=false` gates shell/unified-exec registration, but feature disabling
+alone does not prove the model sees only the three Coach MCP tools: model-driven
+ApplyPatch and MCP-resource handlers also exist in 0.148.0. Keep the shared
+provider disabled until the actual permitted tool surface is proven or further
+restricted. Existing strict event rejection and read-only sandboxing remain
+unchanged; the upgrade does not grant additional tool authority.
+
 FastAPI now resolves its Supabase persistence credential from the current
 `SUPABASE_SECRET_KEY` name with a legacy service-role fallback; the current key
 wins during rotation. Hosted `staging` and `pilot` startup also bind the

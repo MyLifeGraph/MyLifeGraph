@@ -48,6 +48,48 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Requested Codex CLI 0.153.4 upgrade (2026-09-06)
+
+Upgrade base is `15b6b6c66ca44d3a1b655edee36b84c7d79d6f46`, the local
+package-installer fix; protected `main` and the installed held RC still identify
+`73206e7aeb96fef018e86f54be5522a209fb7339`. The user requested the newest stable
+CLI before installing 0.148.0. Official release metadata identifies 0.153.4,
+published on 2026-09-04; its asset digest, official checksum-list entry and
+downloaded x86_64 musl archive match
+`a822187e1a2420c61c5926721bfbd878701ed95547c9bb0d4de4498a16ba1821`.
+The complete layoutVersion1 package shape is unchanged. Manifest, executor
+version pin, current examples and pin-specific tests now agree on 0.153.4;
+generic version-validation fixtures and prior evidence retain their original
+versions. The explicit Coach model remains `gpt-5.5` with Fast mode.
+
+All 39 VPS tests and Ruff pass. A networkless Ubuntu check installed the actual
+package twice under the isolated Coach UID for its version probe. Actual global
+help, exec help and feature output pass the existing provider compatibility
+parsers; its generated exec argv parses and its MCP configuration is accepted.
+Inspection subcommands omit the exec-only `--strict-config` flag. The effective
+feature view retains `unified_exec=true`, while `shell_tool=false` prevents
+shell/unified-exec registration in the exact-tag source. Other non-removed
+features are disabled except Fast. This is not proof of an exclusive three-tool
+model surface: model-driven ApplyPatch and MCP-resource handlers are also
+registered, as they were in 0.148.0. Do not enable the provider until that
+existing integration gap has a proven control and live acceptance; event
+rejection is unchanged. Full verification against the upgrade base passed:
+39 VPS and 16 backup tests, 1,057 Flutter tests, 1,683 backend tests with two
+intentional skips, Web, 24-file/486-assertion final-state pgTAP on isolated
+PG15/PG17 and the normal local database, and all eight browser journeys without
+retries. Documentation/diff checks pass as well.
+
+The concrete root-sealed handoff was rehearsed with the actual package in a
+networkless Ubuntu container: unexpected executor configuration drift was
+refused before replacement, old files were backed up, and only the expected
+CLI version changed in the preserved executor configuration. That wrapper's
+systemd state reads were substituted in the container; real VPS state remains
+separate evidence. Independent source/handoff review passed. The six-file
+flat bundle is staged on the VPS and its outer transport hash matches
+`77516d216ceeb783424749a65493fdd8570e55e6006ee4bfb3dbdf8d94dca55b`.
+No 0.153.4 installation, OAuth login, provider call or service activation on
+the VPS is claimed before the administrator runs that held installation.
+
 ### Codex package installer correction and VPS analysis acceptance (2026-09-06)
 
 Task base is `73206e7aeb96fef018e86f54be5522a209fb7339`, the clean protected

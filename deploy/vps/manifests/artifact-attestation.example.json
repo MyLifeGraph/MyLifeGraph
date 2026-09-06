@@ -13,7 +13,7 @@
     "python_version": "replace-after-build",
     "caddy_version": "replace-after-install",
     "docker_version": "replace-after-install",
-    "codex_version": "0.148.0"
+    "codex_version": "0.153.4"
   },
   "web": {
     "vercel_deployment_id": "replace-after-candidate-build",
