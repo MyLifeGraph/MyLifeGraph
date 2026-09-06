@@ -1,5 +1,10 @@
 # Local Development
 
+For a synthetic, real-Docker Coach image check without a model/provider login, use
+[analysis image verification](verification.md#analysis-image-verification-without-a-model).
+It reuses the existing opt-in test and source-bound image builder; it does not
+publish an application or prove VPS rootless behavior.
+
 Prepare the project-specific VPS access bundle locally with
 `python3 deploy/vps/bin/prepare_access_bundle.py --output /tmp/mylifegraph-access-bundle`.
 The output directory must be new and outside the repository; optional `--key`

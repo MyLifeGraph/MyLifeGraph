@@ -48,6 +48,44 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Release candidate and local analysis image (2026-09-06)
+
+The reviewed access/runtime work is committed locally as
+`70fddd6d24a8cd0a1692da127181df82a00766a0` on `setup/vps-project-access`, based on
+`3693aeca71f78b9805c9fb953f0c58541d522981`. The independent candidate review found
+no source blocker; two stale documentation statements were corrected before
+commit. Runtime/application code is unchanged from the completed Full run
+recorded below. This follow-up runs Docs/diff hygiene and explicit real-image
+checks rather than repeating unchanged broad product suites.
+
+The existing image preparation script built the source-bound local image with
+revision `4d47a6a1688e4706587f85027a6ebc35a98041e4a15b9b92aa7401e11c067ca9`.
+Its local Docker image ID is
+`sha256:f58b777c46f7faedf2590a644106f4b5d1d8c1d8af80a40a2b1bedf8fc6aee3c`;
+this is an image ID, not a published registry-manifest digest or RC artifact.
+The existing opt-in real-image pytest passed (one test): synthetic snapshot
+queries succeeded, snapshot/host-file writes or reads were denied as appropriate,
+the host environment was absent, networking was inaccessible, and cleanup passed.
+
+A supplemental real-container probe through the existing MCP executor observed
+UID 65532, zero effective capabilities, `NoNewPrivs=1`, a read-only root mount,
+only the loopback interface, `memory.max=536870912`, `memory.swap.max=0`,
+`cpu.max=100000 100000`, and `pids.max=64`. Synthetic error cleanup passed; an
+actual endless program hit the host's 30-second deadline in 30.21 seconds and
+was removed. The snapshot remained unchanged and no analysis test container
+remained. This is local Docker evidence, not VPS rootless-container, provider,
+reboot or public-release acceptance; memory/PID exhaustion stress was not run.
+
+Read-only GitHub inspection found `main` still at the base commit above, with
+all seven required CI checks, strict status checks and administrator enforcement;
+force pushes/deletion remain blocked and PRs are optional. No repository ruleset
+was returned, and the required `pilot-release`/`pilot-backup` environments were
+not present in the environment listing. Their release-authority configuration
+must be completed separately before those protected release operations.
+The working branch has not been pushed and no candidate CI run or RC tag/source
+bundle is claimed. The official source-bundle helper still requires an annotated
+tag on the exact clean commit contained in reviewed `origin/main`.
+
 ### Runtime foundation host acceptance (2026-09-06)
 
 The user applied the independently reviewed, root-sealed runtime package on
@@ -936,6 +974,29 @@ JVM, lint, and APK success does not prove Accessibility blocking, DND/OEM
 behavior, calls/alarms, process death, boot, or an installed-device layout.
 
 ## Phase 10 Provider Verification
+
+### Analysis image verification without a model
+
+The existing opt-in Docker test uses synthetic SQLite data and no provider
+credentials. It verifies the real image through the MCP executor, including
+read-only snapshot/host isolation, absent host environment and no network.
+From the repository root, with local Docker and the backend test environment:
+
+```bash
+cd services/ai_service
+analysis_revision="$(python3 app/analysis_image.py coach_analysis)"
+COACH_ANALYSIS_IMAGE="mylifegraph-coach-analysis:sha256-$analysis_revision" \
+  bash ../../scripts/prepare_coach_analysis_image.sh
+COACH_REAL_ANALYSIS_IMAGE_TEST=1 \
+  COACH_ANALYSIS_IMAGE="mylifegraph-coach-analysis:sha256-$analysis_revision" \
+  .venv/bin/python -m pytest -q \
+  tests/test_coach_data_mcp.py::test_real_analysis_image_enforces_isolation_and_conservative_scope
+```
+
+This test is intentionally separate from the default fake-only test suite. It
+does not authenticate Codex, create a release tag or attest another Docker host.
+
+### Optional live provider verification
 
 Standard FastAPI, Flutter, database, and browser checks use fakes. The separate
 real-model smoke is optional, explicit, network/account dependent, and skipped
