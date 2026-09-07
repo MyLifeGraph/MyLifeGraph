@@ -14,6 +14,8 @@ Prepare the project-specific VPS access bundle locally with
 `python3 deploy/vps/bin/prepare_access_bundle.py --output /tmp/mylifegraph-access-bundle`.
 The output directory must be new and outside the repository; optional `--key`
 arguments enroll separate public keys for Gregor, Matthias and automation.
+Repeat `--key` for multiple devices of the same account, one `.pub` file per
+argument, while retaining every existing key assignment in the new bundle.
 Without keys the bundle is review-only with nologin accounts. No server is
 contacted. The separate administrator preview/apply procedure is documented in
 [Project access bootstrap](../deploy/vps/ACCESS.md). It does not install or

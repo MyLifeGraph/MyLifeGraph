@@ -37,7 +37,7 @@ def main():
     for user in ("ops", "agent"):
         run("useradd", "-m", user)
         Path(f"/home/{user}").chmod(0o700)
-    for name in ("gregor", "matthias", "agent"):
+    for name in ("gregor", "matthias", "matthias-vm", "matthias-third", "agent"):
         run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", f"/tmp/{name}")
     manifest = {
         "schema_version": "mylifegraph-access-bootstrap-v1",
@@ -73,7 +73,7 @@ def main():
             result = run(*command)
             return result.stdout.split("Confirmation SHA256: ")[1].splitlines()[0]
 
-        def ssh(name, command, ok=True):
+        def ssh(name, command, ok=True, login=None):
             return run(
                 "ssh",
                 "-i",
@@ -88,7 +88,7 @@ def main():
                 "UserKnownHostsFile=/tmp/known_hosts",
                 "-o",
                 "ConnectTimeout=3",
-                f"mylifegraph-{name}@127.0.0.1",
+                f"mylifegraph-{login or name}@127.0.0.1",
                 command,
                 ok=ok,
             )
@@ -111,12 +111,45 @@ def main():
         before = Path("/tmp/reloads").read_text()
         run(*command, "--apply", "--confirm", preview())
         assert Path("/tmp/reloads").read_text() == before
+        # Model the exact legacy receipt representation already on the VPS.
+        receipt_path = Path("/etc/mylifegraph/access-bootstrap.json")
+        receipt = json.loads(receipt_path.read_text())
+        receipt["schema_version"] = "mylifegraph-access-bootstrap-v1"
+        receipt["manifest"] = {
+            "schema_version": "mylifegraph-access-bootstrap-v1",
+            "keys": {user: keys[0] for user, keys in receipt["manifest"]["keys"].items()},
+        }
+        receipt_path.write_text(json.dumps(receipt))
         stale = preview()
-        manifest["keys"]["mylifegraph-matthias"] = Path("/tmp/matthias.pub").read_text()
+        manifest = {
+            "schema_version": "mylifegraph-access-bootstrap-v2",
+            "keys": {user: [key] for user, key in manifest["keys"].items()},
+        }
+        manifest["keys"]["mylifegraph-matthias"] = [
+            Path("/tmp/matthias.pub").read_text(),
+            Path("/tmp/matthias-vm.pub").read_text(),
+        ]
         (root / "access.json").write_text(json.dumps(manifest))
         assert run(*command, "--apply", "--confirm", stale, ok=False).returncode != 0
         run(*command, "--apply", "--confirm", preview())
-        assert ssh("matthias", "id -un").stdout.strip() == "mylifegraph-matthias"
+        for name in ("matthias", "matthias-vm"):
+            assert ssh(name, "id -un", login="matthias").stdout.strip() == "mylifegraph-matthias"
+            assert ssh(name, "sudo -n true", login="matthias", ok=False).returncode != 0
+        for name in ("gregor", "agent"):
+            assert ssh(name, "id -un").stdout.strip() == f"mylifegraph-{name}"
+        manifest["keys"]["mylifegraph-matthias"].append(Path("/tmp/matthias-third.pub").read_text())
+        (root / "access.json").write_text(json.dumps(manifest))
+        run(*command, "--apply", "--confirm", preview())
+        for name in ("matthias", "matthias-vm", "matthias-third"):
+            assert ssh(name, "id -un", login="matthias").stdout.strip() == "mylifegraph-matthias"
+        before = Path("/tmp/reloads").read_text()
+        run(*command, "--apply", "--confirm", preview())
+        assert Path("/tmp/reloads").read_text() == before
+        removed = manifest["keys"]["mylifegraph-matthias"].pop(0)
+        (root / "access.json").write_text(json.dumps(manifest))
+        assert run(*command, ok=False).returncode != 0
+        manifest["keys"]["mylifegraph-matthias"].append(removed)
+        (root / "access.json").write_text(json.dumps(manifest))
         # A user's own ~/.ssh/authorized_keys must not grant access to another key.
         agent_public = Path("/tmp/agent.pub").read_text().strip()
         ssh(
@@ -144,7 +177,7 @@ def main():
         assert run(*command, ok=False).returncode != 0
         print(
             "Ubuntu access rehearsal passed: preview, stale confirmation, SSH identities, permissions, "
-            "sudo denial, idempotence, later Matthias enrollment, managed keys, and account drift."
+            "sudo denial, idempotence, legacy receipt upgrade, two-device Matthias enrollment, later third key, removal denial, managed keys, and account drift."
         )
     finally:
         daemon.terminate()

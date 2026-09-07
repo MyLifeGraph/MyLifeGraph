@@ -31,7 +31,10 @@ def key(byte: int = 1) -> str:
 
 
 def manifest(keys=None):
-    return {"schema_version": access.SCHEMA, "keys": keys or {}}
+    return {"schema_version": access.SCHEMA, "keys": {
+        user: [value] if isinstance(value, str) else value
+        for user, value in (keys or {}).items()
+    }}
 
 
 class AccessBootstrapTests(unittest.TestCase):
@@ -59,6 +62,109 @@ class AccessBootstrapTests(unittest.TestCase):
             access.load_manifest(
                 b'{"schema_version":"mylifegraph-access-bootstrap-v1","keys":{},"keys":{}}'
             )
+
+    def test_multiple_devices_and_legacy_manifest_normalize_identically(self):
+        user = "mylifegraph-matthias"
+        legacy = {"schema_version": access.LEGACY_SCHEMA, "keys": {user: key()}}
+        self.assertEqual(access.load_manifest(json.dumps(legacy).encode()), manifest({user: key()}))
+        value = manifest({user: [key(2) + " vm", key() + " laptop"]})
+        parsed = access.load_manifest(json.dumps(value).encode())
+        self.assertEqual(parsed["keys"][user], sorted([key(), key(2)]))
+        for invalid in ([], [key(), key() + " duplicate"], [1]):
+            with self.subTest(invalid=invalid), self.assertRaises(access.AccessError):
+                access.load_manifest(json.dumps(manifest({user: invalid})).encode())
+        with self.assertRaises(access.AccessError):
+            access.load_manifest(json.dumps(manifest({user: [key(), key(2)], "mylifegraph-agent": key(2)})).encode())
+
+    def test_added_device_is_visible_and_bound_in_preview(self):
+        user = "mylifegraph-matthias"
+        args = dict(state={"users": {user: {}}, "groups": {}},
+                    previous_keys={user: [key()]}, host="host", machine="machine",
+                    installer_digest="a", ssh_digest="b")
+        plan = access.make_plan(manifest({user: [key(), key(2)]}), **args)
+        self.assertEqual(plan["new_ssh_access"], [])
+        self.assertEqual(plan["added_key_fingerprints"], {user: access.fingerprints([key(2)])})
+        other = access.make_plan(manifest({user: [key(), key(3)]}), **args)
+        self.assertNotEqual(access.digest(access.canonical(plan)), access.digest(access.canonical(other)))
+
+    def test_builder_accepts_repeated_account_and_rejects_duplicate_device(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for number in (1, 2):
+                (root / f"device{number}.pub").write_text(key(number))
+            command = [sys.executable, str(BIN / "prepare_access_bundle.py"),
+                       "--output", str(root / "bundle"),
+                       "--key", f"mylifegraph-matthias={root / 'device1.pub'}",
+                       "--key", f"mylifegraph-matthias={root / 'device2.pub'}"]
+            result = subprocess.run(command, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            value = json.loads((root / "bundle/access.json").read_text())
+            self.assertEqual(value["keys"]["mylifegraph-matthias"], sorted([key(), key(2)]))
+            command[3] = str(root / "duplicate")
+            command[-1] = command[-3]
+            self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            self.assertFalse((root / "duplicate").exists())
+
+    def test_atomic_write_failure_preserves_file_and_permissions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "authorized_keys"
+            path.write_bytes(b"old key\n")
+            path.chmod(0o644)
+            with patch.object(access, "protected"):
+                with patch.object(access.os, "fsync", side_effect=OSError("disk full")):
+                    with self.assertRaises(OSError):
+                        access.write(path, b"new key\n", replace=True)
+                self.assertEqual(path.read_bytes(), b"old key\n")
+                self.assertEqual(list(path.parent.iterdir()), [path])
+                access.write(path, b"both keys\n", replace=True)
+            self.assertEqual(path.read_bytes(), b"both keys\n")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o644)
+
+    def test_failed_receipt_preserves_old_keys_and_attempts_every_rollback(self):
+        first, second = access.PEOPLE[:2]
+        previous = {first: [key()], second: [key(2)]}
+        proposed = manifest({first: [key(), key(3)], second: [key(2), key(4)]})
+        settings = "\n".join([
+            "authorizedkeysfile " + str(access.KEY_ROOT / "%u"),
+            "authorizedkeyscommand none", "trustedusercakeys none",
+            "authenticationmethods publickey", "pubkeyauthentication yes",
+            "passwordauthentication no", "kbdinteractiveauthentication no",
+            "disableforwarding yes", "permituserrc no",
+        ])
+        for fail_restore, published_receipt in ((False, False), (True, False), (False, True)):
+            with self.subTest(fail_restore=fail_restore, published_receipt=published_receipt), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                receipt = root / "receipt"
+                receipt.write_bytes(b"old receipt")
+                for user, keys in previous.items():
+                    (root / user).write_bytes(access.key_bytes(keys))
+                real_write = access.write
+                attempts = []
+                def write(path, data, **kwargs):
+                    attempts.append((path.name, data))
+                    if path == receipt and data != b"old receipt":
+                        if published_receipt:
+                            real_write(path, data, **kwargs)
+                        raise OSError("injected receipt failure")
+                    if fail_restore and path.name == first and data == access.key_bytes(previous[first]):
+                        raise OSError("injected restore failure")
+                    return real_write(path, data, **kwargs)
+                with (patch.object(access, "KEY_ROOT", root),
+                      patch.object(access, "RECEIPT", receipt),
+                      patch.object(access, "protected"),
+                      patch.object(access, "effective_ssh", return_value=settings.replace("/etc/mylifegraph/authorized_keys", str(root))),
+                      patch.object(access, "assert_no_sudo"),
+                      patch.object(access, "run") as commands,
+                      patch.object(access, "identity_snapshot", return_value={}),
+                      patch.object(access, "write", side_effect=write)):
+                    with self.assertRaises((OSError, access.AccessError)):
+                        access.apply(proposed, {"users": {first: {}, second: {}}}, previous)
+                self.assertEqual(receipt.read_bytes(), b"old receipt")
+                self.assertIn((second, access.key_bytes(previous[second])), attempts)
+                self.assertEqual((root / second).read_bytes(), access.key_bytes(previous[second]))
+                if not fail_restore:
+                    self.assertEqual((root / first).read_bytes(), access.key_bytes(previous[first]))
+                self.assertFalse(any(call.args[0] == "/usr/sbin/usermod" for call in commands.call_args_list))
 
     def test_keyless_accounts_and_services_cannot_get_interactive_shells(self):
         for user in access.USERS:

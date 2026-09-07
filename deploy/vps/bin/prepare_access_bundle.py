@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 
 from bootstrap_access import AccessError, PEOPLE, SCHEMA, load_manifest
@@ -29,14 +30,17 @@ def main() -> None:
     keys = {}
     for assignment in args.key:
         user, separator, filename = assignment.partition("=")
-        if not separator or user not in PEOPLE or user in keys:
-            parser.error("--key requires a distinct supported project login account.")
+        if not separator or user not in PEOPLE:
+            parser.error("--key requires a supported project login account.")
         path = Path(filename).expanduser()
-        if path.suffix != ".pub" or path.is_symlink() or path.stat().st_size > 4096:
+        if (
+            path.suffix != ".pub" or path.is_symlink()
+            or not stat.S_ISREG(path.stat().st_mode) or path.stat().st_size > 4096
+        ):
             parser.error(
                 "Only small regular .pub files are accepted; never supply private keys."
             )
-        keys[user] = path.read_text()
+        keys.setdefault(user, []).append(path.read_text())
     manifest = load_manifest(
         json.dumps({"schema_version": SCHEMA, "keys": keys}).encode()
     )

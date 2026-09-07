@@ -50,12 +50,15 @@ python3 deploy/vps/bin/prepare_access_bundle.py \
   --output /tmp/mylifegraph-access-with-keys \
   --key mylifegraph-gregor=/path/to/gregor-project.pub \
   --key mylifegraph-agent=/path/to/automation-project.pub \
-  --key mylifegraph-matthias=/path/to/matthias-project.pub
+  --key mylifegraph-matthias=/path/to/matthias-laptop.pub \
+  --key mylifegraph-matthias=/path/to/matthias-vm.pub
 ```
 
-Only plain single Ed25519 `.pub` files are accepted. Private-key files, SSH
-options, multiple/duplicate keys, and arbitrary account names are rejected;
-comments are stripped. Each login needs its own key. The builder cannot detect
+Each `--key` reads one plain Ed25519 `.pub` file; repeat the account for multiple
+devices. Private-key files, SSH options, multiple keys within one file, duplicate
+keys (also across accounts), and arbitrary account names are rejected. Comments
+are stripped and device keys are sorted deterministically. Each device needs its
+own key. The builder cannot detect
 reuse outside the project: use dedicated keys, especially for automation, and
 never assign the administrative key to automation. Private keys stay on their
 originating machines. No private key or password is generated or read.
@@ -114,17 +117,31 @@ Root owns `/etc/mylifegraph/authorized_keys`; user `~/.ssh/authorized_keys`,
 certificate authorities and external key commands do not grant project access.
 Passwords remain locked. Missing-key accounts and runtime accounts stay nologin.
 
-An exact repeated apply is a no-op after inspection. A later manifest may add a
-previously missing key, such as Matthias', while retaining existing assignments.
-The administrator copies/verifies that manifest, previews its fingerprint, and
-approves the addition. Replacing/revoking keys, deleting accounts, changing roles,
+New bundles and receipts use `mylifegraph-access-bootstrap-v2`, mapping each
+login to a nonempty list of public keys. The installer also reads v1 single-key
+manifests/receipts and normalizes them without losing existing assignments. Old
+installers cannot read v2; once a v2 receipt is written, retain the new installer.
+The runtime bootstrap consumes the unchanged receipt identity snapshot only.
+
+An exact repeated apply is a no-op after inspection. A later manifest may add
+keys to a previously missing login or another device to an enabled login; every
+existing key must remain present. `key_fingerprints` lists all devices and
+`added_key_fingerprints` identifies the additions, including those for an already
+active user. The administrator copies/verifies that manifest, reviews all added
+fingerprints and approves the content-bound plan. Use the complete key set,
+including existing automation keys; do not build a Matthias-only replacement.
+Keep the prior sealed installer/manifest in a separate root-owned directory
+before installing the new bundle at `/root/mylifegraph-access`. Replacing/revoking keys, deleting accounts, changing roles,
 and migrating old usernames are separate operations; legacy `agent`, `deploy`,
 or `coach-executor` accounts are never adopted.
 
 Account/group/key/config drift stops the installer without automatic repair.
 Failure can leave new accounts/directories: review them before continuing.
-Ordinary enrollment errors revert newly enabled shells/keys; an interrupted or
-killed installer still requires manual inspection before any retry.
+Key and receipt writes use fsynced temporary files and atomic publication.
+Ordinary enrollment errors restore prior keys and newly enabled shells, attempting
+all restorations even if one fails; incomplete rollback is explicitly reported.
+This is not a multi-file crash transaction: an interrupted or killed installer
+still requires manual inspection before any retry.
 A newly created drop-in is removed if SSH validation/reload fails. No rollback
 deletes users, homes, unrelated files, or services.
 

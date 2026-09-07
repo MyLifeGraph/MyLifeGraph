@@ -37,6 +37,19 @@ Backup-Einrichtung Teil dieses Auftrags. Für Supabase-Agentenarbeit ausschließ
 den direkten Supabase-MCP verwenden, nicht das Supabase-Plugin. Zugangsdaten und
 Codex-OAuth-Dateien niemals auslesen oder in Chat/Repository übernehmen.
 
+## Optional: Matthias erhält eigenen SSH-Zugang
+
+Für seine beiden Geräte werden zwei getrennte öffentliche Ed25519-Schlüssel
+unter demselben Benutzer `mylifegraph-matthias` aufgenommen. Der
+[Zugangsinstaller](../deploy/vps/ACCESS.md#acceptance-and-later-keys) unterstützt
+Schlüssellisten und erhält bestehende Zuordnungen. Der Administrator muss das
+separat vorbereitete Zugangspaket prüfen und anwenden; dieses Dokument und das
+RC4-Setup schalten den Login nicht automatisch frei. Private Geräteschlüssel
+bleiben bei Matthias. Der aktuelle Vorbereitungsstand steht im
+[Zugangs-Prüfnachweis](verification.md#multiple-device-ssh-enrollment-preparation-2026-09-07).
+Auch nach Freischaltung bleibt der untenstehende Abschluss eine `ops`-Aufgabe;
+Matthias erhält dadurch keine Sudo- oder Deployment-Rechte.
+
 ## 1. Matthias: Domain und Supabase-Key vorbereiten
 
 - Eine API-Subdomain wählen, beispielsweise `api.eure-domain.de`.

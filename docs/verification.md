@@ -48,6 +48,49 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Multiple-device SSH enrollment preparation (2026-09-07)
+
+Task base: `6df56f25ab87e26ac5682021b978a4eef47c0967`. The access installer now
+prepares v2 per-login key lists and reads the existing v1 manifest/receipt form.
+It permits additions only, rejects duplicates across devices/accounts, binds
+added device fingerprints into confirmation, and preserves existing keys and
+shells on enrollment errors. Key/receipt publication is atomic; rollback attempts
+all restorations and explicitly reports incomplete cleanup. Runtime identity,
+sudo denial, managed SSH restrictions and the separate administrator preview/apply
+boundary are unchanged. Machine-specific public keys remain outside Git.
+
+All 14 targeted tests pass, including a pre-publication write failure,
+post-publication receipt failure with exact restoration, and an injected first
+rollback failure proving later restoration attempts. The isolated real Ubuntu
+SSH rehearsal passes v1 receipt upgrade, both Matthias device logins, preservation
+of existing logins, a later third-device addition, no-op replay, removal denial,
+managed-key enforcement and sudo/account-drift denial. No user private keys or
+VPS access are used by that rehearsal. Independent review of source, bundle and
+administrator preview command found no remaining material finding.
+
+The prepared files were uploaded through the existing project SSH connection to
+`/srv/mylifegraph-work/matthias-access-staging/` and readback hashes matched:
+
+- `bootstrap_access.py`:
+  `2994633eac0646c51c9b4c8d7bcbb27f180d27fb470bb8671ffc98a6458f5314`
+- `access.json`:
+  `6c9e8aa9d042576245f88c5af564ae8930b9d5be20b7b077148ea7fd1d56f4b4`
+
+The manifest contains the two user-supplied Matthias public keys and preserves
+the existing automation key; it contains no private keys. No administrator
+preview/apply has run on the VPS. The final SSH read still found Matthias's
+nologin shell and empty managed key file. The reviewed operator command preserves
+the previous root-owned installer bundle before sealing the v2 installer and
+running preview only. The captured-base full affected workflow passed source,
+Flutter analysis/tests, 1,722 backend tests with two explicit opt-in skips, local
+database/isolated compatibility checks, web build and all eight browser journeys
+with process/user cleanup. No reset or migration apply was authorized or used against the normal local
+database; compatibility checks apply schemas only in disposable isolated targets. No new live SSH acceptance is claimed: the
+existing project connection observed Matthias's nologin account and empty managed
+key file; the existing automation public-key fingerprint matched prior acceptance.
+The SSH configuration is not readable by that project account and was not
+inspected through elevated authority. Administrative preview still checks it.
+
 ### RC4 administrator handoff (2026-09-07)
 
 The independently reviewed RC4 completion package targets application commit

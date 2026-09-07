@@ -20,6 +20,7 @@ import stat
 import struct
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 
@@ -36,7 +37,8 @@ RUNTIME = (
     "mylifegraph-build",
 )
 USERS = PEOPLE + RUNTIME
-SCHEMA = "mylifegraph-access-bootstrap-v1"
+LEGACY_SCHEMA = "mylifegraph-access-bootstrap-v1"
+SCHEMA = "mylifegraph-access-bootstrap-v2"
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C", "LC_ALL": "C"}
 
 
@@ -84,19 +86,43 @@ def load_manifest(data: bytes) -> dict:
         raise AccessError("Invalid access manifest JSON.") from exc
     if not isinstance(value, dict) or set(value) != {"schema_version", "keys"}:
         raise AccessError("Unexpected access manifest fields.")
-    if value["schema_version"] != SCHEMA or not isinstance(value["keys"], dict):
+    version = value["schema_version"]
+    if version not in (LEGACY_SCHEMA, SCHEMA) or not isinstance(value["keys"], dict):
         raise AccessError("Unsupported access manifest.")
     keys = value["keys"]
-    if set(keys) - set(PEOPLE) or any(
-        not isinstance(key, str) for key in keys.values()
-    ):
-        raise AccessError(
-            "Public keys may target only the three project login accounts."
-        )
-    keys = {user: public_key(key) for user, key in keys.items()}
-    if len(set(keys.values())) != len(keys):
-        raise AccessError("Each project login requires its own public key.")
-    return {"schema_version": SCHEMA, "keys": keys}
+    if set(keys) - set(PEOPLE):
+        raise AccessError("Public keys may target only the three project login accounts.")
+    normalized = {}
+    seen = set()
+    for user, entries in keys.items():
+        if version == LEGACY_SCHEMA:
+            if not isinstance(entries, str):
+                raise AccessError("Legacy manifests require one public key per login.")
+            entries = [entries]
+        if not isinstance(entries, list) or not entries or any(
+            not isinstance(entry, str) for entry in entries
+        ):
+            raise AccessError("Each login requires a nonempty list of public keys.")
+        parsed = [public_key(entry) for entry in entries]
+        for entry in parsed:
+            if entry in seen:
+                raise AccessError("Each device requires its own distinct public key.")
+            seen.add(entry)
+        normalized[user] = sorted(parsed)
+    return {"schema_version": SCHEMA, "keys": normalized}
+
+
+def key_bytes(keys: list[str]) -> bytes:
+    return ("".join(key + "\n" for key in keys)).encode()
+
+
+def fingerprints(keys: list[str]) -> list[str]:
+    return [
+        "SHA256:" + base64.b64encode(
+            hashlib.sha256(base64.b64decode(key.split()[1])).digest()
+        ).decode().rstrip("=")
+        for key in keys
+    ]
 
 
 def run(*args: str) -> str:
@@ -209,15 +235,17 @@ def inspect_state(manifest: dict) -> tuple[dict, dict]:
     state = identity_snapshot()
     if RECEIPT.exists() or RECEIPT.is_symlink():
         receipt = json.loads(read_protected(RECEIPT))
-        if receipt.get("schema_version") != SCHEMA:
+        if receipt.get("schema_version") not in (LEGACY_SCHEMA, SCHEMA):
             raise AccessError("Unknown existing bootstrap receipt.")
+        if receipt["manifest"].get("schema_version") != receipt["schema_version"]:
+            raise AccessError("Bootstrap receipt version mismatch.")
         previous = load_manifest(canonical(receipt["manifest"]))
         if state != receipt["identities"]:
             raise AccessError(
                 "Project account/group drift; administrator review required."
             )
-        for user, key in previous["keys"].items():
-            if manifest["keys"].get(user) != key:
+        for user, keys in previous["keys"].items():
+            if not set(keys).issubset(manifest["keys"].get(user, [])):
                 raise AccessError(
                     "Key removal/replacement requires a separate reviewed operation."
                 )
@@ -225,11 +253,7 @@ def inspect_state(manifest: dict) -> tuple[dict, dict]:
             raise AccessError("Project SSH configuration drift.")
         for user in USERS:
             assert_no_sudo(user)
-            expected = (
-                (previous["keys"][user] + "\n").encode()
-                if user in previous["keys"]
-                else b""
-            )
+            expected = key_bytes(previous["keys"].get(user, []))
             if read_protected(KEY_ROOT / user) != expected:
                 raise AccessError("Project authorized-key drift.")
         for directory in (Path("/etc/mylifegraph"), KEY_ROOT):
@@ -277,13 +301,12 @@ def make_plan(
             if user in manifest["keys"] and user not in previous_keys
         ],
         "key_fingerprints": {
-            user: "SHA256:"
-            + base64.b64encode(
-                hashlib.sha256(base64.b64decode(key.split()[1])).digest()
-            )
-            .decode()
-            .rstrip("=")
-            for user, key in manifest["keys"].items()
+            user: fingerprints(keys) for user, keys in manifest["keys"].items()
+        },
+        "added_key_fingerprints": {
+            user: fingerprints([key for key in keys if key not in previous_keys.get(user, [])])
+            for user, keys in manifest["keys"].items()
+            if keys != previous_keys.get(user, [])
         },
         "create_accounts": not bool(state["users"]),
         "scope": [
@@ -315,12 +338,29 @@ def mkdir(path: Path, mode: int, user: str = "root", group: str = "root") -> Non
 
 def write(path: Path, data: bytes, *, replace: bool = False) -> None:
     protected(path.parent, directory=True)
-    flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW
-    flags |= os.O_TRUNC if replace else os.O_EXCL
-    with os.fdopen(os.open(path, flags, 0o600), "wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
+    mode = 0o600
+    if replace:
+        protected(path)
+        mode = stat.S_IMODE(path.stat().st_mode)
+    temporary = path.with_name("." + path.name + "." + uuid.uuid4().hex)
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        with os.fdopen(os.open(temporary, flags, 0o600), "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fchmod(handle.fileno(), mode)
+            os.fsync(handle.fileno())
+        if replace:
+            os.replace(temporary, path)
+        else:
+            os.link(temporary, path, follow_symlinks=False)
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def effective_ssh(user: str) -> str:
@@ -331,6 +371,7 @@ def effective_ssh(user: str) -> str:
 
 def apply(manifest: dict, state: dict, previous_keys: dict) -> None:
     # Never invoke this until every preview/precondition and the confirmation pass.
+    old_receipt = read_protected(RECEIPT) if state["users"] else None
     before = {user: effective_ssh(user) for user in ("ops", "agent", "root")}
     if not state["users"]:
         for group in ("mylifegraph-work", "mylifegraph-release", *USERS):
@@ -407,24 +448,44 @@ def apply(manifest: dict, state: dict, previous_keys: dict) -> None:
     additions = [
         user
         for user in PEOPLE
-        if user in manifest["keys"] and user not in previous_keys
+        if user in manifest["keys"]
+        and manifest["keys"][user] != previous_keys.get(user, [])
     ]
     try:
         for user in additions:
             write(
-                KEY_ROOT / user, (manifest["keys"][user] + "\n").encode(), replace=True
+                KEY_ROOT / user, key_bytes(manifest["keys"][user]), replace=True
             )
-            run("/usr/sbin/usermod", "--shell", "/bin/bash", user)
+            if user not in previous_keys:
+                run("/usr/sbin/usermod", "--shell", "/bin/bash", user)
         receipt = {
             "schema_version": SCHEMA,
             "manifest": manifest,
             "identities": identity_snapshot(),
         }
         write(RECEIPT, canonical(receipt) + b"\n", replace=bool(state["users"]))
-    except (AccessError, OSError):
+    except (AccessError, OSError) as error:
+        failures = []
+        def restore(label, action):
+            try:
+                action()
+            except (AccessError, OSError):
+                failures.append(label)
+        if old_receipt is not None:
+            def restore_receipt():
+                if read_protected(RECEIPT) != old_receipt:
+                    write(RECEIPT, old_receipt, replace=True)
+            restore("receipt", restore_receipt)
         for user in additions:
-            run("/usr/sbin/usermod", "--shell", "/usr/sbin/nologin", user)
-            write(KEY_ROOT / user, b"", replace=True)
+            if user not in previous_keys:
+                restore(user + " shell", lambda user=user: run(
+                    "/usr/sbin/usermod", "--shell", "/usr/sbin/nologin", user
+                ))
+            restore(user + " keys", lambda user=user: write(
+                KEY_ROOT / user, key_bytes(previous_keys.get(user, [])), replace=True
+            ))
+        if failures:
+            raise AccessError("Incomplete access rollback; inspect: " + ", ".join(failures)) from error
         raise
 
 
