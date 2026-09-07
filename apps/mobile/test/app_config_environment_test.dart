@@ -2,6 +2,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 
 void main() {
+  test('optional participation preserves all hosted configuration guards', () {
+    const config = AppConfig(
+      environment: 'pilot',
+      supabaseUrl: '',
+      aiServiceBaseUrl: 'http://localhost:8000',
+      useMockData: false,
+      pilotParticipationRequired: false,
+    );
+    expect(config.isHostedEnvironment, isTrue);
+    expect(config.requiresPilotParticipation, isFalse);
+    expect(config.requiresAuthCaptcha, isTrue);
+    expect(config.validateSupabaseConfiguration, throwsStateError);
+    expect(config.validatePilotParticipationConfiguration, throwsStateError);
+    expect(config.validateAuthProtectionConfiguration, throwsStateError);
+    expect(config.validateReleaseIdentityConfiguration, throwsStateError);
+    expect(config.validateAiServiceConfiguration, throwsStateError);
+  });
+
+
   test('Coach surface defaults fail closed for invalid and release builds', () {
     expect(
       () => resolveCoachSurfaceEnabled(

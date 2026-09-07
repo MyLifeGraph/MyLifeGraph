@@ -75,6 +75,10 @@ class Settings(BaseSettings):
         default="",
         alias="PILOT_SUPABASE_PROJECT_REF",
     )
+    pilot_participation_required: bool = Field(
+        default=True,
+        alias="PILOT_PARTICIPATION_REQUIRED",
+    )
     supabase_timeout_seconds: float = Field(
         default=10,
         alias="SUPABASE_TIMEOUT_SECONDS",
@@ -389,7 +393,7 @@ class Settings(BaseSettings):
 
     @property
     def requires_pilot_participation(self) -> bool:
-        return self.normalized_app_env in {"staging", "pilot"}
+        return self.is_hosted_environment and self.pilot_participation_required
 
     def supabase_backend_configuration(self) -> tuple[str, str]:
         current_key = _configured_value(

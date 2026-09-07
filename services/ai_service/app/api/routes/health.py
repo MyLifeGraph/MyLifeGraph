@@ -49,11 +49,12 @@ async def readiness_check(request: Request) -> dict[str, str | int]:
     try:
         async with asyncio.timeout(min(settings.supabase_timeout_seconds, 5)):
             await composition.supabase_client.readiness_probe()
-            if settings.requires_pilot_participation:
+            if settings.is_hosted_environment:
                 gate = await composition.supabase_client.pilot_participation_gate()
                 if not _has_exact_participation_gate(
                     gate,
                     project_ref=settings.hosted_supabase_project_ref(),
+                    required=settings.requires_pilot_participation,
                 ):
                     raise ValueError("Hosted participation gate is not ready.")
                 deletion_status = (
@@ -124,6 +125,7 @@ def _has_exact_participation_gate(
     value: object,
     *,
     project_ref: str,
+    required: bool = True,
 ) -> bool:
     if not isinstance(value, dict) or set(value) != {
         "contract_version",
@@ -134,9 +136,11 @@ def _has_exact_participation_gate(
         return False
     return (
         value["contract_version"] == PILOT_PARTICIPATION_GATE_CONTRACT_VERSION
-        and value["project_ref"] == project_ref
-        and value["participation_required"] is True
-        and value["notice_version"] == "pilot-participation-notice-v1"
+        and value["project_ref"] == (project_ref if required else None)
+        and value["participation_required"] is required
+        and value["notice_version"] == (
+            "pilot-participation-notice-v1" if required else None
+        )
     )
 
 

@@ -22,10 +22,15 @@ current Supabase publishable keys, binds hosted
 builds to distinct exact staging/pilot project refs, rejects a pilot build
 using a legacy key or staging URL, displays persistent `Staging · Test data`
 identity in staging, and implements the versioned adult-participation flow.
-Hosted auth shows the privacy notice and explicit 18-or-older checkbox before
-account creation/Google OAuth. It stores no pre-auth consent: only an
-immediately authenticated email signup can commit in the same verified
-session; confirmation-link and OAuth returns use the post-auth gate. Hosted
+With `PILOT_PARTICIPATION_REQUIRED=true`, hosted auth shows the privacy notice
+and explicit 18-or-older checkbox before account creation/Google OAuth. It
+stores no pre-auth consent: only an immediately authenticated email signup can
+commit in the same verified session; confirmation-link and OAuth returns use
+the post-auth gate. The current small-pilot configuration makes confirmation
+optional: Auth keeps the privacy link without a prerequisite checkbox, and
+unconfirmed authenticated users can choose `Pilot confirmation (optional)` in
+Settings. The existing page allows leaving without acceptance; `Save
+confirmation` still requires a deliberate checkbox and authenticated write. Hosted
 email sign-in/signup/reset/resend acquire a fresh, one-use Cloudflare Turnstile
 token from the exact public origin and pass it only to the matching Supabase
 operation. Guest mode is unavailable in hosted builds. No separate remote
@@ -119,6 +124,7 @@ The app reads configuration from Dart defines in
 | `STAGING_SUPABASE_PROJECT_REF` | empty | Exact non-secret staging ref; required by hosted staging and pilot builds. |
 | `PILOT_SUPABASE_PROJECT_REF` | empty | Exact non-secret pilot ref; required by pilot builds and distinct from staging. |
 | `PILOT_CONTACT_EMAIL` | empty | Required hosted project/incident contact rendered in the adult/privacy notice. |
+| `PILOT_PARTICIPATION_REQUIRED` | `true` in generic Dart; hosted helper defaults `false` for pilot, `true` for staging | Explicit boolean override controls the confirmation prerequisite only. Match the backend policy and database switch; optional mode keeps voluntary confirmation and all other hosted guards. |
 | `APP_PUBLIC_ORIGIN` | empty | Required hosted canonical HTTPS web origin; binds Turnstile popup messaging and release CSP. |
 | `TURNSTILE_SITE_KEY` | empty | Required hosted public Cloudflare Turnstile widget key; the corresponding secret remains only in Supabase. |
 | `AI_SERVICE_BASE_URL` | `http://localhost:8000` | FastAPI service base URL. |
@@ -347,10 +353,14 @@ confirmed.
   copied automatically into an account later. Canonical guest captures are
   migrated best-effort only when real, non-demo authentication succeeds with
   `USE_MOCK_DATA=false`.
-- Exact `staging` and `pilot` builds disable guest entry. They require
-  `pilot-participation-v1` / `pilot-participation-notice-v1` before Setup or any
-  synced product route. Eligibility comes only from the backend-owned profile
-  version/time pair, never editable Auth metadata; no birth date is collected.
+- Exact `staging` and `pilot` builds disable guest entry. With
+  `PILOT_PARTICIPATION_REQUIRED=true`, they require `pilot-participation-v1` /
+  `pilot-participation-notice-v1` before Setup or any synced product route.
+  Acceptance comes only from the backend-owned profile version/time pair,
+  never editable Auth metadata; no birth date is collected. Optional mode
+  neither blocks those routes nor fabricates acceptance. The voluntary Settings
+  page displays `Optional. You can use the app without this confirmation.` and
+  preserves app access on a failed submission.
 - Email/password auth requires Supabase configuration. Hosted sign-in,
   sign-up, reset, and confirmation resend each acquire a fresh Turnstile token;
   timeout, cancellation, popup/WebView failure, missing token, or token reuse
@@ -439,7 +449,8 @@ destination rather than restoring Settings; Settings-owned routes such as
 - `/auth`
 - `/auth/recovery` (Supabase password-recovery event only)
 - `/pilot/privacy` (public and Settings-reachable hosted privacy notice)
-- `/pilot/participation` (authenticated hosted pre-product acceptance gate)
+- `/pilot/participation` (authenticated hosted confirmation; a pre-product gate
+  only when `PILOT_PARTICIPATION_REQUIRED=true`, otherwise voluntary from Settings)
 - `/onboarding` (`?edit=1` re-enters the durable Setup flow)
 - `/dashboard`
 - `/insights`

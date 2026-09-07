@@ -195,7 +195,7 @@ async def get_current_principal(
     principal: Principal = Depends(get_verified_principal),
 ) -> Principal:
     settings = get_settings()
-    if not settings.requires_pilot_participation:
+    if not settings.is_hosted_environment:
         return principal
     try:
         deletion_pending = await get_supabase_client(
@@ -215,6 +215,8 @@ async def get_current_principal(
                 "retryable": False,
             },
         )
+    if not settings.requires_pilot_participation:
+        return principal
     try:
         rows = await get_supabase_client(request).select(
             "profiles",

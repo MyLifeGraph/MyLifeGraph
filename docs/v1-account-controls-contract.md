@@ -16,14 +16,23 @@ gates for the proposed hosted pilot live in
 deployment claim of this account-control contract.
 
 The pilot is restricted to adults. The implemented shared contracts are
-`pilot-participation-v1` and `pilot-participation-notice-v1`. Flutter shows the
-notice and an explicit `I confirm that I am 18 or older` checkbox before
-account creation or Google OAuth. That pre-auth choice is never persisted: a
-failed signup, abandoned OAuth flow, later login, or different account cannot
-inherit it. An immediately authenticated email signup records acceptance in
-that same verified session; confirmation-link and Google returns use the
-dedicated post-auth confirmation gate before Setup or product access. The
-notice remains reachable from Settings.
+`pilot-participation-v1` and `pilot-participation-notice-v1`. When confirmation
+is required, Flutter shows the notice and an explicit `I confirm that I am 18
+or older` checkbox before account creation or Google OAuth. That pre-auth choice
+is never persisted: a failed signup, abandoned OAuth flow, later login, or
+different account cannot inherit it. An immediately authenticated email signup
+records acceptance in that same verified session; confirmation-link and Google
+returns use the dedicated post-auth confirmation gate before Setup or product
+access.
+
+In the current optional mode, Auth keeps the privacy link but omits the
+prerequisite checkbox and post-auth redirect. An authenticated hosted user
+without current acceptance can open `Pilot confirmation (optional)` in Settings.
+The existing confirmation page allows back navigation and says `Optional. You
+can use the app without this confirmation.` Submitting `Save confirmation`
+still requires the explicit checkbox and writes through the same authenticated
+command. Failure permits continued app use and a later retry. The notice stays
+reachable from Settings regardless of acceptance.
 
 `POST /v1/account/pilot-participation` accepts exactly:
 
@@ -41,17 +50,36 @@ notice version plus backend UTC time, and returns the original time with
 `replayed=true` for an exact retry. `profiles` enforces the nullable pair and
 application roles cannot update either field. No date of birth or numeric age
 is stored. Auth `user_metadata` is deliberately ignored. Normal FastAPI
-product dependencies require the current persisted pair in exact `staging` and
-`pilot`; development is unchanged. Export and permanent deletion use the raw
-verified principal so a blocked account retains those controls. Repository
+product dependencies require the current persisted pair in hosted environments
+only when `PILOT_PARTICIPATION_REQUIRED=true`; development is unchanged. Export
+and permanent deletion use the raw verified principal so a blocked account retains those controls. Repository
 source does not prove the migration is applied remotely.
 
 The separate database switch is `pilot-participation-gate-v1`. It is disabled
 by default for local development and, when bound to the exact hosted project,
 adds restrictive authenticated RLS to every product table. Missing/corrupt gate
 state fails closed. This prevents a public publishable-key client from
-bypassing the Flutter or FastAPI gate; only profile discovery, acceptance,
-export, and deletion retain their deliberately narrower pre-acceptance paths.
+bypassing a required Flutter or FastAPI gate; only profile discovery,
+acceptance, export, and deletion retain their deliberately narrower
+pre-acceptance paths.
+
+The current small pilot explicitly sets `PILOT_PARTICIPATION_REQUIRED=false`.
+Confirmation is voluntary: the absence of a stored notice pair does not block
+signup, authentication, Setup or product access. This does not create an
+acceptance record or change the pilot's stated adult audience. Existing
+acceptance remains valid and an explicit voluntary confirmation still uses the
+same bearer-derived RPC. No profile writes or database migrations accompany
+the configuration change.
+
+Backend and generic Dart defaults remain `true`. The hosted Flutter define
+writer defaults to `false` for pilot and `true` for staging and accepts an
+explicit boolean override; client and backend must use the same policy. Hosted
+readiness checks the existing database singleton against that policy: required
+means enabled with the exact project and current notice, while optional means
+disabled with null project/notice bindings. Missing, malformed or mismatched
+state fails readiness. Optional confirmation never disables bearer verification,
+hosted project/key/release validation, CAPTCHA, HTTPS, hosted guest denial,
+owner RLS, pending-deletion guards or migration attestation.
 
 ## Trust Boundary
 

@@ -49,9 +49,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     final profileUnavailable =
         authState.error is MissingProfileInvariantException;
     final authErrorMessage = switch (authState.error) {
-      AuthConfigurationException() => config.requiresPilotParticipation
-          ? 'Synced sign-in is unavailable right now. Try again later.'
-          : 'Synced sign-in is unavailable right now. Continue as guest or try again later.',
+      AuthConfigurationException() =>
+        config.isHostedEnvironment
+            ? 'Synced sign-in is unavailable right now. Try again later.'
+            : 'Synced sign-in is unavailable right now. Continue as guest or try again later.',
       MissingProfileInvariantException() =>
         'Your sign-in succeeded, but this synced account could not be opened. No account data was changed. Sign out, then try again. If it continues, the account needs repair.',
       _ =>
@@ -69,7 +70,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               final verticalPadding = wide ? 48.0 : AppSpacing.lg;
               final intro = _AuthIntro(
                 compact: !wide,
-                syncedOnly: config.requiresPilotParticipation,
+                syncedOnly: config.isHostedEnvironment,
               );
               final access = _AuthPanel(
                 child: _buildAccessPanel(
@@ -189,6 +190,13 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                 : () => context.push(AppRoutes.pilotPrivacyNotice),
           ),
         ],
+        if (config.isHostedEnvironment && !config.requiresPilotParticipation)
+          TextButton(
+            onPressed: isBusy
+                ? null
+                : () => context.push(AppRoutes.pilotPrivacyNotice),
+            child: const Text('Read pilot privacy notice'),
+          ),
         const SizedBox(height: AppSpacing.lg),
         _AuthForm(
           registrationMode: _registrationMode,
@@ -246,7 +254,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        if (!config.requiresPilotParticipation) ...[
+        if (!config.isHostedEnvironment) ...[
           _AuthActionTile(
             icon: AppIcons.personOutlineRounded,
             title: 'Continue as guest',

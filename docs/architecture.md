@@ -87,9 +87,10 @@ not change HTTP contracts, provider selection, or data authority.
 The accepted pilot direction keeps Flutter Web on Vercel and Auth/Postgres in
 hosted Supabase while placing FastAPI behind Caddy and HTTPS on a VPS. Public
 self-registration remains available without an invitation or user allowlist,
-but requires a versioned 18-or-older self-attestation without date-of-birth
-storage. Participants may use their own real data; a separate synthetic-only
-staging project and fail-closed scenario generator must never write fixtures to
+with a versioned 18-or-older self-attestation and no date-of-birth storage.
+Confirmation is optional in the current small-pilot configuration; this does
+not change the stated adult audience. Participants may use their own real data;
+a separate synthetic-only staging project and fail-closed scenario generator must never write fixtures to
 the real-data pilot project. Vercel Web builds bind the application identity to
 the exact provider-supplied Git commit: Production must be protected `main`
 with `main-<SHA>`, while Preview must remain staging with `preview-<SHA>`.
@@ -136,26 +137,41 @@ rejects the staging URL or equal refs. PostgreSQL policies and grants continue
 to name database role `service_role`. No remote key rotation or public
 deployment follows from the project assignment.
 
-The repository now implements the first participation seam. Hosted Flutter
-shows `pilot-participation-notice-v1` before account creation/OAuth and persists
-no pre-auth choice. Only an immediately authenticated email signup may record
-that same-session choice; confirmation-link and OAuth returns route an
-unaccepted account to a dedicated gate before Setup or product routes.
+The repository implements the participation seam with a separately configured
+confirmation requirement. When required, hosted Flutter shows
+`pilot-participation-notice-v1` before account creation/OAuth and persists no
+pre-auth choice. Only an immediately authenticated email signup may record that
+same-session choice; confirmation-link and OAuth returns route an unaccepted
+account to a dedicated gate before Setup or product routes. Optional mode keeps
+the privacy link, omits this prerequisite, and offers unconfirmed authenticated
+users a voluntary Settings action on the existing confirmation page. Submission
+still requires an explicit checkbox; leaving the page or a failed write does
+not block app use.
 `POST /v1/account/pilot-participation` derives the owner from
 the verified bearer and calls the service-role-only
 `accept_pilot_participation_v1` RPC. The canonical `profiles` row owns the exact
 notice version and backend timestamp; Auth metadata is not authority and no
-birth date exists. Normal staging/pilot FastAPI dependencies read that pair
-before product service composition, while account export and deletion retain a
-raw-verified-principal escape path. Staging Flutter also wraps every route with
+birth date exists. Hosted FastAPI dependencies require that pair before product
+service composition only when `PILOT_PARTICIPATION_REQUIRED=true`, while account
+export and deletion retain a raw-verified-principal escape path. Staging Flutter also wraps every route with
 the persistent `Staging · Test data` identity. These are source boundaries, not
 evidence that the migration or clients are deployed remotely.
 
 The database-side `pilot-participation-gate-v1` independently composes
 restrictive authenticated RLS with existing owner policies. It is default-off
 locally, exact-project-bound when enabled, and missing/corrupt state fails
-closed. This prevents a public Supabase publishable key from bypassing the
-Flutter/FastAPI gate. A release crossing this boundary is fix-forward unless
+closed. With participation required, this prevents a public Supabase publishable
+key from bypassing the Flutter/FastAPI gate. The current small pilot explicitly
+sets `PILOT_PARTICIPATION_REQUIRED=false` in client and API configuration;
+missing acceptance does not block authenticated product use and no record is
+automatically created. Backend and generic Dart defaults stay `true`; hosted
+Flutter defines default to optional for pilot and required for staging, with an
+explicit boolean override. Readiness attests the existing singleton as enabled
+with exact project/notice when required, or disabled with null bindings when
+optional; a mismatch is unhealthy. This changes no schema, RPC, bearer/owner
+authority, CAPTCHA, HTTPS, project/key identity, hosted guest restriction,
+pending-deletion guard or migration attestation.
+A release crossing the database migration boundary is fix-forward unless
 every public client and API have first been withdrawn; an older service-role
 runtime cannot be treated as a safe automatic rollback target.
 
@@ -1503,10 +1519,12 @@ The same account boundary owns hosted adult participation. The strict
 `pilot-participation-v1` command accepts only the current notice and literal
 confirmation, derives the profile id from the bearer, and persists the paired
 version/backend time through a service-role-only RPC. Exact retries retain the
-first timestamp. Hosted product dependencies fail closed until this pair is
-current, but export and deletion remain available to the authenticated owner.
-The matching `pilot-participation-gate-v1` RLS layer closes direct Data API
-bypass for all other product relations.
+first timestamp. When participation is required, hosted product dependencies
+fail closed until this pair is current, but export and deletion remain available
+to the authenticated owner. The matching `pilot-participation-gate-v1` RLS layer
+then closes direct Data API bypass for all other product relations. The current
+optional-confirmation pilot leaves this gate disabled and does not synthesize
+acceptance; existing owner RLS and deletion restrictions remain in force.
 
 Export reads only owner-filtered canonical product tables, including the
 current Study Setup and Personal Learning projections, applies field

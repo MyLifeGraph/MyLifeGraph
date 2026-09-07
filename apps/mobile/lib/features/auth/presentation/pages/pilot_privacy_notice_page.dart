@@ -24,7 +24,7 @@ class PilotPrivacyNoticePage extends ConsumerWidget {
           const _NoticeSection(
             title: 'Purpose and participation',
             body:
-                'MyLifeGraph is a first evaluation prototype for personal planning, reflection, and an optional read-only Coach. Participation in this pilot is restricted to people who are 18 or older. The app records a versioned self-attestation and its backend time; it does not ask for or store your birth date.',
+                'MyLifeGraph is a first evaluation prototype for personal planning, reflection, and an optional read-only Coach. Participation in this pilot is restricted to people who are 18 or older. When you explicitly confirm participation, the app records a versioned self-attestation and its backend time; it does not ask for or store your birth date.',
           ),
           const _NoticeSection(
             title: 'Data you may choose to enter',

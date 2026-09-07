@@ -35,9 +35,13 @@ the deployed operator-provider path remain open.
 The next local pilot foundation is also implemented in repository source:
 `pilot-participation-v1` / `pilot-participation-notice-v1` stores a
 backend-owned version/time pair on the canonical profile through a
-service-role-only, bearer-derived command. Exact staging/pilot product
-dependencies fail closed without that pair; development, account export, and
-account deletion preserve their explicit boundaries. Flutter provides the
+service-role-only, bearer-derived command. Hosted product dependencies require
+that pair only with `PILOT_PARTICIPATION_REQUIRED=true`. The current small pilot
+explicitly makes confirmation optional, with the existing database switch
+disabled and no automatic acceptance or schema change. Hosted readiness still
+attests the switch against configuration. Auth, ownership, project/key identity,
+CAPTCHA, HTTPS, guest denial, deletion and migration guards remain mandatory;
+development, account export, and account deletion preserve their boundaries. Flutter provides the
 pre-signup notice, post-auth gate, Settings notice link, hosted guest denial,
 and persistent staging identity. This does not prove any remote migration,
 Auth setting, privacy approval, or deployment. The staging scenario generator

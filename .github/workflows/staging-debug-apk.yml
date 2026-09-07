@@ -48,6 +48,7 @@ jobs:
           PILOT_CONTACT_EMAIL: ${{ secrets.PILOT_CONTACT_EMAIL }}
           APP_PUBLIC_ORIGIN: ${{ vars.APP_PUBLIC_ORIGIN }}
           TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+          PILOT_PARTICIPATION_REQUIRED: ${{ vars.PILOT_PARTICIPATION_REQUIRED }}
           AI_SERVICE_BASE_URL: ${{ secrets.AI_SERVICE_BASE_URL }}
         run: |
           export MLG_DEFINES_FILE="$RUNNER_TEMP/mylifegraph-staging-defines.json"

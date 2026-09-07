@@ -37,6 +37,7 @@ test('hosted defines require complete fail-closed staging configuration', () => 
     SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
     SUPABASE_ANON_KEY: '',
     PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
+    PILOT_PARTICIPATION_REQUIRED: 'true',
     APP_PUBLIC_ORIGIN: 'https://app-staging.example.test',
     TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
     AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
@@ -200,11 +201,31 @@ test('hosted defines are written with owner-only permissions', () => {
       SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test-value',
       SUPABASE_ANON_KEY: '',
       PILOT_CONTACT_EMAIL: 'staging-contact@example.test',
+      PILOT_PARTICIPATION_REQUIRED: 'true',
       APP_PUBLIC_ORIGIN: 'https://app-staging.example.test',
       TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
       AI_SERVICE_BASE_URL: 'https://coach-staging.example.test',
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('participation is optional in pilot, required in staging, and explicitly overridable', () => {
+  const pilot = { ...validEnvironment, APP_ENV: 'pilot',
+    PILOT_SUPABASE_PROJECT_REF: 'bcdefghijklmnopqrstu',
+    SUPABASE_URL: 'https://bcdefghijklmnopqrstu.supabase.co' };
+  assert.equal(hostedFlutterDefines(pilot).PILOT_PARTICIPATION_REQUIRED, 'false');
+  assert.equal(hostedFlutterDefines(validEnvironment).PILOT_PARTICIPATION_REQUIRED, 'true');
+  for (const env of [pilot, validEnvironment]) {
+    for (const required of ['true', 'false']) {
+      assert.equal(hostedFlutterDefines({ ...env, PILOT_PARTICIPATION_REQUIRED: required }).PILOT_PARTICIPATION_REQUIRED, required);
+    }
+    for (const invalid of ['FALSE', '0', ' false ', 'optional', false]) {
+      assert.throws(() => hostedFlutterDefines({ ...env, PILOT_PARTICIPATION_REQUIRED: invalid }), /PILOT_PARTICIPATION_REQUIRED/);
+    }
+  }
+  for (const key of ['PILOT_CONTACT_EMAIL', 'TURNSTILE_SITE_KEY', 'APP_PUBLIC_ORIGIN', 'APP_BUILD_SHA']) {
+    assert.throws(() => hostedFlutterDefines({ ...pilot, [key]: '' }), new RegExp(key));
   }
 });

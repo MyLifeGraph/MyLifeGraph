@@ -90,6 +90,16 @@ fails closed; profile SELECT remains available so an authenticated client can
 render the acceptance surface. Configuration and attestation RPCs are
 `service_role`-only.
 
+The current small-pilot application configuration explicitly makes confirmation
+optional through `PILOT_PARTICIPATION_REQUIRED=false`. It reuses the existing
+disabled singleton; no migration or profile update is needed. Hosted readiness
+still checks the singleton: optional confirmation requires disabled state with
+null project/notice bindings, while required confirmation requires enabled
+state with the exact project/current notice. Missing or mismatched state fails.
+Owner RLS, verified identity, pending-deletion restrictions and migration
+attestation remain mandatory. An optional confirmation creates no automatic
+acceptance, and the existing explicit acceptance RPC is unchanged.
+
 The preceding migration is
 `20260820120000_coach_terminal_replay_probe_v1.sql`. Its service-role-only,
 owner-locked read probe returns an exact terminal Coach replay before fresh

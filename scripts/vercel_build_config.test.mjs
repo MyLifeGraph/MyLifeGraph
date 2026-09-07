@@ -135,6 +135,7 @@ test('Vercel child environment drops inherited sentinel secrets', () => {
         'VERCEL_BUILD_PATH=/usr/local/bin:/usr/bin:/bin',
         'VERCEL_PUB_CACHE=/tmp/mylifegraph-test-pub-cache',
         'APP_ENV=staging',
+        'PILOT_PARTICIPATION_REQUIRED=false',
         'APP_BUILD_SHA=' + 'a'.repeat(40),
         'vercel_run_public /usr/bin/env',
       ].join('\n'),
@@ -155,6 +156,7 @@ test('Vercel child environment drops inherited sentinel secrets', () => {
   );
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^APP_ENV=staging$/m);
+  assert.match(result.stdout, /^PILOT_PARTICIPATION_REQUIRED=false$/m);
   assert.doesNotMatch(result.stdout, /must-not-reach-child/);
   assert.doesNotMatch(
     result.stdout,

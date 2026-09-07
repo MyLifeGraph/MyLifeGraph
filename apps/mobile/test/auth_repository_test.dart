@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
+import 'package:my_life_graph/features/auth/data/pilot_participation_api_data_source.dart';
+import 'package:my_life_graph/features/auth/domain/pilot_participation.dart';
 import 'package:my_life_graph/features/auth/data/guest_setup_data_source.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/domain/auth_captcha.dart';
@@ -13,6 +15,78 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  test('optional hosted account loads unconfirmed and records only voluntary acceptance', () async {
+    SharedPreferences.setMockInitialValues({});
+    final client = SupabaseClient(
+      'http://localhost:54321', 'test-anon-key',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+      httpClient: MockClient((request) async => http.Response(
+        jsonEncode([{
+          'id': 'profile-id', 'email': 'person@example.test',
+          'display_name': 'Person', 'timezone': 'UTC', 'role': 'user',
+          'auth_provider': 'email', 'onboarding_completed_at': '2026-08-01T00:00:00Z',
+          'timezone_revision': 1, 'preparation_budget_revision': 1,
+          'daily_preparation_budget_minutes': null,
+        }]), 200, request: request, headers: {'content-type': 'application/json'},
+      )),
+    );
+    addTearDown(client.dispose);
+    await client.auth.recoverSession(jsonEncode({
+      'access_token': 'synthetic-access-token', 'refresh_token': 'synthetic-refresh-token',
+      'token_type': 'bearer', 'expires_in': 3600,
+      'expires_at': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+      'user': {'id': 'profile-id', 'email': 'person@example.test', 'aud': 'authenticated',
+        'app_metadata': {'provider': 'email'}, 'user_metadata': {}, 'created_at': '2026-08-01T00:00:00Z'},
+    }));
+    final gateway = _VoluntaryParticipationGateway();
+    final repository = AuthRepository(client, useMockData: false,
+      isHostedEnvironment: true, requiresPilotParticipation: false,
+      pilotParticipationGateway: gateway);
+    final session = await repository.currentSession();
+    expect(session!.isAuthenticated, isTrue);
+    expect(session.profile.hasCurrentPilotParticipation, isFalse);
+    expect(gateway.calls, 0);
+    final accepted = await repository.acceptCurrentPilotParticipation();
+    expect(accepted.hasCurrentPilotParticipation, isTrue);
+    expect(gateway.calls, 1);
+  });
+
+  test(
+    'optional hosted participation permits OAuth but never guest access',
+    () async {
+      SharedPreferences.setMockInitialValues({'auth_guest_active': true});
+      final client = SupabaseClient(
+        'http://localhost:54321',
+        'test-anon-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      );
+      addTearDown(client.dispose);
+      var launched = false;
+      final repository = AuthRepository(
+        client,
+        useMockData: false,
+        isHostedEnvironment: true,
+        requiresPilotParticipation: false,
+        googleOAuthLauncher: (_) async {
+          launched = true;
+          return true;
+        },
+      );
+      expect(await repository.currentSession(), isNull);
+      await expectLater(
+        repository.continueAsGuest(),
+        throwsA(isA<PilotParticipationUnavailableException>()),
+      );
+      await repository.signInWithGoogle();
+      expect(launched, isTrue);
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getKeys().where((key) => key.contains('participation')),
+        isEmpty,
+      );
+    },
+  );
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
@@ -383,4 +457,14 @@ IntakeResponseDraft _requiredDraft() {
     fixedCommitments: [],
     calendarConnectionIntent: null,
   );
+}
+
+class _VoluntaryParticipationGateway implements PilotParticipationGateway {
+  int calls = 0;
+  @override
+  Future<PilotParticipationAcceptance> accept({required String accessToken}) async {
+    calls++;
+    return PilotParticipationAcceptance(noticeVersion: pilotParticipationNoticeVersion,
+      acceptedAt: DateTime.utc(2026, 9, 7), replayed: false);
+  }
 }

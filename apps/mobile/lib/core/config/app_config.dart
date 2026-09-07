@@ -21,6 +21,7 @@ class AppConfig {
     this.appBuildSha = '',
     this.appReleaseTag = '',
     this.coachSurfaceEnabled = false,
+    this.pilotParticipationRequired = true,
     this.learnedFocusPlanningPilotEnabled = false,
   });
 
@@ -84,6 +85,10 @@ class AppConfig {
     );
     return AppConfig(
       environment: environment,
+      pilotParticipationRequired: const bool.fromEnvironment(
+        'PILOT_PARTICIPATION_REQUIRED',
+        defaultValue: true,
+      ),
       supabaseUrl: supabaseUrl,
       supabasePublishableKey: supabasePublishableKey,
       supabaseAnonKey: supabaseAnonKey,
@@ -128,16 +133,19 @@ class AppConfig {
   final String aiServiceBaseUrl;
   final bool useMockData;
   final bool coachSurfaceEnabled;
+  final bool pilotParticipationRequired;
   final bool learnedFocusPlanningPilotEnabled;
 
   void validateEnvironmentConfiguration() {
     validateAppEnvironment(environment);
   }
 
-  bool get requiresPilotParticipation =>
-      {'staging', 'pilot'}.contains(environment);
+  bool get isHostedEnvironment => {'staging', 'pilot'}.contains(environment);
 
-  bool get requiresAuthCaptcha => requiresPilotParticipation;
+  bool get requiresPilotParticipation =>
+      isHostedEnvironment && pilotParticipationRequired;
+
+  bool get requiresAuthCaptcha => isHostedEnvironment;
 
   Uri get turnstileChallengeUrl {
     validateAuthProtectionConfiguration();
@@ -188,7 +196,7 @@ class AppConfig {
 
   void validatePilotParticipationConfiguration() {
     validateEnvironmentConfiguration();
-    if (!requiresPilotParticipation) return;
+    if (!isHostedEnvironment) return;
     _rejectSurroundingWhitespace('PILOT_CONTACT_EMAIL', pilotContactEmail);
     if (pilotContactEmail.length > 254 ||
         !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(pilotContactEmail)) {
@@ -227,7 +235,7 @@ class AppConfig {
 
   void validateReleaseIdentityConfiguration() {
     validateEnvironmentConfiguration();
-    if (!requiresPilotParticipation) return;
+    if (!isHostedEnvironment) return;
     _rejectSurroundingWhitespace('APP_BUILD_SHA', appBuildSha);
     _rejectSurroundingWhitespace('APP_RELEASE_TAG', appReleaseTag);
     if (!RegExp(r'^[0-9a-f]{40}$').hasMatch(appBuildSha)) {
@@ -270,7 +278,7 @@ class AppConfig {
         'AI_SERVICE_BASE_URL must be one credential-free HTTP(S) origin.',
       );
     }
-    final hosted = requiresPilotParticipation;
+    final hosted = isHostedEnvironment;
     if (hosted) {
       final hostname = uri.host;
       final canonical = 'https://$hostname';

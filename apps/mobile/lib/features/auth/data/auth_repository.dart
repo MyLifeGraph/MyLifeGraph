@@ -32,6 +32,7 @@ class AuthRepository {
     PilotParticipationGateway? pilotParticipationGateway,
     PendingAccountDeletionResolver? pendingAccountDeletionResolver,
     bool requiresPilotParticipation = false,
+    bool? isHostedEnvironment,
     bool requiresAuthCaptcha = false,
   }) : _useMockData = useMockData,
        _guestSetupDataSource = guestSetupDataSource,
@@ -40,6 +41,7 @@ class AuthRepository {
        _pilotParticipationGateway = pilotParticipationGateway,
        _pendingAccountDeletionResolver = pendingAccountDeletionResolver,
        _requiresPilotParticipation = requiresPilotParticipation,
+       _isHostedEnvironment = isHostedEnvironment ?? requiresPilotParticipation,
        _requiresAuthCaptcha = requiresAuthCaptcha;
 
   final SupabaseClient _client;
@@ -50,6 +52,7 @@ class AuthRepository {
   final PilotParticipationGateway? _pilotParticipationGateway;
   final PendingAccountDeletionResolver? _pendingAccountDeletionResolver;
   final bool _requiresPilotParticipation;
+  final bool _isHostedEnvironment;
   final bool _requiresAuthCaptcha;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
@@ -81,7 +84,7 @@ class AuthRepository {
       return _cachedSession;
     }
 
-    if (_requiresPilotParticipation) {
+    if (_isHostedEnvironment) {
       await _clearGuestActiveFlag();
       _cachedSession = null;
       return null;
@@ -231,7 +234,7 @@ class AuthRepository {
   }
 
   Future<AppSession> continueAsGuest() async {
-    if (_requiresPilotParticipation) {
+    if (_isHostedEnvironment) {
       throw const PilotParticipationUnavailableException();
     }
     final prefs = await SharedPreferences.getInstance();
@@ -373,9 +376,7 @@ class AuthRepository {
 
   Future<AppProfile> acceptCurrentPilotParticipation() async {
     final session = _cachedSession;
-    if (!_requiresPilotParticipation ||
-        session == null ||
-        session.isGuestSession) {
+    if (!_isHostedEnvironment || session == null || session.isGuestSession) {
       throw const PilotParticipationUnavailableException();
     }
     final accepted = await _recordCurrentPilotParticipation(session.profile);

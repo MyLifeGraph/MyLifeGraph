@@ -30,8 +30,8 @@ The pilot must support:
 - public self-registration with email/password;
 - optional Google OAuth after its hosted configuration is verified;
 - no invitation, user allowlist, or hard-coded three-user limit;
-- participation restricted to adults through a versioned 18-or-older
-  self-attestation that stores no date of birth;
+- the stated adult audience and a versioned 18-or-older confirmation without
+  date-of-birth storage; confirmation is optional in the current small pilot;
 - ordinary use with the participant's own persisted Supabase data, not a
   synthetic-only evaluation mode;
 - Vercel-hosted Flutter Web and a signed Android release package;
@@ -52,6 +52,24 @@ while an overloaded or exhausted shared Coach may honestly return busy or
 unavailable.
 
 ### Release profiles
+
+The current small pilot explicitly makes the participation confirmation
+optional through `PILOT_PARTICIPATION_REQUIRED=false` in API and client
+configuration. It changes only the confirmation prerequisite, not the stated
+adult audience or privacy disclosures. Auth keeps the privacy link, and an
+unconfirmed authenticated user may voluntarily confirm from Settings without
+being blocked from Setup or product use. No acceptance is fabricated. The
+existing confirmation command and versioned record are unchanged.
+
+Backend and generic Dart defaults stay `true`. Hosted Flutter defines default
+to optional for pilot and required for staging and support explicit boolean
+overrides. Readiness attests the database switch against the API policy:
+required means enabled with exact project/current notice; optional means
+disabled with null bindings. Missing or mismatched state fails. This reuses the
+existing switch without a SQL migration or automatic mutation. Elsewhere in
+this plan, mandatory confirmation gates apply only to the required profile.
+Verified Auth, CAPTCHA, HTTPS, project/key/release identity, hosted guest denial,
+owner RLS, pending-deletion recovery and migration attestation remain required.
 
 The authorized initial **small VPS pilot without AWS** explicitly selects the
 `vps_file` deletion-journal backend. Vercel, Supabase and the VPS remain the
@@ -99,7 +117,7 @@ risk without describing the path as approved or generally production-ready.
 | Android client | Signed release APK for direct distribution | Release signing, the Supabase deep-link redirect, and a physical-device smoke are mandatory. |
 | Identity and data | The previously inspected project `oscrunlndfrecjilojja` is the real-data pilot candidate; the separately created pristine project `kvdunemnuqcvbhrlfnsh` is staging | No Postgres service is installed on the VPS. A project may remain on Free only while current limits and pause behavior fit; neither environment may be inferred from the other. |
 | Test data | Versioned scenario fixtures only in staging | A fail-closed generator may create targeted synthetic users/data only after an exact staging-project preview and confirmation. It must reject the pilot project and never seed real participant accounts. |
-| Participation | Adults only; normal personal use is allowed | Store a versioned 18-or-older acceptance and notice version/time, not a birth date. Real mood, sleep, stress, study, planning, and Coach data make privacy, deletion, backup, and processor disclosure release gates. |
+| Participation | Adult audience; normal personal use; confirmation optional for the current small pilot | Record version/time only after explicit authenticated confirmation, never a birth date or automatic acceptance. Required mode remains available. Privacy, deletion and processor-disclosure gates remain. |
 | Public domain | Buy one independently controlled low-renewal-cost domain | Use `app.<domain>` for Vercel, `api.<domain>` for the VPS, and a dedicated sender subdomain such as `auth.<domain>`. Continue using the free project-ref `*.supabase.co` endpoints; do not buy the Supabase Custom Domain add-on for this pilot. |
 | Operating budget | At most EUR 10/month in additional recurring services beyond the already held VPS and Codex subscription | Domain renewal, SMTP, CAPTCHA, monitoring, and encrypted off-host storage must fit this ceiling without automatic paid upgrades or uncapped overage. Target domain renewal is at most EUR 20/year. |
 | Public Auth mail | Custom SMTP for arbitrary addresses | Supabase may remain on Free, but the SMTP/domain provider is a separate account, operational dependency, and possible cost that must be accepted before release. |
@@ -312,15 +330,15 @@ reach registration. It does not mean unmetered provider use.
   verified bearer token.
 - Preserve RLS and service-role-only mutation boundaries.
 - Keep account export and confirmed deletion accessible and honest.
-- Require one deliberate 18-or-older acknowledgement before account creation
-  or Google OAuth, but never persist that pre-auth choice. An immediately
-  authenticated email signup may commit it in the same verified session;
-  confirmation-link and OAuth returns must confirm again through the post-auth
-  gate. Before Setup or any product read/write, store the accepted notice
-  version and UTC time through a bearer-derived FastAPI command and enforce the
-  default-off, exact-project `pilot-participation-gate-v1` restrictive RLS
-  boundary. Do not use editable Auth `user_metadata` as eligibility authority
-  and do not collect a date of birth merely for this pilot.
+- Respect `PILOT_PARTICIPATION_REQUIRED`: the current optional mode retains
+  the privacy notice and offers voluntary confirmation in Settings without
+  blocking signup, OAuth, Setup or product access. The explicit command alone
+  records acceptance; no skipped step may create a record. Required mode keeps
+  the deliberate pre-auth acknowledgement, same-session email acceptance and
+  post-auth gate for confirmation-link/OAuth returns. Its exact-project
+  `pilot-participation-gate-v1` RLS switch must be enabled; optional mode requires
+  it disabled with null bindings. Do not use editable Auth `user_metadata` as
+  eligibility authority or collect a birth date merely for this pilot.
 - Treat a synced account as ordinary real use: empty reads stay empty and no
   targeted synthetic persona is silently inserted into a participant account.
 
@@ -554,9 +572,11 @@ release evidence.
   a focused change. Keep legacy hosted variables only as an explicitly tested
   transition; do not rotate or remove a remote key during repository work.
 - Define a versioned 18-or-older acceptance and privacy-notice version/time
-  record without collecting date of birth. The UI presents it before signup;
-  a bearer-derived backend command commits it after authentication and blocks
-  Setup/product access until it succeeds. Keep editable Auth user metadata out
+  record without collecting date of birth. Required mode presents the
+  prerequisite checkbox before signup and blocks Setup/product access until
+  a bearer-derived command records acceptance after authentication. Optional
+  mode keeps the pre-signup privacy link and offers voluntary confirmation
+  later in Settings without blocking app use. Keep editable Auth metadata out
   of the eligibility decision and keep the notice reachable after login.
 - Add the deterministic staging-only scenario manifest/generator, exact preview
   and confirmation, pilot-project denial, bounded cleanup, and tests.
@@ -1597,9 +1617,12 @@ until target-host measurements pass.
 - Google provider settings and both exact web/Android redirects work.
 - At least two independently created users prove owner isolation through the
   remote harness and exact cleanup of its temporary identities.
-- The versioned 18-or-older acceptance and notice version/time persist without
-  a date of birth, editable Auth user metadata grants no eligibility, and the
-  privacy notice is accessible before signup and after authentication.
+- An explicit versioned 18-or-older confirmation persists notice version/time
+  without a birth date. Required mode blocks missing acceptance; optional mode
+  permits authenticated product use without creating a record. The database
+  switch matches the selected policy. Editable Auth metadata grants no
+  eligibility, and the privacy notice remains accessible before signup and
+  after authentication.
 - Public registration remains open without an invitation/allowlist branch.
 
 ### Client and product gate

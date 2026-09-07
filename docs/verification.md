@@ -48,6 +48,103 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Optional pilot confirmation (2026-09-07)
+
+The user authorized optional confirmation for the current small pilot. The
+new `PILOT_PARTICIPATION_REQUIRED` setting defaults to true in backend/Dart
+configuration; the VPS template explicitly selects false, and hosted Flutter
+builds default to false for pilot and true for staging. Exact overrides pass
+through Vercel's public allowlist and both Android build workflows. Read-only
+participation checks and hosted API readiness require the database gate to
+match the configured mode, including exact false/null/null in optional mode.
+
+Optional confirmation removes the signup/product-access prerequisite without
+recording acceptance automatically. Hosted users can explicitly confirm later
+through Settings and leave the existing confirmation page without submitting.
+Authentication, owner isolation, CAPTCHA, hosted guest denial, contact/HTTPS/
+release validation, and account-deletion locks remain independent. Readiness
+still verifies deletion recovery and the release's migration identity. No SQL,
+RLS, migration or public wire-version change was needed; the remote gate was
+already disabled and no remote state was changed.
+
+Focused backend auth/readiness/configuration tests pass all 52 cases. The
+complete backend suite passes 1,722 tests with two intentional provider/image
+opt-in skips. Flutter's focused suite and analysis pass; the added failure
+regression passes in the five-test confirmation-page suite and verifies that a
+failed optional save preserves authentication and permits Back to the dashboard.
+Build/configuration and documentation checks pass. Independent review found no
+remaining findings after clarifying voluntary-save wording and adding that
+failure regression. The captured-base full affected workflow passed source,
+Flutter, backend, local database/isolated compatibility and web-build checks,
+plus all eight browser journeys with fixture and process cleanup. Final
+source/test/docs review has no remaining findings.
+
+These are local implementation checks. The installed VPS remains held RC3;
+optional API/client configuration is for the next release and is not yet a
+claim about a running hosted app. Previously recorded acceptances are retained.
+
+### Direct MCP database attestation after reauthentication (2026-09-07)
+
+After native MCP OAuth reauthentication with supported scopes and a client
+restart, the direct `supabase` MCP successfully queried the intended pilot
+`oscrunlndfrecjilojja`. The installed hosted-database-contract RPC returned the
+exact RC3 prefix and current identity: 69 migrations ending at
+`20260820200000_account_deletion_replayer_role_guard_v2.sql`, SHA256
+`e1c5fe56d8a359f4aa08248e5363a2cdbafd518c09e4046d48ccf1ae7f4f8ff9`,
+and `prepared_deletion_pending_guard=true`. Deletion recovery reported zero
+pending intents and revoked direct legacy deletion.
+
+The participation gate is still disabled, with null project/notice bindings.
+A separate aggregate read found one profile and zero current-notice acceptances.
+Those reads changed nothing; no acceptance was recorded for a user and no gate
+was enabled. The result accepts SQL access and the queried database contracts,
+not complete API readiness. Native Vercel project/domain reads also confirmed
+`my-life-graph-mu.vercel.app` as the verified domain assigned to the existing
+project; no Vercel setting or deployment was changed.
+
+### Held RC3 and VPS journal installed (2026-09-07)
+
+PR #10's six selected required CI jobs passed; the separate migration job was
+path-skipped. The user explicitly confirmed the protected fast-forward from
+`18e681d2e584ea3913a79b7d87b207de883c1808` to
+`bd8aac2dff01f1abcf4858c3b0db7a32e8dcc6a8`; local and remote main matched,
+and GitHub marked the PR merged. The separate Vercel preview remained failed
+and was outside the required status contexts. The normal source-bundle helper
+created local annotated `v0.1.0-pilot.1-rc.3` from that exact main commit;
+no remote tag publication is claimed.
+
+The RC3 source archive SHA256 is
+`bc827b1a47d7a51606f0f5c619dc54ddf016d80eda10aa9312d7ddaf3a3c0290`,
+and its source-manifest SHA256 is
+`68c3e405692104bb277cdf76d78cd1a53b79dfa227cde10a29f669ca4e2462ff`.
+The independently reviewed eight-file administrator archive has SHA256
+`47d158ab09da301476e43effcf80b32ffcf8599a9cf5c0a1079b3dd8613ee4f7`.
+Before handoff, the final bounded Ubuntu rehearsal passed real dependency
+installation, target-UID imports, release sealing, helper updates, filesystem
+journal checks and initial-only replay refusal. Only systemd state reads were
+substituted. Review changed directory creation to atomic mkdir plus descriptor-
+based ownership/mode updates, so an intervening directory cannot be adopted,
+and named the same-process retry result `fresh_writer_retry_verified`.
+
+The administrator subsequently executed that hash-verified archive on the VPS.
+The supplied output confirms held RC3 installation, runtime and fixed tool
+policy under API UID 995 and Coach UID 994, and a successful `vps_file` probe.
+The real API identity wrote synthetic data in a temporary child of the newly
+provisioned private journal, reopened it through a fresh writer, rejected a
+conflicting retry, and removed all synthetic files. No database request or
+model turn was sent. The wrapper also checks project-role traversal denial,
+the final release seal, absent current link and stopped application units.
+
+Independent follow-up project-SSH reads confirmed the installed host-check
+hashes match the reviewed new sources, all four application units are inactive
+and disabled, Docker/Hermes/Coach user manager remain active, and the build/API
+UIDs have no running processes. The project SSH identity cannot inspect the
+protected release or journal directly; their acceptance above is based on the
+administrator output. This accepts held installation and the tested filesystem
+journal behavior, not an API HTTP start, real account deletion, restored data,
+public deployment, or a new RC3 model turn. API configuration remains open;
+the subsequently restored direct-MCP SQL attestation is recorded above.
+
 ### Explicit VPS file deletion journal (2026-09-07)
 
 The user authorized the small `vps_file` pilot and accepted loss of the journal
@@ -83,9 +180,9 @@ The final documentation and whitespace checks pass.
 
 The file profile has no WORM/off-host guarantee, automatic pruning, or supported
 database restore/reopening procedure, including Supabase Auth/Data API. Existing
-S3 recovery tooling remains S3-only. This is local implementation evidence;
-the VPS still has RC2, whose API has not been configured or started. No remote
-migration, new model turn, deployment or main update is claimed.
+S3 recovery tooling remains S3-only. This section records local implementation
+checks; the subsequent main update and held RC3 installation are accepted above.
+No remote migration, API activation or new model turn is claimed.
 
 ### API configuration preflight, not started (2026-09-07)
 

@@ -37,8 +37,10 @@ final authRepositoryProvider = Provider<AuthRepository?>((ref) {
           pilotParticipationGateway: PilotParticipationApiDataSource(
             ref.watch(apiClientProvider),
           ),
-          requiresPilotParticipation:
-              ref.watch(appConfigProvider).requiresPilotParticipation,
+          requiresPilotParticipation: ref
+              .watch(appConfigProvider)
+              .requiresPilotParticipation,
+          isHostedEnvironment: ref.watch(appConfigProvider).isHostedEnvironment,
           requiresAuthCaptcha: ref.watch(appConfigProvider).requiresAuthCaptcha,
           pendingAccountDeletionResolver: ({
             required userId,

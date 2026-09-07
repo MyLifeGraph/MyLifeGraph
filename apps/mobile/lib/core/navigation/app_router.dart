@@ -122,6 +122,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (isPilotParticipationRoute) {
+        if (ref.read(appConfigProvider).isHostedEnvironment &&
+            session.isAuthenticated &&
+            !session.profile.hasCurrentPilotParticipation) {
+          return null;
+        }
         if (session.requiresOnboarding) return AppRoutes.onboarding;
         final continuation = pendingPostAuthLocation?.toString();
         pendingPostAuthLocation = null;

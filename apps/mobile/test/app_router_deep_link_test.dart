@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/app.dart';
+import 'package:my_life_graph/core/supabase/supabase_providers.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/navigation/app_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
@@ -18,6 +19,45 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('optional hosted confirmation is reachable without gating product routes', (tester) async {
+    const profile = AppProfile(
+      id: 'pilot-user', email: 'person@example.test', name: 'Pilot User',
+      timezone: 'UTC', role: AppRole.user, onboardingDone: true,
+      authProvider: 'email',
+    );
+    final repository = _DelayedAuthRepository(Future.value(AppSession.authenticated(profile)));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        appConfigProvider.overrideWithValue(const AppConfig(
+          environment: 'pilot',
+          supabaseUrl: 'https://abcdefghijklmnopqrst.supabase.co',
+          supabasePublishableKey: 'sb_publishable_test',
+          pilotSupabaseProjectRef: 'abcdefghijklmnopqrst',
+          stagingSupabaseProjectRef: 'zyxwvutsrqponmlkjihg',
+          aiServiceBaseUrl: 'https://api.example.test',
+          useMockData: false, pilotParticipationRequired: false,
+          pilotContactEmail: 'contact@example.test',
+        )),
+        authRepositoryProvider.overrideWithValue(repository),
+        supabaseClientProvider.overrideWithValue(null),
+      ],
+      child: const PersonalOptimizationApp(),
+    ));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(PersonalOptimizationApp)));
+    final router = container.read(appRouterProvider);
+    router.go(AppRoutes.calendarIntegration);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.calendarIntegration);
+    router.go(AppRoutes.pilotParticipation);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.pilotParticipation);
+    expect(find.text('Optional. You can use the app without this confirmation.'), findsOneWidget);
+    router.go(AppRoutes.calendarIntegration);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.calendarIntegration);
   });
 
   testWidgets('deep link survives asynchronous guest session restoration',

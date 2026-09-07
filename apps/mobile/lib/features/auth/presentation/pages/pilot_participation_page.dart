@@ -33,12 +33,15 @@ class _PilotParticipationPageState
         session != null &&
         !session.isGuestSession;
     return PopScope(
-      canPop: false,
+      canPop: !config.requiresPilotParticipation && !_submitting,
       child: Scaffold(
         body: AppPage(
           title: 'Confirm pilot participation',
-          subtitle: 'Required before Setup or synced product access.',
-          showBackForFallback: false,
+          subtitle: config.requiresPilotParticipation
+              ? 'Required before Setup or synced product access.'
+              : 'Optional. You can use the app without this confirmation.',
+          showBackForFallback: !config.requiresPilotParticipation,
+          backFallback: config.requiresPilotParticipation ? null : AppRoutes.dashboard,
           maxWidth: 680,
           children: [
             AppSurface(
@@ -102,7 +105,11 @@ class _PilotParticipationPageState
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(AppIcons.check),
-                label: const Text('Continue to MyLifeGraph'),
+                label: Text(
+                  config.requiresPilotParticipation
+                      ? 'Continue to MyLifeGraph'
+                      : 'Save confirmation',
+                ),
               ),
             ),
             SizedBox(
@@ -131,8 +138,9 @@ class _PilotParticipationPageState
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error =
-            'Your confirmation could not be recorded. Your account remains blocked from Setup and saved product data. Try again unchanged or sign out.';
+        _error = ref.read(appConfigProvider).requiresPilotParticipation
+            ? 'Your confirmation could not be recorded. Your account remains blocked from Setup and saved product data. Try again unchanged or sign out.'
+            : 'Your confirmation could not be recorded. You can keep using the app and try again later.';
       });
     } finally {
       if (mounted) setState(() => _submitting = false);

@@ -244,7 +244,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           title: 'Account and appearance',
           description: 'Export, deletion, device theme, and sign-out.',
         ),
-        if (config?.requiresPilotParticipation == true)
+        if (config?.isHostedEnvironment == true)
           AppCard(
             padding: EdgeInsets.zero,
             child: ListTile(
@@ -256,6 +256,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
               trailing: const Icon(AppIcons.chevronRight),
               onTap: () => context.push(AppRoutes.pilotPrivacyNotice),
+            ),
+          ),
+        if (config?.isHostedEnvironment == true &&
+            config?.requiresPilotParticipation == false &&
+            syncedAccount &&
+            profile?.hasCurrentPilotParticipation == false)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const ValueKey('pilot-participation-setting-entry'),
+              leading: const Icon(AppIcons.check),
+              title: const Text('Pilot confirmation (optional)'),
+              subtitle: const Text(
+                'Review the notice and confirm you are 18 or older.',
+              ),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: () => context.push(AppRoutes.pilotParticipation),
             ),
           ),
         AppCard(

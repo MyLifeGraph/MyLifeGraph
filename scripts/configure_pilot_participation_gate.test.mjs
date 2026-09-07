@@ -120,3 +120,28 @@ test('wrong project attestation and legacy pilot keys fail closed', async () => 
     /SUPABASE_SECRET_KEY is required/,
   );
 });
+
+test('optional check attests disabled state without mutating or needing zero acceptances', async () => {
+  const urls = [];
+  const result = await runParticipationGate({
+    argv: ['--check'],
+    environment: { ...environment, PILOT_PARTICIPATION_REQUIRED: 'false' },
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json(attestation(false));
+    },
+  });
+  assert.deepEqual(result, attestation(false));
+  assert.equal(urls.length, 1);
+  assert.match(urls[0], /get_pilot_participation_gate_v1$/);
+  for (const value of [attestation(true), { ...attestation(false), project_ref: projectRef }, null]) {
+    await assert.rejects(runParticipationGate({
+      argv: ['--check'], environment: { ...environment, PILOT_PARTICIPATION_REQUIRED: 'false' },
+      fetchImpl: async () => Response.json(value),
+    }), /does not match|invalid body/);
+  }
+  await assert.rejects(runParticipationGate({
+    argv: ['--check'], environment: { ...environment, PILOT_PARTICIPATION_REQUIRED: '0' },
+    fetchImpl: async () => { throw new Error('must not call remote'); },
+  }), /PILOT_PARTICIPATION_REQUIRED/);
+});

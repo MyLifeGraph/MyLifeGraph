@@ -199,7 +199,7 @@ def test_development_principal_bypasses_hosted_participation_lookup(
     monkeypatch.setattr(
         auth_dependencies,
         "get_settings",
-        lambda: SimpleNamespace(requires_pilot_participation=False),
+        lambda: SimpleNamespace(is_hosted_environment=False, requires_pilot_participation=False),
     )
     monkeypatch.setattr(
         auth_dependencies,
@@ -230,7 +230,7 @@ def test_hosted_principal_requires_and_accepts_exact_profile_pair(
     monkeypatch.setattr(
         auth_dependencies,
         "get_settings",
-        lambda: SimpleNamespace(requires_pilot_participation=True),
+        lambda: SimpleNamespace(is_hosted_environment=True, requires_pilot_participation=True),
     )
     monkeypatch.setattr(
         auth_dependencies,
@@ -264,7 +264,7 @@ def test_hosted_principal_missing_acceptance_is_a_structured_403(
     monkeypatch.setattr(
         auth_dependencies,
         "get_settings",
-        lambda: SimpleNamespace(requires_pilot_participation=True),
+        lambda: SimpleNamespace(is_hosted_environment=True, requires_pilot_participation=True),
     )
     monkeypatch.setattr(
         auth_dependencies,
@@ -297,7 +297,7 @@ def test_hosted_principal_blocks_product_use_while_deletion_is_pending(
     monkeypatch.setattr(
         auth_dependencies,
         "get_settings",
-        lambda: SimpleNamespace(requires_pilot_participation=True),
+        lambda: SimpleNamespace(is_hosted_environment=True, requires_pilot_participation=True),
     )
     monkeypatch.setattr(auth_dependencies, "get_supabase_client", lambda _: client)
 
@@ -321,7 +321,7 @@ def test_hosted_principal_lookup_failure_is_a_sanitized_503(
     monkeypatch.setattr(
         auth_dependencies,
         "get_settings",
-        lambda: SimpleNamespace(requires_pilot_participation=True),
+        lambda: SimpleNamespace(is_hosted_environment=True, requires_pilot_participation=True),
     )
     monkeypatch.setattr(
         auth_dependencies,
@@ -341,3 +341,34 @@ def test_hosted_principal_lookup_failure_is_a_sanitized_503(
 
     assert raised.value.status_code == 503
     assert raised.value.detail == "Pilot participation verification is unavailable."
+
+
+def test_optional_participation_allows_owner_without_profile_acceptance(monkeypatch):
+    client = _ParticipationProfileClient([])
+    principal = Principal(user_id="owner-1")
+    monkeypatch.setattr(auth_dependencies, "get_settings", lambda: SimpleNamespace(
+        is_hosted_environment=True, requires_pilot_participation=False,
+    ))
+    monkeypatch.setattr(auth_dependencies, "get_supabase_client", lambda _: client)
+    assert asyncio.run(auth_dependencies.get_current_principal(_request(), principal)) is principal
+    assert client.calls == []
+
+
+@pytest.mark.parametrize("failure", ["pending", "unavailable"])
+def test_optional_participation_preserves_deletion_lock_and_failure(monkeypatch, failure):
+    class Client:
+        async def account_deletion_pending(self, *, user_id):
+            if failure == "unavailable":
+                raise ValueError("private upstream detail")
+            return True
+        async def select(self, *args, **kwargs):
+            raise AssertionError("Optional confirmation must not read or write acceptance")
+
+    monkeypatch.setattr(auth_dependencies, "get_settings", lambda: SimpleNamespace(
+        is_hosted_environment=True, requires_pilot_participation=False,
+    ))
+    monkeypatch.setattr(auth_dependencies, "get_supabase_client", lambda _: Client())
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(auth_dependencies.get_current_principal(_request(), Principal(user_id="owner-1")))
+    assert raised.value.status_code == (423 if failure == "pending" else 503)
+    assert "private upstream detail" not in str(raised.value.detail)

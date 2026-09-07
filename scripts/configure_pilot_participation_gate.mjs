@@ -100,6 +100,10 @@ export async function runParticipationGate({
   fetchImpl = globalThis.fetch,
 } = {}) {
   const args = parseParticipationGateArguments(argv);
+  const configuredRequired = environment.PILOT_PARTICIPATION_REQUIRED ?? 'true';
+  if (!['true', 'false'].includes(configuredRequired)) {
+    throw new Error('PILOT_PARTICIPATION_REQUIRED must be exactly true or false.');
+  }
   const target = hostedSupabaseTarget(environment);
   const key = backendKey(environment, target.appEnvironment);
   if (args.operation !== 'check') {
@@ -128,7 +132,9 @@ export async function runParticipationGate({
       required,
     });
   }
-  const expectedRequired = args.operation !== 'disable';
+  const expectedRequired = args.operation === 'check'
+    ? configuredRequired === 'true'
+    : args.operation === 'enable';
   const attested = await rpc({
     target,
     key,

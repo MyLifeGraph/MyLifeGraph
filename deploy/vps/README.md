@@ -323,11 +323,20 @@ modified workflow code.
 
    After the additive database migrations are verified, use the tagged
    checkout's `npm run configure:pilot-participation -- --check` as a read-only
-   attestation. A newly migrated database is deliberately disabled. Enable it
-   exactly once with `--enable --confirm
-   ENABLE:<exact-project-ref>:pilot-participation-gate-v1`, then repeat
-   `--check`; the secret key stays in the protected environment. Hosted
-   `/v1/ready` remains `503` until the exact project/notice contract is enabled.
+   attestation with `PILOT_PARTICIPATION_REQUIRED` matching `api.env`. The current
+   small pilot sets it to `false` and keeps the existing database gate disabled
+   with null project/notice bindings. `--check` and hosted `/v1/ready` verify
+   that exact state; voluntary acceptance records do not make it unhealthy.
+   Do not run a mutation just to perform this check.
+
+   A profile explicitly requiring confirmation sets the flag to `true` in API
+   and client configuration, then enables the gate through the separately
+   authorized `--enable --confirm
+   ENABLE:<exact-project-ref>:pilot-participation-gate-v1` command and repeats
+   `--check`. The secret key stays in the protected environment. Missing or
+   mismatched gate state keeps hosted `/v1/ready` at `503` in either mode;
+   optional confirmation does not weaken Auth, ownership, CAPTCHA, HTTPS,
+   release/project identity or deletion checks.
    The separate break-glass rollback requires `--disable --confirm
    DISABLE:<exact-project-ref>:pilot-participation-gate-v1`; disabling the gate
    while a public client is reachable is forbidden. Keep the API withdrawn

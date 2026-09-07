@@ -48,11 +48,19 @@ release identity, and current Supabase backend secret-key support are implemente
 configuration boundaries. The current repository also implements strict
 `pilot-participation-v1`: an authenticated raw principal may record the exact
 `pilot-participation-notice-v1` through a service-role-only RPC, while normal
-staging/pilot product dependencies require the backend-owned profile
-version/time pair. Account export and deletion remain reachable for an
-unaccepted authenticated account. The database-side
+hosted product dependencies require the backend-owned profile version/time pair
+only with `PILOT_PARTICIPATION_REQUIRED=true` (the backend default). The current
+small VPS pilot explicitly sets this flag to `false`; voluntary acceptance uses
+the same command, and missing acceptance does not block authenticated product
+use or trigger an automatic profile write. Account export and deletion remain
+reachable for an unaccepted authenticated account. The database-side
 `pilot-participation-gate-v1` adds default-off restrictive RLS so public Data
-API calls cannot bypass those app/service checks. Development remains ungated.
+API calls cannot bypass required app/service checks. Readiness requires this
+singleton to match the policy: enabled with exact project/current notice for
+required confirmation, disabled with null project/notice bindings for optional
+confirmation. Missing or mismatched state remains unhealthy. Bearer verification,
+project/key/release identity, CAPTCHA, HTTPS, owner RLS, hosted guest denial,
+pending-deletion and migration guards are unchanged. Development remains ungated.
 The staging-only fixture generator is implemented with preview/confirmation/
 cleanup guards; a confirmed remote run and all deployment evidence remain
 open.

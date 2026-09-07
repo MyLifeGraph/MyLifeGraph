@@ -24,15 +24,21 @@ support. A transient database failure is never presented as a cancelled accepted
 deletion. This is current V2 source behavior, not hosted availability evidence;
 applicable journal-profile, migration and deployment gates still require proof.
 
-The public-pilot repository flow is adult-only and allows ordinary personal
-use. Its implemented `pilot-participation-v1` /
-`pilot-participation-notice-v1` pre-signup copy presents the privacy notice
-before one explicit
-`I confirm that I am 18 or older` acceptance, record the accepted notice
-version/time through the backend after authentication but before product
-access, and never ask for a birth date solely for this gate. Editable Auth
-profile metadata must not be presented as proof of eligibility. The notice
-must not describe real mood, sleep, stress, study, calendar, planning,
+The public-pilot repository flow keeps its stated adult audience and allows
+ordinary personal use. Its `pilot-participation-v1` /
+`pilot-participation-notice-v1` confirmation is optional for the current small
+pilot. Auth keeps the privacy link without a prerequisite checkbox. Settings
+shows `Pilot confirmation (optional)` to unconfirmed authenticated hosted users.
+The existing page says `Optional. You can use the app without this confirmation.`
+and allows leaving; `Save confirmation` still requires the explicit `I confirm
+that I am 18 or older` checkbox. A failed save must say the app remains usable
+and confirmation can be retried later. No skipped step is described as accepted.
+
+When `PILOT_PARTICIPATION_REQUIRED=true`, the existing pre-signup acknowledgement
+and post-auth prerequisite remain in force. Only a deliberate authenticated
+command records the notice version/time. Neither mode asks for a birth date
+solely for confirmation. Editable Auth profile metadata must not be presented
+as proof of eligibility. The notice must not describe real mood, sleep, stress, study, calendar, planning,
 reflection, or Coach data as anonymous test data. A staging client containing
 synthetic fixtures must display a persistent `Staging · Test data` identity and
 must never be presented as the public pilot. Both surfaces are implemented in

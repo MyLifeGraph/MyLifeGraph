@@ -436,3 +436,45 @@ def test_deletion_reconcile_loop_survives_an_unexpected_cycle_failure(
         asyncio.run(main._reconcile_account_deletions(app))
 
     assert calls == 2
+
+
+@pytest.mark.parametrize("mismatch", [None, "gate_enabled", "gate_missing", "gate_binding", "deletion", "migration"])
+def test_optional_hosted_readiness_still_attests_gate_deletion_and_migrations(monkeypatch, mismatch):
+    settings = _hosted_settings().model_copy(update={"pilot_participation_required": False})
+    assert settings.is_hosted_environment and not settings.requires_pilot_participation
+    monkeypatch.setattr(main, "settings", settings)
+    app = main.create_app()
+    calls = []
+
+    class Client:
+        async def readiness_probe(self):
+            calls.append("reachable")
+        async def pilot_participation_gate(self):
+            calls.append("gate")
+            if mismatch == "gate_missing":
+                return None
+            return {
+                "contract_version": "pilot-participation-gate-v1",
+                "participation_required": mismatch == "gate_enabled",
+                "project_ref": "abcdefghijklmnopqrst" if mismatch in {"gate_enabled", "gate_binding"} else None,
+                "notice_version": "pilot-participation-notice-v1" if mismatch == "gate_enabled" else None,
+            }
+        async def account_deletion_recovery_status(self):
+            calls.append("deletion")
+            return {
+                "contract_version": "account-deletion-recovery-v2",
+                "legacy_direct_delete_revoked": True,
+                "pending_count": 1 if mismatch == "deletion" else 0,
+                "oldest_pending_at": "2020-01-01T00:00:00Z" if mismatch == "deletion" else None,
+            }
+        async def hosted_database_contract(self, *, through_head):
+            calls.append("migration")
+            assert through_head == HOSTED_DATABASE_HEAD
+            return _database_contract(identity_sha256="0" * 64 if mismatch == "migration" else HOSTED_DATABASE_IDENTITY_SHA256)
+
+    app.state.composition = SimpleNamespace(supabase_client=Client())
+    response = asyncio.run(_get(app, "/v1/ready"))
+    assert response.status_code == (200 if mismatch is None else 503)
+    if mismatch is None:
+        assert response.json()["migration_identity_sha256"] == HOSTED_DATABASE_IDENTITY_SHA256
+        assert calls == ["reachable", "gate", "deletion", "migration"]

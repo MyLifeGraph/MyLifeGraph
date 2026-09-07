@@ -82,6 +82,19 @@ Auth includes the contact in its privacy notice. Staging binds to
 pilot additionally requires a distinct
 `PILOT_SUPABASE_PROJECT_REF` and a current `sb_publishable_` key. Neither the
 helper nor CI prints the resulting values.
+`PILOT_PARTICIPATION_REQUIRED` selects whether the existing explicit confirmation
+blocks product access. Backend and generic Dart defaults are `true`; the hosted
+Flutter define writer defaults to `false` for pilot and `true` for staging,
+with an explicit boolean override. The small VPS pilot sets the API value to
+`false` too. Keep both sides aligned. Making confirmation optional does not
+automatically write acceptance; an explicit voluntary save still persists it.
+Auth, CAPTCHA, HTTPS, hosted guest denial and project/key/release guards remain
+unchanged. API readiness verifies the existing database gate
+against the selected policy: enabled with exact project/notice when required,
+disabled with null bindings when optional. No SQL migration or automatic gate
+mutation is part of this configuration. The notice and explicit confirmation
+remain available after sign-in.
+
 The hosted build deliberately does not translate `VITE_*` or `NEXT_PUBLIC_*`
 aliases: Vercel must provide the canonical names so the exact environment,
 project-ref, key-generation, and release-identity checks cannot be bypassed.

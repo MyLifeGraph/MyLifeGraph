@@ -51,6 +51,13 @@ export function hostedFlutterDefines(environment = process.env) {
     environment.TURNSTILE_SITE_KEY,
     /^[A-Za-z0-9_-]{20,128}$/,
   );
+  const configuredParticipation = environment.PILOT_PARTICIPATION_REQUIRED;
+  const participationRequired = configuredParticipation === undefined || configuredParticipation === ''
+    ? (target.appEnvironment === 'pilot' ? 'false' : 'true')
+    : configuredParticipation;
+  if (!['true', 'false'].includes(participationRequired)) {
+    throw new Error('PILOT_PARTICIPATION_REQUIRED must be exactly true or false.');
+  }
 
   return {
     APP_ENV: target.appEnvironment,
@@ -61,6 +68,7 @@ export function hostedFlutterDefines(environment = process.env) {
     STAGING_SUPABASE_PROJECT_REF: target.stagingProjectRef,
     PILOT_SUPABASE_PROJECT_REF: target.pilotProjectRef,
     PILOT_CONTACT_EMAIL: target.pilotContactEmail,
+    PILOT_PARTICIPATION_REQUIRED: participationRequired,
     APP_PUBLIC_ORIGIN: appPublicOrigin,
     TURNSTILE_SITE_KEY: turnstileSiteKey,
     SUPABASE_URL: target.supabaseUrl,
