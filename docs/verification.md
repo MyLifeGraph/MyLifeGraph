@@ -48,6 +48,28 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Matthias SSH enrollment installed (2026-09-07)
+
+The administrator supplied successful v2 preview/apply output for the prepared
+two-device bundle, bound to confirmation
+`5ff8b86b481640cc95d75474ed35d03801a86873a4618d4654ba4ab721e0e443`.
+It adds SSH access only for `mylifegraph-matthias`, retains the automation key,
+and creates no accounts or sudo grants. A subsequent independent connection
+using the existing automation key confirmed Matthias's UID 1003, `/bin/bash`,
+primary group plus `mylifegraph-work`, root-owned mode-0644 managed keys, and the
+root-owned mode-2770 shared workspace.
+
+Both installed public-key fingerprints match the supplied devices:
+
+- Laptop: `SHA256:yE6ilp3Q5UxMcyRZKtb01XNDJO08D5aBhWwv2/UkHSw`
+- VM: `SHA256:KTB0BfjSBl9Fx7s9o8EpJOen1LqIbgDZ2auyMmm8pT8`
+
+The same trusted connection read the server's Ed25519 host fingerprint:
+`SHA256:T3cGRrXwo6ao6ECqPGoPlvSTwyDUBtaP/IoaHoLbV+0`.
+No user private key was requested, read or used. Actual login and permission
+acceptance from Matthias's laptop and VM remain outstanding. No application
+activation or deployment authority was added by this operation.
+
 ### Multiple-device SSH enrollment preparation (2026-09-07)
 
 Task base: `6df56f25ab87e26ac5682021b978a4eef47c0967`. The access installer now
@@ -77,16 +99,16 @@ The prepared files were uploaded through the existing project SSH connection to
   `6c9e8aa9d042576245f88c5af564ae8930b9d5be20b7b077148ea7fd1d56f4b4`
 
 The manifest contains the two user-supplied Matthias public keys and preserves
-the existing automation key; it contains no private keys. No administrator
-preview/apply has run on the VPS. The final SSH read still found Matthias's
+the existing automation key; it contains no private keys. At the end of preparation, no administrator
+preview/apply had run on the VPS. That SSH read still found Matthias's
 nologin shell and empty managed key file. The reviewed operator command preserves
 the previous root-owned installer bundle before sealing the v2 installer and
 running preview only. The captured-base full affected workflow passed source,
 Flutter analysis/tests, 1,722 backend tests with two explicit opt-in skips, local
 database/isolated compatibility checks, web build and all eight browser journeys
 with process/user cleanup. No reset or migration apply was authorized or used against the normal local
-database; compatibility checks apply schemas only in disposable isolated targets. No new live SSH acceptance is claimed: the
-existing project connection observed Matthias's nologin account and empty managed
+database; compatibility checks apply schemas only in disposable isolated targets. Preparation did not claim live SSH acceptance: the
+project connection then observed Matthias's nologin account and empty managed
 key file; the existing automation public-key fingerprint matched prior acceptance.
 The SSH configuration is not readable by that project account and was not
 inspected through elevated authority. Administrative preview still checks it.

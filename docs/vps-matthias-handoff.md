@@ -37,18 +37,29 @@ Backup-Einrichtung Teil dieses Auftrags. Für Supabase-Agentenarbeit ausschließ
 den direkten Supabase-MCP verwenden, nicht das Supabase-Plugin. Zugangsdaten und
 Codex-OAuth-Dateien niemals auslesen oder in Chat/Repository übernehmen.
 
-## Optional: Matthias erhält eigenen SSH-Zugang
+## Matthias’ SSH-Zugang testen
 
-Für seine beiden Geräte werden zwei getrennte öffentliche Ed25519-Schlüssel
-unter demselben Benutzer `mylifegraph-matthias` aufgenommen. Der
-[Zugangsinstaller](../deploy/vps/ACCESS.md#acceptance-and-later-keys) unterstützt
-Schlüssellisten und erhält bestehende Zuordnungen. Der Administrator muss das
-separat vorbereitete Zugangspaket prüfen und anwenden; dieses Dokument und das
-RC4-Setup schalten den Login nicht automatisch frei. Private Geräteschlüssel
-bleiben bei Matthias. Der aktuelle Vorbereitungsstand steht im
-[Zugangs-Prüfnachweis](verification.md#multiple-device-ssh-enrollment-preparation-2026-09-07).
-Auch nach Freischaltung bleibt der untenstehende Abschluss eine `ops`-Aufgabe;
-Matthias erhält dadurch keine Sudo- oder Deployment-Rechte.
+Der Administrator hat beide Geräteschlüssel für `mylifegraph-matthias`
+freigeschaltet. Der [Zugangs-Prüfnachweis](verification.md#matthias-ssh-enrollment-installed-2026-09-07)
+enthält die unabhängig gelesenen Schlüssel- und Server-Fingerprints. Den
+Zugangsinstaller für diese Schlüssel nicht erneut ausführen. Private
+Geräteschlüssel bleiben bei Matthias; er erhält keine Sudo- oder Deployment-Rechte.
+
+Auf Laptop und VM jeweils mit dem dortigen privaten Schlüssel testen. Den
+Platzhalter durch den tatsächlichen Dateipfad ersetzen (ohne `.pub`):
+
+```bash
+ssh -i /pfad/zum/privaten_schluessel \
+  -o IdentitiesOnly=yes -o HostKeyAlgorithms=ssh-ed25519 \
+  mylifegraph-matthias@178.104.87.50
+```
+
+Beim ersten Login den angezeigten Server-Fingerprint mit dem Prüfnachweis
+abgleichen. Danach `whoami`, `id` und den Zugriff auf `/srv/mylifegraph-work`
+prüfen. Eine mögliche Passphrase-Abfrage betrifft Matthias' Geräteschlüssel.
+Die tatsächlichen Logins von beiden Geräten sind noch nicht bestätigt.
+Auch nach erfolgreichem Login bleibt der untenstehende Abschluss eine
+`ops`-Aufgabe.
 
 ## 1. Matthias: Domain und Supabase-Key vorbereiten
 
@@ -60,7 +71,7 @@ Die Browseradresse bleibt zunächst `https://my-life-graph-mu.vercel.app`. Eine 
 
 ## 2. Einmaliger Abschluss im `ops`-Terminal
 
-Matthias' Projektkonto hat derzeit noch keinen SSH-Login und keine Sudo-Rechte. Gregor oder ein vorhandener `ops`-Administrator führt deshalb diesen Schritt aus; Matthias muss das Sudo-Passwort nicht kennen. Währenddessen keine zweite Installation oder manuelle Dienstkonfiguration starten.
+Matthias' Projektkonto hat SSH-Zugang, aber keine Sudo-Rechte. Gregor oder ein vorhandener `ops`-Administrator führt deshalb diesen Schritt aus; Matthias muss das Sudo-Passwort nicht kennen. Währenddessen keine zweite Installation oder manuelle Dienstkonfiguration starten.
 
 Erst ausführen, wenn Domain und Key bereitstehen. Das Skript fragt beides ab, prüft den Datenbankzugriff und schaltet danach HTTPS, API und Coach ein:
 
