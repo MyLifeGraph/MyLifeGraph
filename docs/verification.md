@@ -48,6 +48,34 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Held RC2 installed with tool policy (2026-09-07)
+
+PR #9's required CI completed with five successful jobs and two path-selected
+skips; the user confirmed the exact protected fast-forward to
+`18e681d2e584ea3913a79b7d87b207de883c1808`. Local annotated tag
+`v0.1.0-pilot.1-rc.2` identifies that source. Its archive SHA256 is
+`3719cbe717c0d3a6561fd052875d865f4e40d8524765c28b4f19162ba949f0c4`;
+the source manifest SHA256 is
+`526f0d63cc2ede53cbadbcf274c6f5954d3b1012a3e044b17110a49f61d13e5e`.
+No remote tag publication is claimed.
+
+The administrator ran the independently reviewed, root-sealed RC2 package on
+the VPS after verifying its outer SHA256
+`47559444e94e106f6c684768149f3b4df42edf08fe5f4aaf899c3601531daa16`.
+Its output confirms source/helper hashes, real locked dependency installation,
+the held release at `/srv/mylifegraph/releases/v0.1.0-pilot.1-rc.2`, and runtime
+imports plus the fixed tool-policy hash under both API UID 995 and Coach UID
+994. The root script's final seal and stopped-service checks passed; it did not
+switch `current` or modify RC1. These privileged results come from the supplied
+administrator output; the project SSH identity cannot traverse the release tree.
+
+Subsequent independent project-SSH reads confirm API, executor, executor socket
+and Caddy inactive, system Docker and Hermes active, Codex `current` at 0.153.4,
+and no remaining build-UID process. This accepts the installed held candidate
+and policy readability, not an authenticated provider turn or public release.
+Account/terms and privacy decisions, login, live model/tool/event acceptance,
+domain/TLS and other public-release gates remain separate.
+
 ### Codex Coach tool authority (2026-09-06)
 
 Task base is `fbdf39500bd55ba9c4f8cc002bdf583e6c0cd6f2`. The VPS has the
