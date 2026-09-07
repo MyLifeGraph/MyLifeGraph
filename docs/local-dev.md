@@ -1103,6 +1103,21 @@ the RPC. A successful call deletes the Auth user and every canonical owned
 product row and cannot be undone. See `docs/v1-account-controls-contract.md`.
 Do not run a live deletion merely to verify a non-destructive checkout.
 
+Non-hosted development keeps the default in-memory deletion journal. Hosted
+configuration defaults to `ACCOUNT_DELETION_JOURNAL_BACKEND=s3`; existing S3
+credentials and recovery requirements remain unchanged. The small VPS pilot
+explicitly uses `ACCOUNT_DELETION_JOURNAL_BACKEND=vps_file` with
+`ACCOUNT_DELETION_JOURNAL_DIRECTORY=/var/lib/mylifegraph-api/deletion-journal`.
+The administrator provisions the private directory before startup using the
+[VPS runbook](../deploy/vps/README.md#privileged-bootstrap-ops); it is never
+created automatically by the writer. Explicit file-backed local tests must use
+a disposable private directory, not the live journal. File receipts remain
+private to the API, are not automatically pruned, and have no off-host recovery
+guarantee. This profile does not support restoring/reopening a database,
+including Supabase Auth and direct Data API access, until a separate recovery
+procedure is approved and verified. It introduces no AWS requirement or backup
+job and does not change the deletion API or its pending reconciler.
+
 Export first validates the complete bounded envelope. Web uses a browser
 download, desktop opens a cancellable save-location dialog, and Android uses
 the platform share sheet so the user chooses the destination. The app deletes

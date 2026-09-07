@@ -305,13 +305,12 @@ authentication timestamp. Flutter keeps the session open and asks the user to
 sign out, sign in again, and return to the deletion control.
 
 Migration `20260820170000_account_deletion_recovery_v2.sql` first writes a
-minimal forced-RLS intent, then the hosted API appends one canonical
-`account-deletion-journal-v2` object through a write-only S3 credential with
-SSE-KMS, versioning, and 45-day Compliance Object Lock. The object contains
-only deletion UUID, owner UUID, UTC acceptance time, and contract version.
-Email and product content never enter the journal. Only after the immutable
-object/hash receipt is accepted does the owner-locked V1 implementation delete
-the account and canonical/legacy data. Direct `service_role` execution of V1 is
+minimal forced-RLS intent, then the hosted API durably appends one canonical
+`account-deletion-journal-v2` envelope using the configured journal backend.
+The envelope contains only deletion UUID, owner UUID, UTC acceptance time, and
+contract version. Email and product content never enter the journal. Only after
+the durable content/hash receipt is accepted does the owner-locked V1
+implementation delete the account and canonical/legacy data. Direct `service_role` execution of V1 is
 revoked, so a rolled-back old API fails closed instead of bypassing the journal.
 
 Once append begins, restrictive database policies and FastAPI dependencies
@@ -328,7 +327,32 @@ RPC may remove focus history before deleting its targets. After a confirmed
 backend deletion, Flutter clears local auth state even if a remote sign-out can
 no longer find the deleted user.
 
-Backup recovery lists every retained journal object version through a separate
+The small VPS pilot explicitly selects `ACCOUNT_DELETION_JOURNAL_BACKEND=vps_file`
+and `ACCOUNT_DELETION_JOURNAL_DIRECTORY=/var/lib/mylifegraph-api/deletion-journal`.
+An administrator provisions this API-owned mode-0700 directory once. The writer
+publishes one private JSON file per deletion UUID without overwriting an
+existing entry, synchronizes file and directory before acknowledging success,
+and accepts retries only when the canonical content matches. Missing or unsafe
+directories and write failures fail closed; neither API startup nor tmpfiles
+silently recreates a lost journal. The existing prepare/append/accept/complete
+sequence and pending reconciler remain unchanged, as do HTTP and SQL contracts.
+
+This file profile has no off-host copy, Object Lock, or separate encryption
+key. The API can read its own receipts and its OS identity can alter its own
+files; it does not protect against a compromised API or loss of the VPS. The
+operator accepts that loss risk for the initial pilot. No automatic pruning or
+backup job is enabled. Restoring a database and reopening access is unsupported
+for this profile until a separately designed and verified recovery procedure
+covers Supabase Auth and direct Data API access as well as FastAPI. An empty
+replacement directory is not recovery evidence.
+
+The default hosted backend remains `s3`, using a write-only credential with
+SSE-KMS, versioning, and 45-day Compliance Object Lock. This is the separate
+restore-capable profile; its 45-day journal retention and maximum 35-day backup
+window do not authorize local-file pruning. Non-hosted development retains its
+default in-memory journal unless `vps_file` is explicitly selected.
+
+S3 backup recovery lists every retained journal object version through a separate
 read/decrypt identity, rejects delete markers, version ambiguity, wrong KMS or
 retention, and binds an exact recovery cutoff. The isolated replay tool alone
 uses the non-login `mylifegraph_deletion_replayer` role; the API `service_role`

@@ -50,6 +50,17 @@ runuser -u mylifegraph-deploy -- test ! -w /srv/mylifegraph/incoming ||
 
 api_uid="$(id -u mylifegraph-api)"
 executor_uid="$(id -u mylifegraph-coach)"
+if grep -qx 'ACCOUNT_DELETION_JOURNAL_BACKEND=vps_file' /etc/mylifegraph/api.env; then
+  journal_dir="$(config_value ACCOUNT_DELETION_JOURNAL_DIRECTORY /etc/mylifegraph/api.env)"
+  [[ "$journal_dir" == /var/lib/mylifegraph-api/deletion-journal && ! -L "$journal_dir" ]] ||
+    fail "VPS journal path is invalid"
+  [[ "$(stat -c '%a:%U:%G' "$journal_dir")" == "700:mylifegraph-api:mylifegraph-api" ]] ||
+    fail "VPS journal mode or ownership is wrong"
+  runuser -u mylifegraph-api -- test -w "$journal_dir" || fail "API cannot write its journal"
+  for user in mylifegraph-coach mylifegraph-deploy mylifegraph-agent; do
+    runuser -u "$user" -- test ! -x "$journal_dir" || fail "$user can traverse API journal"
+  done
+fi
 [[ "$(config_value COACH_EXECUTOR_ALLOWED_API_UID /etc/mylifegraph/executor.env)" == "$api_uid" ]] ||
   fail "executor peer UID does not match mylifegraph-api"
 expected_runtime_dir="/run/user/$executor_uid"

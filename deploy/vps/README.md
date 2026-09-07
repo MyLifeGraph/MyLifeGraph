@@ -68,6 +68,25 @@ The expected layout is:
   0.153.4/bin/codex
 ```
 
+## Small pilot without AWS or backup automation
+
+The initial small pilot explicitly uses `ACCOUNT_DELETION_JOURNAL_BACKEND=vps_file`
+in `api.env`, with
+`ACCOUNT_DELETION_JOURNAL_DIRECTORY=/var/lib/mylifegraph-api/deletion-journal`.
+This profile keeps Vercel, Supabase and the VPS as the application stack. It
+replaces the S3 prerequisite below with private durable local receipts and
+defers external backup jobs, storage and backup heartbeats. Other configuration,
+permissions, HTTPS and release gates still apply.
+
+The operator accepts that losing the VPS can lose the journal. Files are neither
+WORM nor encrypted off-host, and the API identity can read and alter them. No
+automatic pruning is configured. Database restore/reopening is unsupported,
+including Supabase Auth and direct Data API access, until a separately reviewed
+and verified recovery procedure exists. Supabase-managed snapshots do not waive
+that boundary. Do not recreate a lost journal as an empty directory and call it
+recovery. The existing backup/export/replay tools support the separate S3
+profile only; its original recovery requirements remain intact.
+
 ## Fast path before the domain exists
 
 The domain is not needed for repository verification, release-candidate
@@ -86,24 +105,27 @@ Complete these domain-independent gates first:
    BYOK OpenAI/Gemini remains independently available; the shared provider is
    not a fallback for an invalid or absent user key.
 3. Prepare a secret-free inventory naming the intended VPS, the distinct
-   staging and pilot Supabase project refs, release owner, backup owner, Codex
+   staging and pilot Supabase project refs, release owner, selected journal
+   profile (and backup owner when recovery is adopted), Codex
    account/quota owner, Android signing certificate fingerprint, and the
    planned `app`, `api`, and sender hostnames. Store actual keys only in their
    protected target environments.
 4. Resolve the non-domain prerequisites: an Ubuntu 24.04 host meeting
    `bin/preflight_host.sh`, a distinct pilot Supabase project with current
-   publishable/secret keys, the S3 Object-Lock/KMS deletion journal, encrypted
-   off-host Restic storage plus heartbeat, the private Android keystore, and
-   the public-registration privacy decision. SMTP, CAPTCHA, Google OAuth, and
-   their final redirects can be selected now but require the real domain for
-   acceptance.
+   publishable/secret keys, the selected deletion journal, the private Android
+   keystore, and the public-registration privacy decision. The file profile
+   needs the private directory below; the S3 recovery profile additionally
+   needs Object-Lock/KMS, encrypted off-host Restic storage and a heartbeat.
+   SMTP, CAPTCHA, Google OAuth, and their final redirects can be selected now
+   but require the real domain for acceptance.
 5. Record the account/terms and privacy go/no-go for subscription-backed
    Project Coach. Repository packaging is deliberately default-off and is not
    evidence that the account permits a multi-user hosted service.
 
 After the domain is registered, follow this shortest safe order: configure
 recoverable DNS ownership and the three hostname roles; finish the separate
-pilot Supabase/Auth/SMTP/CAPTCHA/OAuth configuration and restore proof;
+pilot Supabase/Auth/SMTP/CAPTCHA/OAuth configuration and selected journal
+acceptance (plus restore proof for the S3 recovery profile);
 bootstrap the VPS with the shared provider still off; install and preflight the
 held immutable RC; prove DNS/TLS; pass the executor-only Codex login,
 permission, image, and live multi-tool smoke; enable the shared provider using
@@ -160,7 +182,27 @@ identifier before use; never paste a secret into shell history.
    `root:mylifegraph-api` mode `0640`, `executor.env` as
    `root:mylifegraph-coach` mode `0640`, and `caddy.env` as `root:caddy` mode
    `0640`. Templates contain names and examples only.
-   Before the API can start in `pilot`, create a dedicated AWS S3 bucket with
+   For the small file-journal pilot, set the two journal variables above and
+   provision this directory **once, before first use**, while the API is stopped.
+   First verify that no earlier journal has been lost; this command is initial
+   provisioning, not a repair command:
+
+   ```bash
+   sudo /bin/bash -c '
+     set -euo pipefail
+     journal_dir=/var/lib/mylifegraph-api/deletion-journal
+     test ! -e "$journal_dir"
+     test ! -L "$journal_dir"
+     install -d -o mylifegraph-api -g mylifegraph-api -m 0700 "$journal_dir"
+   '
+   ```
+
+   Reuse an existing journal after checking ownership and permissions. Do not
+   empty it or add a tmpfiles rule to recreate it. The API refuses a missing or
+   unsafe directory; the surrounding existing API state directory is unchanged.
+   No S3 values are required for this profile or passed to the Coach.
+
+   For the default `s3` backend instead, create a dedicated AWS S3 bucket with
    versioning and Object Lock enabled and a dedicated KMS key. Give the API
    credential only `PutObject` access to `deletions/v2/*`, require SSE-KMS,
    COMPLIANCE retention, `If-None-Match: *`, and the expected bucket owner.
@@ -375,7 +417,8 @@ logs.
 
 - The disk timer records 70/80/90-percent thresholds. A separate off-host
   monitor must check public liveness/readiness every five minutes, TLS expiry,
-  and the daily backup heartbeat; same-host monitoring is not outage evidence.
+  and, for the S3 recovery profile, the daily backup heartbeat; same-host
+  monitoring is not outage evidence.
 - Caddy access logs mask client addresses, strip URL queries, and remove all
   credential-bearing headers. Journald and Caddy retention are bounded by the
   supplied configuration. Never enable debug request/body logging.
@@ -385,13 +428,16 @@ logs.
   traffic controls, not a registration limit.
 - Review disk, rootless image/layer use, Ubuntu/Caddy/Docker advisories, and
   restart/OOM state weekly. Do not run blind Docker prune.
-- Rebuild from the tagged source bundle, versioned host templates, independently
-  retained secret inventory, and off-host Supabase backup. Reauthenticate the
-  executor; never back up Codex OAuth state.
+- Rebuild application binaries from the tagged source bundle, versioned host
+  templates and independently retained secret inventory. Reauthenticate the
+  executor; never back up Codex OAuth state. The file profile has no supported
+  database restore/reopening procedure after journal loss. Off-host Supabase
+  backup and verified deletion replay belong to the separate S3 recovery profile.
 - Freeze discretionary runtime changes 48 hours before evaluation. Record the
   final SHA/tag, tool versions, image digest, APK checksum, TLS check, restore
   rehearsal, rollback owner, and known limitations in the attestation manifest.
 
-Remote Supabase backup, deletion-journal replay, Android signing, and external
-monitor setup have separate repository/runbook gates. Until those pass, these
-VPS artifacts are implementation evidence, not a production-ready claim.
+Remote Supabase backup and deletion-journal replay have separate gates for the
+S3 recovery profile; they remain deferred for the explicit file pilot. Android
+signing and external monitor setup retain their applicable release gates. These
+VPS artifacts alone are implementation evidence, not a production-ready claim.

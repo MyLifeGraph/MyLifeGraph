@@ -295,9 +295,21 @@ open.
   `account-deletion-v2` boundary; `GET /v1/account/deletion` returns strict
   `account-deletion-status-v2`. The client supplies only a stable retry UUID,
   never an owner id. Hosted deletion must first append the
-  `account-deletion-journal-v2` KMS/Object-Lock receipt, then the reconciler
-  converges any durable pending state. The runtime can write but cannot list,
-  read, decrypt, or replay journal objects.
+  `account-deletion-journal-v2` durable receipt, then the reconciler converges
+  any durable pending state. The default hosted `s3` backend uses write-only
+  KMS/Object-Lock storage; that runtime cannot list/read/decrypt/replay objects.
+  The explicit small-pilot `vps_file` backend instead writes private local
+  receipts under an administrator-provisioned API-owned mode-0700 directory.
+  It synchronizes files and the directory, rejects conflicting retry content,
+  and never overwrites an existing entry or silently recreates a missing
+  directory. The API identity can read and alter these files: they are not
+  off-host, WORM, or protected against API compromise or VPS loss. No backup
+  job or automatic pruning is added. Restore/reopening, including Supabase Auth
+  and direct Data API access, is unsupported for this profile until separately
+  designed and verified. Set `ACCOUNT_DELETION_JOURNAL_BACKEND=vps_file` and
+  `ACCOUNT_DELETION_JOURNAL_DIRECTORY=/var/lib/mylifegraph-api/deletion-journal`;
+  other hosted deployments retain the default `s3` backend and non-hosted
+  development retains its default in-memory writer.
   `POST /v1/account/pilot-participation` accepts only the exact versioned
   18-or-older self-attestation and derives its owner from the verified bearer;
   it stores no birth date and ignores editable Auth metadata for eligibility.
@@ -1091,9 +1103,9 @@ timeout and converged on the expected state.
 Permanent account deletion begins with the owner-locked implementation from
 `20260713233000_v1_account_delete.sql`, but the current public boundary is
 `20260820170000_account_deletion_recovery_v2.sql`. V2 records a minimal recovery
-intent, accepts only a write-only encrypted `account-deletion-journal-v2`
-receipt, revokes direct service-role V1 execution, and exposes service-only
-prepare/accept/complete/status/reconcile RPCs. Restore replay is granted only
+intent, accepts a canonical `account-deletion-journal-v2` content/hash receipt
+from the configured durable backend, revokes direct service-role V1 execution,
+and exposes service-only prepare/accept/complete/status/reconcile RPCs. Restore replay is granted only
 to the dedicated non-login database role. FastAPI additionally requires
 session-bound Supabase JWT `amr` sign-in evidence no more than 15 minutes old;
 a refresh-only or stale session receives `403` without starting the flow.

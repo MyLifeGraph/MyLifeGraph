@@ -79,6 +79,14 @@ class Settings(BaseSettings):
         default=10,
         alias="SUPABASE_TIMEOUT_SECONDS",
     )
+    account_deletion_journal_backend: Literal["s3", "vps_file"] = Field(
+        default="s3",
+        alias="ACCOUNT_DELETION_JOURNAL_BACKEND",
+    )
+    account_deletion_journal_directory: str = Field(
+        default="",
+        alias="ACCOUNT_DELETION_JOURNAL_DIRECTORY",
+    )
     account_deletion_journal_s3_url: str = Field(
         default="",
         alias="ACCOUNT_DELETION_JOURNAL_S3_URL",

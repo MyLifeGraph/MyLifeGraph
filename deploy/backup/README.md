@@ -5,6 +5,17 @@ default execution host is a protected GitHub Actions environment, not the VPS.
 The workflow is inert until the repository variable `PILOT_BACKUP_ENABLED` is
 set to exact `true` and all protected secrets/variables are configured.
 
+This runner and its deletion-journal export/replay contract apply only to the
+S3 recovery profile. The initial small VPS pilot instead explicitly selects
+`ACCOUNT_DELETION_JOURNAL_BACKEND=vps_file` and defers this workflow, off-host
+storage and backup heartbeats. Private local receipts retain the same
+`account-deletion-journal-v2` envelope, but this tooling cannot export or attest
+them as a complete recovery ledger. VPS loss is accepted; database
+restore/reopening, including Supabase Auth and direct Data API access, is
+unsupported until a separate recovery procedure is designed and verified.
+Do not enable this workflow as a substitute for that procedure or apply its
+45-day journal/35-day maximum backup-window policy as automatic local pruning.
+
 The runner uses Supabase CLI `2.107.0` and Restic `0.19.1`. It creates roles,
 application schema, data, migration-history schema/data, a complete
 `auth,storage` managed-schema part, and the official custom-schema diff part.

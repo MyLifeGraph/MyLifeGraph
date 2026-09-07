@@ -53,6 +53,25 @@ unavailable.
 
 ### Release profiles
 
+The authorized initial **small VPS pilot without AWS** explicitly selects the
+`vps_file` deletion-journal backend. Vercel, Supabase and the VPS remain the
+application stack. The operator accepts potential journal loss with the VPS;
+external backup automation, storage and backup heartbeats are deferred. This
+recovery-profile decision is independent of the Coach provider choice below.
+It supersedes the mandatory S3/KMS/off-host-backup and restore-proof requirements
+elsewhere in this plan only for this profile. It does not authorize remote
+migrations or waive Auth, ownership, secrets, permission, TLS or product gates.
+The existing S3 recovery profile retains all its original requirements.
+
+Account deletion stays enabled through the unchanged prepare/append/accept/
+complete and reconciliation flow. Private durable local receipts replace the
+S3 append; they are not WORM, encrypted off-host or safe from a compromised API.
+No database restore/reopening is supported for this profile, including Supabase
+Auth and direct Data API access, until a separately designed and verified
+recovery procedure exists. No automatic file pruning is added. A missing
+journal must never be silently replaced with an empty directory. See
+[the scoped recovery contract](#small-pilot-file-journal).
+
 The target handoff is the **full evaluation pilot**. It includes working BYOK
 configuration and a ready no-BYOK `operator_codex_pilot` choice, so the
 professor can evaluate Coach without owning an API key. If the account/terms,
@@ -84,7 +103,7 @@ risk without describing the path as approved or generally production-ready.
 | Public domain | Buy one independently controlled low-renewal-cost domain | Use `app.<domain>` for Vercel, `api.<domain>` for the VPS, and a dedicated sender subdomain such as `auth.<domain>`. Continue using the free project-ref `*.supabase.co` endpoints; do not buy the Supabase Custom Domain add-on for this pilot. |
 | Operating budget | At most EUR 10/month in additional recurring services beyond the already held VPS and Codex subscription | Domain renewal, SMTP, CAPTCHA, monitoring, and encrypted off-host storage must fit this ceiling without automatic paid upgrades or uncapped overage. Target domain renewal is at most EUR 20/year. |
 | Public Auth mail | Custom SMTP for arbitrary addresses | Supabase may remain on Free, but the SMTP/domain provider is a separate account, operational dependency, and possible cost that must be accepted before release. |
-| Off-host recovery | Encrypted backup store plus append-only deletion journal | This is independent of the VPS and may require a small storage/monitoring account; its current price, retention, and object-lock support are release decisions. |
+| Recovery profile | Initial small pilot uses a private durable VPS file journal and defers backups | VPS loss is accepted; database restore/reopening is unsupported. The separate S3 recovery profile retains encrypted off-host storage and Object Lock requirements. |
 | Backend | One FastAPI instance plus one separately sandboxed Coach executor on the VPS | Port 8000 stays on loopback; only HTTPS through the reverse proxy is public. FastAPI owns Supabase access, while the executor alone owns Codex OAuth and the rootless container daemon. |
 | App access | Public self-signup, email/password plus optional Google | There is no invite flow, account allowlist, or three-user hard cap. CAPTCHA and rate limits control abuse. |
 | BYOK | OpenAI and Gemini keys supplied by the user | A key stays out of Postgres and server logs. An invalid BYOK turn fails as that provider and never changes provider automatically. |
@@ -166,7 +185,7 @@ or intentionally deferred gates close:
 5. Android positive signing needs the private keystore/secrets and a physical
    device; repository tests prove only fail-closed configuration and a debug
    build.
-6. Backup needs a separately owned encrypted object store, credentials,
+6. The separate S3 recovery profile needs an encrypted object store, credentials,
    heartbeat monitor, actual isolated database restore, and a real
    `account-deletion-journal-v2` bucket/KMS/Object-Lock policy. The versioned
    export/replay/watermark design exists in source, but until it passes against
@@ -1101,7 +1120,7 @@ dedicated secret store:
 - current Supabase backend secret key for the pilot API;
 - scheduled-refresh token;
 - explicit pilot/provider gates;
-- narrowly scoped deletion-journal append credential;
+- narrowly scoped deletion-journal append credential for the S3 profile only;
 - any future operator API key; and
 - other backend-only runtime credentials.
 
@@ -1133,8 +1152,9 @@ Record only sanitized operational facts:
 - process restart/OOM state; and
 - CPU, memory, disk, image, release, and journal usage.
 
-Alert or visibly report at 70%, 80%, and 90% disk use. Bound journal retention,
+Alert or visibly report at 70%, 80%, and 90% disk use. Bound system-log retention,
 retain only two or three known-good releases, and inspect image/layer growth.
+Do not automatically prune file-backed account-deletion receipts.
 Do not run blind automatic Docker prune because it can remove the only prepared
 analysis image or rollback dependency.
 
@@ -1153,8 +1173,8 @@ same VPS cannot report that the VPS or network is down. The initial contract is:
   outside the VPS every five minutes, tracking their failures separately;
 - alert after three consecutive failures and record recovery;
 - alert on TLS expiry at 21 and 7 days;
-- send a daily backup-job heartbeat and alert when no successful, checksum-
-  verified backup is recorded for 26 hours;
+- for the S3 recovery profile, send a daily backup-job heartbeat and alert when
+  no successful, checksum-verified backup is recorded for 26 hours;
 - aggregate sanitized API metrics and alert on at least three unexpected 5xx
   responses in ten minutes, three consecutive executor/provider failures, or
   disk thresholds of 70/80/90 percent; busy 429 is measured separately and is
@@ -1185,6 +1205,32 @@ local executor probe sends only an aggregate heartbeat.
   evaluation, while retaining authority for an urgent security shutdown.
 
 ## Backup, Restore, Rebuild, And Rollback
+
+### Small pilot file journal
+
+Set `ACCOUNT_DELETION_JOURNAL_BACKEND=vps_file` and
+`ACCOUNT_DELETION_JOURNAL_DIRECTORY=/var/lib/mylifegraph-api/deletion-journal`.
+An administrator provisions this API-owned mode-0700 subdirectory once; neither
+startup nor tmpfiles creates it. One private file per deletion UUID contains
+only the existing canonical `account-deletion-journal-v2` envelope. Publication
+is atomic without overwrite, file and directory are synchronized before the
+receipt is acknowledged, and retries must match existing content. A missing or
+unsafe directory and write errors fail closed. Existing Supabase deletion RPCs,
+RLS restrictions and the pending reconciler remain unchanged.
+
+The operating profile adds no daemon, user, dependency or SQL migration. It has
+no off-host copy or automatic pruning, and the API OS identity can alter its own
+files. Losing the VPS can lose the receipts; the operator has accepted that
+risk. Supabase backup availability is not a tested recovery procedure. Database
+restore/reopening, including Auth and direct Data API access, remains unsupported
+until a separate recovery design is verified. Replacing a lost directory with
+an empty one does not resolve that condition.
+
+The following Supabase and restore-safe deletion sections describe only the
+separate S3 recovery profile. The existing replay/export tool remains S3-only.
+Its 45-day journal retention and maximum 35-day backup window are future
+recovery-policy constraints if that profile is adopted, not permission to purge
+local receipts or a promise of automated expiration.
 
 ### Supabase
 
@@ -1575,8 +1621,8 @@ until target-host measurements pass.
 
 ### Release decision
 
-Any failed security, ownership, secret, TLS, backup/restore, Auth callback,
-provider-fallback, or rollback gate is a no-go. Capacity failure may be closed
+Any failed security, ownership, secret, TLS, applicable recovery-profile, Auth
+callback, provider-fallback, or rollback gate is a no-go. Capacity failure may be closed
 by lowering provider concurrency or budget if the resulting busy behavior is
 honest and tested; it may not be hidden with unbounded queues or user account
 blocking.

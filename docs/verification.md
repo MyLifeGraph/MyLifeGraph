@@ -48,6 +48,188 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Explicit VPS file deletion journal (2026-09-07)
+
+The user authorized the small `vps_file` pilot and accepted loss of the journal
+with the VPS, while deferring AWS and backup automation. The implementation
+retains the existing deletion intent/receipt/completion and reconciliation flow,
+canonical V2 envelope, logical receipt key and public contracts. No migration,
+new service identity, daemon or dependency is introduced. The hosted default
+remains S3; the VPS template explicitly selects the private file backend.
+
+The file writer requires a provisioned API-owned mode-0700 directory and never
+creates or repairs missing storage. It writes private canonical receipts with
+atomic no-overwrite publication, synchronizes the file, journal directory and
+its existing parent before acknowledgement, and verifies exact retry content.
+The tests cover concurrent retries, process exit before and after publication,
+thread-waiter cancellation, corrupt/non-regular/symlink entries, restrictive
+umask and failures at each synchronization stage. Account-service integration
+proves write failures remain pending without journal acceptance or completion,
+and a later retry can complete. Host preflight tests exercise both profiles and
+reject missing/unsafe file storage. The recovery-page message now confirms a
+durable request without claiming off-site storage; its existing widget test
+covers durable pending without premature completion or sign-out.
+
+The final backend gate passes 1,713 tests with two intentional live-provider/
+real-image opt-in skips. The VPS gate passes 43 tests and the focused account
+controls widget gate passes all 10 tests. The captured-base affected selector
+selected the full local verification workflow, which passed source/Flutter/
+backend checks, local database verification and isolated compatibility checks,
+the web build, and all eight browser journeys with fixture/process cleanup.
+After the review corrections, the complete backend, focused widget checks and
+web build were repeated successfully. Independent review found no remaining material
+issue after the neutral UI wording and additional crash/cancellation evidence.
+The final documentation and whitespace checks pass.
+
+The file profile has no WORM/off-host guarantee, automatic pruning, or supported
+database restore/reopening procedure, including Supabase Auth/Data API. Existing
+S3 recovery tooling remains S3-only. This is local implementation evidence;
+the VPS still has RC2, whose API has not been configured or started. No remote
+migration, new model turn, deployment or main update is claimed.
+
+### API configuration preflight, not started (2026-09-07)
+
+Direct Supabase MCP project-URL reads verified the intended pilot target as
+`oscrunlndfrecjilojja`; the connector named `supabase_pilot` instead points to
+staging `kvdunemnuqcvbhrlfnsh`. Connector names are not environment authority.
+The pilot's migration-list call returned 69 entries ending at
+`20260820200000_account_deletion_replayer_role_guard_v2.sql`, the same count and
+last identity as the RC2 source. SQL-based checks failed with `Insufficient
+scope`, so current participation-gate, deletion-recovery and installed runtime
+contract attestation remain unverified. A matching migration-list head/count
+is not a substitute for those checks or the ordered-identity digest.
+
+Source inspection of RC2 confirms hosted API composition constructs the S3/KMS
+journal writer during startup, and its lifespan reconciles Coach and deletion
+state. Starting it against the real database is therefore not a read-only
+connection probe. A secret-free configuration draft has the verified project
+refs; credentials, journal destination and real origin are unresolved. No API
+start, database change, AWS provisioning or backup configuration occurred.
+
+### Single model turn through the RC2 service accepted (2026-09-07)
+
+After the internal control-path acceptance, the user authorized one synthetic
+model turn through that service. The new administrator handoff archive has
+SHA256 `cd00a222bcb7ab41db8a942cb7dfcfd2ae615d617afa96f4dcbeda28ce8a9e34`.
+It reuses the held RC2 service override and the prior direct-test fixture,
+executes the actual socket client as API UID 995, and permits one execute frame
+without retry. It checks the returned model identity when present, reply,
+three completed data tools, snapshot integrity and cleanup. The pinned model
+configuration does not independently identify a model when `model_reported`
+is null.
+
+The new client passed real local Unix-transport rehearsals against a fake
+provider for success, provider failure, invalid trace and cancellation, with
+exactly one execute and empty client/executor temporary directories each time.
+Wrapper success and injected start/API/stop failures passed with substituted
+systemd/host reads. Real dummy process groups exercised both graceful and
+forced termination after a client timeout. No real model was called during
+these local checks. The target's normal 180-second model limit remains;
+the temporary service lifetime is 240 seconds and its API probe has a
+210-second process-group watchdog plus a 10-second kill grace period.
+
+Cleanup checks stopped services, removed runtime configuration, unchanged
+persisted configuration and release link, absent analysis containers and restored
+application temporary-directory entry sets. This does not claim removal of
+native CLI cache or OAuth helper state.
+
+The administrator subsequently ran the hash-verified archive on the VPS.
+The supplied output reports `passed` for exactly one execute request through
+the real service, with all three tools (`inspect_data`, `query_data`,
+`run_python`) completed, three trace rows and a 994-character reply. The fixture
+was synthetic, its snapshot was unchanged, and API temporary-file removal
+passed. Configured model was `gpt-5.5`; `model_reported` was null, so the result
+does not independently confirm model identity or delivered service tier.
+Cleanup reported no failed checks: analysis containers and application temporary
+files were cleared, the runtime override removed, services stopped and persisted
+provider enablement left false.
+
+Independent follow-up project-SSH reads confirmed API, executor, socket and
+Caddy inactive and disabled with empty `DropInPaths`, the runtime override
+absent, Docker/Hermes/Coach user manager active, no API-UID processes and only
+the pre-existing user-manager/rootless-Docker processes under Coach UID 994.
+This accepts one synthetic live turn through the installed systemd executor,
+its native Codex/MCP path and isolated analysis tools on this machine/account.
+It does not accept API HTTP/persistence, durable quotas, public TLS/browser
+operation or general response quality. No extra model turn was sent during
+follow-up checks; backups and domain setup remain deferred.
+
+### Internal RC2 executor service accepted (2026-09-07)
+
+The user authorized an internal systemd/socket test while deferring backups
+and domain setup. Fresh project-SSH inspection found the API, Coach executor,
+executor socket and Caddy inactive and disabled, with the installed executor
+unit/socket matching the repository definitions. No service was started by
+that inspection.
+
+The administrator handoff temporarily selects the sealed RC2 release through
+an override below `/run/systemd/system`, preserving the installed service
+sandbox. It enables the executor only through a temporary environment file,
+uses the actual API adapter as UID 995 to trigger socket activation and check
+readiness, reserve/busy/release and malformed-request rejection, and checks
+API denial of the analysis socket plus automation/filesystem and Coach/peer-UID
+denial of the executor socket. No execute frame or model turn is sent. Cleanup
+attempts both stops, override removal, unit reload and unchanged-state checks
+even after a probe or cleanup-step failure. The persisted environment and
+public release link are not changed; this is not an API or public deployment.
+
+All 11 existing executor tests passed with local Unix-socket I/O enabled. The
+new API probe also passed against the real local protocol server with a fake
+provider; target UIDs and Docker-socket denial were simulated in that rehearsal.
+Success, start failure, API failure, peer-probe failure and socket-stop failure
+were exercised with real temporary override files and substituted manager/host
+reads. Cleanup continued after the injected stop failure and reported failure
+rather than claiming successful restoration. Those local rehearsals alone do
+not prove the target host's systemd execution.
+
+The administrator subsequently executed the independently reviewed handoff
+archive with verified SHA256
+`4cc2638b3441d1c3d18e755059a9ca9f9a1c3746a0b258291f66b7d3799f9868`.
+The supplied output reports successful socket activation of the actual service
+under Coach UID 994 and `ready` through the API adapter. Busy rejection,
+reservation release, malformed-request rejection, API denial of the rootless
+Docker socket, wrong-peer-UID rejection and automation socket denial all passed.
+Cleanup reported no failed checks, removed the runtime override, stopped the
+services and verified persisted provider enablement remained false. No model
+request was sent.
+
+Independent follow-up project-SSH reads confirmed all four application units
+inactive and disabled with empty `DropInPaths`, the temporary override directory
+absent, and system Docker, Hermes and the Coach user manager active. Only the
+existing user-manager/rootless-Docker processes remained under Coach UID 994.
+This accepts the installed systemd activation, control protocol, native readiness
+and tested access boundaries. The subsequent synthetic model turn through
+systemd is accepted above. API persistence and quotas, browser/TLS and public
+deployment remain separate acceptance steps. Backups and domain setup are
+still deferred by the user.
+
+### Authenticated RC2 Coach smoke on the VPS (2026-09-07)
+
+The administrator ran the independently reviewed readiness probe as Coach UID
+994 against the installed RC2 runtime and protected executor configuration.
+It reported `ready`, CLI `0.153.4`, configured model `gpt-5.5`, and persisted
+provider enablement `false`, without sending a model request. Only native CLI
+status was inspected; no raw OAuth state was exposed or copied by the diagnostics.
+
+The administrator then ran the root-sealed live probe with SHA256
+`f97a9f692268f6f892da346138ea73da72e2f760f08cd69a29dc6907116de754`.
+Its supplied output reports `passed` for one direct Coach turn using only
+synthetic data, bounded to 180 seconds. All three tools (`inspect_data`,
+`query_data`, `run_python`) completed, producing three trace rows and a
+1,149-character reply. Snapshot integrity, analysis-container cleanup and
+temporary-file removal passed. GPT-5.5 and Fast were explicitly configured;
+`model_reported` was null, so there is no independently reported model identity
+or service-tier confirmation. The probe enabled dispatch only in memory;
+persisted provider enablement remained false.
+
+Subsequent independent project-SSH reads confirm API, executor, executor socket
+and Caddy inactive, system Docker and Hermes active, and no remaining Codex
+process under the Coach UID. This accepts the direct authenticated provider/MCP
+path for this machine/account and fixture. It does not accept the systemd
+executor/socket path, API persistence or quotas, public TLS/browser flow,
+general response quality, or shared-account policy. Those release gates remain
+separate; no second live turn was sent during the follow-up verification.
+
 ### Held RC2 installed with tool policy (2026-09-07)
 
 PR #9's required CI completed with five successful jobs and two path-selected
@@ -73,8 +255,9 @@ Subsequent independent project-SSH reads confirm API, executor, executor socket
 and Caddy inactive, system Docker and Hermes active, Codex `current` at 0.153.4,
 and no remaining build-UID process. This accepts the installed held candidate
 and policy readability, not an authenticated provider turn or public release.
-Account/terms and privacy decisions, login, live model/tool/event acceptance,
-domain/TLS and other public-release gates remain separate.
+Login and direct live model/tool/event acceptance were subsequently exercised
+in the scoped smoke above. Account/terms and privacy decisions, domain/TLS and
+other public-release gates remain separate.
 
 ### Codex Coach tool authority (2026-09-06)
 

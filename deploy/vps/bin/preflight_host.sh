@@ -54,6 +54,8 @@ codex_manifest="$helper_dir/manifests/codex-cli.json"
   fail "VPS api.env must use exact APP_ENV=pilot"
 python3 - /etc/mylifegraph/api.env <<'PY'
 import re
+import pwd
+import stat
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -67,6 +69,25 @@ for line in path.read_text(encoding="utf-8").splitlines():
     if key in values:
         raise SystemExit(f"duplicate protected API setting: {key}")
     values[key] = value
+
+backend = values.get("ACCOUNT_DELETION_JOURNAL_BACKEND", "s3")
+if backend == "vps_file":
+    directory = Path(values.get("ACCOUNT_DELETION_JOURNAL_DIRECTORY", ""))
+    if directory != Path("/var/lib/mylifegraph-api/deletion-journal"):
+        raise SystemExit("VPS journal must use the dedicated persistent API directory")
+    if directory.resolve(strict=True) != directory:
+        raise SystemExit("VPS journal directory must not contain symlinks")
+    info = directory.lstat()
+    api = pwd.getpwnam("mylifegraph-api")
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != 0o700
+        or (info.st_uid, info.st_gid) != (api.pw_uid, api.pw_gid)
+    ):
+        raise SystemExit("VPS journal directory must be private and API-owned")
+    sys.exit(0)
+if backend != "s3":
+    raise SystemExit("unsupported deletion journal backend")
 
 required = {
     "ACCOUNT_DELETION_JOURNAL_S3_URL",

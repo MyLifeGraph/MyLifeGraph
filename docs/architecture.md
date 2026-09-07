@@ -45,8 +45,9 @@ FastAPI -> OpenAI/Gemini with one request-scoped user BYOK key
 FastAPI -> local Codex CLI/OAuth (explicit Phase 10 development adapter only)
 FastAPI -> peer-authenticated Unix socket -> dedicated pilot Coach executor
 Pilot Coach executor -> pinned Codex CLI/OAuth + executor-only rootless Docker
-FastAPI -> write-only KMS/Object-Lock deletion journal
-Backup owner -> read/decrypt journal -> isolated restore/replay role
+FastAPI -> private VPS file deletion journal (explicit small-pilot profile)
+FastAPI -> write-only KMS/Object-Lock deletion journal (default hosted profile)
+S3 backup owner -> read/decrypt journal -> isolated restore/replay role
 ```
 
 The Flutter app is the main product surface. Supabase is the intended auth and
@@ -1526,19 +1527,33 @@ catalog-ordered tables to both Account Export and Coach Snapshot. Flutter
   validates the entire envelope and counts before saving. Full deletion requires
 exact typed confirmation, recent session-bound authentication, and one stable
 UUIDv4. FastAPI persists a minimal intent, appends the canonical
-`account-deletion-journal-v2` payload through a write-only S3/KMS/Object-Lock
-credential, and only then invokes the owner-locked delete transaction. Once
+`account-deletion-journal-v2` payload through the selected durable journal
+backend, and only then invokes the owner-locked delete transaction. Once
 append starts, RLS and FastAPI block product access; the reconciler converges
 ambiguous work. Direct V1 service-role deletion is revoked.
 
-Recovery is a separate authority. A protected backup runner lists exact
-versioned journal objects with read/decrypt credentials, rejects delete markers
+The explicit `vps_file` small-pilot profile stores the unchanged minimal envelope
+in `/var/lib/mylifegraph-api/deletion-journal`, an administrator-provisioned,
+API-owned mode-0700 directory outside releases. Atomic publication without
+overwrite, file/directory synchronization, and content-matching retries preserve
+the append boundary. A missing directory is not silently recreated. There is no
+new process, database table, backup job, or dependency. This private local store
+is readable and writable by the API identity; it is not off-host, WORM, or
+protected against a compromised API. VPS loss can lose the journal. Database
+restore/reopening, including Supabase Auth and direct Data API access, is
+unsupported until a separately reviewed recovery procedure exists. Files are
+not automatically pruned.
+
+The default hosted `s3` profile retains its write-only S3/KMS/Object-Lock
+credential. Its recovery is a separate authority. A protected backup runner
+lists exact versioned journal objects with read/decrypt credentials, rejects delete markers
 or KMS/Object-Lock drift, and binds them to a recovery cutoff. Only the isolated
 `mylifegraph_deletion_replayer` database role can invoke replay. Auth/profile,
 all owner relations, Storage, and a content-bound identifier-free watermark
 must pass before restored access can open. The API/executor cannot read or
-replay this ledger. On PostgreSQL 16+ the role catalog necessarily contains one
-creator ADMIN edge; `SET` and `INHERIT` remain false and every additional or
+replay this S3 ledger. The existing export/replay tool is S3-only and cannot
+attest recovery of the file profile. On PostgreSQL 16+ the role catalog
+necessarily contains one creator ADMIN edge; `SET` and `INHERIT` remain false and every additional or
 reverse membership is rejected. No real off-host restore/replay is claimed
 from source.
 

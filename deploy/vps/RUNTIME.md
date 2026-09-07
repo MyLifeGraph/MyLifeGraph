@@ -110,10 +110,16 @@ and Docker workloads still run. Reboot acceptance is a separately approved step.
 Then continue [VPS operations](README.md): install the pinned Codex archive
 through its existing dedicated installer; authenticate as the isolated Coach
 UID; prepare a verified tagged release and its hash-locked Python environment;
-build its revision-bound analysis image; configure the hosted data/backup and
-deletion-journal prerequisites; obtain the domain; validate Caddy/TLS/CORS; and
+build its revision-bound analysis image; configure hosted data and the selected
+deletion-journal profile; obtain the domain; validate Caddy/TLS/CORS; and
 finally promote the exact release after all gates. Never start the local
 development server publicly to bypass missing pilot configuration.
+
+The explicit small-pilot profile uses the private VPS file journal and defers
+backup automation and AWS. Provision its mode-0700 API-owned subdirectory
+separately using the VPS runbook; this foundation does not create it through
+startup or tmpfiles. VPS loss is accepted, but database restore/reopening is
+unsupported. The separate S3 recovery profile retains its backup/restore gates.
 
 The unit tests run in `npm run verify:vps`. The local Ubuntu rehearsal uses real
 package binaries/filesystem operations and Caddy parsing; its service-manager,

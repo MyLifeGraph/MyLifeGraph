@@ -41,7 +41,7 @@ class _AccountDeletionRecoveryPageState
               completed
                   ? 'Your synced account data has been deleted. Finish signing out on this device.'
                   : durable
-                      ? 'The off-site recovery journal is confirmed. The server will keep retrying until the account is removed.'
+                      ? 'Your deletion request has been durably recorded. The server will keep retrying until the account is removed.'
                       : 'The app kept the same deletion identity on this device. Retry while signed in; do not start a second deletion request.',
             ),
             if (_message != null) ...[

@@ -684,3 +684,51 @@ def test_delete_blocks_active_processing_before_persisting_intent() -> None:
 
     assert events == ["blocked:owner-1"]
     assert len(repository.deletion_prepare_calls) == 1
+
+
+@pytest.mark.parametrize("failed_sync", [1, 2, 3])
+def test_vps_journal_disk_failure_stays_pending_then_retry_completes(
+    tmp_path, monkeypatch, failed_sync,
+) -> None:
+    import os
+
+    from app.vps_deletion_journal import VpsFileDeletionJournalWriter
+
+    directory = tmp_path / "journal"
+    directory.mkdir(mode=0o700)
+    repository = Repository()
+    service = AccountService(
+        repository=repository,
+        deletion_journal=VpsFileDeletionJournalWriter(str(directory), now=lambda: NOW),
+        now=lambda: NOW,
+    )
+    calls = 0
+    real_sync = os.fsync
+
+    def disk_failure(fd):
+        nonlocal calls
+        calls += 1
+        if calls == failed_sync:
+            raise OSError("injected storage failure")
+        real_sync(fd)
+
+    async def delete():
+        return await service.delete_account(
+            user_id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+            deletion_id=REQUEST_ID,
+            confirmation="DELETE",
+        )
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(os, "fsync", disk_failure)
+        pending = asyncio.run(delete())
+    assert pending.state == "deletion_pending"
+    assert pending.journal_durable is False
+    assert repository.deletion_accept_calls == []
+    assert repository.deletion_complete_calls == []
+    completed = asyncio.run(delete())
+    assert completed.state == "completed"
+    assert completed.journal_durable is True
+    assert len(repository.deletion_accept_calls) == 1
+    assert len(repository.deletion_complete_calls) == 1
+    assert len(list(directory.glob("*.json"))) == 1

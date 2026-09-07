@@ -589,6 +589,10 @@ cancels active Coach work, clears device BYOK material, blocks normal product
 navigation, and waits for durable `deletion_pending` or `completed` truth.
 Only completion/durable acceptance permits final auth teardown; transport or
 contract ambiguity never becomes a success claim.
+The pending recovery message says the deletion request is durably recorded and
+the server keeps retrying until removal. It does not claim off-site storage or
+restore support, so the same UI remains accurate for both supported journal
+backends without exposing infrastructure configuration.
 
 Insights shows the Skill profile only in explicitly local/demo mode and labels
 it as example data. Real accounts neither load nor render `skillset_profiles`

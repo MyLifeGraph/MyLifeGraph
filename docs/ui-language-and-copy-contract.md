@@ -13,15 +13,16 @@ provider will be used after failure.
 `provider_busy` says `Project Coach is busy. Retry manually when the countdown
 ends.`; the countdown is visible, bounded, and never an automatic retry.
 
-The implemented restore-safe hosted deletion flow states the exact irreversible
-off-host-journal point and distinguishes `deletion_pending` from completed
-deletion. Before that point, copy says deletion is paused and the account stays
-signed in for the same-request retry. After durable journal acceptance, recovery
-copy says the off-site journal is confirmed and the server keeps retrying until
-the account is removed; a transient database failure is never presented as a
-cancelled accepted deletion. This is current V2 source behavior, but it is not
-hosted availability evidence until the external journal, backup, migration, and
-deployment gates pass.
+The hosted deletion flow states the exact irreversible durable-journal point
+and distinguishes `deletion_pending` from completed deletion. Before that
+point, copy says deletion is paused and the account stays signed in for the
+same-request retry. After durable journal acceptance, recovery copy says
+`Your deletion request has been durably recorded. The server will keep retrying
+until the account is removed.` This wording applies to both the private VPS file
+journal and the S3 journal; it promises neither off-site storage nor restore
+support. A transient database failure is never presented as a cancelled accepted
+deletion. This is current V2 source behavior, not hosted availability evidence;
+applicable journal-profile, migration and deployment gates still require proof.
 
 The public-pilot repository flow is adult-only and allows ordinary personal
 use. Its implemented `pilot-participation-v1` /

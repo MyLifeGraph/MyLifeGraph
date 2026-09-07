@@ -309,6 +309,10 @@ class S3DeletionJournalWriter:
 
 
 def deletion_journal_from_settings(settings: Settings) -> DeletionJournalWriter:
+    if settings.account_deletion_journal_backend == "vps_file":
+        from app.vps_deletion_journal import VpsFileDeletionJournalWriter
+
+        return VpsFileDeletionJournalWriter(settings.account_deletion_journal_directory)
     if settings.is_hosted_environment:
         return S3DeletionJournalWriter.from_settings(settings)
     return InMemoryDeletionJournalWriter()

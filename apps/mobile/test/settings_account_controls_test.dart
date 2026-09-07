@@ -14,6 +14,7 @@ import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'package:my_life_graph/features/settings/application/account_export_saver.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings_repository.dart';
+import 'package:my_life_graph/features/settings/presentation/pages/account_deletion_recovery_page.dart';
 import 'package:my_life_graph/features/settings/presentation/pages/settings_page.dart';
 import 'package:my_life_graph/features/settings/presentation/providers/account_settings_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -678,6 +679,38 @@ void main() {
       'Deletion could not yet be confirmed. Retry the same request from the recovery screen.',
     );
     expect(container.read(authNoticeProvider)?.isError, isTrue);
+
+    unawaited(
+      Navigator.of(tester.element(find.byType(SettingsPage))).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const AccountDeletionRecoveryPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Deletion needs another retry'), findsOneWidget);
+
+    container.read(authControllerProvider.notifier).enterAccountDeletionRecovery(
+          AccountDeletionResult(
+            deletionId: 'a1000000-0000-4000-8000-000000000001',
+            state: AccountDeletionState.deletionPending,
+            acceptedAt: DateTime.utc(2026, 9, 7),
+            completedAt: null,
+            journalDurable: true,
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Your deletion request has been durably recorded. The server will keep retrying until the account is removed.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Finish sign-out'), findsOneWidget);
+    expect(find.text('Deletion completed'), findsNothing);
+    expect(find.textContaining('off-site'), findsNothing);
+    expect(authRepository.deletedAccountSignOutCalls, 0);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('delete finalization survives leaving Settings before commit',

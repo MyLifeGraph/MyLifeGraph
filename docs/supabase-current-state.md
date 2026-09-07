@@ -63,7 +63,7 @@ The preceding migration is
 `20260820183000_account_deletion_prepared_pending_guard_v2.sql`. It makes the
 first persisted `prepared` deletion state part of every product-access,
 principal-status, and recovery-readiness pending check. A process exit between
-prepare and off-host append therefore remains locked, visible to the
+prepare and durable journal append therefore remains locked, visible to the
 reconciler, and capable of making hosted readiness stale instead of leaving an
 apparently healthy usable account.
 
@@ -71,7 +71,7 @@ The preceding repository migration is
 `20260820170000_account_deletion_recovery_v2.sql`. It adds the forced-RLS,
 service-only `account_deletion_intents` recovery ledger and the
 `account-deletion-v2` prepare/append/accept/complete state machine. The public
-status seam is `account-deletion-status-v2`; the encrypted off-host payload is
+status seam is `account-deletion-status-v2`; the canonical journal payload is
 `account-deletion-journal-v2`. Runtime mutation RPCs remain `service_role`-
 only, direct V1 deletion is revoked so an old runtime fails closed, and replay
 is isolated to the dedicated `mylifegraph_deletion_replayer` database role.
@@ -228,8 +228,13 @@ is applied to the dated staging project or any future pilot project.
 
 Repository source now contains the backup-independent deletion recovery ledger,
 write-only hosted S3/KMS/Object-Lock journal adapter, versioned export/replay
-tools, and isolated-restore watermark checks described above. This is source
-truth only: no journal bucket, credential, pilot migration, deletion receipt,
+tools, and isolated-restore watermark checks described above. The explicit
+small-pilot `vps_file` adapter stores the same canonical envelope privately on
+the VPS with no SQL, RLS, RPC or wire-version change. Its durability excludes
+VPS loss and API compromise; no automatic pruning or database restore/reopening
+is supported, including Supabase Auth and direct Data API access, until a
+separate recovery procedure is designed and verified. The existing export/replay
+tools remain S3-only. This is source truth only: no journal bucket, credential, pilot migration, deletion receipt,
 or successful real restore/replay is inferred until the external release gates
 record it. The disposable backup restore and schema-reference templates pin
 PostgreSQL major 17 and the verifier requires the source and restore majors to
