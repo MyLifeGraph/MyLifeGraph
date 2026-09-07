@@ -1,0 +1,5 @@
+# No shell, generic systemctl, package manager, Docker socket or unit-file access.
+# The installed root-owned CLI validates all subcommands and arguments.
+mylifegraph-matthias ALL=(root) NOPASSWD:NOSETENV: /usr/local/sbin/mylifegraph-project *
+# sudoedit runs the editor as Matthias. Only these exact project files are allowed.
+mylifegraph-matthias ALL=(root) NOPASSWD:NOSETENV: sudoedit /etc/mylifegraph/api.env, sudoedit /etc/mylifegraph/executor.env, sudoedit /etc/mylifegraph/caddy.env

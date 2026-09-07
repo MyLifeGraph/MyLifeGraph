@@ -48,6 +48,55 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Matthias project-maintainer preparation (2026-09-07)
+
+Task base: `8489a0554bfe0cb62eecd5344248613d4dd3666d`. Gregor explicitly authorized
+Matthias to maintain the complete project on the VPS with his agents, including
+editing/testing the server checkout and project deployment/configuration. General
+host administration remains excluded. Gregor confirmed that GitHub, Supabase and
+Vercel access already exists and reported a successful Matthias SSH login; the
+two devices have not been individually attested.
+
+The new role prepares a private working checkout, separate rootless development
+Docker, a root-controlled user-slice limit and loopback local SSH forwarding.
+It delegates one fixed command dispatcher plus exact-path sudoedit for the three
+project environment files. This is deliberately elevated project authority,
+including runtime data/secret access through deployed code, not general sudo or
+independent server-side proof that uploaded artifacts came from reviewed main.
+The initial RC4 archive and application source remain unchanged. Runtime code,
+rootful Docker, Coach's separate daemon, database and provider credentials are
+not modified by preparation.
+
+Read-only VPS checks found existing Git, Node/npm, Python, Docker, rootlesskit,
+slirp4netns and newuidmap; Matthias already has a dedicated subordinate-ID range.
+The host has 8 GiB nominal RAM and about 27 GiB free disk. Flutter/Android/browser/
+Supabase SDK installation remains a user-space development task; no missing host
+package or alternate infrastructure is silently installed.
+
+Focused tests cover invalid commands/tags, exact upload checksums/limits/replay,
+clean root environments, interactive setup dispatch, exact sudoedit paths,
+loopback/public release checks, and atomic SSH/sudoers publication failures.
+The isolated Ubuntu rehearsal uses real sudo, SSH and Git; systemd actions are
+substituted and no live rootless Docker or application activation is claimed.
+All seven focused tests pass. The real Ubuntu sudo/SSH/Git rehearsal passed
+fixed-command authorization and denials, an editor running as Matthias, immutable
+uploads, local-tunnel success, remote-tunnel denial, and checkout creation/replay
+without overwriting work. The installed VPS Docker binary accepted the proposed
+loopback binding flags in validation-only mode; a local Supabase gateway inspect
+showed no explicit host IP, allowing that daemon default to apply. No new VPS
+Docker daemon was started during these checks.
+
+The captured-base full affected workflow passed source, Flutter analysis/tests,
+1,722 backend tests with two explicit opt-in skips, isolated/current local database
+checks, web build and all eight browser journeys with cleanup. Root-policy
+publication failures were tested both before and after publication; API checks
+cover exact release/migration identity on loopback and public HTTPS. Final docs
+checks and whitespace checks pass. No application-code changes were required.
+
+Target-host installation, the actual development daemon/resource limits and the
+new sudo role remain unverified until ops runs the prepared installer. No new
+project privilege has been installed on the VPS in this task.
+
 ### Matthias SSH enrollment installed (2026-09-07)
 
 The administrator supplied successful v2 preview/apply output for the prepared

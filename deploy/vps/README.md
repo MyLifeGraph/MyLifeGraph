@@ -23,6 +23,12 @@ Docker. Only the Coach's user Docker starts; no application release or sudo
 grant is installed by that stage. The root-owned user-manager cgroup owns the
 aggregate resource limit, including sibling container scopes.
 
+For the separately authorized Matthias maintainer role, see
+[Project administration](PROJECT_ADMIN.md). It delegates fixed commands and
+project environment editing while preserving immutable runtime releases and
+separate development Docker. This changes who may prepare/promote a release;
+Matthias assumes the existing release-review obligations, not general host sudo.
+
 ## Fixed runtime boundary
 
 - `ops` prepares and seals each release directory as
@@ -163,10 +169,15 @@ identifier before use; never paste a secret into shell history.
    administrator starts an explicit shell as `mylifegraph-coach` for provider
    and rootless setup without enabling SSH login.
    Give mylifegraph-deploy, API, and executor read-only membership in
-   `mylifegraph-release`; do not grant any of them general sudo. Only mylifegraph-deploy
-   receives the single audited promotion command from `sudoers.d/`.
-3. Install the reviewed files from `systemd/`, `tmpfiles.d/`, `caddy/`, and
-   `sudoers.d/` into their matching system locations. Install
+   `mylifegraph-release`; do not grant any of them general sudo. In the baseline,
+   only mylifegraph-deploy receives the single audited promotion command from
+   `sudoers.d/mylifegraph-deploy`.
+3. Install the reviewed baseline files from `systemd/`, `tmpfiles.d/`, `caddy/`,
+   and only `sudoers.d/mylifegraph-deploy` into their matching system locations.
+   Do not install the entire sudoers directory. The optional
+   `sudoers.d/mylifegraph-matthias` and `systemd/mylifegraph-development*` files
+   belong exclusively to the separate [maintainer installer](PROJECT_ADMIN.md).
+   Install
    `bin/disk_monitor.sh` root-owned mode `0755` as
    `/usr/local/libexec/mylifegraph-disk-monitor`. Install `prepare_release.sh`,
    `promote_release.sh`, `health_check.py`, `analysis_image_revision.py`,

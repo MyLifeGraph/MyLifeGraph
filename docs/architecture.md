@@ -77,6 +77,15 @@ Project access is prepared separately through `deploy/vps/ACCESS.md`. Personal
 are not repurposed. This account-only stage grants no sudo or deployment
 authority and does not promise VM-like host isolation.
 
+A separately authorized [project-maintainer role](../deploy/vps/PROJECT_ADMIN.md)
+lets Matthias edit/test a private VPS checkout, operate his own rootless Docker,
+and use fixed privileged commands plus exact-file project configuration editing.
+Runtime roles, root-owned helpers and immutable releases remain separate. This
+entrusts him with application deployment and project secrets/data through code;
+artifact hashes alone are not server-side proof of protected-main provenance.
+Host administration and root-helper upgrades remain with `ops`. The role's
+installation and device acceptance require live evidence in Verification.
+
 The separate runtime foundation package (`deploy/vps/RUNTIME.md`) preserves
 existing system Docker workloads and starts only the Coach's rootless user
 daemon. Its root-owned user-manager cgroup bounds the daemon and all descendant

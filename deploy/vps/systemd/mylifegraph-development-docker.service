@@ -1,0 +1,24 @@
+[Unit]
+Description=MyLifeGraph maintainer development Docker (rootless)
+Requires=dbus.socket
+After=dbus.socket
+
+[Service]
+Type=notify
+NotifyAccess=all
+Environment=PATH=/usr/local/libexec/mylifegraph:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=DOCKERD=/usr/bin/dockerd
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=slirp4netns
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_DISABLE_HOST_LOOPBACK=true
+ExecStart=/usr/local/libexec/mylifegraph/dockerd-rootless.sh --host=unix://%t/docker.sock --data-root=%h/.local/share/docker --ip=127.0.0.1 --default-network-opt=bridge=com.docker.network.bridge.host_binding_ipv4=127.0.0.1 --log-driver=local --log-opt=max-size=10m --log-opt=max-file=3
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=90s
+TimeoutStopSec=30s
+Delegate=yes
+KillMode=mixed
+LimitNOFILE=65536
+UMask=0077
+
+[Install]
+WantedBy=default.target

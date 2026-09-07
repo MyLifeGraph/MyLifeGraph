@@ -146,8 +146,8 @@ A newly created drop-in is removed if SSH validation/reload fails. No rollback
 deletes users, homes, unrelated files, or services.
 
 Continue with [VPS operations](README.md) after acceptance, reusing the exact
-created identities. Only `mylifegraph-deploy` later gets the root-owned promotion
-helper; developers/automation do not inherit it. Additional delegation requires
+created identities. In the baseline, only `mylifegraph-deploy` later gets the
+root-owned promotion helper; developers/automation do not inherit it. Additional delegation requires
 separate review, never a blanket `sudo su`, `systemctl`, Docker, Python or shell
 grant. Release preparation remains an `ops` task. The administrator launches an
 explicit shell as the nologin Coach UID for provider/rootless-Docker setup; no
@@ -155,6 +155,15 @@ SSH key or another user's provider credential store is copied to that account.
 After a later deployment-authorization step adds the deploy sudo grant, further access
 changes require a separate administrator operation: this first-stage installer
 deliberately stops on any existing sudo authority, including that later grant.
+
+## Later project-maintainer delegation
+
+The independently installed [project-maintainer role](PROJECT_ADMIN.md) can
+extend Matthias's established login with fixed project commands, exact-file
+configuration editing and loopback local tunnels. It also provides a private
+working checkout and separate development Docker. No new login account or host
+Docker group is needed. These are deliberate later rights; the access-only
+installer's sudo/SSH expectations must not be relaxed to impersonate that stage.
 
 ## Local verification
 

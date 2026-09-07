@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/bin/python3 -I /usr/local/libexec/mylifegraph/project_admin.py "$@"

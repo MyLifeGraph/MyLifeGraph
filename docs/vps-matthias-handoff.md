@@ -30,8 +30,15 @@ ein neues geprüftes Paket vorbereiten; keine andere Datei unter gleichem Namen
 ungeprüft ausführen. Dieser Handoff-Commit ersetzt nicht die im Paket festgelegte
 RC4-Anwendungsrevision.
 
-Die nächsten Zuständigkeiten: Matthias bereitet Domain und Key vor; ein
-`ops`-Administrator führt den Abschluss im Serverterminal aus. Danach folgen
+Für die vollständige Serverbetreuung ist das
+[Projektbetreuer-Paket](../deploy/vps/PROJECT_ADMIN.md) vorbereitet. Ein
+`ops`-Administrator muss diese Rechte einmal installieren; bis dahin bleibt
+Matthias' Zugang auf die bisherige SSH-Rolle beschränkt. Danach kann Matthias
+selbst am Server entwickeln, konfigurieren und deployen. Die externen Zugriffe
+auf GitHub, Supabase und Vercel sind laut Gregor bereits vorhanden.
+
+Matthias bereitet Domain und Key vor. Nach Installation der Betreuerrolle führt
+er den Abschluss selbst mit `sudo /usr/local/sbin/mylifegraph-project setup` aus. Danach folgen
 Vercel-Konfiguration und Browser-Abnahme. Aktuell sind weder AWS noch
 Backup-Einrichtung Teil dieses Auftrags. Für Supabase-Agentenarbeit ausschließlich
 den direkten Supabase-MCP verwenden, nicht das Supabase-Plugin. Zugangsdaten und
@@ -58,8 +65,9 @@ Beim ersten Login den angezeigten Server-Fingerprint mit dem Prüfnachweis
 abgleichen. Danach `whoami`, `id` und den Zugriff auf `/srv/mylifegraph-work`
 prüfen. Eine mögliche Passphrase-Abfrage betrifft Matthias' Geräteschlüssel.
 Die tatsächlichen Logins von beiden Geräten sind noch nicht bestätigt.
-Auch nach erfolgreichem Login bleibt der untenstehende Abschluss eine
-`ops`-Aufgabe.
+Gregor hat inzwischen einen erfolgreichen Login gemeldet; die getrennte
+Abnahme beider Geräte steht noch aus. Die weitergehenden Betreuerrechte sind
+noch nicht installiert.
 
 ## 1. Matthias: Domain und Supabase-Key vorbereiten
 
@@ -69,9 +77,19 @@ Auch nach erfolgreichem Login bleibt der untenstehende Abschluss eine
 
 Die Browseradresse bleibt zunächst `https://my-life-graph-mu.vercel.app`. Eine neue eigene App-Domain erfordert zusätzlich eine passende CORS-Konfiguration.
 
-## 2. Einmaliger Abschluss im `ops`-Terminal
+## 2. Anwendung aktivieren
 
-Matthias' Projektkonto hat SSH-Zugang, aber keine Sudo-Rechte. Gregor oder ein vorhandener `ops`-Administrator führt deshalb diesen Schritt aus; Matthias muss das Sudo-Passwort nicht kennen. Währenddessen keine zweite Installation oder manuelle Dienstkonfiguration starten.
+Nach Installation der [Betreuerrolle](../deploy/vps/PROJECT_ADMIN.md) nutzt
+Matthias im interaktiven SSH-Terminal:
+
+```bash
+sudo /usr/local/sbin/mylifegraph-project setup
+```
+
+Er braucht dafür Gregors Passwort nicht. Währenddessen keine zweite Installation
+oder manuelle Dienstkonfiguration starten. Der folgende bisherige `ops`-Befehl
+bleibt nur für Hosts ohne diese Delegation; nach Installation der Betreuerrolle
+ist das RC4-Paket bereits versiegelt und wird über `setup` aufgerufen.
 
 Erst ausführen, wenn Domain und Key bereitstehen. Das Skript fragt beides ab, prüft den Datenbankzugriff und schaltet danach HTTPS, API und Coach ein:
 
@@ -96,7 +114,7 @@ sudo /bin/bash -c '
 
 Erfolg: Die letzte JSON-Zeile meldet `state: passed`, `https_verified: true`, `api_and_coach_active: true` und `boot_enabled: true`. Geprüft werden der exakte Release, Datenbankvertrag, optionale Teilnahmebestätigung, lokales Löschjournal und Coach-Bereitschaft. Der Installer selbst sendet keine Modellanfrage.
 
-Falls eine Eingabe oder Prüfung fehlschlägt: nur die ausgegebene Phase/Fehlermeldung weitergeben, niemals den Key. Nach einem sauberen Abbruch kann der Administrator denselben bereits versiegelten Installer erneut starten:
+Falls eine Eingabe oder Prüfung fehlschlägt: nur die ausgegebene Phase/Fehlermeldung weitergeben, niemals den Key. Nach einem sauberen Abbruch kann Matthias `setup` erneut aufrufen, sofern die Betreuerrolle installiert ist. Ohne diese Rolle kann der Administrator denselben bereits versiegelten Installer erneut starten:
 
 ```bash
 sudo /bin/bash -c 'set -euo pipefail; cd /root/mylifegraph-rc4; /bin/bash install.sh'

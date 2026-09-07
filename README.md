@@ -32,7 +32,11 @@ demo content when a read fails.
 Für die Fortsetzung der vorbereiteten Servereinrichtung zuerst die
 [VPS-Übergabe](docs/vps-matthias-handoff.md) lesen. Sie enthält den Paketpfad auf
 dem Server, die geprüfte Prüfsumme, den Abschlussbefehl und die noch offenen
-Domain-, Key- und Vercel-Schritte. Lokales Starten ersetzt diese Schritte nicht.
+Domain-, Key- und Vercel-Schritte. Für Entwicklung und Betrieb direkt auf dem VPS
+beschreibt die [Projektbetreuer-Anleitung](deploy/vps/PROJECT_ADMIN.md) den
+Arbeits-Checkout, die eigene Entwicklungsumgebung und alle delegierten Befehle.
+Die Rechte gelten erst nach der dort beschriebenen Administrator-Installation.
+Lokales Starten ersetzt diese Schritte nicht.
 
 ## Guest Quick Start
 
