@@ -4,6 +4,11 @@ This directory is the versioned, secret-free deployment contract for the
 single-host pilot. It does not prove that a VPS, DNS record, certificate,
 Supabase project, Codex login, or public deployment currently exists.
 
+For continuing the existing Gregor/Matthias server, use the
+[administrator handoff](../../docs/vps-matthias-handoff.md), including its sealed
+package hash and remaining inputs. The bootstrap sections below also cover new
+hosts and must not be blindly replayed on that prepared server.
+
 For initial Gregor/Matthias/automation accounts before a domain or app
 installation, use [Project access bootstrap](ACCESS.md). It preserves existing
 host `ops` and `agent` accounts. Linux identities are now `mylifegraph-deploy`

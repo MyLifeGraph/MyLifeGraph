@@ -27,6 +27,13 @@ demo content when a read fails.
 - `AGENTS.md` — repository-local workflow and safety instructions for coding
   agents.
 
+## VPS-Übergabe für Matthias
+
+Für die Fortsetzung der vorbereiteten Servereinrichtung zuerst die
+[VPS-Übergabe](docs/vps-matthias-handoff.md) lesen. Sie enthält den Paketpfad auf
+dem Server, die geprüfte Prüfsumme, den Abschlussbefehl und die noch offenen
+Domain-, Key- und Vercel-Schritte. Lokales Starten ersetzt diese Schritte nicht.
+
 ## Guest Quick Start
 
 Prerequisites are Flutter on `PATH` (or `FLUTTER_BIN` set to its executable),

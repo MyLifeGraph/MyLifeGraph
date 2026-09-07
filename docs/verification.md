@@ -48,6 +48,54 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### RC4 administrator handoff (2026-09-07)
+
+The independently reviewed RC4 completion package targets application commit
+`7228d0e18d371ee6c9a0a3a25553c673df67e017` and release
+`v0.1.0-pilot.1-rc.4`. The annotated tag was created locally; no remote tag
+publication is claimed. The source was already on remote main before this
+separate documentation handoff. The artifact remains bound to that application
+revision even when later documentation commits are pulled.
+
+Project SSH upload and readback verified
+`/srv/mylifegraph-work/rc4-staging/setup.tar` with SHA256
+`4dbb604dc2798ec545bc083517ce713304f464af46f79225e899415a6b8336ce`.
+The archive contains eight flat regular files, sealed with an internal checksum
+list plus installed helper/unit/Caddy-file expectations. The initial handoff
+copy is alongside it as `README-MATTHIAS.md`; the maintained continuation guide
+is now [VPS handoff](vps-matthias-handoff.md).
+
+Real isolated Ubuntu preparation installed the locked dependencies and checked
+API UID 995, Coach UID 994, immutable release ownership/tree, repeat preparation,
+and preservation of the pre-existing private journal directory. The 43 existing
+VPS tests and documentation gate passed. Six activation scenarios exercised real
+temporary-file writes/permissions, success, rollback after promotion/Coach/partial
+enable failures, and preservation of an independently replaced executor file.
+A real subprocess timeout killed a TERM-ignoring descendant whose leader exited
+and whose pipes were closed. Systemd, DNS, credential entry and root ownership
+were simulated in the activation harness; that is not live-host activation proof.
+
+Ten database-preflight cases passed using native Settings, the native REST
+client, contract validators and real temporary journal permissions with synthetic
+HTTP responses. Coverage includes invalid credentials, incompatible schema/gate,
+pending deletion and unsafe journal permissions. UID and release metadata were
+simulated; no real credentials or network were used in that harness. A discovered
+integer-Literal parsing issue was resolved in the packaged configuration by
+omitting four redundant fixed quota overrides and asserting the native defaults
+of 5 per-user requests/day, 15 global requests/day, one concurrent request and a
+15-second retry interval. No application-code or policy change was made.
+
+The final independent source/archive/handoff review found no remaining material
+finding. After upload, project SSH rechecked that API, executor service/socket
+and Caddy remained inactive; before upload they were also disabled. The existing
+Matthias account still had a nologin shell. RC3 remains the held installed release;
+RC4 is staged, not installed or promoted. Domain, protected backend-key entry,
+public HTTPS/readiness, boot enablement, Vercel build repair/connection and browser
+acceptance remain outstanding. Installer service/configuration rollback cannot
+undo database reconciliation or requests already handled by a started API.
+No backup automation, model request, hosted database mutation or VPS activation
+was performed during this handoff preparation.
+
 ### Optional pilot confirmation (2026-09-07)
 
 The user authorized optional confirmation for the current small pilot. The

@@ -1,5 +1,10 @@
 # Local Development
 
+For the existing VPS and Matthias's remaining domain/key steps, start with the
+[VPS handoff](vps-matthias-handoff.md). Its staged completion package is separate
+from workstation startup; do not repeat the initial host bootstraps below on
+that already prepared server.
+
 For a synthetic, real-Docker Coach image check without a model/provider login, use
 [analysis image verification](verification.md#analysis-image-verification-without-a-model).
 It reuses the existing opt-in test and source-bound image builder; it does not

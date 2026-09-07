@@ -39,6 +39,7 @@ code, tests, or documentation.
 | --- | --- |
 | General orientation in an unfamiliar checkout | `README.md` |
 | Broad or cross-product user-flow work | `docs/current-product-guide.md` |
+| VPS setup, deployment continuation, or Gregor/Matthias server handoff | `docs/vps-matthias-handoff.md`; `deploy/vps/README.md` |
 | Tooling, startup, environment, local URLs, or configuration | `docs/local-dev.md` |
 | Cross-system data flow, dependency direction, authority, or public architecture | `docs/architecture.md` |
 | Selecting, running, changing, or claiming verification | `docs/verification.md` |
