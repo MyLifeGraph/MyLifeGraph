@@ -30,15 +30,24 @@ ein neues geprüftes Paket vorbereiten; keine andere Datei unter gleichem Namen
 ungeprüft ausführen. Dieser Handoff-Commit ersetzt nicht die im Paket festgelegte
 RC4-Anwendungsrevision.
 
-Für die vollständige Serverbetreuung ist das
-[Projektbetreuer-Paket](../deploy/vps/PROJECT_ADMIN.md) vorbereitet. Ein
-`ops`-Administrator muss diese Rechte einmal installieren; bis dahin bleibt
-Matthias' Zugang auf die bisherige SSH-Rolle beschränkt. Danach kann Matthias
-selbst am Server entwickeln, konfigurieren und deployen. Die externen Zugriffe
+Das [Projektbetreuer-Paket](../deploy/vps/PROJECT_ADMIN.md) wurde durch `ops`
+installiert; siehe [Installationsnachweis](verification.md#matthias-project-maintainer-installed-2026-09-07).
+Matthias kann jetzt selbst am Server entwickeln, konfigurieren und deployen.
+Den Rechte-Installer nicht erneut ausführen. Nach neuer SSH-Anmeldung zuerst:
+
+```bash
+source ~/.config/mylifegraph/development.env
+cd ~/MyLifeGraph
+docker info --format '{{json .SecurityOptions}}'
+sudo /usr/local/sbin/mylifegraph-project status
+```
+
+Docker muss `rootless` melden; die Anwendungsdienste dürfen vor der Erstaktivierung
+noch `inactive` sein. Fehlende Entwicklungs-SDKs nach der Projektbetreuer-Anleitung
+im eigenen Home oder Entwicklungscontainer installieren. Die externen Zugriffe
 auf GitHub, Supabase und Vercel sind laut Gregor bereits vorhanden.
 
-Matthias bereitet Domain und Key vor. Nach Installation der Betreuerrolle führt
-er den Abschluss selbst mit `sudo /usr/local/sbin/mylifegraph-project setup` aus. Danach folgen
+Matthias bereitet Domain und Key vor und führt den Abschluss selbst mit `sudo /usr/local/sbin/mylifegraph-project setup` aus. Danach folgen
 Vercel-Konfiguration und Browser-Abnahme. Aktuell sind weder AWS noch
 Backup-Einrichtung Teil dieses Auftrags. Für Supabase-Agentenarbeit ausschließlich
 den direkten Supabase-MCP verwenden, nicht das Supabase-Plugin. Zugangsdaten und
@@ -50,7 +59,8 @@ Der Administrator hat beide Geräteschlüssel für `mylifegraph-matthias`
 freigeschaltet. Der [Zugangs-Prüfnachweis](verification.md#matthias-ssh-enrollment-installed-2026-09-07)
 enthält die unabhängig gelesenen Schlüssel- und Server-Fingerprints. Den
 Zugangsinstaller für diese Schlüssel nicht erneut ausführen. Private
-Geräteschlüssel bleiben bei Matthias; er erhält keine Sudo- oder Deployment-Rechte.
+Geräteschlüssel bleiben bei Matthias. Die später installierte Betreuerrolle
+ergänzt die oben beschriebenen begrenzten Projekt- und Deployment-Rechte.
 
 Auf Laptop und VM jeweils mit dem dortigen privaten Schlüssel testen. Den
 Platzhalter durch den tatsächlichen Dateipfad ersetzen (ohne `.pub`):
@@ -66,8 +76,8 @@ abgleichen. Danach `whoami`, `id` und den Zugriff auf `/srv/mylifegraph-work`
 prüfen. Eine mögliche Passphrase-Abfrage betrifft Matthias' Geräteschlüssel.
 Die tatsächlichen Logins von beiden Geräten sind noch nicht bestätigt.
 Gregor hat inzwischen einen erfolgreichen Login gemeldet; die getrennte
-Abnahme beider Geräte steht noch aus. Die weitergehenden Betreuerrechte sind
-noch nicht installiert.
+Abnahme beider Geräte steht noch aus. Die weitergehenden Betreuerrechte sind inzwischen installiert; die direkte
+Prüfung aus Matthias' eigener Sitzung steht noch aus.
 
 ## 1. Matthias: Domain und Supabase-Key vorbereiten
 

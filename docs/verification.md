@@ -48,6 +48,34 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Matthias project-maintainer installed (2026-09-07)
+
+Gregor ran the reviewed administrator package with SHA256
+`f022cf1d1be36bb9d29a43bfaf8860af1a4d9c2d19ea6402ec90db8fcd0b025c`.
+The installer returned `state=prepared`, `rootless_docker=true`,
+`project_commands=true`, `general_sudo=false` and
+`application_state_unchanged=true`. In this output, prepared means the maintainer
+role and development environment are installed; it does not mean the application
+has been activated. The supplied output explicitly showed a fresh clone into
+`/home/mylifegraph-matthias/MyLifeGraph` from the reviewed source bundle at
+`9c7b399daee9bdebae647fe61ff9f46e4c3f351c`. The installer checked
+Matthias's native rootless Docker socket/security options and allowed sudo status
+command before reporting success. No credentials were copied.
+
+A subsequent independent project SSH connection confirmed both installed project
+entrypoints as root-owned mode 0555, `user@1003.service` active, and effective
+slice limits of 4,294,967,296 bytes, `CPUQuotaPerSecUSec=2s` and 2,048 tasks.
+API, executor service/socket and Caddy remained inactive. The new Docker daemon's
+native check was performed by the administrator installer; this independent
+unprivileged connection does not read Matthias's private home/socket.
+
+Matthias still needs to reconnect for the new SSH forwarding policy, source his
+development environment, and verify Docker/project commands from his own login.
+Domain/key entry, application activation, Vercel build/connection and browser
+acceptance remain his next steps. The packaged checkout and this repository's
+maintainer changes have not been pushed to GitHub by this agent; installing a
+Git bundle does not publish its branch or update main.
+
 ### Matthias project-maintainer preparation (2026-09-07)
 
 Task base: `8489a0554bfe0cb62eecd5344248613d4dd3666d`. Gregor explicitly authorized
@@ -93,9 +121,9 @@ publication failures were tested both before and after publication; API checks
 cover exact release/migration identity on loopback and public HTTPS. Final docs
 checks and whitespace checks pass. No application-code changes were required.
 
-Target-host installation, the actual development daemon/resource limits and the
-new sudo role remain unverified until ops runs the prepared installer. No new
-project privilege has been installed on the VPS in this task.
+At the end of preparation, target-host installation, the actual development
+daemon/resource limits and the new sudo role were still unverified. The later
+administrator installation and independent readback are recorded above.
 
 ### Matthias SSH enrollment installed (2026-09-07)
 
