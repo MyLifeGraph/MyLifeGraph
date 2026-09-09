@@ -2,7 +2,7 @@ name: Staging debug APK
 
 on:
   push:
-    branches: [new_backend_gh]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
           COACH_SURFACE_ENABLED: "true"
           APP_BUILD_SHA: ${{ github.sha }}
           APP_RELEASE_TAG: v0.1.0-pilot.0-rc.${{ github.run_number }}
-          STAGING_SUPABASE_PROJECT_REF: oscrunlndfrecjilojja
+          STAGING_SUPABASE_PROJECT_REF: kvdunemnuqcvbhrlfnsh
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}

@@ -235,6 +235,16 @@ export function checkAndroidReleaseConfig() {
   requireText(workflow, 'source_sbom_sha256', 'SBOM artifact identity');
   requireExactJavaVersion(ciWorkflow, '21', 'CI workflow');
   requireExactJavaVersion(workflow, '21', 'release workflow');
+  requireText(
+    stagingWorkflow,
+    'branches: [main]',
+    'staging APK workflow',
+  );
+  requireText(
+    stagingWorkflow,
+    'STAGING_SUPABASE_PROJECT_REF: kvdunemnuqcvbhrlfnsh',
+    'staging APK workflow',
+  );
   requireExactJavaVersion(stagingWorkflow, '21', 'staging APK workflow');
   requireImmutableActionPins(workflow, 'release workflow');
   requireImmutableActionPins(stagingWorkflow, 'staging APK workflow');
