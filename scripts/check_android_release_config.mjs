@@ -238,16 +238,21 @@ export function checkAndroidReleaseConfig() {
   requireText(
     stagingWorkflow,
     'branches: [main]',
-    'staging APK workflow',
+    'pilot debug APK workflow',
   );
   requireText(
     stagingWorkflow,
-    'STAGING_SUPABASE_PROJECT_REF: kvdunemnuqcvbhrlfnsh',
-    'staging APK workflow',
+    'environment: pilot-release',
+    'pilot debug APK workflow',
   );
-  requireExactJavaVersion(stagingWorkflow, '21', 'staging APK workflow');
+  requireText(
+    stagingWorkflow,
+    'PILOT_SUPABASE_PROJECT_REF: ${{ vars.PILOT_SUPABASE_PROJECT_REF }}',
+    'pilot debug APK workflow',
+  );
+  requireExactJavaVersion(stagingWorkflow, '21', 'pilot debug APK workflow');
   requireImmutableActionPins(workflow, 'release workflow');
-  requireImmutableActionPins(stagingWorkflow, 'staging APK workflow');
+  requireImmutableActionPins(stagingWorkflow, 'pilot debug APK workflow');
   requireText(
     mobilePubspec,
     'webview_flutter_android: 4.14.0',
