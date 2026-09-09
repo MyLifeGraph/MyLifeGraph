@@ -8,11 +8,6 @@ Read this file completely before changing code, schema, scripts, tests, or
 documentation. This is the only repository document that is always required.
 Load the task-specific context selected below before the first edit.
 
-Keep work proportional: read only the routed documents and sections relevant
-to the task, run the smallest verification that directly covers the change,
-and avoid unrelated refactors, cleanup, or documentation expansion. Use broad
-test suites only when the selected verification or material risk requires them.
-
 ## Context Preflight
 
 Before the first change:
