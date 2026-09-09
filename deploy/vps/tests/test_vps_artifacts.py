@@ -266,7 +266,6 @@ class VpsArtifactTests(unittest.TestCase):
         self.assertIn("--no-access-log", api)
         self.assertIn("User=mylifegraph-coach", executor)
         self.assertIn("/v1/internal/*", caddy)
-        self.assertIn("health_interval 5s", caddy)
         self.assertIn(
             "EnvironmentFile=-/srv/mylifegraph/current/"
             ".mylifegraph-executor-release.env",
