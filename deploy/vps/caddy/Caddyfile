@@ -49,7 +49,7 @@
 
 	reverse_proxy 127.0.0.1:8000 {
 		health_uri /v1/health
-		health_interval 5s
+		health_interval 30s
 		health_timeout 3s
 		health_status 200
 		stream_timeout 5m
