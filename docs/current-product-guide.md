@@ -135,7 +135,7 @@ Mit aktiviertem Coach hat die Hauptnavigation genau fünf Ziele. In `staging`,
 | --- | --- | --- |
 | **Today** | Den gespeicherten Tag überblicken und Tagesaktionen ausführen | Check-in-Streak, transparenter Fortschritt, vertikale Setup/Task/Habit/Fixed commitment/Preparation/Calendar/Focus-Agenda, heutige Tasks und Habits sowie eingeklappte unterstützende Details |
 | **Insights** | Entwicklungen untersuchen | Für echte Accounts die unabhängigen Backend-Karten `Personal study pattern` und `Sleep recommendation` mit Stichprobe und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung und keine erfundene Schlafempfehlung. |
-| **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
+| **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Morning check-in, Evening check-in, Habit completion und Focus |
 | **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, endliche wöchentliche Assignment-Serie und Fixed commitment anlegen; Exam/Assignment bleiben nach dem gewählten Add-new-Button fest; Vorschauen bestätigen; sieben Tage, quellengenaue Konflikte, alle aktiven Habits, ausschließlich unplatzierte offene Tasks und laufende Preparation verwalten (`planner-overview-v2`) |
 | **Coach** | Eine freie Frage zu den eigenen Daten stellen | Explizite Wahl zwischen Project Coach und eigenem OpenAI-/Gemini-Key, frischer persönlicher Snapshot, Read-only-Analyse, sichtbare Evidence/Provenance und validierte englische Textantwort; kein Provider-Fallback |
 

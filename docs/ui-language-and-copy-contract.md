@@ -87,32 +87,37 @@ into a primary title, button, field label, or first-line error.
 
 Within Morning check-in, use `Estimated sleep duration` for the duration
 derived from the student's corrected estimated start/wake instants and
-`Estimated sleep quality` for the separate required `1..10` subjective
+`Sleep quality` for the separate required `1..10` subjective
 measurement. Copy must state that neither is objective measurement, quality is
 judged independently of duration, and neither value may be inferred from the
-other.
+other. Visible Morning clock labels are `Sleep start` and `Wake time`; they
+open a time picker and do not show preset chips. Unset clocks and an
+uncalculable duration show only `—` beside the label, not a status card.
 Morning check-in presents one local draft in two steps. The first step uses
 `MORNING · SLEEP`, `How did you sleep?`, 50-percent progress, and `Next`; the
 second uses `MORNING · CHECK-IN`, `How are you starting today?`, 100-percent
 progress, `Back`, and the final `Save morning check-in`. The first step does
 not show quality, energy, or the save action. `Next` remains unavailable until
 both estimated clocks and the sleep target form a complete valid branch. When
-no duration can be calculated, the result area shows only `—`; the former
-ordered-interval instruction is not shown. `Back` preserves every answer, and a
-failed save leaves the full draft on the second step for an exact retry.
+no duration can be calculated, the compact duration value shows only `—`; the
+former ordered-interval instruction is not shown. `Back` preserves every
+answer, and a failed save leaves the full draft on the second step for an
+exact retry. Chosen `1..10` ratings stay visible beside their labels as
+`n / 10` or `—`; they do not repeat `Choose a value to continue.`
 
 Three Morning explanations start hidden behind independent information
 controls headed `Estimated sleep duration`, `Sleep target used for this night`,
-and `Estimated sleep quality`. The target explanation remains dynamic: it says
+and `Sleep quality`. The target explanation remains dynamic: it says
 whether the latest Evening plan supplied the starting value or no saved plan
 was available. On Evening's sleep-plan step, the intent explanation headed
 `Planned sleep time` and the first-value explanation headed
 `Sleep duration target` also start hidden. The latter states that eight hours
-is shown first and becomes the current plan only on save. Evening step headings,
-optional-context copy, and the separate stress-source information control stay
-visible or independently operable as before. All five new controls use the
-exact semantics and tooltip labels `Show information about <heading>` and
-`Hide information about <heading>`.
+is shown first and becomes the current plan only on save. Evening Mood, Energy
+left, and Stress ratings use the same compact value-beside-label pattern.
+Evening step headings, optional-context copy, and the separate stress-source
+information control stay visible or independently operable as before. All five
+new controls use the exact semantics and tooltip labels
+`Show information about <heading>` and `Hide information about <heading>`.
 
 Morning check-in has no Day Shape/Tagesform question, label, saved summary, or
 Dashboard detail. The Quick Actions subtitle is exactly
@@ -121,9 +126,9 @@ Dashboard detail. The Quick Actions subtitle is exactly
 
 ## Quick Actions Copy
 
-After a successful current-day capture read, the existing `Evening check-in`
-and `Morning check-in` actions use the exact status `Completed today` for their
-respective saved branch. A completed action remains an entry for editing that
+After a successful current-day capture read, the existing `Morning check-in`
+and `Evening check-in` actions appear in that order and use the exact status
+`Completed today` for their respective saved branch. A completed action remains an entry for editing that
 branch. Quick actions does not repeat a detailed saved-signal summary, and it
 must not infer completion while the current-day read is loading or unavailable.
 

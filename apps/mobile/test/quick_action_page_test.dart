@@ -84,6 +84,15 @@ void main() {
     }
   });
 
+  testWidgets('lists Morning check-in above Evening check-in', (tester) async {
+    await _pumpPage(tester, load: () async => null);
+
+    expect(
+      tester.getTopLeft(find.text(_morningTitle)).dy,
+      lessThan(tester.getTopLeft(find.text(_eveningTitle)).dy),
+    );
+  });
+
   testWidgets('completed action remains an accessible edit entry',
       (tester) async {
     final semantics = tester.ensureSemantics();

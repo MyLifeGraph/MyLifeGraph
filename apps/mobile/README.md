@@ -206,9 +206,10 @@ Under `daily-capture-v5`, Evening
 requires one planned local sleep time and a `300..720` minute target on a
 15-minute grid. Its intent and first-value explanations start closed behind
 independent information controls. Morning first records editable aware
-estimated sleep-start/wake instants, derives and labels the `Estimated sleep
-duration`, and retains the target used for that night. Its second page requires
-a separate `1..10` estimated sleep-quality rating plus current energy. The
+estimated sleep-start/wake instants labeled `Sleep start` and `Wake time`,
+derives and labels the compact `Estimated sleep duration` value, and retains
+the target used for that night. Its second page requires a separate `1..10`
+`Sleep quality` rating plus current energy. The
 duration, target-source, and quality explanations start closed independently;
 their 20-pixel information icons use normal 44×44 action targets, dynamic
 `Show/Hide information about <heading>` semantics, and Reduced-Motion-aware

@@ -30,18 +30,18 @@ class QuickActionPage extends ConsumerWidget {
       actions: const [AppHeaderActions()],
       children: [
         _ActionTile(
-          icon: AppIcons.nightsStayOutlined,
-          title: 'Evening check-in',
-          subtitle: 'Close today with three ratings and useful context',
-          completedToday: loadedCheckIn?.evening != null,
-          onTap: () => context.push(AppRoutes.quickMoodCheckIn),
-        ),
-        _ActionTile(
           icon: AppIcons.wbSunnyOutlined,
           title: 'Morning check-in',
           subtitle: 'Add sleep timing, sleep quality, and current energy',
           completedToday: loadedCheckIn?.morning != null,
           onTap: () => context.push(AppRoutes.morningCalibration),
+        ),
+        _ActionTile(
+          icon: AppIcons.nightsStayOutlined,
+          title: 'Evening check-in',
+          subtitle: 'Close today with three ratings and useful context',
+          completedToday: loadedCheckIn?.evening != null,
+          onTap: () => context.push(AppRoutes.quickMoodCheckIn),
         ),
         ...latestCheckIn.when(
           data: (_) => const <Widget>[],

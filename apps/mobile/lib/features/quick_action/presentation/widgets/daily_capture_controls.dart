@@ -258,45 +258,42 @@ class CaptureRatingControl extends StatelessWidget {
     required this.value,
     required this.semanticPrefix,
     required this.onChanged,
+    this.label,
     super.key,
   });
 
   final int? value;
   final String semanticPrefix;
   final ValueChanged<int> onChanged;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
+    final valueLabel = value == null ? '—' : '$value / 10';
     return Column(
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(AppRadii.xl),
-          ),
-          child: Column(
-            children: [
-              Text(
-                value == null ? 'Not set' : '$value / 10',
-                style: Theme.of(context).textTheme.headlineLarge,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                value == null
-                    ? 'Choose a value to continue.'
-                    : 'This selected value will be saved.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
+        Row(
+          children: [
+            if (label != null)
+              Expanded(
+                child: Text(
+                  label!,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              )
+            else
+              const Spacer(),
+            Text(
+              valueLabel,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
         Wrap(
           alignment: WrapAlignment.center,
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
           children: List.generate(10, (index) {
             final rating = index + 1;
             final selected = rating == value;
@@ -307,14 +304,26 @@ class CaptureRatingControl extends StatelessWidget {
               onTap: () => onChanged(rating),
               child: ExcludeSemantics(
                 child: SizedBox.square(
-                  dimension: 48,
+                  dimension: 44,
                   child: selected
                       ? FilledButton(
                           onPressed: () => onChanged(rating),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.square(44),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                           child: Text('$rating'),
                         )
                       : OutlinedButton(
                           onPressed: () => onChanged(rating),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.square(44),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                           child: Text('$rating'),
                         ),
                 ),
@@ -342,13 +351,13 @@ class CaptureSleepHoursControl extends StatelessWidget {
     return Column(
       children: [
         Text(
-          value == null ? 'Not set' : '${formatCaptureHours(value!)} h',
-          style: Theme.of(context).textTheme.headlineLarge,
+          value == null ? '—' : '${formatCaptureHours(value!)} h',
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: AppSpacing.sm),
         Semantics(
           label: 'Morning sleep hours',
-          value: value == null ? 'Not set' : formatCaptureHours(value!),
+          value: value == null ? '—' : formatCaptureHours(value!),
           child: Slider(
             value: value ?? 7,
             min: 0,
@@ -415,8 +424,8 @@ class CaptureClockControl extends StatelessWidget {
         Semantics(
           button: true,
           label: semanticLabel,
-          value: value ?? 'Not set',
-          child: OutlinedButton.icon(
+          value: value ?? '—',
+          child: OutlinedButton(
             onPressed: () async {
               final selected = await showTimePicker(
                 context: context,
@@ -431,20 +440,24 @@ class CaptureClockControl extends StatelessWidget {
                 '${selected.minute.toString().padLeft(2, '0')}',
               );
             },
-            icon: const Icon(AppIcons.schedule),
-            label: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    value ?? 'Set time',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ],
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
               ),
+              alignment: Alignment.centerLeft,
+            ),
+            child: Row(
+              children: [
+                const Icon(AppIcons.schedule),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text(label)),
+                Text(
+                  value ?? '—',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
             ),
           ),
         ),
@@ -493,7 +506,7 @@ class CaptureSleepTargetControl extends StatelessWidget {
       children: [
         Text(
           formatCaptureMinutes(selected),
-          style: Theme.of(context).textTheme.headlineLarge,
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: AppSpacing.sm),
         Semantics(

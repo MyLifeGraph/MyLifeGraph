@@ -136,6 +136,41 @@ void main() {
     await tester.pump();
     expect(find.text(description), findsOneWidget);
   });
+
+  testWidgets('rating control stays compact and omits empty-state cards',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    var selected = 0;
+    await _pump(
+      tester,
+      CaptureRatingControl(
+        label: 'Mood',
+        value: null,
+        semanticPrefix: 'evening mood',
+        onChanged: (value) => selected = value,
+      ),
+    );
+
+    expect(find.text('Mood'), findsOneWidget);
+    expect(find.text('—'), findsOneWidget);
+    expect(find.text('Not set'), findsNothing);
+    expect(find.text('Choose a value to continue.'), findsNothing);
+    expect(
+      tester.getSize(
+        find
+            .ancestor(
+              of: find.text('1'),
+              matching: find.byType(SizedBox),
+            )
+            .first,
+      ),
+      const Size.square(44),
+    );
+
+    await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
+    expect(selected, 7);
+    semantics.dispose();
+  });
 }
 
 Future<void> _pump(

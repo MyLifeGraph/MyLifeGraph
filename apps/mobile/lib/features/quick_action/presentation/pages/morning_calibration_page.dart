@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:my_life_graph/core/constants/app_radii.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -114,56 +113,46 @@ class _MorningCalibrationPageState
           description:
               'These are your own estimates, not objectively measured sleep.',
         ),
-        const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
+        const SizedBox(height: AppSpacing.sm),
+        CaptureClockControl(
+          label: 'Sleep start',
+          semanticLabel: 'estimated sleep start',
+          value: _draft.estimatedSleepStartedAt == null
+              ? null
+              : dailyCaptureClock(
+                  _draft.estimatedSleepStartedAt!,
+                ),
+          onChanged: _setEstimatedSleepStart,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        CaptureClockControl(
+          label: 'Wake time',
+          semanticLabel: 'estimated wake time',
+          value: _draft.wokeAt == null
+              ? null
+              : dailyCaptureClock(_draft.wokeAt!),
+          fallback: TimeOfDay.fromDateTime(DateTime.now()),
+          onChanged: _setWakeTime,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
           children: [
-            SizedBox(
-              width: 260,
-              child: CaptureClockControl(
-                label: 'Estimated sleep start',
-                semanticLabel: 'estimated sleep start',
-                value: _draft.estimatedSleepStartedAt == null
-                    ? null
-                    : dailyCaptureClock(
-                        _draft.estimatedSleepStartedAt!,
-                      ),
-                quickValues: const ['22:00', '23:00', '00:00'],
-                onChanged: _setEstimatedSleepStart,
+            Expanded(
+              child: Text(
+                'Duration',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-            SizedBox(
-              width: 260,
-              child: CaptureClockControl(
-                label: 'Wake time',
-                semanticLabel: 'estimated wake time',
-                value: _draft.wokeAt == null
-                    ? null
-                    : dailyCaptureClock(_draft.wokeAt!),
-                fallback: TimeOfDay.fromDateTime(DateTime.now()),
-                quickValues: const ['05:30', '07:00', '08:00'],
-                onChanged: _setWakeTime,
-              ),
+            Text(
+              _draft.estimatedSleepMinutes == null
+                  ? '—'
+                  : formatCaptureMinutes(_draft.estimatedSleepMinutes!),
+              key: const ValueKey('morning-sleep-duration'),
+              style: Theme.of(context).textTheme.titleMedium,
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(AppRadii.xl),
-          ),
-          child: Text(
-            _draft.estimatedSleepMinutes == null
-                ? '—'
-                : formatCaptureMinutes(_draft.estimatedSleepMinutes!),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         CaptureInfoDisclosure(
           heading: 'Sleep target used for this night',
           description: _draft.sourceEveningCaptureId == null
@@ -186,11 +175,11 @@ class _MorningCalibrationPageState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const CaptureInfoDisclosure(
-          heading: 'Estimated sleep quality',
+          heading: 'Sleep quality',
           description:
               'How restorative did your sleep feel, independently of how long you slept?',
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
         CaptureRatingControl(
           value: _draft.sleepQuality,
           semanticPrefix: 'morning sleep quality',
@@ -198,13 +187,9 @@ class _MorningCalibrationPageState
             () => _draft = _draft.copyWith(sleepQuality: value),
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        Text(
-          'Current energy',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.lg),
         CaptureRatingControl(
+          label: 'Current energy',
           value: _draft.energy,
           semanticPrefix: 'morning energy',
           onChanged: (value) => setState(

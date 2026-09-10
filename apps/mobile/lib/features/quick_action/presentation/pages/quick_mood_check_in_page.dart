@@ -117,29 +117,26 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Mood', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.sm),
         CaptureRatingControl(
+          label: 'Mood',
           value: _draft.mood,
           semanticPrefix: 'evening mood',
           onChanged: (value) => setState(
             () => _draft = _draft.copyWith(mood: value),
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Text('Energy left', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
         CaptureRatingControl(
+          label: 'Energy left',
           value: _draft.energy,
           semanticPrefix: 'evening energy',
           onChanged: (value) => setState(
             () => _draft = _draft.copyWith(energy: value),
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Text('Stress', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
         CaptureRatingControl(
+          label: 'Stress',
           value: _draft.stress,
           semanticPrefix: 'evening stress',
           onChanged: (value) => setState(() {

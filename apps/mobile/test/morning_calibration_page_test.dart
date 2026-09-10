@@ -23,7 +23,10 @@ void main() {
 
     expect(find.text('MORNING · SLEEP'), findsOneWidget);
     expect(find.text('How did you sleep?'), findsOneWidget);
-    expect(find.text('Estimated sleep quality'), findsNothing);
+    expect(find.text('Sleep start'), findsOneWidget);
+    expect(find.text('22:00'), findsNothing);
+    expect(find.text('Choose a value to continue.'), findsNothing);
+    expect(find.text('Sleep quality'), findsNothing);
     expect(find.text('Current energy'), findsNothing);
     expect(find.text('Save morning check-in'), findsNothing);
     expect(
@@ -193,9 +196,9 @@ void main() {
     );
     await _pumpPage(tester, store);
 
-    expect(find.text('Estimated sleep quality'), findsNothing);
+    expect(find.text('Sleep quality'), findsNothing);
     await _tapVisible(tester, find.text('Next'));
-    expect(find.text('Estimated sleep quality'), findsOneWidget);
+    expect(find.text('Sleep quality'), findsOneWidget);
     final saveButton = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Save morning check-in'),
     );
@@ -215,7 +218,14 @@ void main() {
     final store = _NoSleepPlanMorningStore();
     await _pumpPage(tester, store);
 
-    expect(find.text('—'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('morning-sleep-duration')),
+          )
+          .data,
+      '—',
+    );
     expect(
       find.text('Choose an ordered interval of no more than 16 hours.'),
       findsNothing,
@@ -235,7 +245,14 @@ void main() {
         .widget<CaptureClockControl>(find.byType(CaptureClockControl).at(1))
         .onChanged('23:00');
     await tester.pump();
-    expect(find.text('—'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('morning-sleep-duration')),
+          )
+          .data,
+      '—',
+    );
     expect(
       tester
           .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
@@ -356,13 +373,13 @@ void main() {
     expect(find.text(qualityHelp), findsNothing);
     expect(
       find.bySemanticsLabel(
-        'Show information about Estimated sleep quality',
+        'Show information about Sleep quality',
       ),
       findsOneWidget,
     );
     await tester.tap(
       find.byKey(
-        const ValueKey('capture-info-control-Estimated sleep quality'),
+        const ValueKey('capture-info-control-Sleep quality'),
       ),
     );
     await tester.pumpAndSettle();
