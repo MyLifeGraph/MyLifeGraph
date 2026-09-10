@@ -333,6 +333,10 @@ ai_url_host="$(url_host "$AI_SERVICE_HOST")"
 APP_URL="http://$frontend_url_host:$FRONTEND_PORT"
 AI_SERVICE_BASE_URL="http://$ai_url_host:$AI_SERVICE_PORT"
 ALLOWED_ORIGINS="$APP_URL,http://127.0.0.1:$FRONTEND_PORT,http://localhost:$FRONTEND_PORT"
+# Laptop Flutter stays on 7357 even when this stack serves Flutter on another port.
+if [[ "$FRONTEND_PORT" != "7357" ]]; then
+  ALLOWED_ORIGINS="$ALLOWED_ORIGINS,http://127.0.0.1:7357,http://localhost:7357"
+fi
 
 coach_fake_enabled=false
 local_codex_enabled=false

@@ -419,6 +419,7 @@ class AuthRepository {
   }
 
   Future<AccountDeletionRecovery?> _pendingDeletionRecovery(User user) async {
+    if (_useMockData) return null;
     final resolver = _pendingAccountDeletionResolver;
     final session = _client.auth.currentSession;
     if (resolver == null ||
@@ -427,7 +428,12 @@ class AuthRepository {
         session.accessToken.isEmpty) {
       return null;
     }
-    return resolver(userId: user.id, accessToken: session.accessToken);
+    try {
+      return await resolver(userId: user.id, accessToken: session.accessToken);
+    } catch (_) {
+      if (_isHostedEnvironment) rethrow;
+      return null;
+    }
   }
 }
 

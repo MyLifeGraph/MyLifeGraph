@@ -158,6 +158,181 @@ void main() {
   });
 
   test(
+    'authenticated mock session skips pending deletion backend recovery',
+    () async {
+      final client = SupabaseClient(
+        'http://localhost:54321',
+        'test-anon-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      );
+      addTearDown(client.dispose);
+      await client.auth.recoverSession(
+        jsonEncode({
+          'access_token': 'synthetic-access-token',
+          'refresh_token': 'synthetic-refresh-token',
+          'token_type': 'bearer',
+          'expires_in': 3600,
+          'expires_at':
+              DateTime.now()
+                  .add(const Duration(hours: 1))
+                  .millisecondsSinceEpoch ~/
+              1000,
+          'user': {
+            'id': 'mock-profile-id',
+            'email': 'mock-person@example.test',
+            'aud': 'authenticated',
+            'app_metadata': {'provider': 'google'},
+            'user_metadata': {'full_name': 'Mock Person'},
+            'created_at': '2026-09-10T08:00:00Z',
+          },
+        }),
+      );
+      var pendingDeletionCalls = 0;
+      final repository = AuthRepository(
+        client,
+        useMockData: true,
+        pendingAccountDeletionResolver:
+            ({required userId, required accessToken}) async {
+              pendingDeletionCalls += 1;
+              throw StateError('Mock auth must not call FastAPI.');
+            },
+      );
+
+      final session = await repository.currentSession();
+
+      expect(session?.isAuthenticated, isTrue);
+      expect(session?.profile.name, 'Mock Person');
+      expect(pendingDeletionCalls, 0);
+    },
+  );
+
+  test('real authenticated session still checks pending deletion recovery',
+      () async {
+    final client = SupabaseClient(
+      'http://localhost:54321',
+      'test-anon-key',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
+    addTearDown(client.dispose);
+    await client.auth.recoverSession(jsonEncode({
+      'access_token': 'synthetic-access-token',
+      'refresh_token': 'synthetic-refresh-token',
+      'token_type': 'bearer',
+      'expires_in': 3600,
+      'expires_at': DateTime.now()
+              .add(const Duration(hours: 1))
+              .millisecondsSinceEpoch ~/
+          1000,
+      'user': {
+        'id': 'real-profile-id',
+        'email': 'real-person@example.test',
+        'aud': 'authenticated',
+        'app_metadata': {'provider': 'google'},
+        'user_metadata': {},
+        'created_at': '2026-09-10T08:00:00Z',
+      },
+    }));
+    var pendingDeletionCalls = 0;
+    final repository = AuthRepository(
+      client,
+      useMockData: false,
+      isHostedEnvironment: true,
+      pendingAccountDeletionResolver: ({
+        required userId,
+        required accessToken,
+      }) async {
+        pendingDeletionCalls += 1;
+        throw StateError('expected production recovery check');
+      },
+    );
+
+    await expectLater(
+      repository.currentSession(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'expected production recovery check',
+        ),
+      ),
+    );
+    expect(pendingDeletionCalls, 1);
+  });
+
+  test(
+    'local real session continues when pending deletion recovery fails',
+    () async {
+      final client = SupabaseClient(
+        'http://localhost:54321',
+        'test-anon-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+        httpClient: MockClient((request) async {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 'local-profile-id',
+                'email': 'student@example.test',
+                'display_name': 'Maya Student Demo',
+                'timezone': 'Europe/Berlin',
+                'role': 'user',
+                'auth_provider': 'email',
+                'onboarding_completed_at': '2026-08-01T00:00:00Z',
+                'timezone_revision': 1,
+                'preparation_budget_revision': 1,
+                'daily_preparation_budget_minutes': null,
+              },
+            ]),
+            200,
+            request: request,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      addTearDown(client.dispose);
+      await client.auth.recoverSession(
+        jsonEncode({
+          'access_token': 'synthetic-access-token',
+          'refresh_token': 'synthetic-refresh-token',
+          'token_type': 'bearer',
+          'expires_in': 3600,
+          'expires_at':
+              DateTime.now()
+                  .add(const Duration(hours: 1))
+                  .millisecondsSinceEpoch ~/
+              1000,
+          'user': {
+            'id': 'local-profile-id',
+            'email': 'student@example.test',
+            'aud': 'authenticated',
+            'app_metadata': {'provider': 'email'},
+            'user_metadata': {},
+            'created_at': '2026-08-01T00:00:00Z',
+          },
+        }),
+      );
+      var pendingDeletionCalls = 0;
+      final repository = AuthRepository(
+        client,
+        useMockData: false,
+        isHostedEnvironment: false,
+        pendingAccountDeletionResolver: ({
+          required userId,
+          required accessToken,
+        }) async {
+          pendingDeletionCalls += 1;
+          throw StateError('local FastAPI CORS');
+        },
+      );
+
+      final session = await repository.currentSession();
+
+      expect(pendingDeletionCalls, 1);
+      expect(session?.isAuthenticated, isTrue);
+      expect(session?.profile.email, 'student@example.test');
+    },
+  );
+
+  test(
     'missing real profile fails after one read without a repair write',
     () async {
       final requests = <http.Request>[];

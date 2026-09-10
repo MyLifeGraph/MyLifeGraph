@@ -427,14 +427,25 @@ LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true \
 FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
 ```
 
-Windows PowerShell:
+Windows PowerShell (same default as the Bash frontend script: Flutter web-server
+with hot reload):
 
 ```powershell
 apps\mobile\start_server_7357.ps1
 ```
 
-The PowerShell script reads `.env`, builds Flutter Web, and serves `build\web`
-on `127.0.0.1:7357`.
+The script reads `.env` and starts `http://127.0.0.1:7357`. Override `HOST`,
+`PORT`, `USE_MOCK_DATA`, or `MODE` in the process environment. Static
+`build/web` fallback:
+
+```powershell
+$env:MODE = "static"
+apps\mobile\start_server_7357.ps1
+```
+
+Git Bash can run `scripts/start_frontend.sh` when `flutter` is on `PATH`. The
+complete local stack (`npm run start:local`) needs Docker and is not the
+Windows default; use guest/mock on this path.
 
 ## AI Service
 

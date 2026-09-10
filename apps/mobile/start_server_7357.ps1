@@ -42,6 +42,10 @@ $pilotSupabaseProjectRef = Get-DefineValue "PILOT_SUPABASE_PROJECT_REF" ""
 $pilotContactEmail = Get-DefineValue "PILOT_CONTACT_EMAIL" ""
 $aiServiceBaseUrl = Get-DefineValue "AI_SERVICE_BASE_URL" "http://localhost:8000"
 $coachSurfaceEnabled = Get-DefineValue "COACH_SURFACE_ENABLED" ""
+$learnedFocusPlanningPilotEnabled = Get-DefineValue "LEARNED_FOCUS_PLANNING_PILOT_ENABLED" "false"
+$frontendHost = Get-DefineValue "HOST" "127.0.0.1"
+$frontendPort = Get-DefineValue "PORT" "7357"
+$mode = Get-DefineValue "MODE" "flutter"
 
 # Frontend dependencies, the compiler, and the static server do not need
 # backend-only credentials inherited from the caller's process environment.
@@ -54,19 +58,36 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-& $flutterBin build web --debug --no-wasm-dry-run `
-    --dart-define=APP_ENV=$appEnv `
-    --dart-define=USE_MOCK_DATA=$useMockData `
-    --dart-define=SUPABASE_URL=$supabaseUrl `
-    --dart-define=SUPABASE_PUBLISHABLE_KEY=$supabasePublishableKey `
-    --dart-define=SUPABASE_ANON_KEY=$supabaseAnonKey `
-    --dart-define=STAGING_SUPABASE_PROJECT_REF=$stagingSupabaseProjectRef `
-    --dart-define=PILOT_SUPABASE_PROJECT_REF=$pilotSupabaseProjectRef `
-    --dart-define=PILOT_CONTACT_EMAIL=$pilotContactEmail `
-    --dart-define=AI_SERVICE_BASE_URL=$aiServiceBaseUrl `
-    --dart-define=COACH_SURFACE_ENABLED=$coachSurfaceEnabled
-if ($LASTEXITCODE -ne 0) {
+$commonDefines = @(
+    "--dart-define=APP_ENV=$appEnv"
+    "--dart-define=USE_MOCK_DATA=$useMockData"
+    "--dart-define=AI_SERVICE_BASE_URL=$aiServiceBaseUrl"
+    "--dart-define=COACH_SURFACE_ENABLED=$coachSurfaceEnabled"
+    "--dart-define=LEARNED_FOCUS_PLANNING_PILOT_ENABLED=$learnedFocusPlanningPilotEnabled"
+    "--dart-define=SUPABASE_URL=$supabaseUrl"
+    "--dart-define=SUPABASE_PUBLISHABLE_KEY=$supabasePublishableKey"
+    "--dart-define=SUPABASE_ANON_KEY=$supabaseAnonKey"
+    "--dart-define=STAGING_SUPABASE_PROJECT_REF=$stagingSupabaseProjectRef"
+    "--dart-define=PILOT_SUPABASE_PROJECT_REF=$pilotSupabaseProjectRef"
+    "--dart-define=PILOT_CONTACT_EMAIL=$pilotContactEmail"
+)
+
+Write-Host "Starting MyLifeGraph frontend at http://${frontendHost}:${frontendPort}"
+Write-Host "Mode: $mode"
+Write-Host "Mock data: $useMockData"
+
+if ($mode -eq "static") {
+    & $flutterBin build web --debug --no-wasm-dry-run @commonDefines
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
+    & $pythonBin -m http.server $frontendPort --bind $frontendHost --directory "build\web"
     exit $LASTEXITCODE
 }
 
-& $pythonBin -m http.server 7357 --bind 127.0.0.1 --directory "build\web"
+& $flutterBin run -d web-server `
+    --web-hostname $frontendHost `
+    --web-port $frontendPort `
+    @commonDefines
+exit $LASTEXITCODE
