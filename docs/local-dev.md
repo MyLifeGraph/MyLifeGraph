@@ -85,7 +85,11 @@ client key is present, and Supabase/FastAPI URLs are credential-free HTTPS
 roots. On Vercel the build script derives `APP_BUILD_SHA` exactly from
 `VERCEL_GIT_COMMIT_SHA`, maps Production `main` to `APP_ENV=pilot` with
 `APP_RELEASE_TAG=main-<SHA>`, and maps Preview branches to `APP_ENV=staging`
-with `APP_RELEASE_TAG=preview-<SHA>`. It also fixes mock mode off and the Coach
+with `APP_RELEASE_TAG=preview-<SHA>`. Preview binds `SUPABASE_URL` to the
+exact `STAGING_SUPABASE_PROJECT_REF` host, or to `STAGING_SUPABASE_URL` when
+that public value is present, instead of inheriting Production's pilot URL. It
+also sets `APP_PUBLIC_ORIGIN` from `STAGING_APP_PUBLIC_ORIGIN` or the Vercel
+preview hostname. It also fixes mock mode off and the Coach
 surface on instead of trusting mutable project values for those non-secret
 release controls. Other hosted artifact workflows must provide an exact SHA
 and pilot release tag themselves. `PILOT_CONTACT_EMAIL` remains required;

@@ -144,8 +144,37 @@ export function hostedSupabaseTarget(environment = process.env) {
       'PILOT_CONTACT_EMAIL',
       environment.PILOT_CONTACT_EMAIL,
     ),
-    supabaseUrl: requireHttpsBaseUrl('SUPABASE_URL', environment.SUPABASE_URL, {
-      supabaseProjectRef: projectRef,
-    }),
+    supabaseUrl: requireHttpsBaseUrl(
+      'SUPABASE_URL',
+      resolveHostedSupabaseUrl(appEnvironment, environment, projectRef),
+      { supabaseProjectRef: projectRef },
+    ),
   };
+}
+
+function resolveHostedSupabaseUrl(appEnvironment, environment, projectRef) {
+  if (appEnvironment !== 'staging') {
+    return environment.SUPABASE_URL;
+  }
+
+  const dedicated = configuredValue(
+    'STAGING_SUPABASE_URL',
+    environment.STAGING_SUPABASE_URL,
+  );
+  if (dedicated) return dedicated;
+
+  const generic = configuredValue('SUPABASE_URL', environment.SUPABASE_URL);
+  if (generic) {
+    try {
+      if (new URL(generic).hostname === `${projectRef}.supabase.co`) {
+        return generic;
+      }
+    } catch {
+      throw new Error('SUPABASE_URL must be a valid HTTPS URL.');
+    }
+  }
+
+  // Shared Vercel env keeps Production's pilot URL. Preview must still bind
+  // the public staging host from the already-configured staging project ref.
+  return `https://${projectRef}.supabase.co`;
 }

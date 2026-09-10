@@ -20,7 +20,7 @@ export function hostedFlutterDefines(environment = process.env) {
     );
   }
   const publishableKey = resolveCompatibleKey({
-    environment,
+    environment: hostedClientKeyEnvironment(target.appEnvironment, environment),
     currentName: 'SUPABASE_PUBLISHABLE_KEY',
     legacyName: 'SUPABASE_ANON_KEY',
     currentPrefix: 'sb_publishable_',
@@ -78,8 +78,23 @@ export function hostedFlutterDefines(environment = process.env) {
       publishableKey.source === 'legacy' ? publishableKey.value : '',
     AI_SERVICE_BASE_URL: requireHttpsBaseUrl(
       'AI_SERVICE_BASE_URL',
-      environment.AI_SERVICE_BASE_URL,
+      target.appEnvironment === 'staging'
+        ? environment.STAGING_AI_SERVICE_BASE_URL ||
+          environment.AI_SERVICE_BASE_URL
+        : environment.AI_SERVICE_BASE_URL,
     ),
+  };
+}
+
+function hostedClientKeyEnvironment(appEnvironment, environment) {
+  if (appEnvironment !== 'staging') return environment;
+  return {
+    ...environment,
+    SUPABASE_PUBLISHABLE_KEY:
+      environment.STAGING_SUPABASE_PUBLISHABLE_KEY ||
+      environment.SUPABASE_PUBLISHABLE_KEY,
+    SUPABASE_ANON_KEY:
+      environment.STAGING_SUPABASE_ANON_KEY || environment.SUPABASE_ANON_KEY,
   };
 }
 

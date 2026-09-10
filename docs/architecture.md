@@ -103,6 +103,9 @@ a separate synthetic-only staging project and fail-closed scenario generator mus
 the real-data pilot project. Vercel Web builds bind the application identity to
 the exact provider-supplied Git commit: Production must be protected `main`
 with `main-<SHA>`, while Preview must remain staging with `preview-<SHA>`.
+Preview selects the staging Supabase host from `STAGING_SUPABASE_PROJECT_REF`
+rather than inheriting Production `SUPABASE_URL`, and binds `APP_PUBLIC_ORIGIN`
+to the Vercel preview hostname.
 Annotated tags separately bind immutable Android, VPS, and release-manifest
 artifacts; they are not prerequisites for an ordinary protected-`main` Web
 deployment. The build passes only an explicit public-value allowlist to

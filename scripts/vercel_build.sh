@@ -29,6 +29,19 @@ case "${VERCEL_ENV-}:${VERCEL_GIT_COMMIT_REF-}" in
   preview:*)
     APP_ENV='staging'
     APP_RELEASE_TAG="preview-${APP_BUILD_SHA}"
+    if [[ -n "${STAGING_APP_PUBLIC_ORIGIN-}" ]]; then
+      APP_PUBLIC_ORIGIN="${STAGING_APP_PUBLIC_ORIGIN}"
+    else
+      preview_host="${VERCEL_BRANCH_URL:-${VERCEL_URL-}}"
+      preview_host="${preview_host#https://}"
+      preview_host="${preview_host#http://}"
+      preview_host="${preview_host%%/*}"
+      [[ -n "${preview_host}" ]] || {
+        printf 'Vercel build error: preview public origin is unavailable.\n' >&2
+        exit 1
+      }
+      APP_PUBLIC_ORIGIN="https://${preview_host}"
+    fi
     ;;
   *)
     APP_ENV=''

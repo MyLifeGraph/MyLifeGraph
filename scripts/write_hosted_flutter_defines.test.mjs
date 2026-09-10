@@ -46,7 +46,6 @@ test('hosted defines require complete fail-closed staging configuration', () => 
   for (const name of [
     'APP_ENV',
     'STAGING_SUPABASE_PROJECT_REF',
-    'SUPABASE_URL',
     'SUPABASE_PUBLISHABLE_KEY',
     'PILOT_CONTACT_EMAIL',
     'APP_PUBLIC_ORIGIN',
@@ -100,12 +99,71 @@ test('hosted defines reject framework-specific aliases', () => {
     ...validEnvironment,
     SUPABASE_URL: '',
     SUPABASE_PUBLISHABLE_KEY: '',
-    VITE_SUPABASE_URL: validEnvironment.SUPABASE_URL,
+    VITE_SUPABASE_URL: 'https://bcdefghijklmnopqrstu.supabase.co',
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       validEnvironment.SUPABASE_PUBLISHABLE_KEY,
   };
 
-  assert.throws(() => hostedFlutterDefines(aliasesOnly), /SUPABASE_URL/);
+  assert.throws(() => hostedFlutterDefines(aliasesOnly), /SUPABASE_PUBLISHABLE_KEY/);
+  assert.equal(
+    hostedFlutterDefines({
+      ...aliasesOnly,
+      SUPABASE_PUBLISHABLE_KEY: validEnvironment.SUPABASE_PUBLISHABLE_KEY,
+    }).SUPABASE_URL,
+    'https://abcdefghijklmnopqrst.supabase.co',
+  );
+});
+
+test('staging hosted defines bind the staging ref host instead of a shared pilot SUPABASE_URL', () => {
+  const definitions = hostedFlutterDefines({
+    ...validEnvironment,
+    PILOT_SUPABASE_PROJECT_REF: 'bcdefghijklmnopqrstu',
+    SUPABASE_URL: 'https://bcdefghijklmnopqrstu.supabase.co',
+  });
+  assert.equal(
+    definitions.SUPABASE_URL,
+    'https://abcdefghijklmnopqrst.supabase.co',
+  );
+  assert.equal(definitions.STAGING_SUPABASE_PROJECT_REF, 'abcdefghijklmnopqrst');
+  assert.equal(definitions.PILOT_SUPABASE_PROJECT_REF, 'bcdefghijklmnopqrstu');
+});
+
+test('staging hosted defines keep an explicit matching STAGING_SUPABASE_URL', () => {
+  const definitions = hostedFlutterDefines({
+    ...validEnvironment,
+    SUPABASE_URL: 'https://bcdefghijklmnopqrstu.supabase.co',
+    STAGING_SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co/',
+  });
+  assert.equal(
+    definitions.SUPABASE_URL,
+    'https://abcdefghijklmnopqrst.supabase.co',
+  );
+  assert.throws(
+    () =>
+      hostedFlutterDefines({
+        ...validEnvironment,
+        STAGING_SUPABASE_URL: 'https://bcdefghijklmnopqrstu.supabase.co',
+      }),
+    /does not match/,
+  );
+});
+
+test('staging hosted defines prefer dedicated staging client keys and API origin', () => {
+  const definitions = hostedFlutterDefines({
+    ...validEnvironment,
+    SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_pilot-value',
+    STAGING_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_staging-value',
+    AI_SERVICE_BASE_URL: 'https://coach-pilot.example.test',
+    STAGING_AI_SERVICE_BASE_URL: 'https://coach-staging.example.test/',
+  });
+  assert.equal(
+    definitions.SUPABASE_PUBLISHABLE_KEY,
+    'sb_publishable_staging-value',
+  );
+  assert.equal(
+    definitions.AI_SERVICE_BASE_URL,
+    'https://coach-staging.example.test',
+  );
 });
 
 test('pilot builds require current keys and reject staging crossover', () => {
@@ -170,15 +228,15 @@ test('hosted defines reject insecure and credential-bearing endpoints', () => {
   for (const [name, value] of [
     ['SUPABASE_URL', 'http://abcdefghijklmnopqrst.supabase.co'],
     ['SUPABASE_URL', 'https://abcdefghijklmnopqrst.supabase.co:443'],
-    ['SUPABASE_URL', 'https://example.test'],
     ['SUPABASE_URL', 'https://abcdefghijklmnopqrst.supabase.co/rest/v1'],
+    ['STAGING_SUPABASE_URL', 'https://example.test'],
     ['AI_SERVICE_BASE_URL', 'http://coach.example.test'],
     ['AI_SERVICE_BASE_URL', 'https://user:secret@coach.example.test'],
     ['AI_SERVICE_BASE_URL', 'https://coach.example.test?token=secret'],
   ]) {
     assert.throws(
       () => hostedFlutterDefines({ ...validEnvironment, [name]: value }),
-      new RegExp(name),
+      new RegExp(name === 'STAGING_SUPABASE_URL' ? 'SUPABASE_URL' : name),
     );
   }
 });

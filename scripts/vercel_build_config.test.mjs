@@ -30,6 +30,9 @@ test('Vercel build uses an immutable official Flutter archive', () => {
   assert.match(build, /APP_RELEASE_TAG="preview-\$\{APP_BUILD_SHA\}"/);
   assert.match(build, /APP_ENV='pilot'/);
   assert.match(build, /APP_ENV='staging'/);
+  assert.match(build, /STAGING_APP_PUBLIC_ORIGIN/);
+  assert.match(build, /preview_host="\$\{VERCEL_BRANCH_URL:-\$\{VERCEL_URL-\}\}"/);
+  assert.match(build, /APP_PUBLIC_ORIGIN="https:\/\/\$\{preview_host\}"/);
   assert.doesNotMatch(build, /VITE_|NEXT_PUBLIC_|RESOLVED_SUPABASE/);
   assert.match(build, /pub get --enforce-lockfile/);
   assert.match(build, /--no-web-resources-cdn --csp/);
@@ -136,6 +139,8 @@ test('Vercel child environment drops inherited sentinel secrets', () => {
         'VERCEL_PUB_CACHE=/tmp/mylifegraph-test-pub-cache',
         'APP_ENV=staging',
         'PILOT_PARTICIPATION_REQUIRED=false',
+        'STAGING_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co',
+        'STAGING_SUPABASE_PUBLISHABLE_KEY=sb_publishable_staging-value',
         'APP_BUILD_SHA=' + 'a'.repeat(40),
         'vercel_run_public /usr/bin/env',
       ].join('\n'),
@@ -151,15 +156,24 @@ test('Vercel child environment drops inherited sentinel secrets', () => {
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'must-not-reach-child-next',
         OPENAI_API_KEY: 'must-not-reach-child-openai',
         AWS_SECRET_ACCESS_KEY: 'must-not-reach-child-aws',
+        STAGING_SUPABASE_SECRET_KEY: 'must-not-reach-child-staging-secret',
       },
     },
   );
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^APP_ENV=staging$/m);
   assert.match(result.stdout, /^PILOT_PARTICIPATION_REQUIRED=false$/m);
+  assert.match(
+    result.stdout,
+    /^STAGING_SUPABASE_URL=https:\/\/abcdefghijklmnopqrst\.supabase\.co$/m,
+  );
+  assert.match(
+    result.stdout,
+    /^STAGING_SUPABASE_PUBLISHABLE_KEY=sb_publishable_staging-value$/m,
+  );
   assert.doesNotMatch(result.stdout, /must-not-reach-child/);
   assert.doesNotMatch(
     result.stdout,
-    /SUPABASE_ACCESS_TOKEN|VITE_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|SENTINEL_SECRET/,
+    /SUPABASE_ACCESS_TOKEN|VITE_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|SENTINEL_SECRET|STAGING_SUPABASE_SECRET_KEY/,
   );
 });
