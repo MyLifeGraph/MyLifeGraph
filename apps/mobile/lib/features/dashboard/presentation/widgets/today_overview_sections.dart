@@ -153,23 +153,40 @@ class _CheckInStreakCard extends StatelessWidget {
             value: latestCheckIn ?? AsyncData(snapshot.latestCheckIn),
           ),
           const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              _CheckInButton(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 600;
+              final morning = _CheckInButton(
                 label: 'Morning check-in',
+                compactLabel: 'Morning Check-in',
                 saved: checkIns?.morningSaved == true,
                 icon: AppIcons.wbSunnyOutlined,
+                compact: compact,
                 onPressed: onAddMorning,
-              ),
-              _CheckInButton(
+              );
+              final evening = _CheckInButton(
                 label: 'Evening check-in',
+                compactLabel: 'Evening Check-in',
                 saved: checkIns?.eveningSaved == true,
                 icon: AppIcons.nightsStayOutlined,
+                compact: compact,
                 onPressed: onAddEvening,
-              ),
-            ],
+              );
+              if (!compact) {
+                return Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [morning, evening],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: morning),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: evening),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -188,7 +205,10 @@ class _BeatYesterdayInset extends StatelessWidget {
     return Container(
       key: const ValueKey('beat-yesterday'),
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadii.md),
@@ -226,19 +246,42 @@ class _BeatYesterdayInset extends StatelessWidget {
                 children: [
                   Text(
                     'Latest saved · ${DateFormat.yMMMd().format(checkIn.entryDate)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: AppSpacing.xs),
                   if (metrics.isEmpty)
                     const Text('No core values were saved in this check-in.')
                   else
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final metric in metrics)
-                          _BeatYesterdayMetric(metric: metric),
-                      ],
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 600;
+                        if (!compact) {
+                          return Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
+                            children: [
+                              for (final metric in metrics)
+                                _BeatYesterdayMetric(metric: metric),
+                            ],
+                          );
+                        }
+                        final tileWidth =
+                            (constraints.maxWidth - AppSpacing.xs) / 2;
+                        return Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            for (final metric in metrics)
+                              SizedBox(
+                                width: tileWidth,
+                                child: _BeatYesterdayMetric(
+                                  metric: metric,
+                                  expanded: true,
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                 ],
               );
@@ -251,25 +294,69 @@ class _BeatYesterdayInset extends StatelessWidget {
 }
 
 class _BeatYesterdayMetric extends StatelessWidget {
-  const _BeatYesterdayMetric({required this.metric});
+  const _BeatYesterdayMetric({
+    required this.metric,
+    this.expanded = false,
+  });
 
   final ({String label, String value}) metric;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.visualTokens;
+    final (icon, color, surface) = switch (metric.label) {
+      'Mood' => (AppIcons.moodOutlined, tokens.brand, tokens.successSurface),
+      'Energy' => (AppIcons.boltOutlined, tokens.info, tokens.infoSurface),
+      'Sleep duration' => (
+          AppIcons.bedtimeOutlined,
+          tokens.dataViolet,
+          tokens.surfaceSubtle,
+        ),
+      'Sleep quality' => (
+          AppIcons.nightsStayOutlined,
+          tokens.success,
+          tokens.successSurface,
+        ),
+      'Stress' => (
+          AppIcons.warningAmberOutlined,
+          tokens.attention,
+          tokens.attentionSurface,
+        ),
+      _ => (AppIcons.infoOutline, tokens.textSecondary, tokens.surfaceSubtle),
+    };
+    final textTheme = Theme.of(context).textTheme;
     return Semantics(
       label: '${metric.label}: ${metric.value}',
       child: ExcludeSemantics(
         child: Container(
+          width: expanded ? double.infinity : null,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            color: surface,
             borderRadius: BorderRadius.circular(AppRadii.sm),
           ),
-          child: Text('${metric.label}  ${metric.value}'),
+          child: Row(
+            mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: AppSpacing.xs),
+              if (expanded)
+                Expanded(
+                  child: Text(
+                    '${metric.label}  ${metric.value}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelLarge,
+                  ),
+                )
+              else
+                Text('${metric.label}  ${metric.value}'),
+            ],
+          ),
         ),
       ),
     );
@@ -305,30 +392,82 @@ class _CheckInButton extends StatelessWidget {
     required this.saved,
     required this.icon,
     required this.onPressed,
+    this.compact = false,
+    this.compactLabel,
   });
 
   final String label;
+  final String? compactLabel;
   final bool saved;
+  final bool compact;
   final IconData icon;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final text = '${saved ? 'Edit' : 'Add'} $label';
+    final textTheme = Theme.of(context).textTheme;
     return Semantics(
       button: true,
       label: '$text. ${saved ? 'Saved' : 'Not saved'} today.',
-      child: saved
-          ? OutlinedButton.icon(
-              onPressed: onPressed,
-              icon: const Icon(AppIcons.checkCircleOutline),
-              label: Text(text),
-            )
-          : FilledButton.tonalIcon(
-              onPressed: onPressed,
-              icon: Icon(icon),
-              label: Text(text),
-            ),
+      child: compact
+          ? _compactButton(textTheme)
+          : saved
+              ? OutlinedButton.icon(
+                  onPressed: onPressed,
+                  icon: const Icon(AppIcons.checkCircleOutline),
+                  label: Text(text),
+                )
+              : FilledButton.tonalIcon(
+                  onPressed: onPressed,
+                  icon: Icon(icon),
+                  label: Text(text),
+                ),
+    );
+  }
+
+  Widget _compactButton(TextTheme textTheme) {
+    final child = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            saved ? AppIcons.checkCircleOutline : icon,
+            size: 18,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            compactLabel ?? label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: textTheme.labelLarge,
+          ),
+          Text(
+            saved ? 'Edit' : 'Add',
+            style: textTheme.labelSmall,
+          ),
+        ],
+      ),
+    );
+    final style = ButtonStyle(
+      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+      minimumSize: const WidgetStatePropertyAll(Size.zero),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+    if (saved) {
+      return OutlinedButton(
+        onPressed: onPressed,
+        style: style,
+        child: child,
+      );
+    }
+    return FilledButton.tonal(
+      onPressed: onPressed,
+      style: style,
+      child: child,
     );
   }
 }

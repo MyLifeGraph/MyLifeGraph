@@ -29,6 +29,7 @@ node_modules/
 *.env.local
 .tools/
 AGENTS.local.md
+Heimnetz-Handy-VPS-Dev-Anleitung.md
 supabase/.branches/
 supabase/.temp/
 

@@ -128,12 +128,6 @@ void main() {
     );
     await _pumpPage(tester, store);
 
-    expect(
-      find.text(
-        'Today\'s morning check-in is loaded. Saving updates only these morning answers.',
-      ),
-      findsOneWidget,
-    );
     await _tapVisible(tester, find.text('Next'));
     await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));

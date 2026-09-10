@@ -73,9 +73,6 @@ class _MorningCalibrationPageState
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save morning check-in',
-      statusMessage: _loadedSavedCapture
-          ? 'Today\'s morning check-in is loaded. Saving updates only these morning answers.'
-          : null,
       errorMessage: _saveError,
       loadErrorMessage: _loadError ??
           (_eveningPlanUnavailable && !_continueWithoutEveningPlan
@@ -195,10 +192,6 @@ class _MorningCalibrationPageState
           onChanged: (value) => setState(
             () => _draft = _draft.copyWith(energy: value),
           ),
-        ),
-        Text(
-          'This check-in records how today starts. It does not create or change a plan.',
-          style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
     );

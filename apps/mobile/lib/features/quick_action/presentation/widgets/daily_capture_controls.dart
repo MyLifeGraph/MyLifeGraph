@@ -290,48 +290,73 @@ class CaptureRatingControl extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xs,
-          children: List.generate(10, (index) {
-            final rating = index + 1;
-            final selected = rating == value;
-            return Semantics(
-              button: true,
-              selected: selected,
-              label: '$semanticPrefix $rating of 10',
-              onTap: () => onChanged(rating),
-              child: ExcludeSemantics(
-                child: SizedBox.square(
-                  dimension: 44,
-                  child: selected
-                      ? FilledButton(
-                          onPressed: () => onChanged(rating),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.square(44),
-                            padding: EdgeInsets.zero,
-                            visualDensity: VisualDensity.compact,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text('$rating'),
-                        )
-                      : OutlinedButton(
-                          onPressed: () => onChanged(rating),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.square(44),
-                            padding: EdgeInsets.zero,
-                            visualDensity: VisualDensity.compact,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text('$rating'),
-                        ),
-                ),
-              ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const buttonSize = 44.0;
+            const gap = AppSpacing.xs;
+            final oneRowWidth = 10 * buttonSize + 9 * gap;
+            if (constraints.maxWidth >= oneRowWidth) {
+              return Center(child: _ratingRow(1, 10));
+            }
+            return Column(
+              children: [
+                Center(child: _ratingRow(1, 5)),
+                const SizedBox(height: gap),
+                Center(child: _ratingRow(6, 5)),
+              ],
             );
-          }),
+          },
         ),
       ],
+    );
+  }
+
+  Widget _ratingRow(int start, int count) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < count; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.xs),
+          _ratingButton(start + i),
+        ],
+      ],
+    );
+  }
+
+  Widget _ratingButton(int rating) {
+    final selected = rating == value;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$semanticPrefix $rating of 10',
+      onTap: () => onChanged(rating),
+      child: ExcludeSemantics(
+        child: SizedBox.square(
+          dimension: 44,
+          child: selected
+              ? FilledButton(
+                  onPressed: () => onChanged(rating),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.square(44),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text('$rating'),
+                )
+              : OutlinedButton(
+                  onPressed: () => onChanged(rating),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.square(44),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text('$rating'),
+                ),
+        ),
+      ),
     );
   }
 }

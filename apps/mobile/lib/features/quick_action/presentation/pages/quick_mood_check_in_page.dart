@@ -91,9 +91,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save evening check-in',
-      statusMessage: _loadedSavedCapture
-          ? 'Today\'s evening check-in is loaded. Saving updates only these evening answers.'
-          : null,
       errorMessage: _saveError,
       loadErrorMessage: _loadError,
       onRetryLoad: _loadToday,

@@ -236,12 +236,6 @@ void main() {
     );
     await _pumpEveningPage(tester, store);
 
-    expect(
-      find.text(
-        'Today\'s evening check-in is loaded. Saving updates only these evening answers.',
-      ),
-      findsOneWidget,
-    );
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Next'));
