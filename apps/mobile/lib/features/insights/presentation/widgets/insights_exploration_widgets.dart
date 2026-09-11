@@ -1,5 +1,100 @@
 part of '../pages/insights_page.dart';
 
+class _AdvancedPaneTabs extends StatelessWidget {
+  const _AdvancedPaneTabs({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _AdvancedPane selected;
+  final ValueChanged<_AdvancedPane> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.visualTokens;
+    const panes = <(_AdvancedPane, String, IconData)>[
+      (_AdvancedPane.compare, 'Compare', AppIcons.tuneOutlined),
+      (_AdvancedPane.topPatterns, 'Top patterns', AppIcons.autoGraphOutlined),
+      (_AdvancedPane.trend, 'Trend overlay', AppIcons.viewTimelineOutlined),
+      (_AdvancedPane.matrix, 'Matrix', AppIcons.calendarViewWeekOutlined),
+      (_AdvancedPane.discovered, 'Discovered', AppIcons.psychologyOutlined),
+    ];
+    return Container(
+      key: const Key('insights-advanced-pane-tabs'),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: tokens.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < panes.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              _AdvancedPaneChip(
+                pane: panes[i].$1,
+                label: panes[i].$2,
+                icon: panes[i].$3,
+                selected: selected == panes[i].$1,
+                onPressed: () => onSelected(panes[i].$1),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdvancedPaneChip extends StatelessWidget {
+  const _AdvancedPaneChip({
+    required this.pane,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final _AdvancedPane pane;
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.visualTokens;
+    final foreground = selected ? tokens.onBrand : tokens.textSecondary;
+    return Material(
+      key: Key('insights-advanced-pane-${pane.name}'),
+      color: selected ? tokens.brand : Colors.transparent,
+      borderRadius: BorderRadius.circular(AppRadii.pill),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: foreground),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: foreground,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ControlsPanel extends StatelessWidget {
   const _ControlsPanel({
     required this.isMobile,
@@ -28,6 +123,7 @@ class _ControlsPanel extends StatelessWidget {
       metrics: metrics,
       value: metricAId,
       blockedWithMetricId: metricBId,
+      compact: isMobile,
       onChanged: onMetricAChanged,
     );
     final pickerB = _MetricPicker(
@@ -35,22 +131,24 @@ class _ControlsPanel extends StatelessWidget {
       metrics: metrics,
       value: metricBId,
       blockedWithMetricId: metricAId,
+      compact: isMobile,
       onChanged: onMetricBChanged,
     );
     final windowSelector = _WindowSelector(
       value: windowDays,
+      compact: isMobile,
       onChanged: onWindowChanged,
     );
 
     return _InsightsPanel(
-      padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
+      padding: EdgeInsets.all(isMobile ? AppSpacing.sm : AppSpacing.lg),
       child: isMobile
           ? Column(
               children: [
                 windowSelector,
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 pickerA,
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: 12),
                 pickerB,
               ],
             )
@@ -72,24 +170,86 @@ class _WindowSelector extends StatelessWidget {
   const _WindowSelector({
     required this.value,
     required this.onChanged,
+    this.compact = false,
   });
 
   final int value;
   final ValueChanged<int> onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SegmentedButton<int>(
-        segments: const [
-          ButtonSegment(value: 7, label: Text('7d')),
-          ButtonSegment(value: 14, label: Text('14d')),
-          ButtonSegment(value: 30, label: Text('30d')),
-          ButtonSegment(value: 90, label: Text('90d')),
+    if (!compact) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 7, label: Text('7d')),
+            ButtonSegment(value: 14, label: Text('14d')),
+            ButtonSegment(value: 30, label: Text('30d')),
+            ButtonSegment(value: 90, label: Text('90d')),
+          ],
+          selected: {value},
+          onSelectionChanged: (selection) => onChanged(selection.first),
+        ),
+      );
+    }
+
+    final tokens = context.visualTokens;
+    const options = [7, 14, 30, 90];
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: tokens.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+      ),
+      child: Row(
+        children: [
+          for (final days in options)
+            Expanded(
+              child: _WindowPill(
+                label: '${days}d',
+                selected: value == days,
+                onPressed: () => onChanged(days),
+              ),
+            ),
         ],
-        selected: {value},
-        onSelectionChanged: (selection) => onChanged(selection.first),
+      ),
+    );
+  }
+}
+
+class _WindowPill extends StatelessWidget {
+  const _WindowPill({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.visualTokens;
+    return Material(
+      color: selected ? tokens.brand : Colors.transparent,
+      borderRadius: BorderRadius.circular(AppRadii.pill),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected ? tokens.onBrand : tokens.textSecondary,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                ),
+          ),
+        ),
       ),
     );
   }
@@ -102,6 +262,7 @@ class _MetricPicker extends StatelessWidget {
     required this.value,
     required this.blockedWithMetricId,
     required this.onChanged,
+    this.compact = false,
   });
 
   final String label;
@@ -109,13 +270,32 @@ class _MetricPicker extends StatelessWidget {
   final String value;
   final String blockedWithMetricId;
   final ValueChanged<String?> onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.visualTokens;
     return DropdownButtonFormField<String>(
       initialValue: value,
       isExpanded: true,
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(
+        labelText: label,
+        filled: compact,
+        fillColor: compact ? tokens.surfaceSubtle : null,
+        contentPadding: compact
+            ? const EdgeInsets.fromLTRB(12, 18, 12, 12)
+            : null,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadii.md),
+          borderSide: compact ? BorderSide.none : const BorderSide(),
+        ),
+        enabledBorder: compact
+            ? OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                borderSide: BorderSide.none,
+              )
+            : null,
+      ),
       items: metrics
           .map(
             (metric) => DropdownMenuItem(
@@ -163,80 +343,86 @@ class _TrendOverlayCard extends StatelessWidget {
       brightness,
     );
 
+    final chipsAndChart = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final metric in report.metrics)
+              FilterChip(
+                label: Text(metric.label),
+                selected: selectedMetricIds.contains(metric.id),
+                onSelected: !selectedMetricIds.contains(metric.id) &&
+                        selectedMetricIds.any(
+                          (selected) =>
+                              const CorrelationPairPolicy().isBlocked(
+                            selected,
+                            metric.id,
+                          ),
+                        )
+                    ? null
+                    : (_) => onMetricToggled(metric.id),
+                selectedColor: _trendColorForMetric(metric.id, brightness)
+                    .withValues(alpha: 0.22),
+                checkmarkColor: _trendColorForMetric(metric.id, brightness),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          height: isMobile ? 220 : 340,
+          child: CustomPaint(
+            painter: _TrendOverlayPainter(
+              series: series,
+              axisColor: colors.outline,
+              gridColor: colors.outlineVariant,
+              labelColor: colors.onSurfaceVariant,
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final item in series)
+              _LegendDot(color: item.color, label: item.metric.label),
+          ],
+        ),
+        Text(
+          'Previous-night sleep is placed on the local wake and Focus day. '
+          'Focus values include rated sessions only. Each line is normalized '
+          'relative to its own range.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+        ),
+      ],
+    );
+
     return _InsightsPanel(
       padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (useStackedHeader) ...[
-            _TrendOverlayHeading(),
+            const _TrendOverlayHeading(),
             const SizedBox(height: AppSpacing.md),
-            _SmallInfoBadge(label: '0-100 normalized'),
+            const _SmallInfoBadge(label: '0-100 normalized'),
           ] else
-            Row(
+            const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Expanded(child: _TrendOverlayHeading()),
-                const SizedBox(width: AppSpacing.md),
+                Expanded(child: _TrendOverlayHeading()),
+                SizedBox(width: AppSpacing.md),
                 _SmallInfoBadge(label: '0-100 normalized'),
               ],
             ),
           const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (final metric in report.metrics)
-                FilterChip(
-                  label: Text(metric.label),
-                  selected: selectedMetricIds.contains(metric.id),
-                  onSelected: !selectedMetricIds.contains(metric.id) &&
-                          selectedMetricIds.any(
-                            (selected) =>
-                                const CorrelationPairPolicy().isBlocked(
-                              selected,
-                              metric.id,
-                            ),
-                          )
-                      ? null
-                      : (_) => onMetricToggled(metric.id),
-                  selectedColor: _trendColorForMetric(metric.id, brightness)
-                      .withValues(alpha: 0.22),
-                  checkmarkColor: _trendColorForMetric(metric.id, brightness),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Previous-night sleep is placed on the local wake and Focus day. '
-            'Focus values include rated sessions only. Each line is normalized '
-            'relative to its own range.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          SizedBox(
-            height: isMobile ? 260 : 340,
-            child: CustomPaint(
-              painter: _TrendOverlayPainter(
-                series: series,
-                axisColor: colors.outline,
-                gridColor: colors.outlineVariant,
-                labelColor: colors.onSurfaceVariant,
-              ),
-              child: const SizedBox.expand(),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.xs,
-            children: [
-              for (final item in series)
-                _LegendDot(color: item.color, label: item.metric.label),
-            ],
-          ),
+          chipsAndChart,
         ],
       ),
     );
@@ -302,7 +488,7 @@ class _TrendOverlayHeading extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Compare daily evidence without treating the lines as the same scale.',
+          'Lines are scaled separately, not to the same units.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -599,7 +785,7 @@ class _TopPatternsCard extends StatelessWidget {
           Text('Top patterns', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Strongest relationships in the selected window.',
+            'Strongest pairs in this window.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -698,33 +884,18 @@ class _CorrelationMatrixCard extends StatelessWidget {
     required this.selectedMetricAId,
     required this.selectedMetricBId,
     required this.onPairSelected,
+    required this.isMobile,
   });
 
   final CorrelationReport report;
   final String selectedMetricAId;
   final String selectedMetricBId;
   final void Function(String metricAId, String metricBId) onPairSelected;
+  final bool isMobile;
 
   @override
   Widget build(BuildContext context) {
-    return _InsightsPanel(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Correlation matrix',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Tap a comparable cell to inspect it. Overlapping signals are not compared.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          LayoutBuilder(
+    final grid = LayoutBuilder(
             builder: (context, constraints) {
               final desktop = constraints.maxWidth >= 700;
               final textScale = MediaQuery.textScalerOf(context).scale(13) / 13;
@@ -855,7 +1026,26 @@ class _CorrelationMatrixCard extends StatelessWidget {
                 ],
               );
             },
+          );
+
+    return _InsightsPanel(
+      padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Correlation matrix',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Tap a cell to inspect that pair.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          grid,
         ],
       ),
     );

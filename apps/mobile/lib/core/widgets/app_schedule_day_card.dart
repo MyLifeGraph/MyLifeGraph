@@ -44,12 +44,14 @@ class AppScheduleDayCard extends StatelessWidget {
     required this.items,
     required this.emptyLabel,
     required this.onItemTap,
+    this.showDate = true,
   });
 
   final DateTime localDate;
   final List<AppScheduleDayItem> items;
   final String emptyLabel;
   final ValueChanged<AppScheduleDayItem> onItemTap;
+  final bool showDate;
 
   @override
   Widget build(BuildContext context) {
@@ -57,11 +59,13 @@ class AppScheduleDayCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            DateFormat('EEEE, MMM d').format(localDate),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.sm),
+          if (showDate) ...[
+            Text(
+              DateFormat('EEEE, MMM d').format(localDate),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           if (items.isEmpty)
             Text(emptyLabel)
           else

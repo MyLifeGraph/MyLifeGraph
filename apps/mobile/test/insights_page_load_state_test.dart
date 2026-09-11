@@ -607,12 +607,15 @@ void main() {
     );
     expect(find.textContaining('stable baseline'), findsOneWidget);
     expect(find.text('Stable'), findsOneWidget);
-    expect(find.text('20 rated sessions'), findsOneWidget);
+    expect(
+      find.text('20 rated sessions · 100% coverage · 90-day window'),
+      findsOneWidget,
+    );
     expect(find.text('ONE OBSERVATION'), findsNothing);
 
-    await tester.ensureVisible(find.text('Evidence and limits'));
+    await tester.ensureVisible(find.text('Details'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Evidence and limits'));
+    await tester.tap(find.text('Details'));
     await tester.pumpAndSettle();
     expect(find.text('Focus timing'), findsOneWidget);
     expect(
@@ -646,9 +649,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Disabled'), findsOneWidget);
-    expect(find.text('0 rated sessions'), findsOneWidget);
-    expect(find.text('0% coverage'), findsOneWidget);
-    expect(find.text('90-day window'), findsOneWidget);
+    expect(find.textContaining('0 rated sessions'), findsOneWidget);
+    expect(find.textContaining('0% coverage'), findsOneWidget);
+    expect(find.textContaining('90-day window'), findsOneWidget);
     expect(find.text('Europe/Berlin · 0 rated days'), findsOneWidget);
     expect(
       find.text('Pattern analysis is turned off in Personal learning.'),
@@ -1214,6 +1217,26 @@ Future<void> _openCorrelationMatrix(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('Advanced correlation exploration'));
   await tester.pumpAndSettle();
+  final matrixTab = find.byKey(const Key('insights-advanced-pane-matrix'));
+  if (matrixTab.evaluate().isNotEmpty) {
+    await tester.scrollUntilVisible(
+      matrixTab,
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    final tabs = find.byKey(const Key('insights-advanced-pane-tabs'));
+    if (tabs.evaluate().isNotEmpty) {
+      await tester.dragUntilVisible(
+        matrixTab,
+        tabs,
+        const Offset(-72, 0),
+      );
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(matrixTab);
+    await tester.pumpAndSettle();
+  }
   await tester.scrollUntilVisible(
     find.text('Correlation matrix'),
     240,

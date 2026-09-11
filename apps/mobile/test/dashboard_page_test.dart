@@ -55,15 +55,15 @@ void main() {
     expect(find.text('6 consecutive days'), findsOneWidget);
     expect(find.text("Today's progress"), findsOneWidget);
     expect(find.text('4/7 completed'), findsOneWidget);
-    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text("Today's schedule"), findsOneWidget);
     expect(find.text('Setup commitment'), findsOneWidget);
     expect(find.text('Preparation'), findsOneWidget);
     expect(find.text('Calendar'), findsNWidgets(2));
     expect(find.text('Focus'), findsOneWidget);
-    expect(find.text("Today's tasks"), findsOneWidget);
-    expect(find.text("Today's habits"), findsOneWidget);
+    expect(find.text('Tasks due today'), findsOneWidget);
+    expect(find.text('Habits for today'), findsOneWidget);
     expect(find.text('More'), findsNothing);
-    expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Weekly review'), findsOneWidget);
     expect(find.text('Recommendations'), findsNothing);
     expect(find.text('Decision feedback history'), findsNothing);
     await _ensureExpansionVisible(
@@ -76,10 +76,10 @@ void main() {
 
     final streakY = tester.getTopLeft(find.text('Check-in streak')).dy;
     final progressY = tester.getTopLeft(find.text("Today's progress")).dy;
-    final agendaY = tester.getTopLeft(find.text('Today at a glance')).dy;
-    final tasksY = tester.getTopLeft(find.text("Today's tasks")).dy;
-    final habitsY = tester.getTopLeft(find.text("Today's habits")).dy;
-    final weeklyReviewY = tester.getTopLeft(find.text('Review your week')).dy;
+    final agendaY = tester.getTopLeft(find.text("Today's schedule")).dy;
+    final tasksY = tester.getTopLeft(find.text('Tasks due today')).dy;
+    final habitsY = tester.getTopLeft(find.text('Habits for today')).dy;
+    final weeklyReviewY = tester.getTopLeft(find.text('Weekly review')).dy;
     final fullWeekY = tester.getTopLeft(find.text('Full week')).dy;
     expect(streakY, lessThan(progressY));
     expect(progressY, lessThan(agendaY));
@@ -109,10 +109,13 @@ void main() {
           'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
       'Today\'s progress':
           'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
-      'Today at a glance': 'Your timed day in one compact agenda.',
-      'Today\'s tasks': 'Due, overdue, in-progress, and completed-today tasks.',
+      'Today\'s schedule':
+          'This is today\'s timed agenda, not a to-do list. Setup, preparation, calendar, and focus blocks appear here in order.',
+      'Tasks due today':
+          'These are planner tasks due, overdue, in progress, or completed today. They are not repeating habits.',
       'Show all tasks': 'Future, undated, completed, and cancelled tasks',
-      'Today\'s habits': 'Scheduled habits and still-open weekly targets.',
+      'Habits for today':
+          'These come back on a schedule. They are not one-off planner tasks.',
       'Full week':
           'Your profile-local Monday–Sunday agenda across Setup, Preparation, Calendar, Focus, Planner Tasks, Habits, and Fixed commitments.',
     };
@@ -122,7 +125,7 @@ void main() {
     }
     expect(
       find.text(
-        'Completed, skipped, missed, carried, and recovery facts stay distinct.',
+        'Look back at last week. This is not a today to-do.',
       ),
       findsOneWidget,
     );
@@ -179,7 +182,7 @@ void main() {
     );
     await _tapInfo(tester, 'Full week');
 
-    expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Weekly review'), findsOneWidget);
     expect(fullWeekLoads, 0);
 
     await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
@@ -341,7 +344,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Weekly review'), findsOneWidget);
     expect(find.text('Full-week lecture'), findsNothing);
     expect(find.text('Beat yesterday'), findsOneWidget);
     expect(find.textContaining('Sleep duration'), findsOneWidget);
@@ -349,7 +352,7 @@ void main() {
 
     await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
 
-    expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Weekly review'), findsOneWidget);
     expect(find.text('Recommendations'), findsNothing);
     expect(find.text('Decision feedback history'), findsNothing);
     expect(find.text('Full week'), findsOneWidget);
@@ -435,13 +438,13 @@ void main() {
       textScaler: const TextScaler.linear(2),
     );
 
-    await _tapInfo(tester, 'Today\'s tasks');
+    await _tapInfo(tester, 'Tasks due today');
     await _tapInfo(tester, 'Show all tasks');
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
     await tester.pumpAndSettle();
 
-    expect(find.text("Today's habits"), findsOneWidget);
+    expect(find.text('Habits for today'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -504,7 +507,7 @@ void main() {
       projectionRefresh: refresh,
       dashboardRepository: _StaticDashboardRepository(snapshot),
     );
-    final complete = find.widgetWithText(FilledButton, 'Complete');
+    final complete = find.byTooltip('Complete');
     await tester.ensureVisible(complete);
     await tester.pumpAndSettle();
     await tester.tap(complete);

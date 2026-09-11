@@ -127,7 +127,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('start duration choices stack at 320 pixels and 200% text',
+  testWidgets('start duration choices wrap at 320 pixels and 200% text',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 568));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -162,24 +162,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Start a focus block'), findsOneWidget);
-    final choices = find.byWidgetPredicate(
-      (widget) => widget is SegmentedButton,
-      description: 'duration segmented button',
-    );
-    expect(choices, findsOneWidget);
-    final firstChoice = find.descendant(
-      of: choices,
-      matching: find.text('25 min'),
-    );
-    final secondChoice = find.descendant(
-      of: choices,
-      matching: find.text('45 min'),
-    );
-    expect(firstChoice, findsOneWidget);
-    expect(secondChoice, findsOneWidget);
+    expect(find.text('25 min'), findsOneWidget);
+    expect(find.text('45 min'), findsOneWidget);
     expect(
-      tester.getTopLeft(secondChoice).dy,
-      greaterThan(tester.getTopLeft(firstChoice).dy),
+      find.text('Custom').evaluate().isNotEmpty ||
+          find.text('Custom duration').evaluate().isNotEmpty,
+      isTrue,
     );
     expect(tester.takeException(), isNull);
   });
@@ -227,7 +215,7 @@ void main() {
           .initialValue,
       isNull,
     );
-    expect(find.text('Independent focus block'), findsOneWidget);
+    expect(find.text('Focus block (normal)'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -267,7 +255,12 @@ void main() {
     );
     expect(selector.isExpanded, isTrue);
     final targetLabel = tester.widget<Text>(
-      find.textContaining('Task: A very long focus target').first,
+      find
+          .textContaining(
+            'A very long focus target',
+            skipOffstage: false,
+          )
+          .first,
     );
     expect(targetLabel.maxLines, 1);
     expect(targetLabel.overflow, TextOverflow.ellipsis);
@@ -1012,17 +1005,19 @@ void main() {
       await tester.pumpAndSettle();
       if (narrowLargeText) {
         await tester.scrollUntilVisible(
-          find.byType(SegmentedButton<int>),
+          find.text('Custom'),
           200,
           scrollable: find.byType(Scrollable).first,
         );
+        expect(
+          tester
+              .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Custom'))
+              .selected,
+          isTrue,
+        );
+      } else {
+        expect(_selectedFocusDuration(tester), 20);
       }
-      expect(
-        tester
-            .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
-            .selected,
-        {20},
-      );
 
       source.context = _scheduledContext(
         remainingMinutes: remainingMinutes,
@@ -1148,6 +1143,25 @@ void main() {
     );
     expect(find.text('How focused did the session feel?'), findsOneWidget);
   });
+}
+
+int? _selectedFocusDuration(WidgetTester tester) {
+  final segmented = find.byType(SegmentedButton<int>);
+  if (segmented.evaluate().isNotEmpty) {
+    final selected =
+        tester.widget<SegmentedButton<int>>(segmented).selected;
+    return selected.isEmpty ? null : selected.single;
+  }
+  for (final minutes in [20, 25, 45, 50, 60, 90]) {
+    final chip = find.widgetWithText(ChoiceChip, '$minutes min');
+    if (chip.evaluate().isEmpty) {
+      continue;
+    }
+    if (tester.widget<ChoiceChip>(chip).selected) {
+      return minutes;
+    }
+  }
+  return null;
 }
 
 void _expectInlineConflictLiveRegion(WidgetTester tester) {

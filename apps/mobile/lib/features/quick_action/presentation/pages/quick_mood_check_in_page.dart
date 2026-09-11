@@ -191,7 +191,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       children: [
         if (_draft.requiresStressContext) ...[
           Text(
-            'What drove the pressure?',
+            'Where did today\'s stress come from?',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -211,7 +211,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
               () => _draft = _draft.copyWith(stressSource: value),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           Text(
             'How much could you influence it?',
             style: Theme.of(context).textTheme.titleMedium,
@@ -233,31 +233,27 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
               () => _draft = _draft.copyWith(stressControllability: value),
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
         ],
-        const SizedBox(height: AppSpacing.lg),
-        TextField(
+        Text(
+          'Optional notes',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _optionalNoteField(
           controller: _reflectionController,
           maxLength: 500,
           maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: 'Reflection (optional)',
-            hintText: 'A short observation, if useful',
-          ),
+          label: 'Reflection (optional)',
+          hint: 'How did the day feel?',
         ),
         const SizedBox(height: AppSpacing.md),
-        TextField(
+        _optionalNoteField(
           controller: _blockerController,
           maxLength: 240,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Specific blocker (optional)',
-            hintText: 'Leave blank if there was no specific blocker',
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          'Optional blanks stay absent. They do not become tasks or memories.',
-          style: Theme.of(context).textTheme.bodySmall,
+          label: 'Specific blocker (optional)',
+          hint: 'One concrete thing that got in the way',
         ),
         if (_todayFocusSessions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
@@ -278,6 +274,46 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _optionalNoteField({
+    required TextEditingController controller,
+    required int maxLength,
+    required int maxLines,
+    required String label,
+    required String hint,
+  }) {
+    final countStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+    return Stack(
+      children: [
+        TextField(
+          controller: controller,
+          maxLength: maxLength,
+          maxLines: maxLines,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            alignLabelWithHint: true,
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+            counterText: '',
+            contentPadding: const EdgeInsets.fromLTRB(12, 16, 12, 28),
+          ),
+        ),
+        Positioned(
+          right: 12,
+          bottom: 8,
+          child: IgnorePointer(
+            child: Text(
+              '${controller.text.length}/$maxLength',
+              style: countStyle,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -576,9 +612,9 @@ String _stressSourceDescription(StressSource value) => switch (value) {
 
 String _stressControllabilityLabel(StressControllability value) =>
     switch (value) {
-      StressControllability.hardlyControllable => 'Little influence',
-      StressControllability.partlyControllable => 'Some influence',
-      StressControllability.mostlyControllable => 'Mostly within my influence',
+      StressControllability.hardlyControllable => 'Little',
+      StressControllability.partlyControllable => 'Some',
+      StressControllability.mostlyControllable => 'Mostly',
     };
 
 enum _EveningStepKind {

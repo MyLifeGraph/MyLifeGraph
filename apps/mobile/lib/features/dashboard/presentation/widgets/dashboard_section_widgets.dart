@@ -187,27 +187,59 @@ class DashboardSectionTitle extends StatelessWidget {
     super.key,
     required this.title,
     required this.subtitle,
+    this.caption,
+    this.icon,
+    this.iconColor,
     this.trailing,
   });
 
   final String title;
   final String subtitle;
+  final String? caption;
+  final IconData? icon;
+  final Color? iconColor;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.visualTokens;
     final copy = TodayInfoDisclosure(
       topic: title,
       description: subtitle,
       headerBuilder: (context, infoButton) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Flexible(
+          if (icon != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Icon(
+                icon,
+                size: 22,
+                color: iconColor ?? tokens.brand,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+          Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  if (caption != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      caption!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                          ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),

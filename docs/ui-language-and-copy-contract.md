@@ -138,12 +138,12 @@ The primary Today surface uses these exact concepts:
 
 - `Check-in streak` for consecutive dates with both saved check-ins;
 - `Today's progress` and `x/y completed` for the transparent dynamic count;
-- `Today at a glance` for the vertical agenda;
+- `Today's schedule` for the vertical timed agenda;
 - `Setup commitment`, `Preparation`, `Calendar`, and `Focus` for agenda source
   categories;
-- `Today's tasks`, `Show all tasks`, and `Today's habits` for execution;
+- `Tasks due today`, `Show all tasks`, and `Habits for today` for execution;
 - `Beat yesterday` for the compact latest-saved-check-in inset; and
-- `Review your week` for the direct Weekly Review navigation entry; and
+- `Weekly review` for the direct Weekly Review navigation entry; and
 - `Full week` for the independently lazy supporting accordion.
 
 The former generic `Recommendations` and `Decision feedback history` labels are
@@ -176,7 +176,7 @@ information controls use the exact semantics and tooltip labels
 Opening information reveals the existing English copy; it does not replace or
 delay an error, loading, unavailable, result, action, count, or empty-state
 message and does not open the surrounding Task/supporting accordion. The
-direct `Review your week` entry always shows its existing summary and has no
+direct `Weekly review` entry always shows its existing summary and has no
 information control or collapsed wrapper. Every visible information icon is a
 20-pixel glyph inside a 24-pixel frame and a real 44×44 button/semantics target;
 the accordion header is an independent sibling control.

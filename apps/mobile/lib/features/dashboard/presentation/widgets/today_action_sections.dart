@@ -157,9 +157,12 @@ class TodayHabitSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const DashboardSectionTitle(
-          title: 'Today\'s habits',
-          subtitle: 'Scheduled habits and still-open weekly targets.',
+        DashboardSectionTitle(
+          title: 'Habits for today',
+          caption: 'Repeating habits due today',
+          subtitle:
+              'These come back on a schedule. They are not one-off planner tasks.',
+          icon: AppIcons.repeat,
         ),
         const SizedBox(height: AppSpacing.md),
         if (sourceState?.status == TodaySourceStatus.unavailable)
@@ -170,7 +173,7 @@ class TodayHabitSection extends StatelessWidget {
         else if (habits.isEmpty)
           const DashboardEmptySectionCard(
             icon: AppIcons.checkCircleOutline,
-            message: 'No habits need an outcome today.',
+            message: 'No repeating habits due today.',
           )
         else
           ...habits.map(
@@ -221,8 +224,11 @@ class _TodayTasksSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DashboardSectionTitle(
-          title: 'Today\'s tasks',
-          subtitle: 'Due, overdue, in-progress, and completed-today tasks.',
+          title: 'Tasks due today',
+          caption: 'From Planner · one-off actions',
+          subtitle:
+              'These are planner tasks due, overdue, in progress, or completed today. They are not repeating habits.',
+          icon: AppIcons.taskAltOutlined,
           trailing: canExecute
               ? FilledButton.icon(
                   onPressed: onAdd,
@@ -240,7 +246,7 @@ class _TodayTasksSection extends StatelessWidget {
         else if (tasks.isEmpty)
           const DashboardEmptySectionCard(
             icon: AppIcons.taskAltOutlined,
-            message: 'No due, overdue, or in-progress tasks today.',
+            message: 'No planner tasks due today.',
           )
         else
           ...tasks.map(
@@ -402,80 +408,76 @@ class _HabitCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final completed = outcomeOverride == 'completed';
     final skipped = outcomeOverride == 'skipped';
+    final tokens = context.visualTokens;
+    final open = outcomeOverride == null;
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      child: Row(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
+          if (updating)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (open)
+            IconButton(
+              tooltip: 'Complete',
+              onPressed: !canExecute
+                  ? null
+                  : () => onSetOutcome(habit, HabitOutcome.completed),
+              icon: Icon(
+                AppIcons.radioButtonUnchecked,
+                color: tokens.textSecondary,
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Icon(
                 completed
                     ? AppIcons.checkCircle
-                    : skipped
-                        ? AppIcons.skipNextOutlined
-                        : AppIcons.radioButtonUnchecked,
+                    : AppIcons.skipNextOutlined,
                 color: completed
-                    ? context.visualTokens.success
-                    : skipped
-                        ? Theme.of(context).colorScheme.tertiary
-                        : null,
+                    ? tokens.success
+                    : Theme.of(context).colorScheme.tertiary,
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      habit.title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      [
-                        habit.cadenceLabel,
-                        if (habit.cadence == 'weekly_target')
-                          '${habit.weeklyCompleted}/${habit.weeklyTarget} this week',
-                        if (habit.setupManaged) 'Managed in Setup',
-                      ].join(' · '),
-                    ),
-                  ],
-                ),
-              ),
-              if (updating)
-                const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
-          ),
-          if (canExecute && !updating) ...[
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
+            ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (outcomeOverride == null) ...[
-                  FilledButton.tonalIcon(
-                    onPressed: () =>
-                        onSetOutcome(habit, HabitOutcome.completed),
-                    icon: const Icon(AppIcons.check),
-                    label: const Text('Complete'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => onSetOutcome(habit, HabitOutcome.skipped),
-                    icon: const Icon(AppIcons.skipNextOutlined),
-                    label: const Text('Skip'),
-                  ),
-                ] else
-                  OutlinedButton.icon(
-                    onPressed: () => onUndo(habit),
-                    icon: const Icon(AppIcons.undo),
-                    label: const Text('Undo outcome'),
-                  ),
+                Text(
+                  habit.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  [
+                    habit.cadenceLabel,
+                    if (habit.cadence == 'weekly_target')
+                      '${habit.weeklyCompleted}/${habit.weeklyTarget} this week',
+                    if (habit.setupManaged) 'Managed in Setup',
+                  ].join(' · '),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
-          ],
+          ),
+          if (canExecute && !updating)
+            IconButton(
+              tooltip: open ? 'Skip' : 'Undo outcome',
+              onPressed: open
+                  ? () => onSetOutcome(habit, HabitOutcome.skipped)
+                  : () => onUndo(habit),
+              icon: Icon(
+                open ? AppIcons.skipNextOutlined : AppIcons.undo,
+              ),
+            ),
         ],
       ),
     );

@@ -70,22 +70,19 @@ class CaptureChoiceControl<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (equalWidthRow) {
-      return IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var index = 0; index < choices.length; index++) ...[
-              if (index > 0) const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: _EqualChoiceButton<T>(
-                  choice: choices[index],
-                  selected: choices[index].value == value,
-                  onChanged: onChanged,
-                ),
+      return Row(
+        children: [
+          for (var index = 0; index < choices.length; index++) ...[
+            if (index > 0) const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: _EqualChoiceButton<T>(
+                choice: choices[index],
+                selected: choices[index].value == value,
+                onChanged: onChanged,
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       );
     }
     return Column(

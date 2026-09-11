@@ -346,11 +346,22 @@ class _BeatYesterdayMetric extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               if (expanded)
                 Expanded(
-                  child: Text(
-                    '${metric.label}  ${metric.value}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.labelLarge,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        metric.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.labelMedium,
+                      ),
+                      Text(
+                        metric.value,
+                        maxLines: 1,
+                        style: textTheme.titleSmall,
+                      ),
+                    ],
                   ),
                 )
               else
@@ -406,12 +417,11 @@ class _CheckInButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = '${saved ? 'Edit' : 'Add'} $label';
-    final textTheme = Theme.of(context).textTheme;
     return Semantics(
       button: true,
       label: '$text. ${saved ? 'Saved' : 'Not saved'} today.',
       child: compact
-          ? _compactButton(textTheme)
+          ? _compactButton(context)
           : saved
               ? OutlinedButton.icon(
                   onPressed: onPressed,
@@ -426,7 +436,9 @@ class _CheckInButton extends StatelessWidget {
     );
   }
 
-  Widget _compactButton(TextTheme textTheme) {
+  Widget _compactButton(BuildContext context) {
+    final tokens = context.visualTokens;
+    final textTheme = Theme.of(context).textTheme;
     final child = Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       child: Column(
@@ -445,28 +457,23 @@ class _CheckInButton extends StatelessWidget {
             style: textTheme.labelLarge,
           ),
           Text(
-            saved ? 'Edit' : 'Add',
+            saved ? 'Done' : 'To do',
             style: textTheme.labelSmall,
           ),
         ],
       ),
     );
-    final style = ButtonStyle(
-      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-      minimumSize: const WidgetStatePropertyAll(Size.zero),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-    );
-    if (saved) {
-      return OutlinedButton(
-        onPressed: onPressed,
-        style: style,
-        child: child,
-      );
-    }
-    return FilledButton.tonal(
+    return OutlinedButton(
       onPressed: onPressed,
-      style: style,
+      style: ButtonStyle(
+        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+        minimumSize: const WidgetStatePropertyAll(Size.zero),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        backgroundColor: WidgetStatePropertyAll(
+          saved ? Colors.transparent : tokens.brand.withValues(alpha: 0.12),
+        ),
+      ),
       child: child,
     );
   }
@@ -569,9 +576,12 @@ class _TodayAgenda extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const DashboardSectionTitle(
-          title: 'Today at a glance',
-          subtitle: 'Your timed day in one compact agenda.',
+        DashboardSectionTitle(
+          title: 'Today\'s schedule',
+          caption: 'Timed blocks from your calendar and plans',
+          subtitle:
+              'This is today\'s timed agenda, not a to-do list. Setup, preparation, calendar, and focus blocks appear here in order.',
+          icon: AppIcons.schedule,
         ),
         if (sourceErrors.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
@@ -585,7 +595,7 @@ class _TodayAgenda extends StatelessWidget {
         if (snapshot.timeline.isEmpty)
           const DashboardEmptySectionCard(
             icon: AppIcons.calendarTodayOutlined,
-            message: 'No timed blocks or all-day events are available today.',
+            message: 'Nothing timed on the calendar today.',
           )
         else
           ...snapshot.timeline.map(
@@ -622,12 +632,15 @@ class _AgendaItem extends StatelessWidget {
     final appearance = _agendaAppearance(context, item.kind);
     final detail = _agendaDetail(item);
     final rowAction = _rowAction(context);
+    final isPast = const {'completed', 'ended', 'done'}.contains(item.state);
     return Semantics(
       container: true,
       button: rowAction != null,
       enabled: rowAction != null,
       label: '${appearance.label}. ${item.title}. ${_agendaTime(item)}.',
-      child: Material(
+      child: Opacity(
+        opacity: isPast ? 0.62 : 1,
+        child: Material(
         color: appearance.background,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
@@ -755,6 +768,7 @@ class _AgendaItem extends StatelessWidget {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

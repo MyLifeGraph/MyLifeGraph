@@ -7,6 +7,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/time/profile_timezone.dart';
 import '../../../../core/theme/app_category_visuals.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_schedule_day_card.dart';
 import '../../../../core/widgets/app_surface.dart';
@@ -69,58 +70,76 @@ class PlannerAddNewSection extends StatelessWidget {
   final ValueChanged<bool>? onCalendarPreference;
 
   @override
-  Widget build(BuildContext context) => AppCard(
+  Widget build(BuildContext context) {
+    return AppCard(
         key: const ValueKey('planner-add-new'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Add new', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              'Only explicit values are planned. Nothing is scheduled in the background.',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                _CreateButton(
-                  key: const ValueKey('planner-add-task'),
-                  category: AppCategory.task,
-                  icon: AppIcons.taskAltOutlined,
-                  label: 'Task',
-                  onPressed: busy ? null : onTask,
+            if (MediaQuery.sizeOf(context).width < 620)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  key: const ValueKey('planner-add-new-button'),
+                  onPressed: busy
+                      ? null
+                      : () => _openPlannerAddNewSheet(
+                            context,
+                            onTask: onTask,
+                            onHabit: onHabit,
+                            onExam: onExam,
+                            onAssignment: onAssignment,
+                            onCommitment: onCommitment,
+                          ),
+                  icon: const Icon(AppIcons.add),
+                  label: const Text('Add new'),
                 ),
-                _CreateButton(
-                  key: const ValueKey('planner-add-habit'),
-                  category: AppCategory.habit,
-                  icon: AppIcons.repeatOutlined,
-                  label: 'Habit',
-                  onPressed: busy ? null : onHabit,
-                ),
-                _CreateButton(
-                  key: const ValueKey('planner-add-exam'),
-                  category: AppCategory.preparation,
-                  icon: AppIcons.schoolOutlined,
-                  label: 'Exam',
-                  onPressed: busy ? null : onExam,
-                ),
-                _CreateButton(
-                  key: const ValueKey('planner-add-assignment'),
-                  category: AppCategory.preparation,
-                  icon: AppIcons.assignmentOutlined,
-                  label: 'Assignment',
-                  onPressed: busy ? null : onAssignment,
-                ),
-                _CreateButton(
-                  key: const ValueKey('planner-add-commitment'),
-                  category: AppCategory.fixedCommitment,
-                  icon: AppIcons.eventBusyOutlined,
-                  label: 'Fixed commitment',
-                  onPressed: busy ? null : onCommitment,
-                ),
-              ],
-            ),
+              )
+            else ...[
+              Text('Add new', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  _CreateButton(
+                    key: const ValueKey('planner-add-task'),
+                    category: AppCategory.task,
+                    icon: AppIcons.taskAltOutlined,
+                    label: 'Task',
+                    onPressed: busy ? null : onTask,
+                  ),
+                  _CreateButton(
+                    key: const ValueKey('planner-add-habit'),
+                    category: AppCategory.habit,
+                    icon: AppIcons.repeatOutlined,
+                    label: 'Habit',
+                    onPressed: busy ? null : onHabit,
+                  ),
+                  _CreateButton(
+                    key: const ValueKey('planner-add-exam'),
+                    category: AppCategory.preparation,
+                    icon: AppIcons.schoolOutlined,
+                    label: 'Exam',
+                    onPressed: busy ? null : onExam,
+                  ),
+                  _CreateButton(
+                    key: const ValueKey('planner-add-assignment'),
+                    category: AppCategory.preparation,
+                    icon: AppIcons.assignmentOutlined,
+                    label: 'Assignment',
+                    onPressed: busy ? null : onAssignment,
+                  ),
+                  _CreateButton(
+                    key: const ValueKey('planner-add-commitment'),
+                    category: AppCategory.fixedCommitment,
+                    icon: AppIcons.eventBusyOutlined,
+                    label: 'Fixed commitment',
+                    onPressed: busy ? null : onCommitment,
+                  ),
+                ],
+              ),
+            ],
             if (availabilityIncomplete) ...[
               const Divider(height: AppSpacing.xl),
               Container(
@@ -175,10 +194,10 @@ class PlannerAddNewSection extends StatelessWidget {
                 value: calendarPreference!.useCalendarBusyTime,
                 onChanged: busy ? null : onCalendarPreference,
                 secondary: const Icon(AppIcons.calendarMonthOutlined),
-                title: const Text('Use current calendar import as busy time'),
+                title: const Text('Treat imported calendar as busy'),
                 subtitle: Text(
                   calendarPreference!.calendarAvailable
-                      ? 'Read-only. A changed import makes open previews stale.'
+                      ? 'Read-only. After a new import, check open previews.'
                       : 'No current .ics import is available. Import one in Settings first.',
                 ),
               ),
@@ -186,6 +205,103 @@ class PlannerAddNewSection extends StatelessWidget {
           ],
         ),
       );
+  }
+}
+
+Future<void> _openPlannerAddNewSheet(
+  BuildContext context, {
+  required VoidCallback onTask,
+  required VoidCallback onHabit,
+  required VoidCallback onExam,
+  required VoidCallback onAssignment,
+  required VoidCallback onCommitment,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      final options = <({
+        String key,
+        AppCategory category,
+        IconData icon,
+        String label,
+        VoidCallback onSelect,
+      })>[
+        (
+          key: 'planner-add-task',
+          category: AppCategory.task,
+          icon: AppIcons.taskAltOutlined,
+          label: 'Task',
+          onSelect: onTask,
+        ),
+        (
+          key: 'planner-add-habit',
+          category: AppCategory.habit,
+          icon: AppIcons.repeatOutlined,
+          label: 'Habit',
+          onSelect: onHabit,
+        ),
+        (
+          key: 'planner-add-exam',
+          category: AppCategory.preparation,
+          icon: AppIcons.schoolOutlined,
+          label: 'Exam',
+          onSelect: onExam,
+        ),
+        (
+          key: 'planner-add-assignment',
+          category: AppCategory.preparation,
+          icon: AppIcons.assignmentOutlined,
+          label: 'Assignment',
+          onSelect: onAssignment,
+        ),
+        (
+          key: 'planner-add-commitment',
+          category: AppCategory.fixedCommitment,
+          icon: AppIcons.eventBusyOutlined,
+          label: 'Fixed commitment',
+          onSelect: onCommitment,
+        ),
+      ];
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Add new',
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+              ),
+            ),
+            for (final option in options)
+              ListTile(
+                key: ValueKey(option.key),
+                leading: CircleAvatar(
+                  backgroundColor: option.category.visual(sheetContext).background,
+                  foregroundColor: option.category.visual(sheetContext).foreground,
+                  child: Icon(option.icon),
+                ),
+                title: Text(option.label),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  option.onSelect();
+                },
+              ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class _CreateButton extends StatelessWidget {
@@ -770,7 +886,9 @@ Color _plannerExamHealthColor(
       ExamPlanHealthStatus.unknown => Theme.of(context).colorScheme.secondary,
     };
 
-class PlannerSevenDaySection extends StatelessWidget {
+enum _SevenDayView { swipe, list }
+
+class PlannerSevenDaySection extends StatefulWidget {
   const PlannerSevenDaySection({
     super.key,
     required this.days,
@@ -785,32 +903,242 @@ class PlannerSevenDaySection extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) => Column(
-        key: const ValueKey('planner-seven-days'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Next seven days',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          for (final day in days) ...[
-            AppScheduleDayCard(
-              localDate: day.localDate,
-              items: day.items
-                  .map((item) => _plannerDayItemView(
-                        item,
-                        enabled: enabled,
-                        timezone: timezone,
-                      ))
-                  .toList(growable: false),
-              emptyLabel: 'No planned or fixed items.',
-              onItemTap: (view) => onItemTap(view.payload! as PlannerDayItem),
+  State<PlannerSevenDaySection> createState() => _PlannerSevenDaySectionState();
+}
+
+class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
+  _SevenDayView _view = _SevenDayView.swipe;
+  late int _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = _initialPage(widget.days);
+  }
+
+  @override
+  void didUpdateWidget(PlannerSevenDaySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.days.length != widget.days.length ||
+        (widget.days.isNotEmpty &&
+            oldWidget.days.first.localDate != widget.days.first.localDate)) {
+      _page = _initialPage(widget.days);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 620;
+    return Column(
+      key: const ValueKey('planner-seven-days'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Next seven days',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
-            if (day != days.last) const SizedBox(height: AppSpacing.sm),
+            if (compact) _sevenDayViewToggle(context),
           ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (!compact || _view == _SevenDayView.list)
+          _sevenDayList()
+        else
+          _sevenDayPager(context),
+      ],
+    );
+  }
+
+  Widget _sevenDayViewToggle(BuildContext context) {
+    final tokens = context.visualTokens;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _sevenDayViewIcon(
+            context,
+            key: const ValueKey('planner-seven-days-swipe'),
+            selected: _view == _SevenDayView.swipe,
+            icon: AppIcons.viewTimelineOutlined,
+            tooltip: 'Days',
+            onPressed: () => setState(() => _view = _SevenDayView.swipe),
+          ),
+          _sevenDayViewIcon(
+            context,
+            key: const ValueKey('planner-seven-days-list'),
+            selected: _view == _SevenDayView.list,
+            icon: AppIcons.descriptionOutlined,
+            tooltip: 'List',
+            onPressed: () => setState(() => _view = _SevenDayView.list),
+          ),
         ],
-      );
+      ),
+    );
+  }
+
+  Widget _sevenDayViewIcon(
+    BuildContext context, {
+    required Key key,
+    required bool selected,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    final tokens = context.visualTokens;
+    return IconButton(
+      key: key,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        color: selected ? tokens.brand : tokens.textSecondary,
+      ),
+      style: IconButton.styleFrom(
+        backgroundColor: selected ? tokens.brand.withValues(alpha: 0.14) : null,
+      ),
+    );
+  }
+
+  Widget _sevenDayList() {
+    return Column(
+      children: [
+        for (final day in widget.days) ...[
+          AppScheduleDayCard(
+            localDate: day.localDate,
+            items: day.items
+                .map(
+                  (item) => _plannerDayItemView(
+                    item,
+                    enabled: widget.enabled,
+                    timezone: widget.timezone,
+                  ),
+                )
+                .toList(growable: false),
+            emptyLabel: 'No planned or fixed items.',
+            onItemTap: (view) =>
+                widget.onItemTap(view.payload! as PlannerDayItem),
+          ),
+          if (day != widget.days.last) const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+    );
+  }
+
+  Widget _sevenDayPager(BuildContext context) {
+    if (widget.days.isEmpty) {
+      return const Text('No planned or fixed items.');
+    }
+    final day = widget.days[_page.clamp(0, widget.days.length - 1)];
+    final tokens = context.visualTokens;
+    return Column(
+      children: [
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Previous day',
+              onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
+              icon: const RotatedBox(
+                quarterTurns: 2,
+                child: Icon(AppIcons.chevronRight),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                DateFormat('EEEE, MMM d').format(day.localDate),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Next day',
+              onPressed: _page < widget.days.length - 1
+                  ? () => _goTo(_page + 1)
+                  : null,
+              icon: const Icon(AppIcons.chevronRight),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            for (var index = 0; index < widget.days.length; index++)
+              Expanded(
+                child: InkWell(
+                  onTap: () => _goTo(index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      DateFormat('E').format(widget.days[index].localDate),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: index == _page
+                                ? tokens.brand
+                                : tokens.textSecondary,
+                            fontWeight: index == _page
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        GestureDetector(
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity < -180) _goTo(_page + 1);
+            if (velocity > 180) _goTo(_page - 1);
+          },
+          child: AppScheduleDayCard(
+            localDate: day.localDate,
+            showDate: false,
+            items: day.items
+                .map(
+                  (item) => _plannerDayItemView(
+                    item,
+                    enabled: widget.enabled,
+                    timezone: widget.timezone,
+                  ),
+                )
+                .toList(growable: false),
+            emptyLabel: 'No planned or fixed items.',
+            onItemTap: (view) =>
+                widget.onItemTap(view.payload! as PlannerDayItem),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _goTo(int page) {
+    final last = widget.days.length - 1;
+    final next = page.clamp(0, last);
+    if (next == _page) return;
+    setState(() => _page = next);
+  }
+
+  int _initialPage(List<PlannerDay> days) {
+    final today = DateTime.now();
+    for (var i = 0; i < days.length; i++) {
+      final date = days[i].localDate;
+      if (date.year == today.year &&
+          date.month == today.month &&
+          date.day == today.day) {
+        return i;
+      }
+    }
+    return 0;
+  }
 }
 
 AppScheduleDayItem _plannerDayItemView(

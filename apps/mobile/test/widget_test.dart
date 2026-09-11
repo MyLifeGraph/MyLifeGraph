@@ -29,7 +29,7 @@ void main() {
 
     await _startGuestAndCompleteSetup(tester);
 
-    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text("Today's schedule"), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     final rawIntake = prefs.getString('auth_guest_intake_response');
     expect(rawIntake, isNotNull);
@@ -310,7 +310,7 @@ void main() {
     await tester.tap(find.text('Save evening check-in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text("Today's schedule"), findsOneWidget);
     await tester.tap(find.byIcon(AppIcons.add).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Morning check-in'));
@@ -345,7 +345,7 @@ void main() {
     await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text("Today's schedule"), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     final raw = jsonDecode(
       prefs.getString('guest_quick_checkins')!,
@@ -416,7 +416,7 @@ void main() {
     expect(find.byTooltip('Settings'), findsOneWidget);
 
     final router = GoRouter.of(
-      tester.element(find.text('Today at a glance')),
+      tester.element(find.text("Today's schedule")),
     );
     router.go(AppRoutes.coach);
     await tester.pumpAndSettle();
@@ -447,7 +447,7 @@ void main() {
 
     router.go(AppRoutes.weeklyReview);
     await tester.pumpAndSettle();
-    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text("Today's schedule"), findsOneWidget);
     expect(find.text('Weekly review'), findsNothing);
 
     router.go(AppRoutes.calendarIntegration);

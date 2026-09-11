@@ -106,9 +106,12 @@ class _InsightsHome extends ConsumerStatefulWidget {
   ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
 }
 
+enum _AdvancedPane { compare, topPatterns, trend, matrix, discovered }
+
 class _InsightsHomeState extends ConsumerState<_InsightsHome> {
   String _metricAId = 'sleep_hours';
   String _metricBId = 'useful_progress';
+  _AdvancedPane _advancedPane = _AdvancedPane.compare;
   final Set<String> _trendMetricIds = {
     'sleep_hours',
     'useful_progress',
@@ -208,145 +211,29 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                   child: Material(
                     type: MaterialType.transparency,
                     child: ExpansionTile(
+                      initiallyExpanded: false,
                       title: const Text('Advanced correlation exploration'),
                       subtitle: const Text(
-                        'Inspect matrices, trends, and individual signal pairs.',
+                        'Compare two signals, then inspect charts if needed.',
                       ),
                       childrenPadding: EdgeInsets.all(
                         isMobile ? AppSpacing.md : AppSpacing.lg,
                       ),
-                      children: [
-                        _ControlsPanel(
-                          isMobile: isMobile,
-                          windowDays: windowDays,
-                          metrics: widget.report.metrics,
-                          metricAId: _metricAId,
-                          metricBId: _metricBId,
-                          onWindowChanged: (value) {
-                            ref
-                                .read(insightsWindowDaysProvider.notifier)
-                                .state = value;
-                          },
-                          onMetricAChanged: (value) {
-                            if (value == null) return;
-                            setState(() {
-                              _metricAId = value;
-                              if (_metricAId == _metricBId ||
-                                  const CorrelationPairPolicy().isBlocked(
-                                    _metricAId,
-                                    _metricBId,
-                                  )) {
-                                _metricBId = _fallbackMetricId(
-                                  except: _metricAId,
-                                  pairedWith: _metricAId,
-                                );
-                              }
-                            });
-                          },
-                          onMetricBChanged: (value) {
-                            if (value == null) return;
-                            setState(() {
-                              _metricBId = value;
-                              if (_metricAId == _metricBId ||
-                                  const CorrelationPairPolicy().isBlocked(
-                                    _metricAId,
-                                    _metricBId,
-                                  )) {
-                                _metricAId = _fallbackMetricId(
-                                  except: _metricBId,
-                                  pairedWith: _metricBId,
-                                );
-                              }
-                            });
-                          },
-                        ),
-                        SizedBox(
-                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
-                        ),
-                        _TrendOverlayCard(
-                          report: widget.report,
-                          selectedMetricIds: _trendMetricIds,
-                          onMetricToggled: (metricId) {
-                            setState(() {
-                              if (_trendMetricIds.contains(metricId)) {
-                                if (_trendMetricIds.length > 1) {
-                                  _trendMetricIds.remove(metricId);
-                                }
-                              } else if (_trendMetricIds.every(
-                                (selected) =>
-                                    !const CorrelationPairPolicy().isBlocked(
-                                  selected,
-                                  metricId,
-                                ),
-                              )) {
-                                _trendMetricIds.add(metricId);
-                              }
-                            });
-                          },
-                          isMobile: isMobile,
-                        ),
-                        SizedBox(
-                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
-                        ),
-                        if (isMobile) ...[
-                          _CorrelationCard(
-                            metricA: metricA,
-                            metricB: metricB,
-                            result: activeResult,
-                            values: values,
-                            isMobile: true,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _TopPatternsCard(
-                            report: widget.report,
-                            isMobile: true,
-                          ),
-                        ] else
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: _CorrelationCard(
-                                  metricA: metricA,
-                                  metricB: metricB,
-                                  result: activeResult,
-                                  values: values,
-                                  isMobile: false,
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.lg),
-                              Expanded(
-                                flex: 2,
-                                child: _TopPatternsCard(
-                                  report: widget.report,
-                                  isMobile: false,
-                                ),
-                              ),
-                            ],
-                          ),
-                        SizedBox(
-                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
-                        ),
-                        _CorrelationMatrixCard(
-                          report: widget.report,
-                          selectedMetricAId: _metricAId,
-                          selectedMetricBId: _metricBId,
-                          onPairSelected: (metricAId, metricBId) {
-                            setState(() {
-                              _metricAId = metricAId;
-                              _metricBId = metricBId;
-                            });
-                          },
-                        ),
-                        SizedBox(
-                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
-                        ),
-                        _DiscoveredPatternsCard(
-                          insights: widget.insights,
-                          isMobile: isMobile,
-                        ),
-                      ],
+                      children: isMobile
+                          ? _mobileAdvancedChildren(
+                              windowDays: windowDays,
+                              metricA: metricA,
+                              metricB: metricB,
+                              activeResult: activeResult,
+                              values: values,
+                            )
+                          : _desktopAdvancedChildren(
+                              windowDays: windowDays,
+                              metricA: metricA,
+                              metricB: metricB,
+                              activeResult: activeResult,
+                              values: values,
+                            ),
                     ),
                   ),
                 ),
@@ -355,6 +242,179 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
           ),
         ],
       ),
+    );
+  }
+
+  List<Widget> _desktopAdvancedChildren({
+    required int windowDays,
+    required CorrelationMetric metricA,
+    required CorrelationMetric metricB,
+    required CorrelationResult? activeResult,
+    required List<MetricPairValues> values,
+  }) {
+    return [
+      _controlsPanel(isMobile: false, windowDays: windowDays),
+      const SizedBox(height: AppSpacing.lg),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 3,
+            child: _CorrelationCard(
+              metricA: metricA,
+              metricB: metricB,
+              result: activeResult,
+              values: values,
+              isMobile: false,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            flex: 2,
+            child: _TopPatternsCard(
+              report: widget.report,
+              isMobile: false,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      _trendOverlayCard(isMobile: false),
+      const SizedBox(height: AppSpacing.lg),
+      _correlationMatrixCard(isMobile: false),
+      const SizedBox(height: AppSpacing.lg),
+      _DiscoveredPatternsCard(
+        insights: widget.insights,
+        isMobile: false,
+      ),
+    ];
+  }
+
+  List<Widget> _mobileAdvancedChildren({
+    required int windowDays,
+    required CorrelationMetric metricA,
+    required CorrelationMetric metricB,
+    required CorrelationResult? activeResult,
+    required List<MetricPairValues> values,
+  }) {
+    return [
+      _AdvancedPaneTabs(
+        selected: _advancedPane,
+        onSelected: (pane) => setState(() => _advancedPane = pane),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      switch (_advancedPane) {
+        _AdvancedPane.compare => Column(
+            children: [
+              _controlsPanel(isMobile: true, windowDays: windowDays),
+              const SizedBox(height: AppSpacing.md),
+              _CorrelationCard(
+                metricA: metricA,
+                metricB: metricB,
+                result: activeResult,
+                values: values,
+                isMobile: true,
+              ),
+            ],
+          ),
+        _AdvancedPane.topPatterns => _TopPatternsCard(
+            report: widget.report,
+            isMobile: true,
+          ),
+        _AdvancedPane.trend => _trendOverlayCard(isMobile: true),
+        _AdvancedPane.matrix => _correlationMatrixCard(isMobile: true),
+        _AdvancedPane.discovered => _DiscoveredPatternsCard(
+            insights: widget.insights,
+            isMobile: true,
+          ),
+      },
+    ];
+  }
+
+  Widget _controlsPanel({
+    required bool isMobile,
+    required int windowDays,
+  }) {
+    return _ControlsPanel(
+      isMobile: isMobile,
+      windowDays: windowDays,
+      metrics: widget.report.metrics,
+      metricAId: _metricAId,
+      metricBId: _metricBId,
+      onWindowChanged: (value) {
+        ref.read(insightsWindowDaysProvider.notifier).state = value;
+      },
+      onMetricAChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _metricAId = value;
+          if (_metricAId == _metricBId ||
+              const CorrelationPairPolicy().isBlocked(
+                _metricAId,
+                _metricBId,
+              )) {
+            _metricBId = _fallbackMetricId(
+              except: _metricAId,
+              pairedWith: _metricAId,
+            );
+          }
+        });
+      },
+      onMetricBChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _metricBId = value;
+          if (_metricAId == _metricBId ||
+              const CorrelationPairPolicy().isBlocked(
+                _metricAId,
+                _metricBId,
+              )) {
+            _metricAId = _fallbackMetricId(
+              except: _metricBId,
+              pairedWith: _metricBId,
+            );
+          }
+        });
+      },
+    );
+  }
+
+  Widget _trendOverlayCard({required bool isMobile}) {
+    return _TrendOverlayCard(
+      report: widget.report,
+      selectedMetricIds: _trendMetricIds,
+      onMetricToggled: (metricId) {
+        setState(() {
+          if (_trendMetricIds.contains(metricId)) {
+            if (_trendMetricIds.length > 1) {
+              _trendMetricIds.remove(metricId);
+            }
+          } else if (_trendMetricIds.every(
+            (selected) => !const CorrelationPairPolicy().isBlocked(
+              selected,
+              metricId,
+            ),
+          )) {
+            _trendMetricIds.add(metricId);
+          }
+        });
+      },
+      isMobile: isMobile,
+    );
+  }
+
+  Widget _correlationMatrixCard({required bool isMobile}) {
+    return _CorrelationMatrixCard(
+      report: widget.report,
+      selectedMetricAId: _metricAId,
+      selectedMetricBId: _metricBId,
+      isMobile: isMobile,
+      onPairSelected: (metricAId, metricBId) {
+        setState(() {
+          _metricAId = metricAId;
+          _metricBId = metricBId;
+        });
+      },
     );
   }
 

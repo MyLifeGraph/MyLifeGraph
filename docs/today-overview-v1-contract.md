@@ -159,10 +159,10 @@ The primary Today order is:
    Settings header actions;
 2. Check-in streak with Morning and Evening save state/actions;
 3. green Today progress bar;
-4. `Today at a glance` vertical agenda;
-5. `Today's tasks`, followed by collapsed `Show all tasks`;
-6. `Today's habits`;
-7. a direct `Review your week` navigation entry, followed by the independently
+4. `Today's schedule` vertical agenda;
+5. `Tasks due today`, followed by collapsed `Show all tasks`;
+6. `Habits for today`;
+7. a direct `Weekly review` navigation entry, followed by the independently
    collapsed `Full week` section. The Weekly Review entry is omitted when its
    existing capability is unavailable.
 
@@ -174,7 +174,7 @@ improvement, score, or judgment. Loading, no-data, and error copy stays inside
 the inset, so the streak and Morning/Evening actions remain usable.
 
 Full week watches its narrow projection only while its accordion is open.
-`Review your week` keeps its existing navigation and capability boundary but is
+`Weekly review` keeps its existing navigation and capability boundary but is
 not wrapped in a second accordion.
 Today no longer contains a `More` grouping, saved-signal
 summary, or `7-day preparation load`. Planner also has no standalone workload
@@ -186,9 +186,9 @@ behind compatibility UI.
 Explanatory copy is initially hidden behind an independent circled information
 control beside each affected heading. This applies to the Today source/updated
 line, the normal streak explanation, the progress-inclusion explanation,
-`Today at a glance`, `Today's tasks`, `Show all tasks`, its expanded `Tasks`
-subsection, `Today's habits`, and the Full-week accordion description.
-The direct `Review your week` entry keeps its summary visible and has no
+`Today's schedule`, `Tasks due today`, `Show all tasks`, its expanded `Tasks`
+subsection, `Habits for today`, and the Full-week accordion description.
+The direct `Weekly review` entry keeps its summary visible and has no
 information control. Each disclosure has local, non-persisted state; several
 may remain open at the same time, and a newly created Today route starts them
 closed. Error, loading, result, unavailable, action, counter, progress, and

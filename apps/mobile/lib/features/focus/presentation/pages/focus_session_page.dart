@@ -605,7 +605,10 @@ class _StartFocusCard extends StatelessWidget {
         inlineError == null &&
         hasSelectedDuration &&
         selectedTargetExists;
-    return AppCard(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 620;
+        return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -644,32 +647,46 @@ class _StartFocusCard extends StatelessWidget {
           ],
           if (durations.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
-            SegmentedButton<int>(
-              direction: _focusChoiceDirection(context),
-              emptySelectionAllowed: !hasSelectedDuration,
-              segments: [
-                for (final minutes in durations)
-                  ButtonSegment(
-                    value: minutes,
-                    label: Text('$minutes min'),
-                  ),
-              ],
-              selected: hasSelectedDuration ? {plannedMinutes} : const <int>{},
-              onSelectionChanged: isSaving
-                  ? null
-                  : (values) {
-                      if (values.isNotEmpty) onDurationChanged(values.single);
-                    },
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: isSaving ? null : onCustomDuration,
-                icon: const Icon(AppIcons.tune),
-                label: const Text('Custom duration'),
+            if (isMobile)
+              _MobileDurationGrid(
+                presets: const [25, 45, 50, 90]
+                    .where((minutes) => minutes >= 5 && minutes <= maximum)
+                    .toList(),
+                plannedMinutes: plannedMinutes,
+                isSaving: isSaving,
+                onDurationChanged: onDurationChanged,
+                onCustomDuration: onCustomDuration,
+              )
+            else ...[
+              SegmentedButton<int>(
+                emptySelectionAllowed: !hasSelectedDuration,
+                segments: [
+                  for (final minutes in durations)
+                    ButtonSegment(
+                      value: minutes,
+                      label: Text('$minutes min'),
+                    ),
+                ],
+                selected:
+                    hasSelectedDuration ? {plannedMinutes} : const <int>{},
+                onSelectionChanged: isSaving
+                    ? null
+                    : (values) {
+                        if (values.isNotEmpty) {
+                          onDurationChanged(values.single);
+                        }
+                      },
               ),
-            ),
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: isSaving ? null : onCustomDuration,
+                  icon: const Icon(AppIcons.tune),
+                  label: const Text('Custom duration'),
+                ),
+              ),
+            ],
           ],
           if (suggestion != null && scheduledContext == null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -702,14 +719,14 @@ class _StartFocusCard extends StatelessWidget {
             isExpanded: true,
             decoration: InputDecoration(
               labelText: scheduledContext == null
-                  ? 'Linked action optional'
+                  ? 'Link task or habit (optional)'
                   : 'Linked planned task',
             ),
             items: [
               const DropdownMenuItem<String?>(
                 value: null,
                 child: Text(
-                  'Independent focus block',
+                  'Focus block (normal)',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -718,8 +735,7 @@ class _StartFocusCard extends StatelessWidget {
                 (target) => DropdownMenuItem<String?>(
                   value: target.value,
                   child: Text(
-                    '${target.kind == FocusTargetKind.task ? 'Task' : 'Habit'}: '
-                    '${target.title}',
+                    _focusTargetDisplayLabel(target),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -762,20 +778,75 @@ class _StartFocusCard extends StatelessWidget {
           ],
           const SizedBox(height: AppSpacing.lg),
           Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: isSaving || !canStartNow ? null : onStart,
-              icon: isSaving
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(AppIcons.playArrow),
-              label: const Text('Start focus session'),
+            alignment:
+                isMobile ? Alignment.center : Alignment.centerRight,
+            child: SizedBox(
+              width: isMobile ? double.infinity : null,
+              child: FilledButton.icon(
+                onPressed: isSaving || !canStartNow ? null : onStart,
+                icon: isSaving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(AppIcons.playArrow),
+                label: const Text('Start focus session'),
+              ),
             ),
           ),
         ],
       ),
+    );
+      },
+    );
+  }
+}
+
+class _MobileDurationGrid extends StatelessWidget {
+  const _MobileDurationGrid({
+    required this.presets,
+    required this.plannedMinutes,
+    required this.isSaving,
+    required this.onDurationChanged,
+    required this.onCustomDuration,
+  });
+
+  final List<int> presets;
+  final int plannedMinutes;
+  final bool isSaving;
+  final ValueChanged<int> onDurationChanged;
+  final VoidCallback onCustomDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    final presetSelected = presets.contains(plannedMinutes);
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final minutes in presets)
+          ChoiceChip(
+            showCheckmark: false,
+            selected: presetSelected && plannedMinutes == minutes,
+            label: Text('$minutes min'),
+            onSelected: isSaving
+                ? null
+                : (selected) {
+                    if (selected) onDurationChanged(minutes);
+                  },
+          ),
+        ChoiceChip(
+          showCheckmark: false,
+          selected: !presetSelected,
+          avatar: Icon(
+            AppIcons.tune,
+            size: 18,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          label: const Text('Custom'),
+          onSelected: isSaving ? null : (_) => onCustomDuration(),
+        ),
+      ],
     );
   }
 }
@@ -882,7 +953,9 @@ class _ActiveFocusCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(session.label ?? target?.title ?? 'Independent focus block'),
+          Text(
+            _focusBlockDisplayLabel(session.label ?? target?.title),
+          ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Started ${DateFormat.Hm().format(session.startedAt.toLocal())} · '
@@ -1215,11 +1288,16 @@ class _RecoveryCard extends StatelessWidget {
   }
 }
 
-Axis _focusChoiceDirection(BuildContext context) {
-  final scaledBody = MediaQuery.textScalerOf(context).scale(14);
-  return MediaQuery.sizeOf(context).width < 420 || scaledBody > 20
-      ? Axis.vertical
-      : Axis.horizontal;
+String _focusTargetDisplayLabel(FocusTargetOption target) {
+  final kind = target.kind == FocusTargetKind.task ? 'task' : 'habit';
+  return '${target.title} ($kind)';
+}
+
+String _focusBlockDisplayLabel(String? stored) {
+  if (stored == null || stored == 'Independent focus block') {
+    return 'Focus block (normal)';
+  }
+  return stored;
 }
 
 String _focusTimerText(Duration duration) {
@@ -1249,15 +1327,27 @@ class _FocusHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final terminal = sessions.where((session) => !session.isActive).take(5);
+    final terminal =
+        sessions.where((session) => !session.isActive).take(5).toList();
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.zero,
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        title: const Text('Recent focus history'),
+        subtitle: Text(
+          terminal.isEmpty
+              ? 'No finished sessions yet.'
+              : '${terminal.length} finished session${terminal.length == 1 ? '' : 's'}',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
         children: [
-          Text('Recent focus', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
           if (terminal.isEmpty)
-            const Text('No finished sessions yet.')
+            const SizedBox.shrink()
           else
             ...terminal.map(
               (session) => ListTile(

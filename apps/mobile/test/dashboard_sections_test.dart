@@ -337,7 +337,7 @@ void main() {
 
     expect(find.text('Check-in streak'), findsOneWidget);
     expect(find.text("Today's progress"), findsOneWidget);
-    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text("Today's schedule"), findsOneWidget);
     expect(find.text('Beat yesterday'), findsOneWidget);
     expect(find.textContaining('Mood'), findsOneWidget);
     expect(find.textContaining('Energy'), findsOneWidget);
@@ -587,9 +587,9 @@ void main() {
       ),
     );
 
-    expect(find.text('Undo outcome'), findsOneWidget);
-    expect(find.text('Complete'), findsNothing);
-    await tester.tap(find.text('Undo outcome'));
+    expect(find.byTooltip('Undo outcome'), findsOneWidget);
+    expect(find.byTooltip('Complete'), findsNothing);
+    await tester.tap(find.byTooltip('Undo outcome'));
     expect(undoneHabitId, 'habit-1');
   });
 
@@ -617,10 +617,10 @@ void main() {
       ),
     );
 
-    expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Weekly review'), findsOneWidget);
     expect(
       find.text(
-        'Completed, skipped, missed, carried, and recovery facts stay distinct.',
+        'Look back at last week. This is not a today to-do.',
       ),
       findsOneWidget,
     );
@@ -628,7 +628,7 @@ void main() {
       find.byKey(const ValueKey('today-info-control-Weekly review')),
       findsNothing,
     );
-    await tester.tap(find.text('Review your week'));
+    await tester.tap(find.text('Weekly review'));
     expect(weeklyReviewCalls, 1);
 
     await _pump(
@@ -646,7 +646,7 @@ void main() {
       find.byKey(const ValueKey('dashboard-weekly-review')),
       findsNothing,
     );
-    expect(find.text('Review your week'), findsNothing);
+    expect(find.text('Weekly review'), findsNothing);
   });
 
   testWidgets('Full week Preparation row exposes its typed action',
@@ -733,12 +733,11 @@ void main() {
       find.text('Setup: Setup commitments are unavailable.'),
       findsOneWidget,
     );
-    expect(find.text('No items from available sources.'), findsWidgets);
+    expect(find.text('No items from available sources.'), findsOneWidget);
     expect(find.text('Nothing scheduled.'), findsNothing);
   });
 
-  testWidgets(
-      'Full week shows 2.5 normal mobile days and exactly 2 narrow days',
+  testWidgets('Full week mobile pager shows one day and moves with arrows',
       (tester) async {
     final projection = dashboardFullWeekFixture(
       localToday: DateTime.utc(2026, 8, 3),
@@ -749,36 +748,29 @@ void main() {
       DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
       size: const Size(432, 800),
     );
-    expect(find.text('Nothing scheduled.'), findsWidgets);
-    final monday = find.byKey(
-      const ValueKey('dashboard-full-week-day-2026-08-03'),
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-pager')),
+      findsOneWidget,
     );
-    final tuesday = find.byKey(
-      const ValueKey('dashboard-full-week-day-2026-08-04'),
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-03')),
+      findsOneWidget,
     );
-    final wednesday = find.byKey(
-      const ValueKey('dashboard-full-week-day-2026-08-05'),
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-04')),
+      findsNothing,
     );
-    expect(tester.getTopLeft(tuesday).dx - tester.getTopLeft(monday).dx, 160);
-    expect(tester.getTopLeft(wednesday).dx, lessThan(416));
-    expect(tester.getTopRight(wednesday).dx, greaterThan(416));
 
-    await _pump(
-      tester,
-      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
-      size: const Size(352, 800),
+    await tester.tap(find.byKey(const ValueKey('dashboard-full-week-next')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-04')),
+      findsOneWidget,
     );
-    expect(tester.getTopLeft(tuesday).dx - tester.getTopLeft(monday).dx, 160);
-    expect(tester.getTopLeft(wednesday).dx, greaterThanOrEqualTo(336));
-
-    await _pump(
-      tester,
-      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
-      size: const Size(432, 800),
-      textScaler: const TextScaler.linear(2),
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-03')),
+      findsNothing,
     );
-    expect(tester.getTopLeft(tuesday).dx - tester.getTopLeft(monday).dx, 200);
-    expect(tester.getTopLeft(wednesday).dx, greaterThanOrEqualTo(416));
     expect(tester.takeException(), isNull);
   });
 
@@ -816,12 +808,16 @@ void main() {
       size: const Size(threshold + 31, 800),
     );
     expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+      find.byKey(const ValueKey('dashboard-full-week-day-pager')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+      findsNothing,
     );
   });
 
-  testWidgets('Full week clamps weekends, snaps one day, and keeps hard bounds',
+  testWidgets('Full week mobile pager starts on today and stays in week bounds',
       (tester) async {
     final sundayProjection = dashboardFullWeekFixture(
       localToday: DateTime.utc(2026, 8, 9),
@@ -834,14 +830,25 @@ void main() {
       ),
       size: const Size(432, 800),
     );
-    final saturday = find.byKey(
-      const ValueKey('dashboard-full-week-day-2026-08-08'),
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-09')),
+      findsOneWidget,
     );
-    final sunday = find.byKey(
-      const ValueKey('dashboard-full-week-day-2026-08-09'),
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey('dashboard-full-week-next')),
+          )
+          .onPressed,
+      isNull,
     );
-    expect(tester.getTopLeft(saturday).dx, greaterThanOrEqualTo(16));
-    expect(tester.getTopRight(sunday).dx, lessThanOrEqualTo(416));
+
+    await tester.tap(find.byKey(const ValueKey('dashboard-full-week-prev')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-08')),
+      findsOneWidget,
+    );
 
     final mondayProjection = dashboardFullWeekFixture(
       localToday: DateTime.utc(2026, 8, 3),
@@ -855,37 +862,24 @@ void main() {
       ),
       size: const Size(432, 800),
     );
-    final strip = find.byKey(
-      const ValueKey('dashboard-full-week-day-strip'),
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-03')),
+      findsOneWidget,
     );
-    final monday = find.byKey(
-      const ValueKey('dashboard-full-week-day-2026-08-03'),
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey('dashboard-full-week-prev')),
+          )
+          .onPressed,
+      isNull,
     );
-    final tuesday = find.byKey(
-      const ValueKey('dashboard-full-week-day-2026-08-04'),
+    await tester.tap(find.byKey(const ValueKey('dashboard-full-week-next')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-04')),
+      findsOneWidget,
     );
-    await tester.timedDrag(
-      strip,
-      const Offset(-110, 0),
-      const Duration(seconds: 1),
-    );
-    await tester.pumpAndSettle();
-    expect(tester.getTopLeft(tuesday).dx, 16);
-
-    await tester.drag(strip, const Offset(-2000, 0));
-    await tester.pumpAndSettle();
-    final terminalSaturday = tester.getTopLeft(saturday).dx;
-    final terminalSunday = tester.getTopLeft(sunday).dx;
-    expect(terminalSaturday, greaterThanOrEqualTo(16));
-    expect(tester.getTopRight(sunday).dx, lessThanOrEqualTo(416));
-    await tester.drag(strip, const Offset(-500, 0));
-    await tester.pumpAndSettle();
-    expect(tester.getTopLeft(saturday).dx, terminalSaturday);
-    expect(tester.getTopLeft(sunday).dx, terminalSunday);
-
-    await tester.drag(strip, const Offset(2000, 0));
-    await tester.pumpAndSettle();
-    expect(tester.getTopLeft(monday).dx, 16);
   });
 
   testWidgets('dense Full week stays uncut at 320px and 200 percent text',

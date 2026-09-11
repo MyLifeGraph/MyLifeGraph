@@ -180,23 +180,23 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
      keine automatisch zu erledigenden Schritte;
    - wenn eine gezählte Quelle ausfällt, steht dort ehrlich `Progress
      unavailable`.
-3. **Today at a glance**
+3. **Today's schedule**
    - vertikale, chronologische Tagesagenda;
    - verschieden bezeichnete und gefärbte `Setup commitment`, `Preparation`,
      `Calendar` und `Focus`-Einträge;
    - ganztägige Events zuerst, überlappende Einträge separat;
    - Preparation kann den Plan öffnen oder Focus auf dem Managed Task starten.
-4. **Today's tasks**
+4. **Tasks due today**
    - überfällige/heute fällige, alle laufenden und heute erledigte manuelle
      Tasks;
    - inline erledigen, wiederherstellen, bearbeiten und Focus starten;
    - `Show all tasks` enthält zusätzlich zukünftige, undatierte, erledigte,
      abgebrochene und planner-managed Tasks.
-5. **Today's habits**
+5. **Habits for today**
    - tägliche, am Wochentag geplante und noch offene Weekly-Target Habits;
    - explizit `Complete`, `Skip` oder `Undo outcome` über Habit V1.
 6. **Weekly Review direkt, Full week zunächst geschlossen**
-   - `Review your week` öffnet mit seiner bestehenden Berechtigungsgrenze
+   - `Weekly review` öffnet mit seiner bestehenden Berechtigungsgrenze
      direkt den Weekly Review;
    - `Full week` zeigt Montag bis Sonntag der aktuellen profil-lokalen
      Kalenderwoche mit Setup, Preparation, Calendar, tatsächlichem Focus,

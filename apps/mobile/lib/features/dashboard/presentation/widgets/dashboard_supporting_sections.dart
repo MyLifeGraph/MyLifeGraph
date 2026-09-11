@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_category_visuals.dart';
 import '../../../../core/theme/app_icons.dart';
-import '../../../../core/theme/app_motion_tokens.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_schedule_day_card.dart';
 import '../../domain/entities/dashboard_full_week.dart';
@@ -120,9 +121,9 @@ class _WeeklyReviewEntry extends StatelessWidget {
           AppIcons.eventNoteOutlined,
           color: Theme.of(context).colorScheme.primary,
         ),
-        title: const Text('Review your week'),
+        title: const Text('Weekly review'),
         subtitle: const Text(
-          'Completed, skipped, missed, carried, and recovery facts stay distinct.',
+          'Look back at last week. This is not a today to-do.',
         ),
         trailing: const Icon(AppIcons.chevronRight),
         onTap: onOpen,
@@ -209,16 +210,12 @@ class DashboardFullWeekAgenda extends StatefulWidget {
 }
 
 class _DashboardFullWeekAgendaState extends State<DashboardFullWeekAgenda> {
-  final ScrollController _controller = ScrollController();
-  late int _snappedDay;
-  double? _lastExtent;
-  bool _syncScheduled = false;
-  bool _snapScheduled = false;
+  late int _page;
 
   @override
   void initState() {
     super.initState();
-    _snappedDay = _initialDay(widget.projection);
+    _page = _initialDay(widget.projection);
   }
 
   @override
@@ -229,15 +226,8 @@ class _DashboardFullWeekAgendaState extends State<DashboardFullWeekAgenda> {
           widget.projection.weekStartsOn,
         ) ||
         oldWidget.projection.timezone != widget.projection.timezone) {
-      _snappedDay = _initialDay(widget.projection);
-      _lastExtent = null;
+      _page = _initialDay(widget.projection);
     }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   @override
@@ -260,49 +250,88 @@ class _DashboardFullWeekAgendaState extends State<DashboardFullWeekAgenda> {
             ],
           );
         }
-
-        final scaledBody = MediaQuery.textScalerOf(context).scale(16);
-        final visibleSlots =
-            constraints.maxWidth < dashboardFullWeekNarrowBreakpoint ||
-                    scaledBody >= dashboardFullWeekLargeTextThreshold
-                ? 2.0
-                : 2.5;
-        final extent = constraints.maxWidth / visibleSlots;
-        _scheduleSync(extent);
-        return NotificationListener<ScrollEndNotification>(
-          onNotification: (notification) {
-            _scheduleSnap(extent);
-            return false;
-          },
-          child: SingleChildScrollView(
-            key: const ValueKey('dashboard-full-week-day-strip'),
-            controller: _controller,
-            scrollDirection: Axis.horizontal,
-            physics: const ClampingScrollPhysics(),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final day in widget.projection.days)
-                  SizedBox(
-                    width: extent,
-                    child: Padding(
-                      padding: const EdgeInsetsDirectional.only(
-                        end: dashboardFullWeekDayGap,
-                      ),
-                      child: _dayCard(day),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
+        return _mobileDayPager(context);
       },
     );
   }
 
-  Widget _dayCard(DashboardFullWeekDay day) => AppScheduleDayCard(
+  Widget _mobileDayPager(BuildContext context) {
+    final days = widget.projection.days;
+    final day = days[_page];
+    final tokens = context.visualTokens;
+    return Column(
+      key: const ValueKey('dashboard-full-week-day-pager'),
+      children: [
+        Row(
+          children: [
+            IconButton(
+              key: const ValueKey('dashboard-full-week-prev'),
+              tooltip: 'Previous day',
+              onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
+              icon: const RotatedBox(
+                quarterTurns: 2,
+                child: Icon(AppIcons.chevronRight),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                DateFormat('EEEE, MMM d').format(day.localDate),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('dashboard-full-week-next'),
+              tooltip: 'Next day',
+              onPressed:
+                  _page < days.length - 1 ? () => _goTo(_page + 1) : null,
+              icon: const Icon(AppIcons.chevronRight),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            for (var index = 0; index < days.length; index++)
+              Expanded(
+                child: InkWell(
+                  onTap: () => _goTo(index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      DateFormat('E').format(days[index].localDate),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: index == _page
+                                ? tokens.brand
+                                : tokens.textSecondary,
+                            fontWeight: index == _page
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        GestureDetector(
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity < -180) _goTo(_page + 1);
+            if (velocity > 180) _goTo(_page - 1);
+          },
+          child: _dayCard(day, showDate: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _dayCard(DashboardFullWeekDay day, {bool showDate = true}) =>
+      AppScheduleDayCard(
         key: ValueKey('dashboard-full-week-day-${_dateKey(day.localDate)}'),
         localDate: day.localDate,
+        showDate: showDate,
         items: day.items.map(_fullWeekItemView).toList(growable: false),
         emptyLabel: widget.projection.unavailableSources.isEmpty
             ? 'Nothing scheduled.'
@@ -314,53 +343,18 @@ class _DashboardFullWeekAgendaState extends State<DashboardFullWeekAgenda> {
         },
       );
 
-  void _scheduleSync(double extent) {
-    if (_lastExtent == extent && _controller.hasClients) return;
-    _lastExtent = extent;
-    if (_syncScheduled) return;
-    _syncScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _syncScheduled = false;
-      if (!mounted || !_controller.hasClients) return;
-      _controller.jumpTo(
-        (_snappedDay * extent).clamp(
-          0.0,
-          _controller.position.maxScrollExtent,
-        ),
-      );
-    });
-  }
-
-  void _snapToNearestDay(double extent) {
-    if (!_controller.hasClients || extent <= 0) return;
-    final requested = (_controller.offset / extent).round().clamp(0, 5).toInt();
-    _snappedDay = requested;
-    final offset = (requested * extent).clamp(
-      0.0,
-      _controller.position.maxScrollExtent,
-    );
-    if ((_controller.offset - offset).abs() < 0.5) return;
-    _controller.animateTo(
-      offset,
-      duration: context.motionTokens.stateFor(context),
-      curve: context.motionTokens.curve,
-    );
-  }
-
-  void _scheduleSnap(double extent) {
-    if (_snapScheduled) return;
-    _snapScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _snapScheduled = false;
-      if (mounted) _snapToNearestDay(extent);
-    });
+  void _goTo(int page) {
+    final last = widget.projection.days.length - 1;
+    final next = page.clamp(0, last);
+    if (next == _page) return;
+    setState(() => _page = next);
   }
 }
 
 int _initialDay(DashboardFullWeekProjection projection) => projection.localToday
     .difference(projection.weekStartsOn)
     .inDays
-    .clamp(0, 5)
+    .clamp(0, projection.days.length - 1)
     .toInt();
 
 bool _sameDate(DateTime left, DateTime right) =>

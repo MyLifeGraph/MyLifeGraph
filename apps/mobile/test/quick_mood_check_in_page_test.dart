@@ -269,7 +269,8 @@ void main() {
 
     expect(find.text('Make tomorrow gentler'), findsNothing);
     expect(find.textContaining('friction'), findsNothing);
-    expect(find.text('What drove the pressure?'), findsOneWidget);
+    expect(find.text('Where did today\'s stress come from?'), findsOneWidget);
+    expect(find.text('Optional notes'), findsOneWidget);
     expect(
       _textFieldWithLabel('Possible priority tomorrow (optional)'),
       findsNothing,

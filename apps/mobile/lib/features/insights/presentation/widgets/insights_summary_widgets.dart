@@ -98,15 +98,11 @@ class _SparseInsightsHome extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Keep using the features you already need',
+                        'Not enough signals yet',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(measured),
-                      const SizedBox(height: AppSpacing.sm),
-                      const Text(
-                        'Completed focus sessions now count automatically. Unmeasured screen, movement, or focus values are not offered as empty metrics.',
-                      ),
                     ],
                   ),
                 ),
@@ -140,27 +136,17 @@ class _InsightsHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'PATTERNS AND TRENDS',
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                fontSize: isMobile ? 12 : 14,
-                letterSpacing: isMobile ? 2.5 : 4,
-              ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
           'Insights',
           style: isMobile
               ? Theme.of(context).textTheme.headlineMedium
               : Theme.of(context).textTheme.headlineLarge,
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.xs),
         Text(
-          'Start with transparent personal evidence. Open advanced exploration when you want to inspect individual signals.',
+          'What your check-ins and focus days show so far.',
           key: const Key('insights-header-description'),
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1.7,
               ),
         ),
       ],
@@ -309,38 +295,41 @@ class _PersonalStudyPatternContent extends StatelessWidget {
     final coverage = (patterns.sample.ratingCoverage * 100).round();
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
         AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'PERSONAL STUDY PATTERN',
-            style: Theme.of(context).textTheme.labelLarge,
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Icon(
+                AppIcons.schoolOutlined,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              Text(
+                'PERSONAL STUDY PATTERN',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              Chip(label: Text(status), visualDensity: VisualDensity.compact),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             patterns.summary,
             key: const Key('personal-study-pattern-summary'),
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
-            children: [
-              Chip(label: Text(status)),
-              Chip(
-                label: Text(
-                  '${patterns.sample.ratedSessions} rated sessions',
-                ),
-              ),
-              Chip(label: Text('$coverage% coverage')),
-              const Chip(label: Text('90-day window')),
-            ],
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '${patterns.sample.ratedSessions} rated sessions · $coverage% coverage · 90-day window',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -379,7 +368,7 @@ class _PersonalStudyPatternContent extends StatelessWidget {
         header,
         ExpansionTile(
           key: const Key('personal-study-pattern-evidence'),
-          title: const Text('Evidence and limits'),
+          title: const Text('Details'),
           subtitle: Text(
             '${patterns.timezone} · '
             '${patterns.sample.ratedLocalDays} rated days',
@@ -493,8 +482,7 @@ class _SleepRecommendationCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               const Text(
-                'Your existing personal study pattern is still available. '
-                'No fallback sleep window was created.',
+                'Your study pattern is unchanged. No fallback window was created.',
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
@@ -543,49 +531,34 @@ class _SleepRecommendationContent extends StatelessWidget {
       key: Key('sleep-recommendation-${value.status.name}'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Icon(
+              AppIcons.bedtimeOutlined,
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            Text(
+              'SLEEP RECOMMENDATION',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            AppStatusPill(label: status, tone: tone),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
         Text(
-          'SLEEP RECOMMENDATION',
-          style: Theme.of(context).textTheme.labelLarge,
+          ready == null
+              ? 'No stable window yet'
+              : 'Best-supported sleep window',
+          key: const Key('sleep-recommendation-title'),
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: AppSpacing.sm),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final title = Text(
-              ready == null
-                  ? 'No stable window yet'
-                  : 'Best-supported sleep window',
-              key: const Key('sleep-recommendation-title'),
-              style: Theme.of(context).textTheme.titleLarge,
-            );
-            if (constraints.maxWidth < 520) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  title,
-                  const SizedBox(height: AppSpacing.sm),
-                  AppStatusPill(label: status, tone: tone),
-                ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: title),
-                const SizedBox(width: AppSpacing.sm),
-                AppStatusPill(label: status, tone: tone),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(value.summary),
-        const SizedBox(height: AppSpacing.md),
         if (ready == null)
-          Text(
-            '${value.eligibleFocusDays} eligible Focus days · '
-            '${value.validNights} valid nights · 90-day window',
-            style: Theme.of(context).textTheme.bodySmall,
-          )
+          Text(value.summary)
         else ...[
           LayoutBuilder(
             builder: (context, constraints) {
@@ -636,24 +609,49 @@ class _SleepRecommendationContent extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            '${ready.candidateDays} matching days compared with '
-            '${ready.comparisonDays} other eligible days · ${value.timezone}',
-            style: Theme.of(context).textTheme.bodySmall,
+        ],
+        if (ready != null || value.limitations.isNotEmpty)
+          ExpansionTile(
+            title: const Text('Details'),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            children: [
+              if (ready != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(value.summary),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${ready.candidateDays} matching days compared with '
+                    '${ready.comparisonDays} other eligible days · ${value.timezone}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ] else
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${value.eligibleFocusDays} eligible Focus days · '
+                    '${value.validNights} valid nights · 90-day window',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              for (final limitation in value.limitations)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      '• $limitation',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ],
-        if (value.limitations.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          for (final limitation in value.limitations)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(
-                '• $limitation',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-        ],
       ],
     );
   }
@@ -684,35 +682,44 @@ class _CoachingObservationCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             observation.title,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(observation.summary),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
+          const SizedBox(height: AppSpacing.sm),
+          Chip(
+            label: Text('$confidence confidence'),
+            visualDensity: VisualDensity.compact,
+          ),
+          ExpansionTile(
+            title: const Text('Details'),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
             children: [
-              Chip(label: Text('$confidence confidence')),
-              Chip(label: Text(observation.evidenceWindow)),
-              Chip(label: Text(observation.dataQuality)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${observation.evidenceWindow} · ${observation.dataQuality}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              if (observation.experiment != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primaryContainer
+                        .withAlpha(90),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                  ),
+                  child: Text(observation.experiment!),
+                ),
+              ],
             ],
           ),
-          if (observation.experiment != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primaryContainer
-                    .withAlpha(90),
-                borderRadius: BorderRadius.circular(AppRadii.md),
-              ),
-              child: Text(observation.experiment!),
-            ),
-          ],
         ],
       ),
     );
