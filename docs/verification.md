@@ -48,6 +48,15 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Check-in inputs independent of Insights filters — 2026-09-13
+
+Task base `f79f7f3aea1e74f4fe80fd88bbf541f7ed8040a8`: Morning motivation and
+Evening sport/social inputs no longer depend on selected radar dimensions.
+Backend capability gating, nullable answers and persistence remain unchanged.
+Evening choices are directly at the end of the context step. Both affected
+Flutter page suites passed (23 tests), including saving with no Insights
+dimensions selected. No backend, migration or production deployment changed.
+
 ### RC5 production rollout — 2026-09-13
 
 User-confirmed protected-main fast-forward `aaf7571` ->

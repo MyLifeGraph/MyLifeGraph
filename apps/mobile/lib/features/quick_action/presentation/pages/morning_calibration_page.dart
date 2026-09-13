@@ -169,7 +169,6 @@ class _MorningCalibrationPageState
   }
 
   Widget _buildCheckInStep() {
-    final dimensions = ref.watch(skillsetDimensionsProvider);
     final allowExtras = ref.watch(optionalSkillsetCaptureProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -194,7 +193,7 @@ class _MorningCalibrationPageState
           onChanged: (value) =>
               setState(() => _draft = _draft.copyWith(energy: value)),
         ),
-        if (allowExtras && dimensions.contains('motivation'))
+        if (allowExtras)
           Material(
             type: MaterialType.transparency,
             child: ExpansionTile(

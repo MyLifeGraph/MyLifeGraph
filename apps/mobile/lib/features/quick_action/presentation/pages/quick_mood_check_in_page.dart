@@ -113,8 +113,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Widget _buildCheckInStep() {
-    final dimensions = ref.watch(skillsetDimensionsProvider);
-    final allowExtras = ref.watch(optionalSkillsetCaptureProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -148,44 +146,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             );
           }),
         ),
-        if (allowExtras &&
-            (dimensions.contains('sport') ||
-                dimensions.contains('social') ||
-                dimensions.contains('discipline')))
-          Material(
-            type: MaterialType.transparency,
-            child: ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: const Text('More (optional)'),
-              children: [
-                if (dimensions.contains('sport') ||
-                    dimensions.contains('discipline'))
-                  OptionalSkillsetChoice(
-                    label: 'Sport today',
-                    choices: const ['None', 'Light', 'Intense'],
-                    value: _draft.skillset?.values['sport'],
-                    onChanged: (value) => setState(
-                      () => _draft = _draft.copyWith(
-                        skillset: (_draft.skillset ?? const SkillsetSignals({}))
-                            .withValue('sport', value),
-                      ),
-                    ),
-                  ),
-                if (dimensions.contains('social'))
-                  OptionalSkillsetChoice(
-                    label: 'Social contact',
-                    choices: const ['Little', 'Some', 'Lots'],
-                    value: _draft.skillset?.values['social'],
-                    onChanged: (value) => setState(
-                      () => _draft = _draft.copyWith(
-                        skillset: (_draft.skillset ?? const SkillsetSignals({}))
-                            .withValue('social', value),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
       ],
     );
   }
@@ -226,6 +186,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Widget _buildContextStep() {
+    final allowExtras = ref.watch(optionalSkillsetCaptureProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -307,6 +268,31 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
               ),
               trailing: const Icon(AppIcons.chevronRight),
               onTap: _openTodayFocusReflections,
+            ),
+          ),
+        ],
+        if (allowExtras) ...[
+          const SizedBox(height: AppSpacing.md),
+          OptionalSkillsetChoice(
+            label: 'Sport today',
+            choices: const ['None', 'Light', 'Intense'],
+            value: _draft.skillset?.values['sport'],
+            onChanged: (value) => setState(
+              () => _draft = _draft.copyWith(
+                skillset: (_draft.skillset ?? const SkillsetSignals({}))
+                    .withValue('sport', value),
+              ),
+            ),
+          ),
+          OptionalSkillsetChoice(
+            label: 'Social contact',
+            choices: const ['Little', 'Some', 'Lots'],
+            value: _draft.skillset?.values['social'],
+            onChanged: (value) => setState(
+              () => _draft = _draft.copyWith(
+                skillset: (_draft.skillset ?? const SkillsetSignals({}))
+                    .withValue('social', value),
+              ),
             ),
           ),
         ],

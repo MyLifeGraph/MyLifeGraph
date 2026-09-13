@@ -3,7 +3,9 @@
 Optional Skillset collection adds the `skillset-capture-v1` namespace to V5
 branches only: Morning `motivation`, Evening `sport` and `social` are nullable
 integers 0–2. They do not replace mood, stress, energy, sleep or Focus ratings.
-Selected dimensions expose short choices under `More (optional)`; skipping
+Evening exposes both short choices at the end of the context step without a
+disclosure; Morning keeps `More (optional)`. Insights dimension selection only
+filters the radar display, never the available Capture inputs. Skipping
 keeps them absent. Existing validations, save/retry identities, Daily State and
 Briefing behavior stay unchanged. Older writers omitting the namespace preserve
 it in the owner-locked RPC; explicit new-client null answers clear it. The

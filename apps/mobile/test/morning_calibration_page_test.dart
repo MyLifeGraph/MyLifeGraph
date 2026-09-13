@@ -12,7 +12,7 @@ import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 
 void main() {
   testWidgets(
-    'selected motivation is optional and saved from the compact choices',
+    'motivation is available and saved with no Insights dimensions selected',
     (tester) async {
       final store = _MorningStore();
       await _pumpPage(tester, store, skillsetEnabled: true);
@@ -448,7 +448,7 @@ Future<void> _pumpPage(
     ProviderScope(
       overrides: [
         optionalSkillsetCaptureProvider.overrideWithValue(skillsetEnabled),
-        skillsetDimensionsProvider.overrideWith((ref) => {'motivation'}),
+        skillsetDimensionsProvider.overrideWith((ref) => <String>{}),
         profileLocalDateSourceProvider.overrideWithValue(
           SessionProfileLocalDateSource(
             session: null,

@@ -18,21 +18,31 @@ import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
+import 'package:my_life_graph/features/quick_action/presentation/widgets/optional_skillset_controls.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
-  testWidgets('optional sport and social choices survive every step and save', (
+  testWidgets('sport and social save with no Insights dimensions selected', (
     tester,
   ) async {
     final store = _RecordingCaptureStore();
     await _pumpEveningPage(tester, store, skillsetEnabled: true);
-    await _tapVisible(tester, find.text('More (optional)'));
-    await _tapVisible(tester, find.text('Intense'));
-    await _tapVisible(tester, find.text('Some'));
+    expect(find.text('Sport today'), findsNothing);
     await _completeEveningDraft(tester, includeOptionals: false);
+    expect(find.text('More (optional)'), findsNothing);
+    expect(find.text('Sport today'), findsOneWidget);
+    expect(find.text('Social contact'), findsOneWidget);
+    await _tapVisible(tester, find.text('Intense'));
+    await _tapVisible(
+      tester,
+      find.descendant(
+        of: find.widgetWithText(OptionalSkillsetChoice, 'Social contact'),
+        matching: find.text('Some'),
+      ),
+    );
     await _tapVisible(tester, find.text('Save evening check-in'));
     expect(store.eveningAttempts.single.skillset?.values, {
       'sport': 2,
@@ -568,7 +578,7 @@ Future<void> _pumpEveningPage(
     ProviderScope(
       overrides: [
         optionalSkillsetCaptureProvider.overrideWithValue(skillsetEnabled),
-        skillsetDimensionsProvider.overrideWith((ref) => {'sport', 'social'}),
+        skillsetDimensionsProvider.overrideWith((ref) => <String>{}),
         profileLocalDateSourceProvider.overrideWithValue(
           SessionProfileLocalDateSource(
             session: null,

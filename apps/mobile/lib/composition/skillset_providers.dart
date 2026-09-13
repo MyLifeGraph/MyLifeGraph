@@ -3,7 +3,7 @@ import '../core/capabilities/app_surface_capabilities.dart';
 import '../features/insights/presentation/providers/insights_providers.dart';
 import 'auth_providers.dart';
 
-// Page/session choices shared by Insights and Capture. No new account setting.
+// Insights-only display choices for the account session; never gate Capture.
 final skillsetDimensionsProvider = StateProvider<Set<String>>((ref) {
   ref.watch(
     authControllerProvider.select((value) => value.valueOrNull?.profile.id),

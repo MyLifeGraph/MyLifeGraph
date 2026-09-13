@@ -408,7 +408,8 @@ the read-only radar: numbered short names label its axes; source labels, raw
 scales and day counts are retained under the initially collapsed `Details`.
 Missing dimensions say `No data`, never a low ability score. Unsupported concepts
 are not inferred from loosely related metrics. Stress says lower is calmer.
-Optional Capture copy is limited to `More (optional)`, `Sport today` (None,
+Evening shows its optional choices directly at the end of the context step;
+only Morning retains `More (optional)`. Choice copy is `Sport today` (None,
 Light, Intense), `Social contact` (Little, Some, Lots), and `Study motivation`
 (Low, Medium, High). Discipline is an explained activity-regularity percentage,
 not a personality assessment; Learning is completed study Focus sessions.

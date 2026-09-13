@@ -209,7 +209,8 @@ It is a read-only presentation of recorded observations in the selected window,
 not the legacy persisted Skillset profile or a personal-strength model.
 The default dimensions are Sleep, Sport, Energy, Social activity, Learning,
 and Concentration; Stress, Mood, Productivity, Motivation, and Discipline are
-optional. Selection is shared with Capture for the current account session.
+optional. Selection filters only the Insights display for the current account
+session; it never hides Capture inputs or limits which values can be recorded.
 
 Sleep uses sleep quality, Energy uses Morning energy (otherwise Evening), Concentration uses rated
 Focus quality, and Productivity uses rated useful progress. Stress and Mood

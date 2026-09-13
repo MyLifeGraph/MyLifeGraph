@@ -718,9 +718,11 @@ sources and observation counts under collapsed Details. Short names accompany
 the numbered radar axes; the selected window stays visible. Unmeasured dimensions are
 labelled No data and omitted from the polygon; fewer than three measured axes
 show empty guidance. This does not load persisted Skillset profiles. Filters
-survive tab switches and are shared with check-ins for the account session.
-Selected Sport/Social contact questions appear under Evening `More (optional)`;
-selected Study motivation appears under Morning `More (optional)`. All are
+survive tab switches for the account session and affect only the Insights display,
+not the inputs available in check-ins.
+Sport/Social contact questions appear directly at the end of Evening's
+context step, without a disclosure or extra section heading;
+Study motivation appears under Morning `More (optional)`. All are
 nullable 0–2 choices, enabled only when the backend advertises support (or local
 demo). Energy replaces Recovery. Learning and Discipline are labelled window
 summaries with a formula disclosure; see the Personal Learning owner.
