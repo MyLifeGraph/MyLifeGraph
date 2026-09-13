@@ -129,6 +129,10 @@ its new or existing reflection even outside recent history and independently
 of the automatic prompt preference. Imported events and recurring Setup or
 fixed commitments remain non-executable context.
 
+Schedule rows keep their category treatment and use compact, labelled icon
+actions on the right for Open plan and Start focus. The time/category column
+leaves space for wrapping titles; action eligibility and destinations are unchanged.
+
 ## Task And Habit Selection
 
 `Today's tasks` includes non-planner tasks that are:

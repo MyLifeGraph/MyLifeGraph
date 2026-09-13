@@ -805,6 +805,13 @@ cloud-off icon when unavailable; a generic information icon is not used as an
 error state. Ordinary unavailable/failure copy is outcome-first and does not
 expose provider configuration, transport dumps, or raw contract exceptions.
 
+The remaining-question count appears compactly beside the Coach title, with
+its complete daily/UTC meaning in a tooltip. Ready status needs no separate
+card; errors, unavailable states and test-provider disclosures remain visible.
+The composer has a full-width two-line input above a compact model-selection,
+microphone and Send toolbar. The existing selection dialog, draft, recording,
+retry and cancel actions are unchanged.
+
 Inside Coach, the current surface contains:
 
 - capability/status and remaining-question truth;

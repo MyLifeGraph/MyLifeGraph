@@ -17,7 +17,8 @@ void main() {
       final store = _MorningStore();
       await _pumpPage(tester, store, skillsetEnabled: true);
       await _tapVisible(tester, find.text('Next'));
-      await _tapVisible(tester, find.text('More (optional)'));
+      expect(find.text('More (optional)'), findsNothing);
+      expect(find.text('Study motivation (optional)'), findsOneWidget);
       await _tapVisible(tester, find.text('Low'));
       await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
       await _performSemanticTap(tester, 'morning energy 4 of 10');

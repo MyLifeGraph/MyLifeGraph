@@ -722,10 +722,16 @@ survive tab switches for the account session and affect only the Insights displa
 not the inputs available in check-ins.
 Sport/Social contact questions appear directly at the end of Evening's
 context step, without a disclosure or extra section heading;
-Study motivation appears under Morning `More (optional)`. All are
+`Study motivation (optional)` appears directly in Morning Check-in. All are
 nullable 0–2 choices, enabled only when the backend advertises support (or local
 demo). Energy replaces Recovery. Learning and Discipline are labelled window
 summaries with a formula disclosure; see the Personal Learning owner.
+
+Today schedule actions use compact Open plan/Start focus icons. Planner's
+Exam Outlook expands from its risk/summary into the existing details and
+icon-labelled Review/Replan actions. Coach puts its daily quota beside the
+title and the full-width input above its model/microphone/Send toolbar.
+These layout changes retain existing callbacks, eligibility and data sources.
 Real-account Insights loads `personal-patterns-v1` and
 `sleep-recommendation-v1` independently. The Sleep Recommendation card is
 directly below Personal Study Pattern and owns loading, disabled, collecting,

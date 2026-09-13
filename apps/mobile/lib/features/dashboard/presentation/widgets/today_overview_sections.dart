@@ -655,16 +655,20 @@ class _AgendaItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 76,
-                  child: Text(
+                  width: 64,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [Text(
                     _agendaTime(item),
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: appearance.foreground,
                         ),
                   ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Icon(appearance.icon, color: appearance.foreground, size: 21),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Icon(appearance.icon, color: appearance.foreground, size: 21),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(
@@ -706,49 +710,6 @@ class _AgendaItem extends StatelessWidget {
                                   ),
                         ),
                       ],
-                      if (item.kind == TodayTimelineKind.preparation &&
-                          item.planId != null) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
-                          children: [
-                            OutlinedButton(
-                              onPressed: () =>
-                                  onOpenPreparationPlan(item.planId!),
-                              child: const Text('Open plan'),
-                            ),
-                            if (canExecute &&
-                                item.blockId != null &&
-                                const {
-                                  'upcoming',
-                                  'partial',
-                                  'missed',
-                                }.contains(item.state))
-                              FilledButton.tonalIcon(
-                                onPressed: () => onStartPreparationFocus(
-                                  item.blockId!,
-                                ),
-                                icon: const Icon(AppIcons.timerOutlined),
-                                label: const Text('Start focus'),
-                              ),
-                          ],
-                        ),
-                      ],
-                      if (canExecute &&
-                          item.kind == TodayTimelineKind.taskBlock) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        FilledButton.tonalIcon(
-                          onPressed: () => context.push(
-                            _scheduledFocusRoute(
-                              sourceKind: 'planner_task_block',
-                              blockId: item.id,
-                            ),
-                          ),
-                          icon: const Icon(AppIcons.timerOutlined),
-                          label: const Text('Start focus'),
-                        ),
-                      ],
                       if (canExecute &&
                           item.kind == TodayTimelineKind.habitSlot &&
                           item.habitId != null) ...[
@@ -763,6 +724,38 @@ class _AgendaItem extends StatelessWidget {
                     ],
                   ),
                 ),
+                if ((item.kind == TodayTimelineKind.preparation &&
+                        item.planId != null) ||
+                    (canExecute && item.kind == TodayTimelineKind.taskBlock))
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (item.kind == TodayTimelineKind.preparation &&
+                          item.planId != null)
+                        IconButton(
+                          tooltip: 'Open plan',
+                          onPressed: () => onOpenPreparationPlan(item.planId!),
+                          icon: const Icon(AppIcons.calendarMonthOutlined, size: 20),
+                        ),
+                      if (canExecute &&
+                          item.kind == TodayTimelineKind.preparation &&
+                          item.blockId != null &&
+                          const {'upcoming', 'partial', 'missed'}.contains(item.state))
+                        IconButton(
+                          tooltip: 'Start focus',
+                          onPressed: () => onStartPreparationFocus(item.blockId!),
+                          icon: const Icon(AppIcons.timerOutlined, size: 20),
+                        ),
+                      if (canExecute && item.kind == TodayTimelineKind.taskBlock)
+                        IconButton(
+                          tooltip: 'Start focus',
+                          onPressed: () => context.push(_scheduledFocusRoute(
+                            sourceKind: 'planner_task_block', blockId: item.id,
+                          )),
+                          icon: const Icon(AppIcons.timerOutlined, size: 20),
+                        ),
+                    ],
+                  ),
               ],
             ),
           ),

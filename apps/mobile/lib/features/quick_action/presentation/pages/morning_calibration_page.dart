@@ -194,14 +194,10 @@ class _MorningCalibrationPageState
               setState(() => _draft = _draft.copyWith(energy: value)),
         ),
         if (allowExtras)
-          Material(
-            type: MaterialType.transparency,
-            child: ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: const Text('More (optional)'),
-              children: [
-                OptionalSkillsetChoice(
-                  label: 'Study motivation',
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.lg),
+            child: OptionalSkillsetChoice(
+                  label: 'Study motivation (optional)',
                   choices: const ['Low', 'Medium', 'High'],
                   value: _draft.skillset?.values['motivation'],
                   onChanged: (value) => setState(
@@ -210,8 +206,6 @@ class _MorningCalibrationPageState
                           .withValue('motivation', value),
                     ),
                   ),
-                ),
-              ],
             ),
           ),
       ],

@@ -2852,8 +2852,11 @@ void main() {
               .dy,
         ),
       );
-      expect(find.text('Review plan'), findsOneWidget);
-      expect(find.text('Replan remaining time'), findsOneWidget);
+      expect(find.byTooltip('Review plan'), findsNothing);
+      await tester.tap(find.byKey(const PageStorageKey('planner-exam-outlook-details')));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Review plan'), findsOneWidget);
+      expect(find.byTooltip('Replan remaining time'), findsOneWidget);
       expect(
         find.textContaining('Read-only outlook'),
         findsOneWidget,
@@ -2885,6 +2888,8 @@ void main() {
     );
 
     expect(find.text('Unknown'), findsOneWidget);
+    await tester.tap(find.byKey(const PageStorageKey('planner-exam-outlook-details')));
+    await tester.pumpAndSettle();
     expect(find.text('Capacity is incomplete'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('exam-outlook-evening-check-in')),

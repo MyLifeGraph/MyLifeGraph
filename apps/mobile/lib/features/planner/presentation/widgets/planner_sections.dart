@@ -443,10 +443,13 @@ class _ExamWeekOutlookCard extends StatelessWidget {
         .length;
     return AppCard(
       key: ValueKey('planner-exam-week-outlook-${outlook.mode}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: ExpansionTile(
+        key: const PageStorageKey('planner-exam-outlook-details'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        title: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
@@ -466,20 +469,21 @@ class _ExamWeekOutlookCard extends StatelessWidget {
                       _outlookTitle(outlook.mode),
                       style: Theme.of(context)
                           .textTheme
-                          .titleLarge
+                          .titleMedium
                           ?.copyWith(color: accent),
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    Text(_outlookSummary(outlook)),
+                    _OutlookRiskChip(
+                      label: _riskLabel(outlook.riskLevel),
+                      color: accent,
+                    ),
                   ],
                 ),
               ),
-              _OutlookRiskChip(
-                label: _riskLabel(outlook.riskLevel),
-                color: accent,
-              ),
             ],
           ),
+          subtitle: Text(_outlookSummary(outlook)),
+          children: [
           const SizedBox(height: AppSpacing.md),
           Container(
             width: double.infinity,
@@ -658,17 +662,18 @@ class _OutlookExamRow extends StatelessWidget {
                 'The staged preview overlaps the saved sleep window. It remains unconfirmed.',
               ),
             const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                OutlinedButton(
+                IconButton(
+                  tooltip: 'Review plan',
                   onPressed: onReview,
-                  child: const Text('Review plan'),
+                  icon: const Icon(AppIcons.visibilityOutlined, size: 20),
                 ),
-                FilledButton.tonal(
+                IconButton(
+                  tooltip: 'Replan remaining time',
                   onPressed: onReplan,
-                  child: const Text('Replan remaining time'),
+                  icon: const Icon(AppIcons.editCalendarOutlined, size: 20),
                 ),
               ],
             ),
@@ -686,7 +691,7 @@ String _outlookTitle(String mode) => switch (mode) {
 
 String _outlookSummary(ExamWeekOutlook outlook) => switch (outlook.mode) {
       'watch' =>
-        '${outlook.exams.length} upcoming exam${outlook.exams.length == 1 ? '' : 's'} now affects the 14-day capacity check.',
+        '${outlook.exams.length} upcoming exam${outlook.exams.length == 1 ? '' : 's'}',
       'exam_week' =>
         '${outlook.exams.length} exam${outlook.exams.length == 1 ? '' : 's'} falls within seven profile-local days.',
       'overdue' =>

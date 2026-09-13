@@ -167,6 +167,13 @@ void main() {
     expect(find.text('Ask your coach anything'), findsOneWidget);
     final frame = tester.getRect(find.byKey(const Key('app-page-body-outline')));
     final input = tester.getRect(find.byKey(const Key('coach-message-field')));
+    final model = tester.getRect(find.byKey(const Key('coach-model-button')));
+    final send = tester.getRect(find.byKey(const Key('coach-send-button')));
+    expect(input.bottom, lessThanOrEqualTo(model.top));
+    expect(input.width, greaterThan(model.width));
+    expect(model.right, lessThan(send.left));
+    expect(find.descendant(of: find.byType(AppPageHeading),
+        matching: find.textContaining('left')), findsOneWidget);
     expect(frame.bottom, greaterThan(input.bottom));
     final invitation = tester.getRect(find.byKey(const Key('coach-empty-chat')));
     expect(frame.top, closeTo(invitation.top - 8, 0.1));

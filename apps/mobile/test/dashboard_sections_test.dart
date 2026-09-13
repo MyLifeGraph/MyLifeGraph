@@ -373,7 +373,7 @@ void main() {
     expect(find.textContaining('Stress'), findsOneWidget);
 
     await tester.tap(find.text('Edit Morning check-in'));
-    await tester.tap(find.text('Open plan'));
+    await tester.tap(find.byTooltip('Open plan'));
 
     expect(morningCalls, 1);
     expect(openedPlan, 'plan-1');
@@ -465,7 +465,7 @@ void main() {
 
     await tester.tap(find.text('Missed mathematics block'));
     expect(startedBlock, 'block-1');
-    expect(find.text('Start focus'), findsOneWidget);
+    expect(find.byTooltip('Start focus'), findsOneWidget);
   });
 
   testWidgets('whole Focus and Task rows navigate with exact identities',

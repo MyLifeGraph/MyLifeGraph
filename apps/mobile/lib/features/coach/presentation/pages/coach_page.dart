@@ -64,6 +64,17 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       title: 'Coach',
       compactHeader: true,
       actions: [
+        if (state.capabilities?.canRespond == true)
+          Tooltip(
+            message: '${state.capabilities!.limits.remainingRequests} of '
+                '${state.capabilities!.limits.requestsPerLocalDay} questions left '
+                '${state.capabilities!.limits.requestPeriod == 'utc_day' ? 'today (UTC)' : 'today'}',
+            child: Text(
+              '${state.capabilities!.limits.remainingRequests}/'
+              '${state.capabilities!.limits.requestsPerLocalDay} left',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
         AppHeaderActions(
           pageActions: [
             IconButton(
@@ -82,10 +93,15 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       viewportBody: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+        if (state.capabilities?.canRespond != true ||
+            state.isRateLimited || state.capabilityError != null ||
+            state.capabilities?.provider == CoachProviderName.fake ||
+            state.capabilities?.provider == CoachProviderName.localCodexOauth) ...[
         _CapabilityCard(
           state: state,
         ),
         const SizedBox(height: AppSpacing.md),
+        ],
         Expanded(child: DecoratedBox(
           key: const Key('app-page-body-outline'),
           decoration: BoxDecoration(
@@ -117,7 +133,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                 ),
             );
             final compactHeight = constraints.maxHeight <
-                MediaQuery.textScalerOf(context).scale(160);
+                MediaQuery.textScalerOf(context).scale(240);
             final scroll = SingleChildScrollView(
               key: const Key('coach-chat-scroll'),
               controller: _chatScrollController,
@@ -334,15 +350,6 @@ class _CapabilityCard extends StatelessWidget {
           if (demo || capability.provider == CoachProviderName.fake ||
               capability.provider == CoachProviderName.localCodexOauth)
             Text(_availabilitySummary(capability)),
-          if (ready) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '${capability.limits.remainingRequests} of '
-              '${capability.limits.requestsPerLocalDay} questions left '
-              '${capability.limits.requestPeriod == 'utc_day' ? 'today (UTC)' : 'today'}.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
           if (state.capabilityError != null) ...[
             const SizedBox(height: AppSpacing.sm),
             _ErrorText(
@@ -473,10 +480,10 @@ class _ComposerCardState extends State<_ComposerCard> {
                 onChanged(combined);
                 if (sendNow) onSend();
               },
-              idleBuilder: (microphone) => Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              idleBuilder: (microphone) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: Focus(
+                Focus(
                   onKeyEvent: _onComposerKey,
                   child: TextField(
             key: const Key('coach-message-field'),
@@ -485,7 +492,7 @@ class _ComposerCardState extends State<_ComposerCard> {
                 !state.isLoading &&
                 !state.isSending &&
                 !state.isDeletingHistory,
-            minLines: 1,
+            minLines: 2,
             maxLines: 4,
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => _submitDraft(),
@@ -498,10 +505,12 @@ class _ComposerCardState extends State<_ComposerCard> {
                   ? 'Keep the question within 2,000 characters.'
                   : null,
             ),
-          ))),
-                IconButton(
+          )),
+                Row(children: [
+                Expanded(child: Tooltip(
+                  message: 'Choose Coach',
+                  child: TextButton.icon(
                   key: const Key('coach-model-button'),
-                  tooltip: 'Choose Coach',
                   onPressed: state.isLoading || state.isSending ||
                       state.isDeletingHistory || state.busyRetrySeconds > 0
                       ? null : () => showDialog<void>(
@@ -511,7 +520,16 @@ class _ComposerCardState extends State<_ComposerCard> {
                           ),
                         ),
                   icon: const Icon(AppIcons.tuneOutlined),
-                ),
+                  label: Text(switch (state.capabilities?.provider) {
+                    CoachProviderName.operatorCodexPilot => 'Standard',
+                    CoachProviderName.openai => 'OpenAI',
+                    CoachProviderName.gemini => 'Gemini',
+                    CoachProviderName.localCodexOauth => 'Local Coach',
+                    CoachProviderName.fake => 'Test Coach',
+                    _ => 'Choose Coach',
+                  }),
+                  style: TextButton.styleFrom(alignment: Alignment.centerLeft),
+                ))),
                 microphone,
                 if (state.isSending)
                   IconButton.outlined(
@@ -528,6 +546,7 @@ class _ComposerCardState extends State<_ComposerCard> {
                     icon: Icon(state.canRetryExact
                         ? AppIcons.refreshOutlined : AppIcons.sendOutlined),
                   ),
+                ]),
               ],
             ),
           ),

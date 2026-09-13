@@ -298,6 +298,10 @@ placed after `Add new` and before `Needs attention`:
 - missing sleep plan links to Evening check-in; and
 - each exam offers `Review plan` and `Replan remaining time`.
 
+The card initially shows its title, risk and summary. Expanding reveals all
+existing capacity, sleep, warning and exam details. Review and replan use
+tooltip-labelled icons with unchanged destinations and enablement rules.
+
 The separate Preparation Plans surface may start a kind-locked Exam from either
 Planner's direct `Exam` action or its general `Plan preparation` chooser. That
 chooser also routes `Assignment` to the finite weekly series editor, and a
