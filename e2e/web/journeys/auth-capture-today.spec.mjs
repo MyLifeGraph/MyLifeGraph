@@ -73,13 +73,13 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
   expect(JSON.stringify(persisted.json)).not.toContain('day_shape');
 
   await e2e.signInUi();
-  await expectFlutterText(page, 'Today at a glance');
-  const agendaInformation = 'Your timed day in one compact agenda.';
+  await expectFlutterText(page, "Today's schedule");
+  const agendaInformation = "Today's scheduled time blocks, in order.";
   await expect(
     page.getByText(agendaInformation, { exact: true }),
   ).toHaveCount(0);
   const showAgendaInformation = page.getByRole('button', {
-    name: 'Show information about Today at a glance',
+    name: "Show information about Today's schedule",
     exact: true,
   });
   const closedHitTargetBounds = await showAgendaInformation.boundingBox();
@@ -93,7 +93,7 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
   });
   await expectFlutterText(page, agendaInformation);
   const hideAgendaInformation = page.getByRole('button', {
-    name: 'Hide information about Today at a glance',
+    name: "Hide information about Today's schedule",
     exact: true,
   });
   await expect(hideAgendaInformation).toBeVisible();

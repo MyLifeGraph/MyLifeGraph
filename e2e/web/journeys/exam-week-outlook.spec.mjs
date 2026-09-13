@@ -146,7 +146,7 @@ test('@exam-week-outlook renders a read-only Planner outlook and replan entry', 
   ]);
 
   await e2e.signInUi();
-  await expectFlutterText(page, 'Today at a glance');
+  await expectFlutterText(page, "Today's schedule");
   await expect(page.getByText('Exam week', { exact: true })).toHaveCount(0);
 
   await openFlutterRoute(page, e2e.appUrl, '/planner');
@@ -168,7 +168,7 @@ test('@exam-week-outlook renders a read-only Planner outlook and replan entry', 
   await expectFlutterText(page, 'Replan remaining preparation');
   await expectFlutterText(page, 'Create preview with these values');
   await clickFlutterText(page, 'Cancel');
-  await expectFlutterText(page, 'Preparation plans');
+  await expectFlutterText(page, 'Replan preparation');
 
   const after = await persistedDeadlineState(e2e, [
     exam.planId,

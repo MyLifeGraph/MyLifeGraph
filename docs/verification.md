@@ -61,6 +61,14 @@ manifest declaration. The additive declaration changes no runtime prompt/grant.
 These two corrections require the subsequent full Linux run; no baseline or
 production security guard was relaxed.
 
+Run `34761086793` passed all 486 isolated final-state pgTAP assertions. Its
+following PG17 restore precondition still expected the previous 69-migration
+head; only that exact count/head expectation was updated. Restored/source
+equality, role safety and deletion replay remain required. Browser journey
+locators were aligned with the approved Today/Setup/Coach labels and the focused
+Replan route title; persisted-data and read-only assertions remain unchanged.
+The updated browser and complete restore gates still require a successful run.
+
 Publication target: `preview/morning-evening-check-in`; task base
 `002c968c3427c6b5a6c52fb56bc58bb143a8457f`. Includes the previously approved
 uncommitted UI, dictation, Android signing, local Cloud transport and additive

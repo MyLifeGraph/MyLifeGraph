@@ -14,19 +14,19 @@ test('@setup-onboarding completes required Setup through Flutter', async ({
   await expectFlutterText(page, 'Required setup');
   await selectFlutterDropdownOption(
     page,
-    'Typical weekday required',
-    'School or work blocks',
+    'Typical weekday (required)',
+    'Regular school or work hours',
   );
   await selectFlutterDropdownOption(
     page,
-    'Best energy window required',
+    'Best energy window (required)',
     'Morning',
   );
   await scrollFlutterTextIntoView(page, 'Save setup');
   await clickFlutterText(page, 'Save setup');
 
   await page.waitForURL('**/#/dashboard', { timeout: 45000 });
-  await expectFlutterText(page, 'Today at a glance');
+  await expectFlutterText(page, "Today's schedule");
   const stored = await e2e.db.select(
     `intake_responses?select=version,base_revision,revision,state,responses,metadata&user_id=eq.${e2e.identity.user.id}`,
   );

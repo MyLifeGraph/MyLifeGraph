@@ -43,6 +43,6 @@ test('@coach persists a fake-provider turn and renders its history', async ({
 
   await e2e.signInUi();
   await openFlutterRoute(page, e2e.appUrl, '/coach');
-  await expectFlutterText(page, 'Ask anything');
+  await expectFlutterText(page, 'Your question');
   await expectFlutterText(page, message);
 });

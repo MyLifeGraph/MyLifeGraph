@@ -505,7 +505,7 @@ SQL
       -U postgres -d "$database_name" -X -At -v ON_ERROR_STOP=1 \
       -c "select concat_ws('|',current_setting('server_version_num'),(select count(*) from supabase_migrations.schema_migrations),(select max(version) from supabase_migrations.schema_migrations),private.account_deletion_replayer_role_safe_v2(),(select count(*) from pg_auth_members as membership join pg_roles as role on role.rolname='mylifegraph_deletion_replayer' where membership.roleid=role.oid or membership.member=role.oid))")"
     [[ "$pg17_source_facts" == \
-      '170006|69|20260820200000|t|1' ]] || {
+      '170006|70|20260913113853|t|1' ]] || {
       printf 'PG17 source restore facts are unexpected: %s\n' \
         "$pg17_source_facts" >&2
       return 1
