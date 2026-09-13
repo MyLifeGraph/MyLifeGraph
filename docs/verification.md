@@ -48,6 +48,48 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### RC5 production rollout — 2026-09-13
+
+User-confirmed protected-main fast-forward `aaf7571` ->
+`0462d0c4b4d70b2559d0d3a6ecf2eeefe7b82556` completed after PR #18 passed all
+seven required checks in run
+[`34767767008`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34767767008).
+The earlier successful manual run did not satisfy the protected push; no check
+or administrator enforcement was disabled. PR #18 is merged.
+
+The reviewed annotated `v0.1.0-pilot.1-rc.5` source bundle was built in a separate
+clean Matthias worktree, uploaded by exact checksum, prepared and promoted
+through the existing installed project helper. Archive SHA256:
+`b3ecab5825cb9ea7306dfb99a7fa8d1d06ec9aeb99100c82ed075539664a824c`;
+source manifest SHA256:
+`ba50329c06635550fcc1db0ba1cbd75edb4e86d44d1c2e72f44988ce2605d381`.
+Both loopback and public HTTPS release checks passed. The subsequent full
+`mylifegraph-project check` returned `passed`, with public API and Coach ready.
+Live health identifies RC5 and the exact main SHA; readiness attests 70
+migrations and the existing Skillset migration identity recorded below.
+No further SQL, Auth, Caddy, Speech or unrelated-host configuration was changed.
+The development stack remains parked with both data volumes retained; roughly
+20 GiB disk remains free. RC4 is retained for the existing verified rollback path.
+
+User-authorized GitHub rulesets `23188889`/`23188890` restrict pilot-tag creation
+to organization owners and deny subsequent updates/deletion without bypass.
+The `pilot-release` signing environment now allows only branch `main` and tags
+`v*-pilot.*-rc.*`; existing signing secrets were preserved. The automatic signed
+main APK run
+[`34768303524`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34768303524)
+passed and published `MyLifeGraph-Pilot-Signed-0462d0c4b4d7`, including signer and
+checksum verification. The separate signed RC-tag APK run
+[`34768818512`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34768818512)
+also passed. Installed-device acceptance remains manual.
+
+The actual user-facing production aliases `my-life-graph-mu.vercel.app` and
+`my-life-graph-my-life-graph-s-projects.vercel.app` resolve to ready deployment
+`dpl_xjJRLoVki6iJd5BMmZedn9jQ6Hke`; its build logs confirm main commit `0462d0c`
+and successful completion. GitHub's blocked status refers to another Vercel
+team/project; that project was not modified. Laptop frontend HTTP 200 was also
+confirmed. Real user capture/Coach conversations and physical APK behavior are
+not claimed from these operational checks.
+
 ### Forward-release readiness clarification — 2026-09-13
 
 Read-only VPS inspection confirmed that the installed `promote_release.sh`,

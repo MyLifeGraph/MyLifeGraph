@@ -285,8 +285,9 @@ observed successfully; adding it is a separate irreversible-cache decision.
 
 Only an annotated RC tag on protected `main` is a source authority. GitHub must
 additionally protect the pilot RC/final tag patterns from arbitrary creation,
-update, and deletion and restrict the `pilot-release` environment to those
-protected tags. No second reviewer account is mandatory; creation is limited
+update, and deletion. Restrict the `pilot-release` signing environment to those
+protected RC tags and protected `main` for the automatic signed-main APK workflow.
+No second reviewer account is mandatory; creation is limited
 to named release owners and the workflow's source-identity guards remain
 fail-closed. These are external settings gates; the repository's tag-to-main
 checks are defense in depth, not proof that signing secrets cannot reach
