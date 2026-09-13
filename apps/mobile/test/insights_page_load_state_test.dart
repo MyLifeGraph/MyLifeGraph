@@ -23,6 +23,61 @@ const _fingerprint =
 
 void main() {
   for (final sparse in [false, true]) {
+    for (final width in [390.0, 1280.0]) {
+      testWidgets('Advanced windows are available across relevant tabs: sparse=$sparse width=$width', (tester) async {
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(ProviderScope(
+          overrides: [
+            _skillsetSelectionOverride(),
+            _demoSurfaceOverride(),
+            insightsProvider.overrideWith((ref) async => const []),
+            skillsetProfileProvider.overrideWith((ref) async => _skillsetProfile()),
+            correlationReportProvider.overrideWith((ref) async => CorrelationReport(
+              windowDays: ref.watch(insightsWindowDaysProvider),
+              metrics: sparse ? [] : correlationMetrics,
+              points: const [], results: const [],
+            )),
+          ],
+          child: MaterialApp(theme: AppTheme.dark, home: const Scaffold(body: InsightsPage())),
+        ));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Advanced'));
+        await tester.tap(find.text('Advanced').hitTestable());
+        await tester.pumpAndSettle();
+        final container = ProviderScope.containerOf(tester.element(find.byType(InsightsPage)));
+        var selected = 14;
+        for (final pane in ['compare', 'topPatterns', 'trend', 'skillset', 'matrix']) {
+          final tab = find.byKey(Key('insights-advanced-pane-$pane'));
+          await tester.ensureVisible(tab);
+          await tester.pumpAndSettle();
+          await tester.tap(tab);
+          await tester.pumpAndSettle();
+          expect(container.read(insightsWindowDaysProvider), selected);
+          for (final days in [7, 14, 30, 90]) {
+            expect(find.text('${days}d'), findsOneWidget);
+          }
+          selected = selected == 30 ? 90 : 30;
+          final choice = find.text('${selected}d');
+          await tester.ensureVisible(choice);
+          await tester.pumpAndSettle();
+          await tester.tap(choice);
+          await tester.pumpAndSettle();
+          expect(container.read(insightsWindowDaysProvider), selected);
+        }
+        final discovered = find.byKey(const Key('insights-advanced-pane-discovered'));
+        await tester.ensureVisible(discovered);
+        await tester.pumpAndSettle();
+        await tester.tap(discovered);
+        await tester.pumpAndSettle();
+        expect(find.text('30d'), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+  for (final sparse in [false, true]) {
     testWidgets('Skillset tab is ordered and retains dimensions, sparse=$sparse', (tester) async {
       tester.view..physicalSize = Size(sparse ? 320 : 1280, 960)..devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);

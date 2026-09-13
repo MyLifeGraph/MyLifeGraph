@@ -721,6 +721,9 @@ labelled No data and omitted from the polygon; fewer than three measured axes
 show empty guidance. This does not load persisted Skillset profiles. Filters
 survive tab switches for the account session and affect only the Insights display,
 not the inputs available in check-ins.
+The shared 7/14/30/90-day choice is available in Compare, Top patterns, Trend
+overlay, Skillset and Matrix, including sparse data. Discovered is independent
+of that window and omits the control. Changing tabs preserves the selection.
 Sport/Social contact questions appear directly at the end of Evening's
 context step, without a disclosure or extra section heading;
 `Study motivation (optional)` appears directly in Morning Check-in. All are

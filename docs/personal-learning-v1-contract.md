@@ -205,6 +205,9 @@ selected signal. Normalization and evidence-timing explanations remain visible.
 
 Both viewport layouts use Compare, Top patterns, Trend overlay, Skillset,
 Matrix, then Discovered tabs. Skillset remains selectable with sparse data.
+Compare, Top patterns, Trend overlay, Skillset and Matrix expose the shared
+7/14/30/90-day selection, including sparse states. Switching tabs retains it.
+Discovered shows saved results independent of this window and has no selector.
 It is a read-only presentation of recorded observations in the selected window,
 not the legacy persisted Skillset profile or a personal-strength model.
 The default dimensions are Sleep, Sport, Energy, Social activity, Learning,

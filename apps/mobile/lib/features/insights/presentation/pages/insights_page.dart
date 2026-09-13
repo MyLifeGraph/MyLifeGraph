@@ -139,6 +139,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         advancedPane: _advancedPane,
         onPaneSelected: (pane) => setState(() => _advancedPane = pane),
         skillsetCard: _skillsetCard(),
+        windowSelector: _windowSelector(isMobile: isMobile, windowDays: windowDays),
         isMobile: isMobile,
         report: widget.report,
         observation: observation,
@@ -274,6 +275,11 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         onSelected: (pane) => setState(() => _advancedPane = pane),
       ),
       const SizedBox(height: AppSpacing.md),
+      if (const {_AdvancedPane.topPatterns, _AdvancedPane.trend, _AdvancedPane.matrix}
+          .contains(_advancedPane)) ...[
+        _windowSelector(isMobile: isMobile, windowDays: windowDays),
+        const SizedBox(height: AppSpacing.md),
+      ],
       switch (_advancedPane) {
         _AdvancedPane.compare => Column(
           children: [
@@ -302,6 +308,13 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
       },
     ];
   }
+
+  Widget _windowSelector({required bool isMobile, required int windowDays}) =>
+      _WindowSelector(
+        value: windowDays,
+        compact: isMobile,
+        onChanged: (days) => ref.read(insightsWindowDaysProvider.notifier).state = days,
+      );
 
   Widget _skillsetCard() => InsightsSkillsetCard(
     report:

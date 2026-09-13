@@ -89,6 +89,7 @@ class _SparseInsightsHome extends StatelessWidget {
     required this.advancedPane,
     required this.onPaneSelected,
     required this.skillsetCard,
+    required this.windowSelector,
     required this.isMobile,
     required this.report,
     required this.observation,
@@ -104,6 +105,7 @@ class _SparseInsightsHome extends StatelessWidget {
   final _AdvancedPane advancedPane;
   final ValueChanged<_AdvancedPane> onPaneSelected;
   final Widget skillsetCard;
+  final Widget windowSelector;
   final bool isMobile;
   final CorrelationReport report;
   final CoachingObservation observation;
@@ -174,6 +176,11 @@ class _SparseInsightsHome extends StatelessWidget {
                           onSelected: onPaneSelected,
                         ),
                         const SizedBox(height: AppSpacing.md),
+                        if (advancedPane != _AdvancedPane.skillset &&
+                            advancedPane != _AdvancedPane.discovered) ...[
+                          windowSelector,
+                          const SizedBox(height: AppSpacing.md),
+                        ],
                         if (advancedPane == _AdvancedPane.skillset)
                           skillsetCard
                         else
