@@ -701,6 +701,9 @@ immediately before Send. Recording requires an explicit audio-data notice and
 microphone permission, is capped at 30 seconds, and inserts recognized text into
 the existing draft. Existing text is preserved; an overlong combined draft is
 rejected without truncation.
+Android declares audio and the recorder service's optional notification
+capability. The latter declaration does not request/grant permission or enable
+OS notification delivery; the existing foreground-only recording flow remains.
 The audio-data notice is acknowledged once per signed-in app session, in memory
 only; route revisits retain it, while sign-out/profile change or a full app
 reload resets it. Declining never records consent. OS/browser microphone

@@ -50,6 +50,17 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ### Branch publication checks — 2026-09-13
 
+Linux CI for candidate `c2b31d3ca8889d06af324a452a6de21b20d963c6`, run
+`34760040337`, passed Source/Docs/Visual, full FastAPI, full Flutter (including
+goldens), and debug Web build. The database lane applied the full chain and
+failed only three stale current-head/count expectations in the hosted readiness
+test. Updated full identity is independently derived from sorted repository
+migration filenames; the older release prefix and security assertions remain.
+Android JVM tests passed; lint found the recorder's missing `POST_NOTIFICATIONS`
+manifest declaration. The additive declaration changes no runtime prompt/grant.
+These two corrections require the subsequent full Linux run; no baseline or
+production security guard was relaxed.
+
 Publication target: `preview/morning-evening-check-in`; task base
 `002c968c3427c6b5a6c52fb56bc58bb143a8457f`. Includes the previously approved
 uncommitted UI, dictation, Android signing, local Cloud transport and additive

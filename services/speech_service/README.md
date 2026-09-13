@@ -65,6 +65,11 @@ adds runtime microphone permission through the pinned recorder package; neither
 change grants permission without the user. Old deployed clients stay unchanged
 until a separately authorized release.
 
+Android declares `POST_NOTIFICATIONS` for the recorder package's bundled
+recording service so Android 13+ lint can validate its notification code. This
+does not request or grant notification permission, enable background recording,
+or turn the application's in-app Inbox into OS/push delivery.
+
 Local development: forward laptop loopback 8002 to VPS loopback 8002 and set
 `SPEECH_SERVICE_BASE_URL=http://127.0.0.1:8002/dev` before starting Flutter.
 Only approved exact browser origins are allowed (see installer); adding another

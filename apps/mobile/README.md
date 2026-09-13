@@ -18,6 +18,8 @@ The Turnstile challenge uses its container width at initial render: compact
 below 300px, flexible otherwise. Page padding is included in the viewport width;
 the widget is not cropped or scaled. Token/origin validation is unchanged.
 
+Android declares `POST_NOTIFICATIONS` for the recorder package's bundled service;
+this build declaration neither requests permission nor enables OS/push delivery.
 Coach dictation adds a microphone immediately before Send on Web/Android. The
 user confirms server-side transcription once per signed-in app session and
 records at most 30 seconds. The memory-only acknowledgement survives route
