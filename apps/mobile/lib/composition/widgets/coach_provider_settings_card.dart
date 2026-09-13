@@ -16,6 +16,8 @@ class CoachProviderSettingsCard extends ConsumerStatefulWidget {
     this.initiallyExpanded = false,
     this.showOpenCoach = true,
     this.compact = false,
+    this.directSelection = false,
+    this.onSelected,
     this.enabled = true,
     this.onChanged,
     this.availabilityDetails,
@@ -25,6 +27,8 @@ class CoachProviderSettingsCard extends ConsumerStatefulWidget {
   final bool initiallyExpanded;
   final bool showOpenCoach;
   final bool compact;
+  final bool directSelection;
+  final ValueChanged<CoachProviderName>? onSelected;
   final bool enabled;
   final VoidCallback? onChanged;
   final String? availabilityDetails;
@@ -113,7 +117,46 @@ class _CoachProviderSettingsCardState
             },
     );
     final controls = <Widget>[
-      if (widget.compact)
+      if (widget.directSelection)
+        for (final option in const {
+          CoachProviderName.operatorCodexPilot: 'Standard (provided)',
+          CoachProviderName.openai: 'OpenAI (your key)',
+          CoachProviderName.gemini: 'Gemini (your key)',
+        }.entries)
+          AppInfoDisclosure(
+            topic: option.value,
+            useDialog: true,
+            keyPrefix: 'coach-mode-${option.key.code}',
+            description: (option.key == CoachProviderName.operatorCodexPilot
+                ? 'Project Coach uses a temporary read-only snapshot on the VPS. '
+                  'Only your question and queried results reach the shared pilot '
+                  'account. Limits: 5 questions per account and 15 total per UTC day. '
+                  'No personal API key is required. No automatic provider fallback.'
+                : 'Uses your own ${option.key == CoachProviderName.openai ? 'OpenAI' : 'Gemini'} key. '
+                  'Requests may cost money. Your question and relevant read-only '
+                  'query results are sent to this provider. On web, keys exist '
+                  'only in this tab and disappear on reload. No automatic provider fallback.') +
+                (selected == option.key && widget.availabilityDetails != null
+                    ? '\n\n${widget.availabilityDetails}' : ''),
+            headerBuilder: (context, infoButton) => Row(children: [
+              Expanded(child: ListTile(
+                key: ValueKey('coach-select-${option.key.code}'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(option.value),
+                selected: selected == option.key,
+                trailing: selected == option.key
+                    ? const Icon(AppIcons.check) : null,
+                enabled: !credentials.busy && widget.enabled,
+                onTap: () {
+                  ref.read(coachCredentialsProvider.notifier).select(option.key);
+                  widget.onChanged?.call();
+                  widget.onSelected?.call(option.key);
+                },
+              )),
+              infoButton,
+            ]),
+          )
+      else if (widget.compact)
         AppInfoDisclosure(
           topic: 'Coach modes',
           useDialog: true,
@@ -209,7 +252,8 @@ class _CoachProviderSettingsCardState
           'after an error.',
         ),
       ],
-      if (widget.compact && selected != null) ...[
+      if (widget.compact && selected != null &&
+          (!widget.directSelection || isByok)) ...[
         const SizedBox(height: AppSpacing.xs),
         Text(
           isByok

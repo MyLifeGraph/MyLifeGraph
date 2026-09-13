@@ -734,6 +734,9 @@ icon-labelled Review/Replan actions. Coach puts its daily quota beside the
 title and the full-width input above its model/microphone/Send toolbar.
 The composer is one shared surface: its unframed input grows upward from one
 to five lines, then scrolls internally without moving the toolbar out of reach.
+Its model control opens a bottom sheet with Standard/OpenAI/Gemini immediately
+selectable and independent per-option Info dialogs. Personal-key options retain
+key testing, replacement and deletion; Settings keeps its existing dropdown.
 These layout changes retain existing callbacks, eligibility and data sources.
 Real-account Insights loads `personal-patterns-v1` and
 `sleep-recommendation-v1` independently. The Sleep Recommendation card is

@@ -102,7 +102,7 @@ void main() {
   });
   for (final scale in [1.0, 2.0]) {
   testWidgets(
-    'compact mobile Coach selects a provider in a dialog at $scale',
+    'compact mobile Coach selects directly in a sheet with optional info at $scale',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = Size(scale == 1 ? 390 : 320, 844);
@@ -149,27 +149,36 @@ void main() {
       expect(credentials.state.provider, CoachProviderName.operatorCodexPilot);
       await tester.tap(find.byKey(const Key('coach-model-button')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('coach-provider-selection')));
-      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.byKey(const Key('coach-provider-selection')), findsNothing);
       expect(find.text('OpenAI (your key)').hitTestable(), findsOneWidget);
       expect(find.text('Gemini (your key)').hitTestable(), findsOneWidget);
+      expect(find.textContaining('No automatic provider fallback'), findsNothing);
+      await tester.tap(find.byTooltip('Show information about Standard (provided)'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No automatic provider fallback'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(credentials.state.provider, CoachProviderName.operatorCodexPilot);
+      expect(repository.capabilityCalls, 1);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OpenAI (your key)').hitTestable());
+      await tester.pumpAndSettle();
+      expect(credentials.state.provider, CoachProviderName.openai);
+      expect(find.byKey(const Key('coach-key-openai')), findsOneWidget);
+      await tester.tap(find.text('Gemini (your key)').hitTestable());
+      await tester.pumpAndSettle();
+      expect(credentials.state.provider, CoachProviderName.gemini);
+      expect(find.byKey(const Key('coach-key-gemini')), findsOneWidget);
       repository.capability = CoachCapabilities.fromJson(coachCapabilitiesJson());
       await tester.tap(find.text('Standard (provided)').hitTestable());
       await tester.pumpAndSettle();
       expect(credentials.state.provider, CoachProviderName.operatorCodexPilot);
       expect(tester.takeException(), isNull, reason: 'selected provider layout');
       expect(find.text('Coach unavailable'), findsNothing);
-      expect(find.byKey(const Key('coach-provider-selection')), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
       expect(find.textContaining('No automatic provider fallback'), findsNothing);
-      await tester.tap(find.byTooltip('Show information about Coach modes'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('No automatic provider fallback'), findsOneWidget);
-      expect(find.byType(AlertDialog), findsNWidgets(2));
-      await tester.tap(find.text('Close'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-      expect(repository.capabilityCalls, 2);
+      expect(repository.capabilityCalls, 4);
       expect(repository.messages, isEmpty);
       expect(tester.takeException(), isNull);
     },

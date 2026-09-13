@@ -9,9 +9,12 @@ Capability reads and sends await credential initialization, so the first read
 already names Standard instead of racing the stored-key load. This wait does
 not replace a subsequent explicit provider choice or bypass storage failures.
 
-The composer model icon opens the existing provider/key controls in a dialog,
-including Coach explanations. Errors remain visible above the chat. Opening the
-dialog or switching providers never sends a question.
+The composer model control opens a bottom sheet with all three provider options
+directly selectable. Each option has independent Info opening its explanation
+in a dialog without selecting that provider. Standard selection closes the sheet;
+personal-key options retain the existing key test/save/delete controls inside it.
+Errors remain visible above the chat. Opening the sheet or switching providers
+never sends a question. Settings retains its existing dropdown.
 
 The permanent chat outline starts below the fixed capability status card and
 continues through the fixed bottom composer. Only the timeline scrolls within
@@ -758,11 +761,11 @@ Hosted Settings requires one deliberate mode selection: `Project Coach`,
 `Use my OpenAI key`, or `Use my Gemini key`. Project Coach never reads or
 stores a key. BYOK keys remain isolated per provider, tab-memory-only on web
 and encrypted device-local on Android. A failed mode never changes providers.
-Non-demo Coach places a compact `Choose Coach` dropdown directly below the
-header, including when ready. Unavailable and rate-limit states stay visible;
+Non-demo Coach keeps the model selector in the composer, including when ready.
+It opens the direct-choice sheet described above. Unavailable and rate-limit states stay visible;
 provider/key changes refresh availability. Key fields appear only for BYOK.
 Optional explanations use Info; short cost/data-sharing copy stays visible.
-Settings keeps the same controls. No provider is selected automatically.
+Settings keeps its existing controls; the authenticated default remains Standard.
 For `provider_busy`, Flutter preserves the exact request id/message, shows the
 bounded server countdown, and enables only a manual retry after it expires.
 

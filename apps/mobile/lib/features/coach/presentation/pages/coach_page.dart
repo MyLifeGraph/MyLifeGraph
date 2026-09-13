@@ -519,9 +519,12 @@ class _ComposerCardState extends State<_ComposerCard> {
                   key: const Key('coach-model-button'),
                   onPressed: state.isLoading || state.isSending ||
                       state.isDeletingHistory || state.busyRetrySeconds > 0
-                      ? null : () => showDialog<void>(
+                      ? null : () => showModalBottomSheet<void>(
                           context: context,
-                          builder: (_) => _CoachOptionsDialog(
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          showDragHandle: true,
+                          builder: (_) => _CoachOptionsSheet(
                             onChanged: widget.onProviderChanged,
                           ),
                         ),
@@ -600,8 +603,8 @@ class _ComposerCardState extends State<_ComposerCard> {
   }
 }
 
-class _CoachOptionsDialog extends ConsumerWidget {
-  const _CoachOptionsDialog({required this.onChanged});
+class _CoachOptionsSheet extends ConsumerWidget {
+  const _CoachOptionsSheet({required this.onChanged});
 
   final VoidCallback onChanged;
 
@@ -609,14 +612,24 @@ class _CoachOptionsDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(coachControllerProvider);
     final capability = state.capabilities;
-    return AlertDialog(
-      title: const Text('Choose Coach'),
-      scrollable: true,
-      content: Column(
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(top: false, child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text('Choose Coach', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
           CoachProviderSettingsCard(
             compact: true,
+            directSelection: true,
+            onSelected: (provider) {
+              if (provider == CoachProviderName.operatorCodexPilot) {
+                Navigator.of(context).pop();
+              }
+            },
             enabled: !state.isLoading && !state.isSending &&
                 !state.isDeletingHistory && state.busyRetrySeconds == 0,
             onChanged: onChanged,
@@ -628,15 +641,13 @@ class _CoachOptionsDialog extends ConsumerWidget {
                   'Service tier: ${_humanize(capability.serviceTier)}',
           ),
           const SizedBox(height: AppSpacing.sm),
-          const Text('Coach answers using your read-only app data. '
-              'It can inspect data with SQL and isolated Python, '
-              'but cannot change the app.'),
+          Align(alignment: Alignment.centerRight, child: TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          )),
         ],
       ),
-      actions: [TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Done'),
-      )],
+      )),
     );
   }
 }
