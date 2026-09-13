@@ -133,7 +133,9 @@ derived from the student's corrected estimated start/wake instants and
 measurement. Copy must state that neither is objective measurement, quality is
 judged independently of duration, and neither value may be inferred from the
 other. Visible Morning clock labels are `Sleep start` and `Wake time`; they
-open a time picker and do not show preset chips. Unset clocks and an
+open a time picker and do not show preset chips. Compact minus/plus controls
+move each entered clock 30 minutes earlier/later, with a visible `30m` step.
+Unset clocks disable these shortcuts rather than inventing a time. Unset clocks and an
 uncalculable duration show only `—` beside the label, not a status card.
 Morning check-in presents one local draft in two steps. The first step uses
 `MORNING · SLEEP`, `How did you sleep?`, 50-percent progress, and `Next`; the

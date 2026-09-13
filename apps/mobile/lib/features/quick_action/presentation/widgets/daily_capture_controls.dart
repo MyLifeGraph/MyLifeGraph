@@ -427,6 +427,7 @@ class CaptureClockControl extends StatelessWidget {
     required this.onChanged,
     this.fallback = const TimeOfDay(hour: 23, minute: 0),
     this.quickValues = const [],
+    this.quickAdjust = false,
     super.key,
   });
 
@@ -436,14 +437,24 @@ class CaptureClockControl extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final TimeOfDay fallback;
   final List<String> quickValues;
+  final bool quickAdjust;
+
+  void _adjust(TimeOfDay time, int minutes) {
+    final clock = (time.hour * 60 + time.minute + minutes) % (24 * 60);
+    onChanged(
+      '${(clock ~/ 60).toString().padLeft(2, '0')}:'
+      '${(clock % 60).toString().padLeft(2, '0')}',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final parsed = _parseTimeOfDay(value);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Semantics(
+    final timeText = Text(
+      value ?? '—',
+      style: Theme.of(context).textTheme.titleMedium,
+    );
+    final clockButton = Semantics(
           button: true,
           label: semanticLabel,
           value: value ?? '—',
@@ -472,17 +483,39 @@ class CaptureClockControl extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(AppIcons.schedule),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: Text(label)),
-                Text(
-                  value ?? '—',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                if (!quickAdjust) ...[
+                  const Icon(AppIcons.schedule),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
+                if (!quickAdjust) Expanded(child: Text(label)),
+                if (quickAdjust) Flexible(child: timeText) else timeText,
               ],
             ),
           ),
-        ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (quickAdjust) ...[
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: AppSpacing.xs),
+          Row(children: [
+            Expanded(child: clockButton),
+            const SizedBox(width: AppSpacing.xs),
+            IconButton(
+              tooltip: '$label 30 minutes earlier',
+              onPressed: parsed == null ? null : () => _adjust(parsed, -30),
+              icon: const Icon(AppIcons.removeCircleOutline),
+            ),
+            Text('30m', style: Theme.of(context).textTheme.labelSmall),
+            IconButton(
+              tooltip: '$label 30 minutes later',
+              onPressed: parsed == null ? null : () => _adjust(parsed, 30),
+              icon: const Icon(AppIcons.add),
+            ),
+          ]),
+        ] else
+          clockButton,
         if (quickValues.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
           Wrap(

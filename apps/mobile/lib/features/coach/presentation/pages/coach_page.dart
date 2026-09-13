@@ -454,6 +454,7 @@ class _ComposerCardState extends State<_ComposerCard> {
         ? Theme.of(context).colorScheme.error
         : Theme.of(context).colorScheme.onSurfaceVariant;
     return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -492,15 +493,20 @@ class _ComposerCardState extends State<_ComposerCard> {
                 !state.isLoading &&
                 !state.isSending &&
                 !state.isDeletingHistory,
-            minLines: 2,
-            maxLines: 4,
+            minLines: 1,
+            maxLines: 5,
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => _submitDraft(),
             onChanged: onChanged,
             decoration: InputDecoration(
-              labelText: 'Your question',
               hintText: 'Message Coach',
+              filled: false,
+              isDense: true,
+              contentPadding: const EdgeInsets.all(AppSpacing.sm),
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
               errorText: state.draftCodepoints > coachMessageCodepoints
                   ? 'Keep the question within 2,000 characters.'
                   : null,

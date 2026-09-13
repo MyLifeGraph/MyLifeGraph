@@ -21,6 +21,23 @@ import 'package:my_life_graph/features/coach/presentation/widgets/coach_dictatio
 import 'support/coach_fixtures.dart';
 
 void main() {
+  testWidgets('composer grows upward to five lines and keeps its toolbar', (tester) async {
+    await _pumpPage(tester, _FakeCoachRepository(historyTurns: []));
+    final field = find.byKey(const Key('coach-message-field'));
+    final initial = tester.getRect(field);
+    await tester.enterText(field, List.filled(5, 'A short line').join('\n'));
+    await tester.pumpAndSettle();
+    final expanded = tester.getRect(field);
+    expect(expanded.height, greaterThan(initial.height));
+    expect(expanded.top, lessThan(initial.top));
+    await tester.enterText(field, List.filled(9, 'A short line').join('\n'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(field).height, expanded.height);
+    expect(find.byKey(const Key('coach-model-button')).hitTestable(), findsOneWidget);
+    expect(find.byKey(const Key('coach-send-button')).hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final keyboard in [true, false]) {
     testWidgets('Coach Enter sends once; hardware keyboard = $keyboard',
         (tester) async {

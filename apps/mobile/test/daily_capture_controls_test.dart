@@ -5,6 +5,34 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
 
 void main() {
+  testWidgets('clock shortcuts wrap midnight and keep the picker', (tester) async {
+    String? changed;
+    await _pump(tester, CaptureClockControl(
+      label: 'Sleep start', semanticLabel: 'estimated sleep start',
+      value: '00:15', quickAdjust: true, onChanged: (value) => changed = value,
+    ));
+    await tester.tap(find.byTooltip('Sleep start 30 minutes earlier'));
+    expect(changed, '23:45');
+    await tester.tap(find.byTooltip('Sleep start 30 minutes later'));
+    expect(changed, '00:45');
+    await tester.tap(find.text('00:15'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TimePickerDialog), findsOneWidget);
+  });
+
+  testWidgets('unset clocks do not invent a time through shortcuts', (tester) async {
+    await _pump(tester, CaptureClockControl(
+      label: 'Sleep start', semanticLabel: 'estimated sleep start',
+      value: null, quickAdjust: true, onChanged: (_) => fail('Unexpected change'),
+    ));
+    expect(tester.widget<IconButton>(find.byWidgetPredicate((widget) =>
+        widget is IconButton && widget.tooltip == 'Sleep start 30 minutes earlier'))
+        .onPressed, isNull);
+    expect(tester.widget<IconButton>(find.byWidgetPredicate((widget) =>
+        widget is IconButton && widget.tooltip == 'Sleep start 30 minutes later'))
+        .onPressed, isNull);
+  });
+
   testWidgets(
       'Capture information uses a 44px target, dynamic semantics, keyboard, and independent state',
       (tester) async {

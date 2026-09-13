@@ -267,6 +267,7 @@ requires one planned local sleep time and a `300..720` minute target on a
 15-minute grid. Its intent and first-value explanations start closed behind
 independent information controls. Morning first records editable aware
 estimated sleep-start/wake instants labeled `Sleep start` and `Wake time`,
+with a time picker and compact 30-minute earlier/later shortcuts for set clocks,
 derives and labels the compact `Estimated sleep duration` value, and retains
 the target used for that night. Its second page requires a separate `1..10`
 `Sleep quality` rating plus current energy. The
@@ -731,6 +732,8 @@ Today schedule actions use compact Open plan/Start focus icons. Planner's
 Exam Outlook expands from its risk/summary into the existing details and
 icon-labelled Review/Replan actions. Coach puts its daily quota beside the
 title and the full-width input above its model/microphone/Send toolbar.
+The composer is one shared surface: its unframed input grows upward from one
+to five lines, then scrolls internally without moving the toolbar out of reach.
 These layout changes retain existing callbacks, eligibility and data sources.
 Real-account Insights loads `personal-patterns-v1` and
 `sleep-recommendation-v1` independently. The Sleep Recommendation card is

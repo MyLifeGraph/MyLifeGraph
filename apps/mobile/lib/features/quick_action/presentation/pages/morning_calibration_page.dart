@@ -116,6 +116,7 @@ class _MorningCalibrationPageState
         const SizedBox(height: AppSpacing.sm),
         CaptureClockControl(
           label: 'Sleep start',
+          quickAdjust: true,
           semanticLabel: 'estimated sleep start',
           value: _draft.estimatedSleepStartedAt == null
               ? null
@@ -125,6 +126,7 @@ class _MorningCalibrationPageState
         const SizedBox(height: AppSpacing.sm),
         CaptureClockControl(
           label: 'Wake time',
+          quickAdjust: true,
           semanticLabel: 'estimated wake time',
           value: _draft.wokeAt == null
               ? null

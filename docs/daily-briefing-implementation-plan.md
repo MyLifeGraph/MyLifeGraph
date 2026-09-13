@@ -946,6 +946,9 @@ The implemented short Morning Calibration surface supports:
   control hides the two Evening sleep-plan explanations without changing its
   existing step headings or context help.
 - Prefill and same-kind replacement without erasing saved Evening context.
+- Morning clock fields offer optional 30-minute earlier/later shortcuts beside
+  the exact time picker. They reuse the existing clock-change path and duration
+  validation; no new persistence or date-inference rule is introduced.
 - Honest current-state copy stating that capture does not generate
   recommendations or create or change a plan. Authenticated real saves may
   refresh the separate backend Daily State; guest/mock saves remain local.

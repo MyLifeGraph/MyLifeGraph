@@ -66,6 +66,10 @@ void main() {
           .onChanged('07:00');
       await tester.pump();
 
+      await _tapVisible(tester, find.byTooltip('Sleep start 30 minutes earlier'));
+      expect(find.text('8 h 30 min'), findsOneWidget);
+      await _tapVisible(tester, find.byTooltip('Wake time 30 minutes earlier'));
+
       await _tapVisible(tester, find.text('Next'));
       expect(find.text('MORNING · CHECK-IN'), findsOneWidget);
       expect(find.text('How are you starting today?'), findsOneWidget);
