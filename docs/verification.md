@@ -48,6 +48,22 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Forward-release readiness clarification — 2026-09-13
+
+Read-only VPS inspection confirmed that the installed `promote_release.sh`,
+`health_check.py`, and `project_admin.py` match the reviewed repository sources
+(LF-normalized SHA256). The installed health helper's database-contract-only
+probe successfully attested the candidate's full 70-migration inventory:
+head `20260913113853_optional_skillset_capture.sql`, identity
+`6f3607d4eba7f8b225448aae68e59444518c2a9caa43b94466dece67c21a6c84`.
+The promotion helper uses this candidate-bound attestation before switching
+releases and verifies rollback against the actual database inventory.
+Consequently, the old release's strict `project check` mismatch is not an
+independent forward-deployment blocker and needs no helper or database change.
+Protected-main confirmation, exact-candidate GitHub checks, an annotated RC,
+preparation and live promotion checks still apply. No release was switched by
+this inspection; the development stack stays parked.
+
 ### Matthias development backup and disk recovery — 2026-09-13
 
 User-authorized cleanup was limited to Unix user `mylifegraph-matthias` (UID
