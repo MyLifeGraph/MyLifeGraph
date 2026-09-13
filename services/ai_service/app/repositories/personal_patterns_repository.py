@@ -86,7 +86,7 @@ class SupabasePersonalPatternsRepository:
                         (
                             "select",
                             "id,status,started_at,ended_at,planned_minutes,"
-                            "actual_minutes",
+                            "actual_minutes,focus_session_schedule_sources(source_kind)",
                         ),
                         ("user_id", f"eq.{user_id}"),
                         ("status", "in.(completed,abandoned)"),

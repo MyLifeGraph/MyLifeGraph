@@ -1,11 +1,67 @@
 # MyLifeGraph Mobile App
 
+Settings omits its own navigation cog while retaining Coach notices and Back;
+its compact header reduces the gap before Profile. The Focus target dropdown
+has a viewport-bounded scrollable menu so the final option remains reachable.
+These are presentation-only changes. Android Focus Protection remains tied to
+the confirmed Focus start and chosen duration; it is not a separate clock schedule.
+Pilot privacy notice is available in hosted Pilot/Staging on Web and Android,
+not in the local Development configuration.
+
+Supporting copy is concise on mobile and desktop: Settings section summaries,
+the duplicated Required Setup explanation, and the second empty-Coach notice
+are omitted. Today retains its independent information controls with shorter
+descriptions; Planner uses a plain-language subtitle. State, errors, consent,
+costs, data-quality and preview/confirmation guidance are unchanged.
+
+The Turnstile challenge uses its container width at initial render: compact
+below 300px, flexible otherwise. Page padding is included in the viewport width;
+the widget is not cropped or scaled. Token/origin validation is unchanged.
+
+Coach dictation adds a microphone immediately before Send on Web/Android. The
+user confirms server-side transcription once per signed-in app session and
+records at most 30 seconds. The memory-only acknowledgement survives route
+revisits, not sign-out/account changes or a full reload. Microphone permission
+still applies. Remaining seconds and voice-level bars appear while recording;
+display-only logarithmic scaling makes normal speech visible without modifying
+audio, and reduced motion removes transitions rather than level feedback. The input
+becomes a recording bar: X discards, square Stop inserts text for review, and Send
+transcribes and explicitly sends through the existing Coach flow. Automatic stop
+only inserts text; it never sends. Recording stops on leaving
+the page or backgrounding. See [Speech setup](../../services/speech_service/README.md).
+The recording widget uses a cancellable domain request; HTTP and transport
+errors stay in Coach data and `ApiClient`. Discard/account change suppress late
+text and errors. Uploads set `followRedirects: false` for native adapters;
+the existing web adapter leaves redirect handling to the browser, so the
+configured endpoint must remain canonical. No UI or wire-format change is
+implied by this separation.
+
+Authenticated non-mock development accounts may test dictation and edit the draft
+even when the development Coach is unavailable. Send still requires a ready
+Coach. This exception does not apply to hosted builds or guest/mock sessions.
+
+The permanent Coach frame starts below the fixed capability status
+and includes the scrollable timeline and fixed bottom composer. It remains for
+empty and populated history; opening or refreshing history scrolls to the newest
+message. The empty state includes the no-saved notice and short static example.
+The model icon before the microphone opens the existing provider/key controls
+and Coach information in a dialog. Errors remain visible above the chat; the
+main page itself does not scroll.
+At very small remaining heights the composer joins the same chat scroller.
+This does not send a question or alter existing conversations.
+
+The successfully loaded empty Coach chat shows a softly outlined
+`Ask your coach anything` invitation below the no-conversation notice.
+Existing messages, loading/error states, and request behavior are unchanged.
+
 Flutter client for the AI Personal Coach / MyLifeGraph product.
 
 Coach V4 is the current public surface. `coach-request-v4`,
 `coach-capabilities-v5`, `coach-response-v4`, and `coach-history-v4` use
 `free-coach-agent-prompt-v5`; stored V1-V3 responses remain readable. Hosted
-users deliberately choose Project Coach or one personal OpenAI/Gemini key;
+users start with Project Coach (`Standard (provided)`) selected and may choose
+one personal OpenAI/Gemini key instead; the selector remains visible on a
+capability error, including with saved history;
 there is no provider fallback. Android keeps BYOK keys in encrypted device
 storage, while web keeps them only in tab memory. Android cloud backup and
 device-to-device transfer are explicitly disabled so encrypted preferences or
@@ -181,9 +237,11 @@ but it is no longer presented as a decision made for the user. Capture itself
 does not create or change a plan. Morning Calibration
 therefore describes only what that save does.
 
-Today keeps its source/update line and ordinary heading explanations initially
-hidden behind independent circled information buttons. The shared core
-disclosure is used for streak, progress, agenda, Today/all Tasks, Habits, and
+Today omits its redundant account/source information control. `All tasks`
+expands directly into compact task rows, with a Planner icon in the header and
+no duplicate Tasks heading or explanation. Ordinary heading explanations remain
+behind independent circled information buttons. The shared core
+disclosure is used for streak, progress, agenda, due Tasks, Habits, and
 the Full-week accordion. The direct `Review your week` entry instead keeps
 its summary visible and has no information toggle. Opening information never
 opens the surrounding accordion or starts its lazy provider; errors,
@@ -378,6 +436,15 @@ confirmed.
   explicit sign-out action; Flutter never attempts to insert or repair the
   protected profile.
 
+Setup stays a single scrollable page without a progress stepper. Its hero,
+outlined Required/Optional setup cards, icon-led accordions and full-width Save action
+use the existing theme. All fields, expansion defaults and save behavior remain.
+Start-ritual items put text, an include checkbox and direct reorder/remove icons in
+one compact row; the full text remains editable and the length limit unchanged.
+Other Setup editors use matching compact cards: title-adjacent actions,
+aligned semester date controls and wrapping summary statuses. The main Setup
+sections, all fields, validation and save/retry paths remain unchanged.
+
 First-run Setup requires only Typical weekday and Best energy window, with an
 optional display name, routines, fixed commitments, and Study Setup. Focus
 areas, friction, coaching style, Reminder preference, and free-form context are
@@ -442,10 +509,14 @@ actual backend time while retaining their original planned interval.
 With the development Coach surface enabled, the five shell destinations are
 Today, Insights, Quick actions, Planner, and Coach. Those pages plus Settings
 share a top action group with optional page action, unread Coach result, and
-Settings in that order. Settings is pushed so Back returns to the originating
-page; Inbox remains under Settings. A disabled Coach gate omits the fifth
+Settings in that order. Settings omits its own navigation action while keeping
+the unread result and Back; it is pushed so Back returns to the originating
+page. Inbox remains under Settings. A disabled Coach gate omits the fifth
 destination rather than restoring Settings; Settings-owned routes such as
 `/alerts` leave the shell destinations unselected.
+Today, Insights, Planner, and Coach align compact icon actions at the same
+top-right inset; large text moves actions above the title. Other page headers
+retain their existing layout.
 
 - `/auth`
 - `/auth/recovery` (Supabase password-recovery event only)
@@ -553,6 +624,21 @@ newly previewed accordion is expanded. In-page navigation pushes route history,
 while shell destinations replace it. The shared top back control pops real
 history and uses route-specific fallbacks for direct deep links.
 
+Planner Days uses a stable-height outlined appointment viewport with internal
+scrolling, including empty days. Larger text gets extra space; date navigation
+stays outside and resets the item scroll to the top. List remains continuous.
+Planner supports Days/List at every width, retains the selected day across
+mode switches and places the agenda first at every width. Desktop keeps its
+main/right-summary columns below the calendar. Add new stays below the agenda
+with the existing five actions; calendar preferences
+and all warnings/previews remain reachable. Mobile uses weekday underlines and
+broad icon-led cards; tablet/enlarged text stacks sections. Sidebar, mobile
+navigation and FAB are unchanged. The mobile Add new sheet scrolls at constrained
+heights or enlarged text, keeping all five actions reachable without shrinking them.
+The Fixed commitment dialog also scrolls its title at constrained heights and
+fits its recurrence/weekday dropdowns to the available width without changing
+validation or review behavior.
+
 Planner's rolling `Next seven days` and Today's calendar-week `Full week` use
 the same feature-neutral day-card and appointment-row primitive but never share
 read authority. Full week is lazy and renders all seven
@@ -568,7 +654,10 @@ the named narrow/large-text breakpoint it shows exactly two. Saturday/Sunday
 initial positions clamp so two real days remain, scrolling snaps one day at a
 time and cannot pass week bounds. A seven-column layout activates only when
 every card retains at least 208 logical pixels. Dense cards grow without fixed
-height, and only Full week may use the wider page surface.
+height. Full week and Weekly review share Today's 1080-pixel maximum content
+width; the existing day pager is used when seven full-size columns cannot fit.
+Check-in buttons share their outlined state colors across mobile and desktop;
+only their responsive content arrangement differs.
 
 Deadline confirm/complete/cancel success, including exact retry, emits one
 controller-owned projection impact; proposal previews emit none, and only a
@@ -611,16 +700,82 @@ it as example data. Real accounts neither load nor render `skillset_profiles`
 because no trusted producer currently exists.
 The Skillset provider uses the shared local-demo capability and the local
 example source directly; it has no remote loader or repository/service wrapper.
+The demo observation and example-profile headings use distinct descriptive
+icons; observation content still follows the current correlation report.
+Advanced trend signals use an expandable checkbox list with the same ordering
+and selection rules. The mobile matrix uses narrower cells and labels at normal
+text sizes, retaining fixed row labels and the large-text layout.
+The `Overview`/`Advanced` selector opens on Overview. Personal Study Pattern and
+Sleep Recommendation (or demo summaries) stay there; Advanced opens correlation
+tools directly. Switching tabs preserves filters and expanded details without
+changing provider calls or calculations. Sparse data has the same selector.
+Advanced now uses the same ordered tabs on every width: Compare, Top patterns,
+Trend overlay, Skillset, Matrix, Discovered. Skillset offers a compact dimensions
+multi-select and a radar of recorded ratings and explicit activity summaries, with raw values,
+sources and observation counts under collapsed Details. Short names accompany
+the numbered radar axes; the selected window stays visible. Unmeasured dimensions are
+labelled No data and omitted from the polygon; fewer than three measured axes
+show empty guidance. This does not load persisted Skillset profiles. Filters
+survive tab switches and are shared with check-ins for the account session.
+Selected Sport/Social contact questions appear under Evening `More (optional)`;
+selected Study motivation appears under Morning `More (optional)`. All are
+nullable 0–2 choices, enabled only when the backend advertises support (or local
+demo). Energy replaces Recovery. Learning and Discipline are labelled window
+summaries with a formula disclosure; see the Personal Learning owner.
 Real-account Insights loads `personal-patterns-v1` and
 `sleep-recommendation-v1` independently. The Sleep Recommendation card is
 directly below Personal Study Pattern and owns loading, disabled, collecting,
 unstable, ready, and route-error states without replacing the existing card.
+Sleep start, Wake time, and Duration use compact label/value rows on mobile,
+with stacked text at narrow widths or large text sizes and columns on desktop.
+The status, below-target warning, and expandable evidence
+remain available. Today due-task rows likewise use compact Habit-style spacing
+and a leading completion circle; Focus/restore and command guards are unchanged.
+Both the due-task heading and expanded all-tasks heading use a compact
+`Open Planner` icon, inline when space allows. The expanded list uses the same
+compact completion-circle rows while preserving managed-plan navigation.
+Planner's `Next seven days` also links to the existing `.ics` import screen;
+Settings retains its entry and no Google sync is enabled. Coach submits on Enter
+or the mobile keyboard Send action; Shift+Enter preserves multiline editing.
+The calendar-import page prioritizes file selection above calendar metadata,
+keeps read-only/no-sync and replacement notices visible, and collapses detailed
+import counts/window information without changing consent or retry semantics.
+Individual imported events expand from compact title/date rows. Their optional
+`Plan study time` action opens the existing exam/assignment preparation flow;
+unavailable actions explain the unchanged future-event/connection requirement.
+Source actions sit in the imported-events header menu and retain confirmation
+and exact-retry behavior. New Calendar preparation uses two compact input screens
+before the existing preview: event/type and study time. Event editing/linking and
+optional plan settings are expandable; required missing details and source warnings
+remain visible. Other editors, defaults, validation, and confirmation are unchanged.
+Preparation also offers 20/30-hour estimate shortcuts and custom 25–180-minute
+Focus blocks, including weekly Assignment editors. Choices wrap on mobile and
+retain exact custom values. Planner descriptions grow from one to three lines;
+all fields, limits and preview/confirmation actions remain available.
+Preparation block rows separate date/time and share a visible timezone heading.
+Focus/recovery, tracked credit, status and start controls remain unchanged.
+Plan actions use one mobile-friendly row: `Edit plan`, `Complete`, `Cancel`,
+with icons and full-action tooltips; preview confirmation stays separate.
+Detailed Focus-credit explanations share the existing planning-info disclosure.
+Short start/preview/conflict notices remain visible beside unchanged plan values
+and actions; no scheduling, credit or confirmation behavior changes.
+The Calendar-linked preparation page itself prioritizes the selected event and
+its plans. `All plans` retains other plans and series; selected details/errors
+reveal that group. The compact `Enough study time?` and `Redistribute study time`
+tools are directly visible, with short empty guidance and always-visible controls
+(disabled when unavailable). Their cards use the same available width. The
+non-Calendar page is unchanged.
+`Plan preparation` is directly available beside `All plans`, including when no
+saved plans exist. Calendar-event retry/reload uses a header refresh icon with a
+tooltip; read-only retry callbacks and other editor actions are unchanged.
+Dictation Stop keeps recognized text in the draft; Send requests immediate
+submission after successful transcription, using existing availability guards.
 Ready renders Sleep start, Wake time, and Duration plus a below-confirmed-target
 warning only when the parsed raw median is below the parsed confirmed target.
 The V1 parser rejects inconsistent status/reason, 90-day window, sample,
 evidence, or warning relationships and accepts a zero lower duration boundary
-created by outward rounding. Wake time says `Same local day` for offset `0` and
-`Following local day` for offset `1`; it has no apply action. Guest/local demo
+created by outward rounding. Wake time omits the standalone day-offset caption;
+clock-window values and parsing are unchanged. It has no apply action. Guest/local demo
 returns before
 resolving the sleep API data source, so it makes zero endpoint calls and receives
 no synthetic sleep history.
@@ -629,13 +784,23 @@ every contributing Supabase source with a hard explicit row ceiling; it neither
 labels a silently truncated result as all-time nor allocates unbounded history.
 
 Phase 10 is a typed authenticated free-question FastAPI Coach. Flutter never
+requires a detour through Settings to choose a provider: non-demo Coach offers
+`Choose Coach` inline, reusing the Settings controls and refreshing availability
+after provider/key changes. Explanations start collapsed; state, cost/data-sharing,
+and errors remain visible. Flutter never
 handles a Codex OAuth login, snapshot, SQL, Python container, or operator
 credential. It loads capability and mixed legacy/current history without
-generating. Hosted Settings requires one explicit `Project Coach`, `Use my
-OpenAI key`, or `Use my Gemini key` choice; Project Coach never reads or stores
-a key, and an error never changes the selection. The Coach page has `Ask
-anything`, one free question field, Send, explicit history deletion, and Cancel
-only while analysis is running. It has no
+generating. The first capability read waits for profile credential initialization,
+which preselects `Standard (provided)` (Project Coach). The selector still offers
+personal OpenAI/Gemini keys; later reads preserve the active choice. Project Coach never reads or stores
+a key, and an error never changes the selection. Coach presents an oldest-first
+chat with separate user/Coach messages, preserving uncertainty and details.
+The bottom composer stays visible while the conversation scrolls and uses a
+`Send` icon, with exact retry and Cancel retaining their existing semantics.
+While sending, a Coach reply placeholder in the timeline shows the spinner and
+safe activity text directly after the pending user message.
+`Delete conversation` retains its confirmation. This is presentation only:
+request payloads, persistence, and provider context are unchanged. It has no
 Today/Patterns/Focus/Review, horizon, Focus-session, prompt-starter,
 memory-selection, or structured suggestion controls.
 

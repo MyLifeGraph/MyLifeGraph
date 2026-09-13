@@ -19,6 +19,9 @@ dependencies:
   go_router: ^14.6.2
   intl: ^0.20.1
   path_provider: ^2.1.5
+  record: 6.1.2
+  # Keep recording compatible with the existing Android build toolchain.
+  record_android: 1.4.3
   phosphor_flutter: 2.1.0
   # 10.1.4 supports the current AGP 8.3 lane; 12.x requires AGP 8.12.1.
   share_plus: ">=10.1.4 <11.0.0"

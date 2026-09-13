@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from math import isfinite
 from typing import Literal
+from app.contracts.skillset_capture import valid_skillset_signals
 
 
 DAILY_CAPTURE_CONTRACT_VERSION = "daily-capture-v5"
@@ -174,12 +175,16 @@ def validate_daily_capture_branch(
     required = (
         _MORNING_V5_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
     )
-    optional = _MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS
+    optional = (_MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS) | {"skillset"}
     issues: list[str] = []
     if required - set(raw):
         issues.append(f"{branch}.missing_fields")
     if set(raw) - required - optional:
         issues.append(f"{branch}.unexpected_fields")
+    if "skillset" in raw and not valid_skillset_signals(
+        raw["skillset"], morning=branch == "morning",
+    ):
+        issues.append(f"{branch}.invalid_skillset")
 
     parsed = (
         parse_daily_capture_sleep_episode(

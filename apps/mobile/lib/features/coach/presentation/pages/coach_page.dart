@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_radii.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../composition/widgets/coach_provider_settings_card.dart';
 import '../../application/coach_controller.dart';
 import '../../application/coach_turn_notice.dart';
 import '../../domain/coach.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/coach_providers.dart';
+import '../widgets/coach_dictation_button.dart';
 
 class CoachPage extends ConsumerStatefulWidget {
   const CoachPage({super.key});
@@ -23,14 +27,19 @@ class CoachPage extends ConsumerStatefulWidget {
 
 class _CoachPageState extends ConsumerState<CoachPage> {
   final _messageController = TextEditingController();
+  final _chatScrollController = ScrollController();
   final _latestResponseKey = GlobalKey();
+  final _pendingMessageKey = GlobalKey();
   final _latestReadMarkerKey = GlobalKey();
   final _failureReadMarkerKey = GlobalKey();
+  final _composerViewportKey = GlobalKey();
   bool _readCheckScheduled = false;
+  bool _historyPositioned = false;
 
   @override
   void dispose() {
     _messageController.dispose();
+    _chatScrollController.dispose();
     super.dispose();
   }
 
@@ -38,15 +47,22 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(coachControllerProvider);
     ref.listen(coachTurnNoticeProvider, (_, __) => _scheduleReadCheck());
-    _syncDraft(state.draft);
-    final history = state.latestResponse == null
-        ? state.history.turns
-        : state.history.turns
-            .where((turn) => turn.requestId != state.latestResponse!.requestId)
-            .toList(growable: false);
+    _syncDraft(state.isSending ? '' : state.draft);
+    final history = [
+      ...state.history.turns.where(
+        (turn) => turn.requestId != state.latestResponse?.requestId,
+      ),
+      if (state.latestResponse != null && state.latestMessage != null)
+        CoachHistoryTurn(
+          requestId: state.latestResponse!.requestId,
+          message: state.latestMessage!,
+          response: state.latestResponse!,
+          createdAt: state.latestResponse!.provenance.generatedAt,
+        ),
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final page = AppPage(
       title: 'Coach',
-      subtitle: 'Ask freely. Personal data stays read-only.',
+      compactHeader: true,
       actions: [
         AppHeaderActions(
           pageActions: [
@@ -63,40 +79,79 @@ class _CoachPageState extends ConsumerState<CoachPage> {
           ],
         ),
       ],
-      children: [
-        _CapabilityCard(state: state),
-        SizeChangedLayoutNotifier(
-          child: _ComposerCard(
-            state: state,
-            controller: _messageController,
-            failureReadMarkerKey: _failureReadMarkerKey,
-            onChanged: ref.read(coachControllerProvider.notifier).updateDraft,
-            onSend: _send,
-            onCancel: ref.read(coachControllerProvider.notifier).cancelAnalysis,
-          ),
-        ),
-        if (state.latestResponse != null && state.latestMessage != null)
-          SizeChangedLayoutNotifier(
-            child: Semantics(
-              key: _latestResponseKey,
-              container: true,
-              liveRegion: true,
-              child: _ConversationTurnCard(
-                title: 'Latest response',
-                message: state.latestMessage!,
-                response: state.latestResponse!,
-                readMarkerKey: _latestReadMarkerKey,
-              ),
-            ),
-          ),
-        _HistoryCard(
+      viewportBody: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+        _CapabilityCard(
           state: state,
-          turns: history,
-          onDelete: _confirmDeleteHistory,
         ),
-        const SizedBox(height: 72),
+        const SizedBox(height: AppSpacing.md),
+        Expanded(child: DecoratedBox(
+          key: const Key('app-page-body-outline'),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(AppRadii.md),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: LayoutBuilder(builder: (context, constraints) {
+            final timeline = SizeChangedLayoutNotifier(child: _ChatTimeline(
+              state: state,
+              turns: history,
+              onDelete: _confirmDeleteHistory,
+              latestResponseKey: _latestResponseKey,
+              readMarkerKey: _latestReadMarkerKey,
+              pendingMessageKey: _pendingMessageKey,
+            ));
+            final composer = SizeChangedLayoutNotifier(
+                key: _composerViewportKey,
+                child: _ComposerCard(
+                  state: state,
+                  allowLocalDictation: ref.watch(coachLocalDictationProvider),
+                  controller: _messageController,
+                  failureReadMarkerKey: _failureReadMarkerKey,
+                  onChanged: ref.read(coachControllerProvider.notifier).updateDraft,
+                  onSend: _send,
+                  onCancel: ref.read(coachControllerProvider.notifier).cancelAnalysis,
+                  onProviderChanged: () => ref.read(coachControllerProvider.notifier).load(),
+                ),
+            );
+            final compactHeight = constraints.maxHeight <
+                MediaQuery.textScalerOf(context).scale(160);
+            final scroll = SingleChildScrollView(
+              key: const Key('coach-chat-scroll'),
+              controller: _chatScrollController,
+              padding: const EdgeInsets.fromLTRB(AppSpacing.sm, 0, AppSpacing.sm, AppSpacing.sm),
+              child: compactHeight
+                  ? Column(children: [timeline, const SizedBox(height: AppSpacing.sm), composer])
+                  : timeline,
+            );
+            // At very small heights keep all controls reachable in this same
+            // chat viewport rather than adding another page/composer scroller.
+            if (compactHeight) return scroll;
+            return Column(children: [
+              Expanded(child: scroll),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.sm, 0, AppSpacing.sm, AppSpacing.sm),
+                child: composer,
+              ),
+            ]);
+          })),
+        )),
       ],
+      ),
+      children: const [],
     );
+    if (state.isLoading) _historyPositioned = false;
+    if (!_historyPositioned && !state.isLoading && state.historyError == null) {
+      _historyPositioned = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && history.isNotEmpty && _chatScrollController.hasClients) {
+          _chatScrollController.jumpTo(_chatScrollController.position.maxScrollExtent);
+          _scheduleReadCheck();
+        }
+      });
+    }
     _scheduleReadCheck();
     return NotificationListener<SizeChangedLayoutNotification>(
       onNotification: (_) {
@@ -114,14 +169,19 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   }
 
   Future<void> _send() async {
-    final sent = await ref.read(coachControllerProvider.notifier).send();
-    if (!sent || !mounted) return;
+    final sending = ref.read(coachControllerProvider.notifier).send();
+    _revealMessage(_pendingMessageKey);
+    final sent = await sending;
+    if (sent && mounted) _revealMessage(_latestResponseKey);
+  }
+
+  void _revealMessage(GlobalKey key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final responseContext = _latestResponseKey.currentContext;
-      if (responseContext == null) return;
+      final target = key.currentContext;
+      if (target == null) return;
       Scrollable.ensureVisible(
-        responseContext,
+        target,
         alignment: 0.08,
         duration: context.motionTokens.emphasisFor(context),
         curve: context.motionTokens.curve,
@@ -161,7 +221,9 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     final marker = markerContext?.findRenderObject();
     final scrollable =
         markerContext == null ? null : Scrollable.maybeOf(markerContext);
-    final viewport = scrollable?.context.findRenderObject();
+    final viewport = notice.status == CoachTurnNoticeStatus.failed && scrollable == null
+        ? _composerViewportKey.currentContext?.findRenderObject()
+        : scrollable?.context.findRenderObject();
     if (marker is! RenderBox ||
         viewport is! RenderBox ||
         !marker.attached ||
@@ -223,16 +285,14 @@ class _CapabilityCard extends StatelessWidget {
     final capability = state.capabilities;
     if (state.isLoading && capability == null) {
       return const AppCard(
-        child: Row(
-          children: [
-            SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: AppSpacing.md),
-            Expanded(child: Text('Loading Coach availability …')),
-          ],
-        ),
+        child: Row(children: [
+          SizedBox.square(
+            dimension: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text('Loading Coach …')),
+        ]),
       );
     }
     if (capability == null) {
@@ -240,10 +300,8 @@ class _CapabilityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Coach availability error',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Coach availability error',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             _ErrorText(coachErrorMessage(state.capabilityError)),
           ],
@@ -251,40 +309,38 @@ class _CapabilityCard extends StatelessWidget {
       );
     }
     final ready = capability.canRespond;
+    final demo = capability.reasonCode == 'local_demo';
     return AppCard(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(
-                ready ? AppIcons.checkCircleOutline : AppIcons.cloudOffOutlined,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  state.isRateLimited
-                      ? 'Daily question limit reached'
-                      : ready
-                          ? 'Read-only Coach ready'
-                          : 'Coach unavailable',
-                  style: Theme.of(context).textTheme.titleMedium,
+          if (!ready || state.isRateLimited) ...[
+            Row(
+              children: [
+                const Icon(AppIcons.cloudOffOutlined),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    state.isRateLimited
+                        ? 'Daily question limit reached'
+                        : 'Coach unavailable',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(_availabilitySummary(capability)),
-          if (capability.state == CoachCapabilityState.ready) ...[
+              ],
+            ),
             const SizedBox(height: AppSpacing.sm),
+          ],
+          if (demo || capability.provider == CoachProviderName.fake ||
+              capability.provider == CoachProviderName.localCodexOauth)
+            Text(_availabilitySummary(capability)),
+          if (ready) ...[
+            const SizedBox(height: AppSpacing.xs),
             Text(
-              capability.limits.requestPeriod == 'utc_day'
-                  ? '${capability.limits.remainingRequests} of '
-                      '${capability.limits.requestsPerLocalDay} Project Coach '
-                      'questions remain for the current UTC day'
-                  : '${capability.limits.remainingRequests} of '
-                      '${capability.limits.requestsPerLocalDay} questions '
-                      'remain for your local day',
+              '${capability.limits.remainingRequests} of '
+              '${capability.limits.requestsPerLocalDay} questions left '
+              '${capability.limits.requestPeriod == 'utc_day' ? 'today (UTC)' : 'today'}.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
           if (state.capabilityError != null) ...[
@@ -294,27 +350,6 @@ class _CapabilityCard extends StatelessWidget {
               '${coachErrorMessage(state.capabilityError)}',
             ),
           ],
-          ExpansionTile(
-            key: const Key('coach-capability-details'),
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            title: const Text('Technical availability'),
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Status: ${_humanize(capability.state.code)}\n'
-                  'Reason: ${_humanize(capability.reasonCode)}\n'
-                  'Model: ${capability.modelRequested ?? 'Not applicable'}\n'
-                  'Service tier: ${_humanize(capability.serviceTier)}\n'
-                  'Tool limit: ${capability.limits.maxToolCalls}\n'
-                  'Turn limit: ${capability.limits.turnTimeoutSeconds} seconds\n'
-                  'Snapshot limit: ${capability.limits.snapshotMaxRows} rows · '
-                  '${_formatBytes(capability.limits.snapshotMaxBytes)}',
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -337,22 +372,72 @@ String _availabilitySummary(CoachCapabilities capability) {
   return 'No Coach response provider is enabled for this run.';
 }
 
-class _ComposerCard extends StatelessWidget {
+class _ComposerCard extends StatefulWidget {
   const _ComposerCard({
     required this.state,
+    this.allowLocalDictation = false,
     required this.controller,
     required this.failureReadMarkerKey,
     required this.onChanged,
     required this.onSend,
     required this.onCancel,
+    required this.onProviderChanged,
   });
 
   final CoachState state;
+  final bool allowLocalDictation;
   final TextEditingController controller;
   final GlobalKey failureReadMarkerKey;
   final ValueChanged<String> onChanged;
   final VoidCallback onSend;
   final VoidCallback onCancel;
+  final VoidCallback onProviderChanged;
+
+  @override
+  State<_ComposerCard> createState() => _ComposerCardState();
+}
+
+class _ComposerCardState extends State<_ComposerCard> {
+  bool _dictating = false;
+  CoachState get state => widget.state;
+  TextEditingController get controller => widget.controller;
+  GlobalKey get failureReadMarkerKey => widget.failureReadMarkerKey;
+  ValueChanged<String> get onChanged => widget.onChanged;
+  VoidCallback get onSend => widget.onSend;
+  VoidCallback get onCancel => widget.onCancel;
+
+  void _submitDraft() {
+    if (state.canSend && !_dictating) onSend();
+  }
+
+  KeyEventResult _onComposerKey(FocusNode node, KeyEvent event) {
+    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (!isEnter ||
+        (controller.value.composing.isValid &&
+            !controller.value.composing.isCollapsed)) {
+      return KeyEventResult.ignored;
+    }
+    if (event is KeyDownEvent) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        if (state.isLoading || state.isSending || state.isDeletingHistory) {
+          return KeyEventResult.handled;
+        }
+        final selection = controller.selection;
+        final start = selection.isValid ? selection.start : controller.text.length;
+        final end = selection.isValid ? selection.end : start;
+        final text = controller.text.replaceRange(start, end, '\n');
+        controller.value = TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: start + 1),
+        );
+        onChanged(text);
+      } else {
+        _submitDraft();
+      }
+    }
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -365,68 +450,98 @@ class _ComposerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Ask anything',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'Coach may answer directly or inspect your read-only personal '
-            'data with SQL and isolated Python. It cannot change the app.',
-          ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
+          CoachDictationButton(
+              enabled: (available || widget.allowLocalDictation) &&
+                  !state.isLoading && !state.isSending && !state.isDeletingHistory,
+              canSendDirect: state.capabilities?.canRespond == true &&
+                  !state.isRateLimited && !state.isLoading && !state.isSending &&
+                  !state.isDeletingHistory && state.busyRetrySeconds == 0,
+              onBusyChanged: (value) {
+                if (mounted) setState(() => _dictating = value);
+              },
+              onText: (text, sendNow) {
+                final previous = controller.text.trimRight();
+                final combined = previous.isEmpty ? text : '$previous $text';
+                if (combined.runes.length > coachMessageCodepoints) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('The question is too long. Shorten it and dictate again.'),
+                  ));
+                  return;
+                }
+                controller.text = combined;
+                controller.selection = TextSelection.collapsed(offset: combined.length);
+                onChanged(combined);
+                if (sendNow) onSend();
+              },
+              idleBuilder: (microphone) => Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: Focus(
+                  onKeyEvent: _onComposerKey,
+                  child: TextField(
             key: const Key('coach-message-field'),
             controller: controller,
-            enabled: available &&
+            enabled: (available || widget.allowLocalDictation) &&
                 !state.isLoading &&
                 !state.isSending &&
                 !state.isDeletingHistory,
-            minLines: 3,
-            maxLines: 8,
-            textInputAction: TextInputAction.newline,
+            minLines: 1,
+            maxLines: 4,
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) => _submitDraft(),
             onChanged: onChanged,
             decoration: InputDecoration(
               labelText: 'Your question',
-              hintText: 'What do my data suggest about …?',
-              border: const OutlineInputBorder(),
+              hintText: 'Message Coach',
+              border: InputBorder.none,
               errorText: state.draftCodepoints > coachMessageCodepoints
                   ? 'Keep the question within 2,000 characters.'
                   : null,
             ),
+          ))),
+                IconButton(
+                  key: const Key('coach-model-button'),
+                  tooltip: 'Choose Coach',
+                  onPressed: state.isLoading || state.isSending ||
+                      state.isDeletingHistory || state.busyRetrySeconds > 0
+                      ? null : () => showDialog<void>(
+                          context: context,
+                          builder: (_) => _CoachOptionsDialog(
+                            onChanged: widget.onProviderChanged,
+                          ),
+                        ),
+                  icon: const Icon(AppIcons.tuneOutlined),
+                ),
+                microphone,
+                if (state.isSending)
+                  IconButton.outlined(
+                    key: const Key('coach-cancel-button'),
+                    tooltip: state.isCancelling ? 'Cancelling …' : 'Cancel analysis',
+                    onPressed: state.isCancelling ? null : onCancel,
+                    icon: const Icon(AppIcons.close),
+                  )
+                else
+                  IconButton.filled(
+                    key: const Key('coach-send-button'),
+                    tooltip: state.canRetryExact ? 'Retry unchanged' : 'Send',
+                    onPressed: state.canSend && !_dictating ? onSend : null,
+                    icon: Icon(state.canRetryExact
+                        ? AppIcons.refreshOutlined : AppIcons.sendOutlined),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
+          if (!_dictating && state.draftCodepoints > 0)
           Align(
             alignment: Alignment.centerRight,
             child: Text(
               '${state.draftCodepoints}/$coachMessageCodepoints',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: countColor),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: countColor),
             ),
           ),
-          if (state.isSending) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Semantics(
-              liveRegion: true,
-              child: Row(
-                key: const Key('coach-activity'),
-                children: [
-                  const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      state.activityMessage ?? 'Working with personal data …',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           if (state.sendError != null) ...[
             const SizedBox(height: AppSpacing.sm),
             _ErrorText(coachErrorMessage(state.sendError)),
@@ -453,111 +568,199 @@ class _ComposerCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: state.isSending
-                ? OutlinedButton.icon(
-                    key: const Key('coach-cancel-button'),
-                    onPressed: state.isCancelling ? null : onCancel,
-                    icon: const Icon(AppIcons.close),
-                    label: Text(
-                      state.isCancelling ? 'Cancelling …' : 'Cancel analysis',
-                    ),
-                  )
-                : FilledButton.icon(
-                    key: const Key('coach-send-button'),
-                    onPressed: state.canSend ? onSend : null,
-                    icon: const Icon(AppIcons.sendOutlined),
-                    label: Text(
-                      state.canRetryExact ? 'Retry unchanged' : 'Ask Coach',
-                    ),
-                  ),
-          ),
+
         ],
       ),
     );
   }
 }
 
-class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({
+class _CoachOptionsDialog extends ConsumerWidget {
+  const _CoachOptionsDialog({required this.onChanged});
+
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(coachControllerProvider);
+    final capability = state.capabilities;
+    return AlertDialog(
+      title: const Text('Choose Coach'),
+      scrollable: true,
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CoachProviderSettingsCard(
+            compact: true,
+            enabled: !state.isLoading && !state.isSending &&
+                !state.isDeletingHistory && state.busyRetrySeconds == 0,
+            onChanged: onChanged,
+            availabilityDetails: capability == null
+                ? coachErrorMessage(state.capabilityError)
+                : 'Status: ${_humanize(capability.state.code)}\n'
+                  'Reason: ${_humanize(capability.reasonCode)}\n'
+                  'Model: ${capability.modelRequested ?? 'Not applicable'}\n'
+                  'Service tier: ${_humanize(capability.serviceTier)}',
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const Text('Coach answers using your read-only app data. '
+              'It can inspect data with SQL and isolated Python, '
+              'but cannot change the app.'),
+        ],
+      ),
+      actions: [TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Done'),
+      )],
+    );
+  }
+}
+
+class _ChatTimeline extends StatelessWidget {
+  const _ChatTimeline({
     required this.state,
     required this.turns,
     required this.onDelete,
+    required this.latestResponseKey,
+    required this.readMarkerKey,
+    required this.pendingMessageKey,
   });
 
   final CoachState state;
   final List<CoachHistoryTurn> turns;
   final VoidCallback onDelete;
+  final GlobalKey latestResponseKey;
+  final GlobalKey readMarkerKey;
+  final GlobalKey pendingMessageKey;
 
   @override
   Widget build(BuildContext context) {
-    final hasConversation = turns.isNotEmpty || state.latestResponse != null;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Conversation history',
+    return Column(
+      key: const Key('coach-chat-timeline'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (turns.isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const Key('coach-delete-conversation'),
+              onPressed: state.isLoading || state.isDeletingHistory ||
+                      state.isSending ? null : onDelete,
+              icon: state.isDeletingHistory
+                  ? const SizedBox.square(dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(AppIcons.deleteOutline),
+              label: const Text('Delete conversation'),
+            ),
+          ),
+        if (state.historyError != null)
+          _ErrorText(coachErrorMessage(state.historyError)),
+        if (state.historyActionError != null)
+          _ErrorText(coachErrorMessage(state.historyActionError)),
+        if (turns.isEmpty && !state.isSending && !state.isLoading &&
+            state.historyError == null) ...[
+          Container(
+            key: const Key('coach-empty-chat'),
+            constraints: const BoxConstraints(minHeight: 180),
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Ask your coach anything',
+                  textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-              TextButton.icon(
-                onPressed: hasConversation &&
-                        !state.isLoading &&
-                        !state.isDeletingHistory &&
-                        !state.isSending
-                    ? onDelete
-                    : null,
-                icon: state.isDeletingHistory
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(AppIcons.deleteOutline),
-                label: const Text('Delete'),
-              ),
-            ],
-          ),
-          if (state.historyError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ErrorText(coachErrorMessage(state.historyError)),
-          ],
-          if (state.historyActionError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ErrorText(coachErrorMessage(state.historyActionError)),
-          ],
-          if (turns.isEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              state.latestResponse == null
-                  ? 'No saved Coach conversation yet.'
-                  : 'The latest response is shown above.',
-            ),
-          ] else ...[
-            const SizedBox(height: AppSpacing.md),
-            ...turns.reversed.map(
-              (turn) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: _ConversationTurnCard(
-                  title: DateFormat('MMM d, HH:mm').format(
-                    turn.createdAt.toLocal(),
-                  ),
-                  message: turn.message,
-                  response: turn.response,
-                  nested: true,
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'For example: What patterns do you notice in my week?',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
+              ],
+            ),
+          ),
+        ],
+        for (final turn in turns)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: Semantics(
+              key: turn.requestId == state.latestResponse?.requestId
+                  ? latestResponseKey : ValueKey('coach-turn-${turn.requestId}'),
+              container: true,
+              liveRegion: turn.requestId == state.latestResponse?.requestId,
+              child: _ConversationTurnCard(
+                title: DateFormat('MMM d, HH:mm').format(turn.createdAt.toLocal()),
+                message: turn.message,
+                response: turn.response,
+                readMarkerKey: turn.requestId == state.latestResponse?.requestId
+                    ? readMarkerKey : null,
               ),
             ),
-          ],
+          ),
+        if (state.isSending) ...[
+          _UserMessage(message: state.draft.trim()),
+          const SizedBox(height: AppSpacing.md),
+          Semantics(
+            liveRegion: true,
+            child: AppCard(
+              key: pendingMessageKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Coach', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    key: const Key('coach-activity'),
+                    children: [
+                      const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: Text(
+                        state.activityMessage ?? 'Working with personal data …',
+                      )),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
+}
+
+class _UserMessage extends StatelessWidget {
+  const _UserMessage({required this.message, this.timestamp});
+  final String message;
+  final String? timestamp;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: FractionallySizedBox(
+      widthFactor: 0.9,
+      child: AppSurface(
+        variant: AppSurfaceVariant.raised,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('You', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: AppSpacing.xs),
+            Text(message),
+            if (timestamp != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(timestamp!, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _ConversationTurnCard extends StatelessWidget {
@@ -565,56 +768,43 @@ class _ConversationTurnCard extends StatelessWidget {
     required this.title,
     required this.message,
     required this.response,
-    this.nested = false,
     this.readMarkerKey,
   });
 
   final String title;
   final String message;
   final CoachResponse response;
-  final bool nested;
   final GlobalKey? readMarkerKey;
 
   @override
   Widget build(BuildContext context) {
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.sm),
-        Text('You', style: Theme.of(context).textTheme.labelLarge),
-        Text(message),
+        _UserMessage(message: message, timestamp: title),
         const SizedBox(height: AppSpacing.md),
-        Text('Coach', style: Theme.of(context).textTheme.labelLarge),
-        Text(response.reply),
-        const SizedBox(height: AppSpacing.md),
-        Text('Uncertainty', style: Theme.of(context).textTheme.labelLarge),
-        Text('${_humanize(response.uncertainty.level)} · '
-            '${response.uncertainty.reason}'),
-        if (readMarkerKey != null)
-          ExcludeSemantics(
-            child: SizedBox(
-              key: readMarkerKey,
-              height: 1,
-              width: double.infinity,
-            ),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Coach', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: AppSpacing.xs),
+              Text(response.reply),
+              const SizedBox(height: AppSpacing.md),
+              Text('Uncertainty', style: Theme.of(context).textTheme.labelLarge),
+              Text('${_humanize(response.uncertainty.level)} · '
+                  '${response.uncertainty.reason}'),
+              if (readMarkerKey != null)
+                ExcludeSemantics(
+                  child: SizedBox(key: readMarkerKey, height: 1,
+                      width: double.infinity),
+                ),
+              const SizedBox(height: AppSpacing.sm),
+              _AnalysisDetails(response: response),
+            ],
           ),
-        const SizedBox(height: AppSpacing.sm),
-        _AnalysisDetails(response: response),
-      ],
-    );
-    if (!nested) return AppCard(child: content);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
         ),
-        borderRadius: BorderRadius.circular(AppRadii.md),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: content,
-      ),
+      ],
     );
   }
 }
@@ -715,10 +905,8 @@ class _AnalysisDetails extends StatelessWidget {
             ),
           ),
           ...response.agentTrace.limitations.map(
-            (value) => Align(
-              alignment: Alignment.centerLeft,
-              child: Text('• $value'),
-            ),
+            (value) =>
+                Align(alignment: Alignment.centerLeft, child: Text('• $value')),
           ),
         ],
         const SizedBox(height: AppSpacing.md),
@@ -737,9 +925,7 @@ class _AnalysisDetails extends StatelessWidget {
             '${_snapshotText(provenance, legacy: legacy)}\n'
             'Prompt: ${provenance.promptVersion}\n'
             'Context: ${provenance.contextVersion}\n'
-            'Answered: ${DateFormat('MMM d, HH:mm').format(
-              provenance.generatedAt.toLocal(),
-            )}',
+            'Answered: ${DateFormat('MMM d, HH:mm').format(provenance.generatedAt.toLocal())}',
           ),
         ),
       ],
@@ -762,10 +948,7 @@ String _provenanceLabel(CoachProvenance provenance) {
 
 String _recordLabel(int value) => value == 1 ? 'record' : 'records';
 
-String _coverageText(
-  CoachEvidence evidence, {
-  required bool legacy,
-}) {
+String _coverageText(CoachEvidence evidence, {required bool legacy}) {
   if (legacy) {
     final available = evidence.availableRecordCount ?? evidence.recordCount;
     return '${evidence.recordCount} of $available ${_recordLabel(available)} '
@@ -775,10 +958,7 @@ String _coverageText(
       'in snapshot${_period(evidence)}';
 }
 
-String _snapshotText(
-  CoachProvenance provenance, {
-  required bool legacy,
-}) {
+String _snapshotText(CoachProvenance provenance, {required bool legacy}) {
   if (legacy) return 'Snapshot: not recorded for this older response';
   return 'Snapshot: ${provenance.snapshotRowCount} rows · '
       '${_formatBytes(provenance.snapshotBytes)}';

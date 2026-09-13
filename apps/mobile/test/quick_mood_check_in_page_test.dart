@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:my_life_graph/composition/skillset_providers.dart';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:dio/dio.dart';
@@ -23,37 +24,54 @@ import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
-  testWidgets('first Evening value shows eight hours but still requires a time',
-      (tester) async {
-    final store = _NoSleepPlanStore();
-    await _pumpEveningPage(tester, store);
-
-    await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
-    await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
-    await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
-    await tester.pump();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('8 h'), findsWidgets);
-    expect(
-      find.textContaining('becomes your current sleep plan'),
-      findsNothing,
-    );
-    expect(
-      find.bySemanticsLabel(
-        'Show information about Sleep duration target',
-      ),
-      findsOneWidget,
-    );
-    final next = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Next'),
-    );
-    expect(next.onPressed, isNull);
+  testWidgets('optional sport and social choices survive every step and save', (
+    tester,
+  ) async {
+    final store = _RecordingCaptureStore();
+    await _pumpEveningPage(tester, store, skillsetEnabled: true);
+    await _tapVisible(tester, find.text('More (optional)'));
+    await _tapVisible(tester, find.text('Intense'));
+    await _tapVisible(tester, find.text('Some'));
+    await _completeEveningDraft(tester, includeOptionals: false);
+    await _tapVisible(tester, find.text('Save evening check-in'));
+    expect(store.eveningAttempts.single.skillset?.values, {
+      'sport': 2,
+      'social': 1,
+    });
   });
 
-  testWidgets('both Evening sleep explanations start closed and open alone',
-      (tester) async {
+  testWidgets(
+    'first Evening value shows eight hours but still requires a time',
+    (tester) async {
+      final store = _NoSleepPlanStore();
+      await _pumpEveningPage(tester, store);
+
+      await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
+      await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
+      await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
+      await tester.pump();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('8 h'), findsWidgets);
+      expect(
+        find.textContaining('becomes your current sleep plan'),
+        findsNothing,
+      );
+      expect(
+        find.bySemanticsLabel('Show information about Sleep duration target'),
+        findsOneWidget,
+      );
+      final next = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Next'),
+      );
+      expect(next.onPressed, isNull);
+    },
+  );
+
+  testWidgets('both Evening sleep explanations start closed and open alone', (
+    tester,
+  ) async {
     const plannedHelp =
         'This is your intention for tonight, not an automatic restriction.';
     const targetHelp =
@@ -78,18 +96,14 @@ void main() {
     );
 
     await tester.tap(
-      find.byKey(
-        const ValueKey('capture-info-control-Planned sleep time'),
-      ),
+      find.byKey(const ValueKey('capture-info-control-Planned sleep time')),
     );
     await tester.pumpAndSettle();
     expect(find.text(plannedHelp), findsOneWidget);
     expect(find.text(targetHelp), findsNothing);
 
     await tester.tap(
-      find.byKey(
-        const ValueKey('capture-info-control-Sleep duration target'),
-      ),
+      find.byKey(const ValueKey('capture-info-control-Sleep duration target')),
     );
     await tester.pumpAndSettle();
     expect(find.text(plannedHelp), findsOneWidget);
@@ -97,47 +111,53 @@ void main() {
   });
 
   testWidgets(
-      'Evening sleep step stays usable at 320 pixels, 200% text, and reduced motion',
-      (tester) async {
-    await _pumpEveningPage(
-      tester,
-      _RecordingCaptureStore(),
-      viewSize: const Size(320, 700),
-      textScale: 2,
-      disableAnimations: true,
-    );
+    'Evening sleep step stays usable at 320 pixels, 200% text, and reduced motion',
+    (tester) async {
+      await _pumpEveningPage(
+        tester,
+        _RecordingCaptureStore(),
+        viewSize: const Size(320, 700),
+        textScale: 2,
+        disableAnimations: true,
+      );
 
-    await _tapVisible(tester, find.bySemanticsLabel('evening mood 7 of 10'));
-    await _tapVisible(tester, find.bySemanticsLabel('evening energy 7 of 10'));
-    await _tapVisible(tester, find.bySemanticsLabel('evening stress 3 of 10'));
-    await _tapVisible(tester, find.text('Next'));
-    await _tapVisible(
-      tester,
-      find.byKey(
-        const ValueKey('capture-info-control-Planned sleep time'),
-      ),
-    );
-    await _tapVisible(
-      tester,
-      find.byKey(
-        const ValueKey('capture-info-control-Sleep duration target'),
-      ),
-    );
+      await _tapVisible(tester, find.bySemanticsLabel('evening mood 7 of 10'));
+      await _tapVisible(
+        tester,
+        find.bySemanticsLabel('evening energy 7 of 10'),
+      );
+      await _tapVisible(
+        tester,
+        find.bySemanticsLabel('evening stress 3 of 10'),
+      );
+      await _tapVisible(tester, find.text('Next'));
+      await _tapVisible(
+        tester,
+        find.byKey(const ValueKey('capture-info-control-Planned sleep time')),
+      );
+      await _tapVisible(
+        tester,
+        find.byKey(
+          const ValueKey('capture-info-control-Sleep duration target'),
+        ),
+      );
 
-    expect(
-      find.text(
-        'This is your intention for tonight, not an automatic restriction.',
-      ),
-      findsOneWidget,
-    );
-    await tester.ensureVisible(find.text('Next'));
-    await tester.pump();
-    expect(find.text('Next').hitTestable(), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(
+        find.text(
+          'This is your intention for tonight, not an automatic restriction.',
+        ),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.text('Next'));
+      await tester.pump();
+      expect(find.text('Next').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('latest Evening sleep plan prefills the next save',
-      (tester) async {
+  testWidgets('latest Evening sleep plan prefills the next save', (
+    tester,
+  ) async {
     await _pumpEveningPage(tester, _RecordingCaptureStore());
 
     await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
@@ -155,29 +175,30 @@ void main() {
     expect(next.onPressed, isNotNull);
   });
 
-  testWidgets('top back returns an Evening flow step before leaving the route',
-      (tester) async {
-    await _pumpEveningPage(tester, _RecordingCaptureStore());
-    await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
-    await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
-    await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
-    await tester.pump();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    expect(find.text('Planned sleep time'), findsOneWidget);
+  testWidgets(
+    'top back returns an Evening flow step before leaving the route',
+    (tester) async {
+      await _pumpEveningPage(tester, _RecordingCaptureStore());
+      await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
+      await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
+      await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
+      await tester.pump();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Planned sleep time'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('capture-flow-back')),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('capture-flow-back')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Close today in under a minute'), findsOneWidget);
-    expect(find.text('Planned sleep time'), findsNothing);
-    expect(find.text('7 / 10'), findsNWidgets(2));
-  });
+      expect(find.text('Close today in under a minute'), findsOneWidget);
+      expect(find.text('Planned sleep time'), findsNothing);
+      expect(find.text('7 / 10'), findsNWidgets(2));
+    },
+  );
 
-  testWidgets('authenticated evening failure retains exact draft for retry',
-      (tester) async {
+  testWidgets('authenticated evening failure retains exact draft for retry', (
+    tester,
+  ) async {
     final store = _FailOnceCaptureStore();
     final snapshotRefresh = _RecordingSnapshotRefreshService();
     await _pumpEveningPage(tester, store, snapshotRefresh: snapshotRefresh);
@@ -187,9 +208,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(
-        'Could not save. Your answers are still here. Try again.',
-      ),
+      find.text('Could not save. Your answers are still here. Try again.'),
       findsWidgets,
     );
     expect(store.eveningAttempts, hasLength(1));
@@ -218,19 +237,14 @@ void main() {
     expect(find.text('Dashboard destination'), findsOneWidget);
     expect(store.eveningAttempts, hasLength(2));
     expect(store.eveningAttempts[1].captureId, first.captureId);
-    expect(
-      store.eveningAttempts[1].toMetadataJson(),
-      first.toMetadataJson(),
-    );
+    expect(store.eveningAttempts[1].toMetadataJson(), first.toMetadataJson());
     expect(snapshotRefresh.targetDates, [first.entryDate]);
   });
 
-  testWidgets('evening re-entry is prefilled and blank optionals stay blank',
-      (tester) async {
-    final saved = _eveningDraft(
-      reflectionNote: '',
-      specificBlocker: '',
-    );
+  testWidgets('evening re-entry is prefilled and blank optionals stay blank', (
+    tester,
+  ) async {
+    final saved = _eveningDraft(reflectionNote: '', specificBlocker: '');
     final store = _RecordingCaptureStore(
       initial: DailyCaptureEntry(entryDate: saved.entryDate, evening: saved),
     );
@@ -244,10 +258,7 @@ void main() {
       _textFieldWithLabel('Possible priority tomorrow (optional)'),
       findsNothing,
     );
-    expect(
-      _textFieldWithLabel('Reflection (optional)'),
-      findsOneWidget,
-    );
+    expect(_textFieldWithLabel('Reflection (optional)'), findsOneWidget);
     await _tapVisible(tester, find.text('Save evening check-in'));
     await tester.pumpAndSettle();
 
@@ -260,8 +271,9 @@ void main() {
     expect(written['tomorrow_priority'], 'Protect the exact priority');
   });
 
-  testWidgets('evening omits friction choices but keeps stress and notes',
-      (tester) async {
+  testWidgets('evening omits friction choices but keeps stress and notes', (
+    tester,
+  ) async {
     final store = _RecordingCaptureStore();
     await _pumpEveningPage(tester, store);
 
@@ -287,111 +299,112 @@ void main() {
   });
 
   testWidgets(
-      'stress source info supports hover and tap without changing selection',
-      (tester) async {
-    var changed = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: CaptureChoiceControl<String>(
-            value: null,
-            choices: const [
-              CaptureChoice(
-                value: 'workload',
-                label: 'Workload',
-                semanticLabel: 'stress source workload',
-                description: 'Deadlines, volume, meetings, or responsibility',
-              ),
-            ],
-            onChanged: (_) => changed += 1,
+    'stress source info supports hover and tap without changing selection',
+    (tester) async {
+      var changed = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CaptureChoiceControl<String>(
+              value: null,
+              choices: const [
+                CaptureChoice(
+                  value: 'workload',
+                  label: 'Workload',
+                  semanticLabel: 'stress source workload',
+                  description: 'Deadlines, volume, meetings, or responsibility',
+                ),
+              ],
+              onChanged: (_) => changed += 1,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final info = find.byKey(
-      const ValueKey('capture-choice-info-Workload'),
-    );
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    addTearDown(mouse.removePointer);
-    await mouse.addPointer(location: tester.getCenter(info));
-    await mouse.moveTo(tester.getCenter(info));
-    await tester.pump(const Duration(seconds: 1));
-    expect(
-      find.text('Deadlines, volume, meetings, or responsibility'),
-      findsOneWidget,
-    );
-    expect(changed, 0);
+      final info = find.byKey(const ValueKey('capture-choice-info-Workload'));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: tester.getCenter(info));
+      await mouse.moveTo(tester.getCenter(info));
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.text('Deadlines, volume, meetings, or responsibility'),
+        findsOneWidget,
+      );
+      expect(changed, 0);
 
-    await mouse.moveTo(const Offset(1, 1));
-    await tester.pumpAndSettle();
-    await tester.tap(info);
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Deadlines, volume, meetings, or responsibility'),
-      findsOneWidget,
-    );
-    expect(changed, 0);
-    expect(
-      find.bySemanticsLabel(
-        'More information about Workload: '
-        'Deadlines, volume, meetings, or responsibility',
-      ),
-      findsOneWidget,
-    );
-  });
+      await mouse.moveTo(const Offset(1, 1));
+      await tester.pumpAndSettle();
+      await tester.tap(info);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Deadlines, volume, meetings, or responsibility'),
+        findsOneWidget,
+      );
+      expect(changed, 0);
+      expect(
+        find.bySemanticsLabel(
+          'More information about Workload: '
+          'Deadlines, volume, meetings, or responsibility',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
-      'influence choices stay equal and horizontal at narrow large text',
-      (tester) async {
-    tester.view.physicalSize = const Size(320, 568);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    await tester.pumpWidget(
-      MaterialApp(
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: const TextScaler.linear(2),
+    'influence choices stay equal and horizontal at narrow large text',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
           ),
-          child: child!,
-        ),
-        home: Scaffold(
-          body: CaptureChoiceControl<String>(
-            value: null,
-            equalWidthRow: true,
-            choices: const [
-              CaptureChoice(value: 'little', label: 'Little influence'),
-              CaptureChoice(value: 'some', label: 'Some influence'),
-              CaptureChoice(
-                value: 'mostly',
-                label: 'Mostly within my influence',
-              ),
-            ],
-            onChanged: (_) {},
+          home: Scaffold(
+            body: CaptureChoiceControl<String>(
+              value: null,
+              equalWidthRow: true,
+              choices: const [
+                CaptureChoice(value: 'little', label: 'Little influence'),
+                CaptureChoice(value: 'some', label: 'Some influence'),
+                CaptureChoice(
+                  value: 'mostly',
+                  label: 'Mostly within my influence',
+                ),
+              ],
+              onChanged: (_) {},
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final chips = find.byType(ChoiceChip);
-    expect(chips, findsNWidgets(3));
-    final rects = [
-      for (var index = 0; index < 3; index++) tester.getRect(chips.at(index)),
-    ];
-    expect(rects[0].top, rects[1].top);
-    expect(rects[1].top, rects[2].top);
-    expect(rects[0].width, closeTo(rects[1].width, 0.01));
-    expect(rects[1].width, closeTo(rects[2].width, 0.01));
-    expect(rects[0].height, closeTo(rects[1].height, 0.01));
-    expect(rects[1].height, closeTo(rects[2].height, 0.01));
-    expect(tester.takeException(), isNull);
-  });
+      final chips = find.byType(ChoiceChip);
+      expect(chips, findsNWidgets(3));
+      final rects = [
+        for (var index = 0; index < 3; index++) tester.getRect(chips.at(index)),
+      ];
+      expect(rects[0].top, rects[1].top);
+      expect(rects[1].top, rects[2].top);
+      expect(rects[0].width, closeTo(rects[1].width, 0.01));
+      expect(rects[1].width, closeTo(rects[2].width, 0.01));
+      expect(rects[0].height, closeTo(rects[1].height, 0.01));
+      expect(rects[1].height, closeTo(rects[2].height, 0.01));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('saving state prevents a duplicate in-flight evening write',
-      (tester) async {
+  testWidgets('saving state prevents a duplicate in-flight evening write', (
+    tester,
+  ) async {
     final store = _PendingCaptureStore();
     await _pumpEveningPage(tester, store);
     await _completeEveningDraft(tester, includeOptionals: false);
@@ -407,72 +420,77 @@ void main() {
   });
 
   testWidgets(
-      'dismissed reflection sheet saves without touching rating-free Full week',
-      (tester) async {
-    final source = _PendingFocusReflectionSource();
-    final projection = _RecordingProjectionRefresh();
-    await _pumpEveningPage(
-      tester,
-      _RecordingCaptureStore(),
-      focusSource: source,
-      projectionRefresh: projection.coordinator,
-      currentInstant: _reflectionNow,
-    );
-    await _openReflectionSheet(tester);
+    'dismissed reflection sheet saves without touching rating-free Full week',
+    (tester) async {
+      final source = _PendingFocusReflectionSource();
+      final projection = _RecordingProjectionRefresh();
+      await _pumpEveningPage(
+        tester,
+        _RecordingCaptureStore(),
+        focusSource: source,
+        projectionRefresh: projection.coordinator,
+        currentInstant: _reflectionNow,
+      );
+      await _openReflectionSheet(tester);
 
-    await tester.tap(find.bySemanticsLabel('Focus quality 4 of 5'));
-    await tester.tap(find.bySemanticsLabel('Useful progress 5 of 5'));
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('save-focus-reflection')));
-    await tester.pump();
-    expect(source.saveCalls, 1);
+      await tester.tap(find.bySemanticsLabel('Focus quality 4 of 5'));
+      await tester.tap(find.bySemanticsLabel('Useful progress 5 of 5'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('save-focus-reflection')));
+      await tester.pump();
+      expect(source.saveCalls, 1);
 
-    final sheetContext =
-        tester.element(find.byKey(const ValueKey('focus-reflection-sheet')));
-    Navigator.of(sheetContext).pop();
-    await tester.pumpAndSettle();
-    source.completeSave();
-    await tester.pump();
-    await tester.pump();
+      final sheetContext = tester.element(
+        find.byKey(const ValueKey('focus-reflection-sheet')),
+      );
+      Navigator.of(sheetContext).pop();
+      await tester.pumpAndSettle();
+      source.completeSave();
+      await tester.pump();
+      await tester.pump();
 
-    expect(projection.fullWeekInvalidations, 0);
-    expect(find.text('Focus reflection saved.'), findsNothing);
-  });
+      expect(projection.fullWeekInvalidations, 0);
+      expect(find.text('Focus reflection saved.'), findsNothing);
+    },
+  );
 
   testWidgets(
-      'dismissed reflection sheet deletes without touching rating-free Full week',
-      (tester) async {
-    final source = _PendingFocusReflectionSource(withExisting: true);
-    final projection = _RecordingProjectionRefresh();
-    await _pumpEveningPage(
-      tester,
-      _RecordingCaptureStore(),
-      focusSource: source,
-      projectionRefresh: projection.coordinator,
-      currentInstant: _reflectionNow,
-    );
-    await _openReflectionSheet(tester);
+    'dismissed reflection sheet deletes without touching rating-free Full week',
+    (tester) async {
+      final source = _PendingFocusReflectionSource(withExisting: true);
+      final projection = _RecordingProjectionRefresh();
+      await _pumpEveningPage(
+        tester,
+        _RecordingCaptureStore(),
+        focusSource: source,
+        projectionRefresh: projection.coordinator,
+        currentInstant: _reflectionNow,
+      );
+      await _openReflectionSheet(tester);
 
-    await tester.tap(find.byKey(const ValueKey('delete-focus-reflection')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete reflection'));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(source.deleteCalls, 1);
+      await tester.tap(find.byKey(const ValueKey('delete-focus-reflection')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete reflection'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(source.deleteCalls, 1);
 
-    final sheetContext =
-        tester.element(find.byKey(const ValueKey('focus-reflection-sheet')));
-    Navigator.of(sheetContext).pop();
-    await tester.pumpAndSettle();
-    source.completeDelete();
-    await tester.pump();
-    await tester.pump();
+      final sheetContext = tester.element(
+        find.byKey(const ValueKey('focus-reflection-sheet')),
+      );
+      Navigator.of(sheetContext).pop();
+      await tester.pumpAndSettle();
+      source.completeDelete();
+      await tester.pump();
+      await tester.pump();
 
-    expect(projection.fullWeekInvalidations, 0);
-    expect(find.text('Focus reflection deleted.'), findsNothing);
-  });
+      expect(projection.fullWeekInvalidations, 0);
+      expect(find.text('Focus reflection deleted.'), findsNothing);
+    },
+  );
 
-  testWidgets('reflection save does not refresh the rating-free week agenda',
-      (tester) async {
+  testWidgets('reflection save does not refresh the rating-free week agenda', (
+    tester,
+  ) async {
     final source = _PendingFocusReflectionSource(immediateSave: true);
     final projection = _RecordingProjectionRefresh(throwOnFullWeek: true);
     await _pumpEveningPage(
@@ -506,10 +524,7 @@ Future<void> _openReflectionSheet(WidgetTester tester) async {
     find.byKey(const ValueKey('evening-focus-reflections')),
   );
   await tester.pumpAndSettle();
-  expect(
-    find.byKey(const ValueKey('focus-reflection-sheet')),
-    findsOneWidget,
-  );
+  expect(find.byKey(const ValueKey('focus-reflection-sheet')), findsOneWidget);
 }
 
 Future<void> _pumpEveningPage(
@@ -522,6 +537,7 @@ Future<void> _pumpEveningPage(
   Size viewSize = const Size(1200, 1200),
   double textScale = 1,
   bool disableAnimations = false,
+  bool skillsetEnabled = false,
 }) async {
   final router = GoRouter(
     initialLocation: '/quick-mood-check-in',
@@ -551,11 +567,14 @@ Future<void> _pumpEveningPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        optionalSkillsetCaptureProvider.overrideWithValue(skillsetEnabled),
+        skillsetDimensionsProvider.overrideWith((ref) => {'sport', 'social'}),
         profileLocalDateSourceProvider.overrideWithValue(
           SessionProfileLocalDateSource(
             session: null,
-            currentInstant:
-                currentInstant == null ? DateTime.now : () => currentInstant,
+            currentInstant: currentInstant == null
+                ? DateTime.now
+                : () => currentInstant,
           ),
         ),
         if (currentInstant != null)
@@ -654,9 +673,9 @@ EveningShutdownDraft _eveningDraft({
 }
 
 Finder _textFieldWithLabel(String label) => find.byWidgetPredicate(
-      (widget) => widget is TextField && widget.decoration?.labelText == label,
-      description: 'TextField with label $label',
-    );
+  (widget) => widget is TextField && widget.decoration?.labelText == label,
+  description: 'TextField with label $label',
+);
 
 class _RecordingCaptureStore implements QuickCheckInStore {
   _RecordingCaptureStore({this.initial});
@@ -716,18 +735,18 @@ class _PendingCaptureStore extends _RecordingCaptureStore {
 
 class _RecordingSnapshotRefreshService extends SnapshotRefreshService {
   _RecordingSnapshotRefreshService()
-      : super(
-          config: const AppConfig(
-            environment: 'test',
-            supabaseUrl: '',
-            supabaseAnonKey: '',
-            aiServiceBaseUrl: 'http://localhost:8000',
-            useMockData: false,
-          ),
-          apiDataSource: SnapshotApiDataSource(ApiClient(Dio())),
-          accessTokenProvider: () => null,
-          allowRemoteRefresh: false,
-        );
+    : super(
+        config: const AppConfig(
+          environment: 'test',
+          supabaseUrl: '',
+          supabaseAnonKey: '',
+          aiServiceBaseUrl: 'http://localhost:8000',
+          useMockData: false,
+        ),
+        apiDataSource: SnapshotApiDataSource(ApiClient(Dio())),
+        accessTokenProvider: () => null,
+        allowRemoteRefresh: false,
+      );
 
   final List<String?> targetDates = [];
 
@@ -742,12 +761,12 @@ class _PendingFocusReflectionSource extends FocusSessionSupabaseDataSource {
     this.withExisting = false,
     this.immediateSave = false,
   }) : super(
-          SupabaseClient(
-            'http://localhost:54321',
-            'test-anon-key',
-            authOptions: const AuthClientOptions(autoRefreshToken: false),
-          ),
-        );
+         SupabaseClient(
+           'http://localhost:54321',
+           'test-anon-key',
+           authOptions: const AuthClientOptions(autoRefreshToken: false),
+         ),
+       );
 
   final bool withExisting;
   final bool immediateSave;
@@ -757,35 +776,35 @@ class _PendingFocusReflectionSource extends FocusSessionSupabaseDataSource {
   int deleteCalls = 0;
 
   FocusSession get session => FocusSession(
-        id: '11111111-1111-4111-8111-111111111111',
-        status: FocusSessionStatus.completed,
-        startedAt: DateTime.utc(2026, 8, 5, 15),
-        endedAt: DateTime.utc(2026, 8, 5, 15, 25),
-        plannedMinutes: 25,
-        actualMinutes: 25,
-        label: 'Algorithms review',
-        entryDate: '2026-08-05',
-        updatedAt: DateTime.utc(2026, 8, 5, 15, 25),
-      );
+    id: '11111111-1111-4111-8111-111111111111',
+    status: FocusSessionStatus.completed,
+    startedAt: DateTime.utc(2026, 8, 5, 15),
+    endedAt: DateTime.utc(2026, 8, 5, 15, 25),
+    plannedMinutes: 25,
+    actualMinutes: 25,
+    label: 'Algorithms review',
+    entryDate: '2026-08-05',
+    updatedAt: DateTime.utc(2026, 8, 5, 15, 25),
+  );
 
   FocusReflection get reflection => FocusReflection(
-        focusSessionId: session.id,
-        focusQuality: 4,
-        usefulProgress: 5,
-        obstacles: const [],
-        createdAt: DateTime.utc(2026, 8, 5, 15, 30),
-        updatedAt: DateTime.utc(2026, 8, 5, 15, 30),
-      );
+    focusSessionId: session.id,
+    focusQuality: 4,
+    usefulProgress: 5,
+    obstacles: const [],
+    createdAt: DateTime.utc(2026, 8, 5, 15, 30),
+    updatedAt: DateTime.utc(2026, 8, 5, 15, 30),
+  );
 
   @override
-  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async =>
-      [session];
+  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async => [
+    session,
+  ];
 
   @override
   Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
     Iterable<FocusSession> sessions,
-  ) async =>
-      withExisting ? {session.id: reflection} : const {};
+  ) async => withExisting ? {session.id: reflection} : const {};
 
   @override
   Future<FocusReflection> saveReflection({
@@ -815,12 +834,12 @@ class _RecordingProjectionRefresh {
   int fullWeekInvalidations = 0;
   late final ProjectionRefreshCoordinator coordinator =
       ProjectionRefreshCoordinator(
-    refreshDailySnapshot: (_) async {},
-    invalidateProjection: (projection) {
-      if (projection == ProductProjection.todayFullWeek) {
-        fullWeekInvalidations += 1;
-        if (throwOnFullWeek) throw StateError('refresh unavailable');
-      }
-    },
-  );
+        refreshDailySnapshot: (_) async {},
+        invalidateProjection: (projection) {
+          if (projection == ProductProjection.todayFullWeek) {
+            fullWeekInvalidations += 1;
+            if (throwOnFullWeek) throw StateError('refresh unavailable');
+          }
+        },
+      );
 }

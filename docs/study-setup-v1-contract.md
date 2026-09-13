@@ -288,6 +288,24 @@ Intake/Study shapes remain unchanged.
 
 ## Visual presentation
 
+The single-page Setup presentation uses an eyebrow/hero, an outlined required
+card, and one `Optional setup` card containing four icon-led accordions. There is
+no stepper. Existing theme colors, fields, expansion defaults, review, errors,
+and Save/retry behavior remain unchanged. Optional section previews are short;
+routine activation requirements stay visible inside Routines. Focus/recovery
+fields share a row when space and text size permit. Each preparation item uses
+one row: expanding text input, include checkbox, down/up buttons side by side,
+and a remove icon at the right edge. Boundary moves remain disabled; the 120-character limit
+is unchanged. Routine/commitment remove and duplicate actions use labelled icon
+controls. No field, activation or save semantics change.
+
+Required and summary surfaces use the same compact inset as the Optional
+setup group. Routine/commitment actions sit beside their title input inside
+plain editor cards. Semester date controls show a short label above the date
+and share equal widths, stacking at narrow widths or large text. Name counters
+are hidden without changing their length limit. Summary statuses wrap beneath
+the item title; the complete status and date range stay visible.
+
 Setup and Study Setup use the shared
 [Frontend Visual System V2](frontend-visual-system-v2.md). The visual migration
 does not change optional fields, revision ownership, recovery reservations,

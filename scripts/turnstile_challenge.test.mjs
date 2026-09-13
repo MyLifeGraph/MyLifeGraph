@@ -8,13 +8,14 @@ const source = readFileSync(
   'utf8',
 );
 
-function challenge(search) {
+function challenge(search, width = 360) {
   const messages = [];
   const elements = new Map(
     ['status', 'turnstile-widget', 'cancel'].map((id) => [
       id,
       {
         id,
+        clientWidth: width,
         textContent: '',
         listeners: {},
         addEventListener(name, handler) {
@@ -61,6 +62,18 @@ test('native Turnstile bridge binds action and nonce to one token', () => {
   });
   result.rendered[0].options.callback('second-token');
   assert.equal(result.messages.length, 1);
+});
+
+test('Turnstile uses compact layout only below its 300px minimum', () => {
+  for (const width of [240, 288, 299, 300, 328, 360]) {
+    const result = challenge(
+      `?sitekey=1x00000000000000000000AA&action=signin&nonce=${'a'.repeat(32)}&client=native`,
+      width,
+    );
+    result.window.mylifegraphTurnstileReady();
+    assert.equal(result.rendered[0].options.size,
+      width < 300 ? 'compact' : 'flexible');
+  }
 });
 
 test('unknown actions fail closed before rendering', () => {

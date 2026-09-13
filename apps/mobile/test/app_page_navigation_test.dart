@@ -2,12 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
 void main() {
+  testWidgets('compact main headers align Settings at mobile and large text',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final scale in [1.0, 2.0]) {
+      tester.view.physicalSize = Size(scale == 1 ? 390 : 320, 844);
+      for (final title in ['Today', 'Insights', 'Planner', 'Coach']) {
+        await tester.pumpWidget(ProviderScope(
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            home: MediaQuery(
+              data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+              child: Scaffold(body: AppPage(
+                title: title,
+                compactHeader: true,
+                actions: const [AppHeaderActions()],
+                children: const [Text('Content')],
+              )),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        final settings = tester.getRect(
+            find.byKey(const ValueKey('global-header-settings')));
+        expect(settings.top, 16);
+        expect(settings.right, tester.view.physicalSize.width - 16);
+        expect(settings.width, greaterThanOrEqualTo(44));
+        expect(settings.height, greaterThanOrEqualTo(44));
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
   testWidgets('Today push to Planner returns through actual history',
       (tester) async {
     final router = _pageRouter();

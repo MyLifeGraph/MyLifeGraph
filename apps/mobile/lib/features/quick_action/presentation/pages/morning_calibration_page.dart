@@ -10,6 +10,9 @@ import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../domain/quick_check_in.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
+import '../../../../composition/skillset_providers.dart';
+import '../../domain/skillset_signals.dart';
+import '../widgets/optional_skillset_controls.dart';
 
 class MorningCalibrationPage extends ConsumerStatefulWidget {
   const MorningCalibrationPage({super.key});
@@ -24,7 +27,6 @@ class _MorningCalibrationPageState
   late MorningCalibrationDraft _draft;
   var _stepIndex = 0;
   var _isLoading = true;
-  var _loadedSavedCapture = false;
   var _safeCaptureLoaded = false;
   var _eveningPlanUnavailable = false;
   var _continueWithoutEveningPlan = false;
@@ -74,15 +76,16 @@ class _MorningCalibrationPageState
       isSaving: _isSaving,
       saveLabel: 'Save morning check-in',
       errorMessage: _saveError,
-      loadErrorMessage: _loadError ??
+      loadErrorMessage:
+          _loadError ??
           (_eveningPlanUnavailable && !_continueWithoutEveningPlan
               ? 'The previous Evening sleep plan could not be loaded. Retry, or explicitly continue without that plan.'
               : null),
       onRetryLoad: _loadToday,
       secondaryLoadActionLabel:
           _eveningPlanUnavailable && !_continueWithoutEveningPlan
-              ? 'Continue without previous Evening plan'
-              : null,
+          ? 'Continue without previous Evening plan'
+          : null,
       onSecondaryLoadAction: _eveningPlanUnavailable
           ? () => setState(() => _continueWithoutEveningPlan = true)
           : null,
@@ -116,9 +119,7 @@ class _MorningCalibrationPageState
           semanticLabel: 'estimated sleep start',
           value: _draft.estimatedSleepStartedAt == null
               ? null
-              : dailyCaptureClock(
-                  _draft.estimatedSleepStartedAt!,
-                ),
+              : dailyCaptureClock(_draft.estimatedSleepStartedAt!),
           onChanged: _setEstimatedSleepStart,
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -168,6 +169,8 @@ class _MorningCalibrationPageState
   }
 
   Widget _buildCheckInStep() {
+    final dimensions = ref.watch(skillsetDimensionsProvider);
+    final allowExtras = ref.watch(optionalSkillsetCaptureProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -180,19 +183,38 @@ class _MorningCalibrationPageState
         CaptureRatingControl(
           value: _draft.sleepQuality,
           semanticPrefix: 'morning sleep quality',
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(sleepQuality: value),
-          ),
+          onChanged: (value) =>
+              setState(() => _draft = _draft.copyWith(sleepQuality: value)),
         ),
         const SizedBox(height: AppSpacing.lg),
         CaptureRatingControl(
           label: 'Current energy',
           value: _draft.energy,
           semanticPrefix: 'morning energy',
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(energy: value),
-          ),
+          onChanged: (value) =>
+              setState(() => _draft = _draft.copyWith(energy: value)),
         ),
+        if (allowExtras && dimensions.contains('motivation'))
+          Material(
+            type: MaterialType.transparency,
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('More (optional)'),
+              children: [
+                OptionalSkillsetChoice(
+                  label: 'Study motivation',
+                  choices: const ['Low', 'Medium', 'High'],
+                  value: _draft.skillset?.values['motivation'],
+                  onChanged: (value) => setState(
+                    () => _draft = _draft.copyWith(
+                      skillset: (_draft.skillset ?? const SkillsetSignals({}))
+                          .withValue('motivation', value),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -204,9 +226,9 @@ class _MorningCalibrationPageState
       _canContinue;
 
   bool get _canContinue => switch (_steps[_stepIndex].kind) {
-        _MorningStepKind.sleep => _hasValidSleepDetails,
-        _MorningStepKind.checkIn => _draft.isComplete,
-      };
+    _MorningStepKind.sleep => _hasValidSleepDetails,
+    _MorningStepKind.checkIn => _draft.isComplete,
+  };
 
   bool get _hasValidSleepDetails {
     final start = _draft.estimatedSleepStartedAt;
@@ -266,10 +288,7 @@ class _MorningCalibrationPageState
     _applySleepClocks(start: dailyCaptureClock(start), wake: value);
   }
 
-  void _applySleepClocks({
-    required String start,
-    required String wake,
-  }) {
+  void _applySleepClocks({required String start, required String wake}) {
     final interval = estimatedSleepIntervalForLocalClocks(
       entryDate: _draft.entryDate,
       estimatedSleepStartedAt: start,
@@ -309,7 +328,9 @@ class _MorningCalibrationPageState
     try {
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveMorning(draft);
-      await ref.read(projectionRefreshCoordinatorProvider).dailyCaptureChanged(
+      await ref
+          .read(projectionRefreshCoordinatorProvider)
+          .dailyCaptureChanged(
             targetDate: draft.entryDate,
             refreshDailySnapshot:
                 store.target == QuickCheckInSaveTarget.supabase,
@@ -361,9 +382,9 @@ class _MorningCalibrationPageState
       }
       final saved = entry?.morning;
       if (mounted) {
-        var next = (saved ?? _draft).forEditing(sleepPlan: sleepPlan).copyWith(
-              capturedAt: saved == null ? null : _draft.capturedAt,
-            );
+        var next = (saved ?? _draft)
+            .forEditing(sleepPlan: sleepPlan)
+            .copyWith(capturedAt: saved == null ? null : _draft.capturedAt);
         if (next.wokeAt == null) {
           next = next.copyWith(
             wokeAt: _clockOnEntryDate(dailyCaptureClock(DateTime.now())),
@@ -383,7 +404,6 @@ class _MorningCalibrationPageState
         }
         setState(() {
           _draft = next;
-          _loadedSavedCapture = saved != null;
           _safeCaptureLoaded = true;
           _loadError = null;
         });
@@ -410,10 +430,7 @@ class _MorningCalibrationPageState
   }
 }
 
-enum _MorningStepKind {
-  sleep,
-  checkIn,
-}
+enum _MorningStepKind { sleep, checkIn }
 
 class _MorningStep {
   const _MorningStep({

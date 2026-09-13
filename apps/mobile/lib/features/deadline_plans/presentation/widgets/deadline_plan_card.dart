@@ -312,7 +312,8 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           AppInfoSectionDisclosure(
             heading: 'How new previews place time',
             description:
-                '${_deadlineAllocationDescription(revision.kind)} ${_planningWindowDescription(revision.bestEnergyWindow)} ${widget.profileTimezone == null ? 'Your current profile timezone is unavailable, so local preparation times stay hidden.' : 'Preparation blocks use your profile timezone: ${widget.profileTimezone}.'}',
+                '${_deadlineAllocationDescription(revision.kind)} ${_planningWindowDescription(revision.bestEnergyWindow)} ${widget.profileTimezone == null ? 'Your current profile timezone is unavailable, so local preparation times stay hidden.' : 'Preparation blocks use your profile timezone: ${widget.profileTimezone}.'}'
+                '${plan.isActive ? '\n\nLinked Focus completed after this plan was first activated counts toward the plan as a whole and fills reserved blocks in chronological order. Starting from a row only prefills its remaining duration.' : ''}',
             headingStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -370,14 +371,14 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             Text(
               '${_duration(revision.preferredSessionMinutes)} focus + '
               '${_duration(revision.recoveryMinutes)} recovery per full block. '
-              'Recovery is reserved but is not learning time, progress, or preparation budget.',
+              'Recovery reserves time but adds no study minutes, progress or preparation budget.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
           if (revision.unscheduledMinutes > 0) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Not all remaining preparation fits before the buffer. Increase the daily cap, start earlier, shorten the buffer, or revise your estimate.',
+              'Some study time does not fit. Raise the daily limit, start earlier, reduce clear days or adjust your estimate.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),
@@ -386,7 +387,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           if (sourceNeedsReview) ...[
             const SizedBox(height: AppSpacing.sm),
             const Text(
-              'The imported calendar event may be out of date or unavailable. Check the deadline before confirming another version of this plan.',
+              'Imported event changed or unavailable. Check the deadline before confirming.',
             ),
           ],
           if (plan.record.attentionReasons.contains('timezone_changed')) ...[
@@ -399,7 +400,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 borderRadius: BorderRadius.circular(AppRadii.sm),
               ),
               child: const Text(
-                'The account timezone changed. Existing reservations were not moved. Create a new preview before confirming different times.',
+                'Timezone changed; reservations stayed in place. Create a new preview to change times.',
               ),
             ),
           ],
@@ -407,14 +408,14 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           Text(
             pending
                 ? plan.isActive
-                    ? 'Proposed reservations only. Your currently active plan remains in place until you confirm.'
-                    : 'Proposed reservations only. Nothing is reserved until you confirm.'
+                    ? 'Preview only. Your current plan stays until you confirm.'
+                    : 'Preview only. Confirm to reserve these times.'
                 : 'Reserved in MyLifeGraph only',
           ),
           if (plan.isActive) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Linked Focus completed after this plan was first activated counts toward the plan as a whole and fills reserved blocks in chronological order. Starting from a row only prefills its remaining duration.',
+              'Start a block to focus on its remaining time.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -436,12 +437,12 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    '${missedBlocks.length} reserved ${missedBlocks.length == 1 ? 'block has' : 'blocks have'} passed with ${_duration(missedMinutes)} still uncredited. Start a missed block now if the actual time is free, or replan the remainder.',
+                    '${missedBlocks.length} missed ${missedBlocks.length == 1 ? 'block' : 'blocks'} · ${_duration(missedMinutes)} still uncredited. Start if time is free, or replan.',
                   ),
                   if (pending) ...[
                     const SizedBox(height: AppSpacing.xs),
                     const Text(
-                      'The active reservations still need attention while the replacement remains an unconfirmed preview.',
+                      'Current reservations still need attention until you confirm the replacement.',
                     ),
                   ],
                   const SizedBox(height: AppSpacing.sm),
@@ -456,6 +457,13 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
+          if (revision.blocks.isNotEmpty || active?.blocks.isNotEmpty == true) ...[
+            Text(
+              'Study blocks · ${widget.profileTimezone ?? 'Timezone unavailable'}',
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
           for (final block in _visibleBlocks(
             revision.blocks,
             showAll: _showAllDisplayedBlocks,
@@ -499,7 +507,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             const SizedBox(height: AppSpacing.xs),
             Text(active.title),
             Text(
-              '${_duration(active.plannedMinutes)} remains on the weekly plan while this replacement is only a preview.',
+              '${_duration(active.plannedMinutes)} stays reserved until confirmation.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -547,11 +555,10 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             ),
           ],
           const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (pending)
+              if (pending) ...[
                 FilledButton.icon(
                   onPressed: canMutate &&
                           !sourceNeedsReview &&
@@ -562,22 +569,37 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   icon: const Icon(AppIcons.eventAvailableOutlined),
                   label: Text(widget.confirmLabel),
                 ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
               if (!plan.isTerminal)
-                OutlinedButton.icon(
-                  onPressed: canMutate ? onAdjust : null,
-                  icon: const Icon(AppIcons.tune),
-                  label: const Text('Adjust estimate or plan'),
-                ),
-              if (plan.isActive)
-                OutlinedButton.icon(
-                  onPressed: canMutate ? onComplete : null,
-                  icon: const Icon(AppIcons.checkCircleOutline),
-                  label: const Text('Mark preparation complete'),
-                ),
-              if (plan.isActive || plan.isDraft)
-                TextButton(
-                  onPressed: canMutate ? onCancel : null,
-                  child: Text(plan.isDraft ? 'Discard preview' : 'Cancel plan'),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _DeadlinePlanActionButton(
+                      label: 'Edit plan',
+                      tooltip: 'Adjust estimate or plan',
+                      icon: AppIcons.tune,
+                      onPressed: canMutate ? onAdjust : null,
+                    )),
+                    if (plan.isActive) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(child: _DeadlinePlanActionButton(
+                        label: 'Complete',
+                        tooltip: 'Mark preparation complete',
+                        icon: AppIcons.checkCircleOutline,
+                        onPressed: canMutate ? onComplete : null,
+                      )),
+                    ],
+                    if (plan.isActive || plan.isDraft) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(child: _DeadlinePlanActionButton(
+                        label: plan.isDraft ? 'Discard preview' : 'Cancel',
+                        tooltip: plan.isDraft ? 'Discard preview' : 'Cancel plan',
+                        icon: AppIcons.deleteOutline,
+                        onPressed: canMutate ? onCancel : null,
+                      )),
+                    ],
+                  ],
                 ),
             ],
           ),
@@ -591,6 +613,43 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
     required bool showAll,
   }) =>
       showAll ? blocks : blocks.take(_collapsedBlockLimit);
+}
+
+class _DeadlinePlanActionButton extends StatelessWidget {
+  const _DeadlinePlanActionButton({
+    required this.label,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: AppSpacing.sm,
+            ),
+            minimumSize: const Size(44, 64),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20),
+              const SizedBox(height: AppSpacing.xs),
+              Text(label, textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
 }
 
 String _profileDeadlineCopy(DateTime instant, String? timezone) {
@@ -670,12 +729,30 @@ class _DeadlineBlockTile extends StatelessWidget {
       key: ValueKey('deadline-block-${block.id}'),
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(child: Text('${block.sequence}')),
-      title: Text(localCopy.$1),
-      subtitle: Text(
-        '${_duration(block.plannedMinutes)} focus'
-        '${block.recoveryMinutes > 0 ? ' + ${_duration(block.recoveryMinutes)} recovery · ${localCopy.$2}' : ''}'
-        ' · ${_blockLabel(block.state)}'
-        '${block.creditedTrackedMinutes > 0 ? ' · ${_duration(block.creditedTrackedMinutes)} tracked' : ''}',
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(localCopy.$1, style: Theme.of(context).textTheme.bodySmall),
+          if (localCopy.$2.isNotEmpty)
+            Text(localCopy.$2, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Text('${_duration(block.plannedMinutes)} focus'),
+              Text(_blockLabel(block.state)),
+              if (block.creditedTrackedMinutes > 0)
+                Text('${_duration(block.creditedTrackedMinutes)} tracked'),
+            ],
+          ),
+          if (block.recoveryMinutes > 0)
+            Text('+ ${_duration(block.recoveryMinutes)} recovery · ${localCopy.$3}'),
+        ],
       ),
       trailing: canStart
           ? IconButton(
@@ -688,13 +765,14 @@ class _DeadlineBlockTile extends StatelessWidget {
   }
 }
 
-(String, String) _deadlineBlockLocalCopy(
+(String, String, String) _deadlineBlockLocalCopy(
   DeadlinePlanBlock block,
   String? timezone,
 ) {
   if (timezone == null) {
     return (
       'Local time unavailable · current profile timezone unavailable',
+      '',
       'reserved-through time unavailable',
     );
   }
@@ -712,12 +790,14 @@ class _DeadlineBlockTile extends StatelessWidget {
       timezoneName: timezone,
     );
     return (
-      '${DateFormat.yMMMd().format(start)} · ${DateFormat.Hm().format(start)}–${DateFormat.Hm().format(end)} · $timezone',
-      'reserved until ${DateFormat.Hm().format(reservedEnd)} $timezone',
+      DateFormat.yMMMd().format(start),
+      '${DateFormat.Hm().format(start)}–${DateUtils.isSameDay(start, end) ? '' : '${DateFormat.yMMMd().format(end)} '}${DateFormat.Hm().format(end)}',
+      'reserved until ${DateUtils.isSameDay(start, reservedEnd) ? '' : '${DateFormat.yMMMd().format(reservedEnd)} '}${DateFormat.Hm().format(reservedEnd)}',
     );
   } on ProfileTimezoneException {
     return (
       'Local time unavailable · current profile timezone invalid',
+      '',
       'reserved-through time unavailable',
     );
   }

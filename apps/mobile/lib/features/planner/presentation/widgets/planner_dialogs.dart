@@ -184,20 +184,26 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
                   key: const ValueKey('planner-task-title'),
                   controller: _title,
                   maxLength: 160,
-                  decoration: const InputDecoration(labelText: 'Title *'),
+                  decoration: const InputDecoration(labelText: 'Title *', counterText: ''),
                 ),
+                const SizedBox(height: AppSpacing.sm),
                 TextField(
                   key: const ValueKey('planner-task-description'),
                   controller: _description,
                   maxLength: 2000,
+                  minLines: 1,
                   maxLines: 3,
                   decoration: const InputDecoration(
                     labelText: 'Description (optional)',
+                    counterText: '',
                   ),
                 ),
+                const SizedBox(height: AppSpacing.sm),
                 DropdownButtonFormField<String>(
                   key: const ValueKey('planner-task-priority'),
                   initialValue: _priority,
+                  isExpanded: true,
+                  itemHeight: null,
                   decoration: const InputDecoration(labelText: 'Priority'),
                   items: const [
                     DropdownMenuItem(value: 'low', child: Text('Low')),
@@ -219,7 +225,7 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
                   }),
                   title: const Text('Create a time-block preview'),
                   subtitle: const Text(
-                    'Requires your duration, exact deadline, and preferred session length.',
+                    'Add duration, deadline and focus-block length.',
                   ),
                 ),
                 if (_schedule) ...[
@@ -243,6 +249,7 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
                       labelText: 'Total duration in minutes *',
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
                   TextField(
                     key: const ValueKey('planner-task-session'),
                     controller: _session,
@@ -454,21 +461,27 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
                     key: const ValueKey('planner-habit-title'),
                     controller: _title,
                     maxLength: 160,
-                    decoration: const InputDecoration(labelText: 'Title *'),
+                    decoration: const InputDecoration(labelText: 'Title *', counterText: ''),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
                   TextField(
                     key: const ValueKey('planner-habit-description'),
                     controller: _description,
                     maxLength: 2000,
+                    minLines: 1,
                     maxLines: 3,
                     decoration: const InputDecoration(
                       labelText: 'Description (optional)',
+                      counterText: '',
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
                   DropdownButtonFormField<String>(
                     key: const ValueKey('planner-habit-cadence'),
                     initialValue: _cadence,
-                    decoration: const InputDecoration(labelText: 'Cadence *'),
+                    isExpanded: true,
+                    itemHeight: null,
+                    decoration: const InputDecoration(labelText: 'How often? *'),
                     items: const [
                       DropdownMenuItem(value: 'daily', child: Text('Daily')),
                       DropdownMenuItem(
@@ -514,6 +527,7 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
                     onChanged: (value) =>
                         setState(() => _weeklyTarget = value!),
                   ),
+                const SizedBox(height: AppSpacing.sm),
                 TextField(
                   key: const ValueKey('planner-habit-duration'),
                   controller: _duration,
@@ -721,6 +735,7 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
   @override
   Widget build(BuildContext context) => AlertDialog(
         title: const Text('Add fixed commitment'),
+        scrollable: true,
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(
@@ -731,16 +746,20 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
                   key: const ValueKey('planner-commitment-title'),
                   controller: _title,
                   maxLength: 160,
-                  decoration: const InputDecoration(labelText: 'Title *'),
+                  decoration: const InputDecoration(labelText: 'Title *', counterText: ''),
                 ),
+                const SizedBox(height: AppSpacing.sm),
                 TextField(
                   controller: _location,
                   maxLength: 300,
                   decoration:
-                      const InputDecoration(labelText: 'Location (optional)'),
+                      const InputDecoration(labelText: 'Location (optional)', counterText: ''),
                 ),
+                const SizedBox(height: AppSpacing.sm),
                 DropdownButtonFormField<String>(
                   initialValue: _recurrence,
+                  isExpanded: true,
+                  itemHeight: null,
                   decoration: const InputDecoration(labelText: 'Repeats *'),
                   items: const [
                     DropdownMenuItem(value: 'one_off', child: Text('One time')),
@@ -761,6 +780,7 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
                           : DateFormat.yMMMd().add_Hm().format(_startsAt!),
                     ),
                     onTap: () => _pickOneOff(start: true),
+                    trailing: const Icon(AppIcons.editCalendarOutlined),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -771,11 +791,14 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
                           : DateFormat.yMMMd().add_Hm().format(_endsAt!),
                     ),
                     onTap: () => _pickOneOff(start: false),
+                    trailing: const Icon(AppIcons.editCalendarOutlined),
                   ),
                 ],
                 if (_recurrence == 'weekly') ...[
                   DropdownButtonFormField<int>(
                     initialValue: _weekday,
+                    isExpanded: true,
+                    itemHeight: null,
                     decoration: const InputDecoration(labelText: 'Weekday *'),
                     items: [
                       for (var day = 1; day <= 7; day++)
@@ -792,6 +815,7 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
                     subtitle:
                         Text(_weeklyStart?.format(context) ?? 'Not selected'),
                     onTap: () => _pickWeekly(start: true),
+                    trailing: const Icon(AppIcons.editCalendarOutlined),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -799,6 +823,7 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
                     subtitle:
                         Text(_weeklyEnd?.format(context) ?? 'Not selected'),
                     onTap: () => _pickWeekly(start: false),
+                    trailing: const Icon(AppIcons.editCalendarOutlined),
                   ),
                 ],
                 if (_error != null)

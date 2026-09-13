@@ -40,8 +40,55 @@ class _InsightsLoadError extends StatelessWidget {
   }
 }
 
+class _InsightsViewToggle extends StatelessWidget {
+  const _InsightsViewToggle({required this.selected, required this.onChanged});
+
+  final _InsightsView selected;
+  final ValueChanged<_InsightsView> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: SegmentedButton<_InsightsView>(
+        key: const Key('insights-view-toggle'),
+        expandedInsets: EdgeInsets.zero,
+        showSelectedIcon: false,
+        style: SegmentedButton.styleFrom(
+          side: BorderSide.none,
+          padding: const EdgeInsets.all(AppSpacing.sm),
+        ),
+        segments: [
+          ButtonSegment(
+            value: _InsightsView.overview,
+            label: const Text('Overview'),
+            icon: MediaQuery.textScalerOf(context).scale(14) <= 18
+                ? const Icon(AppIcons.insightsOutlined, size: 18)
+                : null,
+          ),
+          ButtonSegment(
+            value: _InsightsView.advanced,
+            label: const Text('Advanced'),
+            icon: MediaQuery.textScalerOf(context).scale(14) <= 18
+                ? const Icon(AppIcons.tuneOutlined, size: 18)
+                : null,
+          ),
+        ],
+        selected: {selected},
+        onSelectionChanged: (values) => onChanged(values.single),
+      ),
+    ),
+  );
+}
+
 class _SparseInsightsHome extends StatelessWidget {
   const _SparseInsightsHome({
+    required this.view,
+    required this.onViewChanged,
+    required this.advancedPane,
+    required this.onPaneSelected,
+    required this.skillsetCard,
     required this.isMobile,
     required this.report,
     required this.observation,
@@ -52,6 +99,11 @@ class _SparseInsightsHome extends StatelessWidget {
     required this.onRefresh,
   });
 
+  final _InsightsView view;
+  final ValueChanged<_InsightsView> onViewChanged;
+  final _AdvancedPane advancedPane;
+  final ValueChanged<_AdvancedPane> onPaneSelected;
+  final Widget skillsetCard;
   final bool isMobile;
   final CorrelationReport report;
   final CoachingObservation observation;
@@ -72,47 +124,77 @@ class _SparseInsightsHome extends StatelessWidget {
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
               isMobile ? AppSpacing.md : AppSpacing.lg,
-              isMobile ? AppSpacing.sm : AppSpacing.lg,
+              isMobile ? AppSpacing.md : AppSpacing.lg,
               isMobile ? AppSpacing.md : AppSpacing.lg,
               AppSpacing.xl,
             ),
-            sliver: SliverList.list(
-              children: [
-                _InsightsHeader(isMobile: isMobile, onRefresh: onRefresh),
-                SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                if (showPersonalPatterns) ...[
-                  _PersonalStudyPatternCard(
-                    patterns: personalPatterns,
-                    onRetry: onRefresh,
-                  ),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _InsightsHeader(isMobile: isMobile, onRefresh: onRefresh),
+                  SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
+                  _InsightsViewToggle(selected: view, onChanged: onViewChanged),
                   const SizedBox(height: AppSpacing.md),
-                  _SleepRecommendationCard(
-                    value: sleepRecommendation,
-                    onRetry: onRefresh,
+                  Visibility(
+                    visible: view == _InsightsView.overview,
+                    maintainState: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (showPersonalPatterns) ...[
+                          _PersonalStudyPatternCard(
+                            patterns: personalPatterns,
+                            onRetry: onRefresh,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _SleepRecommendationCard(
+                            value: sleepRecommendation,
+                            onRetry: onRefresh,
+                          ),
+                        ] else
+                          _CoachingObservationCard(observation: observation),
+                        const SizedBox(height: AppSpacing.md),
+                        if (skillset != null)
+                          _SkillsetProfileCard(
+                            skillset: skillset!,
+                            onRetry: onRefresh,
+                          ),
+                      ],
+                    ),
                   ),
-                ] else
-                  _CoachingObservationCard(observation: observation),
-                const SizedBox(height: AppSpacing.md),
-                _InsightsPanel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Not enough signals yet',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(measured),
-                    ],
+                  Visibility(
+                    visible: view == _InsightsView.advanced,
+                    maintainState: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _AdvancedPaneTabs(
+                          selected: advancedPane,
+                          onSelected: onPaneSelected,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        if (advancedPane == _AdvancedPane.skillset)
+                          skillsetCard
+                        else
+                          _InsightsPanel(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Not enough signals yet',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(measured),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                if (skillset != null)
-                  _SkillsetProfileCard(
-                    skillset: skillset!,
-                    onRetry: onRefresh,
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -122,60 +204,30 @@ class _SparseInsightsHome extends StatelessWidget {
 }
 
 class _InsightsHeader extends StatelessWidget {
-  const _InsightsHeader({
-    required this.isMobile,
-    required this.onRefresh,
-  });
+  const _InsightsHeader({required this.isMobile, required this.onRefresh});
 
   final bool isMobile;
   final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final copy = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Insights',
-          style: isMobile
-              ? Theme.of(context).textTheme.headlineMedium
-              : Theme.of(context).textTheme.headlineLarge,
+    return AppPageHeading(
+      title: Text(
+        'Insights',
+        style: isMobile
+            ? Theme.of(context).textTheme.headlineMedium
+            : Theme.of(context).textTheme.headlineLarge,
+      ),
+      subtitle: Text(
+        'What your check-ins and focus days show so far.',
+        key: const Key('insights-header-description'),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          'What your check-ins and focus days show so far.',
-          key: const Key('insights-header-description'),
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-        ),
-      ],
-    );
-
-    final actions = AppHeaderActions(
-      pageActions: [
-        _InsightsRefreshButton(onRefresh: onRefresh),
-      ],
-    );
-
-    if (isMobile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          copy,
-          const SizedBox(height: AppSpacing.md),
-          Align(alignment: Alignment.centerRight, child: actions),
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: copy),
-        const SizedBox(width: AppSpacing.md),
-        Flexible(child: actions),
-      ],
+      ),
+      actions: AppHeaderActions(
+        pageActions: [_InsightsRefreshButton(onRefresh: onRefresh)],
+      ),
     );
   }
 }
@@ -187,21 +239,10 @@ class _InsightsRefreshButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      style: FilledButton.styleFrom(
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
-        ),
-      ),
+    return IconButton(
+      tooltip: 'Refresh correlations',
       onPressed: onRefresh,
-      icon: const Icon(AppIcons.refresh, size: 18),
-      label: const Text('Refresh correlations'),
+      icon: const Icon(AppIcons.refresh),
     );
   }
 }
@@ -439,10 +480,7 @@ class _PersonalStudyPatternContent extends StatelessWidget {
 }
 
 class _SleepRecommendationCard extends StatelessWidget {
-  const _SleepRecommendationCard({
-    required this.value,
-    required this.onRetry,
-  });
+  const _SleepRecommendationCard({required this.value, required this.onRetry});
 
   final AsyncValue<SleepRecommendation?> value;
   final VoidCallback onRetry;
@@ -451,7 +489,7 @@ class _SleepRecommendationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InsightsPanel(
       panelKey: const Key('sleep-recommendation-panel'),
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Semantics(
         container: true,
         label: 'Sleep recommendation',
@@ -509,22 +547,16 @@ class _SleepRecommendationContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (status, tone) = switch (value.status) {
-      SleepRecommendationStatus.disabled => (
-          'Disabled',
-          AppStatusTone.neutral,
-        ),
+      SleepRecommendationStatus.disabled => ('Disabled', AppStatusTone.neutral),
       SleepRecommendationStatus.collecting => (
-          'Collecting ${value.progress}',
-          AppStatusTone.info,
-        ),
+        'Collecting ${value.progress}',
+        AppStatusTone.info,
+      ),
       SleepRecommendationStatus.unstable => (
-          'Unstable',
-          AppStatusTone.attention,
-        ),
-      SleepRecommendationStatus.ready => (
-          'Ready',
-          AppStatusTone.success,
-        ),
+        'Unstable',
+        AppStatusTone.attention,
+      ),
+      SleepRecommendationStatus.ready => ('Ready', AppStatusTone.success),
     };
     final ready = value.recommendation;
     return Column(
@@ -562,33 +594,37 @@ class _SleepRecommendationContent extends StatelessWidget {
         else ...[
           LayoutBuilder(
             builder: (context, constraints) {
+              final inline =
+                  constraints.maxWidth < 600 &&
+                  constraints.maxWidth >= 260 &&
+                  MediaQuery.textScalerOf(context).scale(14) <= 18;
               final metricWidth = constraints.maxWidth < 600
                   ? constraints.maxWidth
-                  : (constraints.maxWidth - AppSpacing.lg * 2) / 3;
+                  : (constraints.maxWidth - AppSpacing.md * 2) / 3;
               return Wrap(
-                spacing: AppSpacing.lg,
-                runSpacing: AppSpacing.md,
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
                 children: [
                   SizedBox(
                     width: metricWidth,
-                    child: AppMetric(
+                    child: _SleepWindowMetric(
+                      inline: inline,
                       value: ready.bedtime.label,
                       label: 'Sleep start',
                     ),
                   ),
                   SizedBox(
                     width: metricWidth,
-                    child: AppMetric(
+                    child: _SleepWindowMetric(
+                      inline: inline,
                       value: ready.wakeTime.label,
                       label: 'Wake time',
-                      supportingText: ready.wakeDayOffset == 0
-                          ? 'Same local day'
-                          : 'Following local day',
                     ),
                   ),
                   SizedBox(
                     width: metricWidth,
-                    child: AppMetric(
+                    child: _SleepWindowMetric(
+                      inline: inline,
                       value: ready.duration.label,
                       label: 'Duration',
                     ),
@@ -657,6 +693,68 @@ class _SleepRecommendationContent extends StatelessWidget {
   }
 }
 
+class _SleepWindowMetric extends StatelessWidget {
+  const _SleepWindowMetric({
+    required this.label,
+    required this.value,
+    required this.inline,
+  });
+
+  final String label;
+  final String value;
+  final bool inline;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final caption = Text(label, style: theme.textTheme.bodyMedium);
+    final number = Text(
+      value,
+      textAlign: inline ? TextAlign.end : TextAlign.start,
+      style: theme.textTheme.titleMedium,
+    );
+    return inline
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: caption),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(child: number),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [caption, number],
+          );
+  }
+}
+
+class _InsightsCardLabel extends StatelessWidget {
+  const _InsightsCardLabel({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        ExcludeSemantics(
+          child: Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+        ),
+      ],
+    );
+  }
+}
+
 class _CoachingObservationCard extends StatelessWidget {
   const _CoachingObservationCard({required this.observation});
 
@@ -675,9 +773,9 @@ class _CoachingObservationCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ONE OBSERVATION',
-            style: Theme.of(context).textTheme.labelLarge,
+          const _InsightsCardLabel(
+            icon: AppIcons.lightbulbOutline,
+            label: 'ONE OBSERVATION',
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -709,10 +807,9 @@ class _CoachingObservationCard extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primaryContainer
-                        .withAlpha(90),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withAlpha(90),
                     borderRadius: BorderRadius.circular(AppRadii.md),
                   ),
                   child: Text(observation.experiment!),
@@ -727,10 +824,7 @@ class _CoachingObservationCard extends StatelessWidget {
 }
 
 class _SkillsetProfileCard extends StatelessWidget {
-  const _SkillsetProfileCard({
-    required this.skillset,
-    required this.onRetry,
-  });
+  const _SkillsetProfileCard({required this.skillset, required this.onRetry});
 
   final AsyncValue<SkillsetProfile> skillset;
   final VoidCallback onRetry;
@@ -753,9 +847,9 @@ class _SkillsetProfileCard extends StatelessWidget {
         error: (error, __) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'EXAMPLE SKILL PROFILE',
-              style: Theme.of(context).textTheme.labelLarge,
+            const _InsightsCardLabel(
+              icon: AppIcons.autoGraphOutlined,
+              label: 'EXAMPLE SKILL PROFILE',
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -778,9 +872,9 @@ class _SkillsetProfileCard extends StatelessWidget {
         data: (profile) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'EXAMPLE SKILL PROFILE',
-              style: Theme.of(context).textTheme.labelLarge,
+            const _InsightsCardLabel(
+              icon: AppIcons.autoGraphOutlined,
+              label: 'EXAMPLE SKILL PROFILE',
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -814,7 +908,8 @@ class _SkillsetProfileCard extends StatelessWidget {
                           ),
                         ],
                       );
-                      final stackScore = constraints.maxWidth < 280 ||
+                      final stackScore =
+                          constraints.maxWidth < 280 ||
                           MediaQuery.textScalerOf(context).scale(14) > 21;
                       if (stackScore) {
                         return Column(

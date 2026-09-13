@@ -134,7 +134,7 @@ void main() {
 
     await _selectLabeledDropdown<String>(
       tester,
-      'Cadence (required before activation)',
+      'Schedule',
       'Weekly',
     );
     var targetField = find.widgetWithText(
@@ -158,7 +158,7 @@ void main() {
 
     await _selectLabeledDropdown<String>(
       tester,
-      'Cadence (required before activation)',
+      'Schedule',
       'Daily',
     );
     targetField = find.widgetWithText(TextFormField, 'Daily target (fixed)');
@@ -177,7 +177,7 @@ void main() {
 
     await _selectLabeledDropdown<String>(
       tester,
-      'Cadence (required before activation)',
+      'Schedule',
       'Weekly',
     );
     targetField = find.widgetWithText(
@@ -315,14 +315,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Morning check-in'));
     await tester.pumpAndSettle();
-    for (final label in [
-      'estimated sleep start preset 00:00',
-      'estimated wake time preset 05:30',
+    for (final clock in [
+      ('Sleep start', const TimeOfDay(hour: 0, minute: 0)),
+      ('Wake time', const TimeOfDay(hour: 5, minute: 30)),
     ]) {
-      final choice = find.bySemanticsLabel(label);
+      final choice = find.text(clock.$1);
       await tester.ensureVisible(choice);
       await tester.tap(choice);
-      await tester.pump();
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.byType(TimePickerDialog))).pop(clock.$2);
+      await tester.pumpAndSettle();
     }
     final morningNext = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Next'),
@@ -420,9 +422,13 @@ void main() {
     );
     router.go(AppRoutes.coach);
     await tester.pumpAndSettle();
-    expect(find.text('Ask anything'), findsOneWidget);
+    expect(find.text('Ask your coach anything'), findsOneWidget);
     expect(find.text('Coach unavailable'), findsOneWidget);
-    expect(find.text('Ask Coach'), findsOneWidget);
+    expect(find.byTooltip('Send'), findsOneWidget);
+    expect(
+      tester.widget<IconButton>(find.byKey(const Key('coach-send-button'))).onPressed,
+      isNull,
+    );
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('coach-message-field')))
@@ -513,8 +519,9 @@ void main() {
     tester.widget<ListTile>(setupEntry).onTap!.call();
     await tester.pumpAndSettle();
     expect(find.text('Review your setup'), findsOneWidget);
-    expect(find.text('Flexible schedule'), findsOneWidget);
-    expect(find.text('No optional setup commitments.'), findsOneWidget);
+    expect(find.text('Flexible daily schedule'), findsOneWidget);
+    expect(find.text('No optional setup commitments.'), findsNothing);
+    expect(find.text('Optional setup'), findsOneWidget);
   });
 
   testWidgets('guest can inspect correlation insights', (tester) async {
@@ -528,22 +535,25 @@ void main() {
     tester.view.physicalSize = const Size(1200, 1300);
     await tester.pumpAndSettle();
     expect(find.text('ONE OBSERVATION'), findsOneWidget);
-    expect(find.text('Advanced correlation exploration'), findsOneWidget);
+    expect(find.text('Advanced'), findsOneWidget);
     expect(find.text('Compare'), findsNothing);
 
-    await tester.tap(find.text('Advanced correlation exploration'));
+    await tester.tap(find.text('Advanced'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Compare'), findsOneWidget);
+    expect(find.byKey(const Key('insights-advanced-pane-compare')), findsOneWidget);
     expect(find.text('90d'), findsOneWidget);
     expect(find.text('All'), findsNothing);
     expect(find.text('Trend overlay'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('insights-advanced-pane-trend')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('insights-advanced-pane-trend')));
+    await tester.pumpAndSettle();
     expect(find.text('0-100 normalized'), findsOneWidget);
 
-    await tester.drag(
-      find.byType(CustomScrollView).last,
-      const Offset(0, -900),
-    );
+    await tester.ensureVisible(find.byKey(const Key('insights-advanced-pane-matrix')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('insights-advanced-pane-matrix')));
     await tester.pumpAndSettle();
 
     expect(find.text('Top patterns'), findsOneWidget);
@@ -612,7 +622,7 @@ Future<void> _startGuestAndFillRequiredSetup(WidgetTester tester) async {
   expect(find.text('Math'), findsNothing);
   expect(find.text('Build a steadier weekly routine'), findsNothing);
 
-  await _selectDropdownValue(tester, 0, 'Flexible schedule');
+  await _selectDropdownValue(tester, 0, 'Flexible daily schedule');
   await _selectDropdownValue(tester, 1, 'Morning');
 }
 

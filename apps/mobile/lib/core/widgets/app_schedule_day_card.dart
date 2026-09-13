@@ -45,6 +45,7 @@ class AppScheduleDayCard extends StatelessWidget {
     required this.emptyLabel,
     required this.onItemTap,
     this.showDate = true,
+    this.timelineStyle = false,
   });
 
   final DateTime localDate;
@@ -52,6 +53,8 @@ class AppScheduleDayCard extends StatelessWidget {
   final String emptyLabel;
   final ValueChanged<AppScheduleDayItem> onItemTap;
   final bool showDate;
+  /// Planner-only presentation; default Today cards retain their current style.
+  final bool timelineStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +75,7 @@ class AppScheduleDayCard extends StatelessWidget {
             for (final item in items)
               _ScheduleItemRow(
                 item: item,
+                timelineStyle: timelineStyle,
                 onTap: () => onItemTap(item),
               ),
         ],
@@ -81,10 +85,11 @@ class AppScheduleDayCard extends StatelessWidget {
 }
 
 class _ScheduleItemRow extends StatefulWidget {
-  const _ScheduleItemRow({required this.item, required this.onTap});
+  const _ScheduleItemRow({required this.item, required this.onTap, this.timelineStyle = false});
 
   final AppScheduleDayItem item;
   final VoidCallback onTap;
+  final bool timelineStyle;
 
   @override
   State<_ScheduleItemRow> createState() => _ScheduleItemRowState();
@@ -114,6 +119,11 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final appearance = item.category.visual(context);
+    final timeline = widget.timelineStyle;
+    final tokens = context.visualTokens;
+    final largeTimeline = timeline && MediaQuery.textScalerOf(context).scale(16) >= 24;
+    final splitTime = timeline && MediaQuery.sizeOf(context).width >= 900 &&
+        MediaQuery.textScalerOf(context).scale(16) < 24 && item.detail.length < 25;
     final action = item.actionable ? _activate : null;
     final statusLabel = item.status == null ? null : _statusLabel(item.status!);
     final semanticsLabel = '${[
@@ -125,15 +135,20 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
     return Container(
       key: ValueKey('schedule-day-item-${item.id}'),
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: timeline ? const EdgeInsets.only(left: 3) : null,
+      decoration: timeline ? BoxDecoration(
+        color: appearance.foreground,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ) : null,
       child: Material(
         key: ValueKey('schedule-day-item-material-${item.id}'),
-        color: appearance.background,
+        color: timeline ? tokens.surfaceRaised : appearance.background,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
           side: BorderSide(
             color: _showFocusHighlight
                 ? context.visualTokens.focus
-                : appearance.foreground.withValues(alpha: 0.34),
+                : timeline ? tokens.outlineSoft : appearance.foreground.withValues(alpha: 0.34),
             width: _showFocusHighlight ? 2 : 1,
           ),
         ),
@@ -171,13 +186,33 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: AppSpacing.sm,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: timeline ? AppSpacing.md : AppSpacing.sm,
+                    vertical: timeline ? AppSpacing.md : AppSpacing.sm,
                   ),
-                  child: Row(
+                  child: largeTimeline ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Icon(item.icon ?? appearance.icon, size: 22, color: appearance.foreground),
+                        const Spacer(),
+                        if (action != null) Icon(AppIcons.chevronRight, color: appearance.foreground),
+                      ]),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(item.title, style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(item.detail, style: Theme.of(context).textTheme.bodyMedium),
+                      Text(appearance.label, style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: tokens.textSecondary)),
+                    ],
+                  ) : Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      if (splitTime) ...[
+                        SizedBox(width: 106, child: Text(item.detail,
+                          style: Theme.of(context).textTheme.bodyMedium)),
+                        const SizedBox(width: AppSpacing.sm),
+                      ],
                       if (item.status case final status?) ...[
                         _ScheduleStatusBox(
                           itemId: item.id,
@@ -186,10 +221,14 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
                         ),
                         const SizedBox(width: AppSpacing.sm),
                       ],
-                      Icon(
-                        item.icon ?? appearance.icon,
-                        size: 22,
-                        color: appearance.foreground,
+                      Container(
+                        padding: timeline ? const EdgeInsets.all(10) : EdgeInsets.zero,
+                        decoration: timeline ? BoxDecoration(
+                          color: appearance.background,
+                          borderRadius: BorderRadius.circular(AppRadii.sm),
+                        ) : null,
+                        child: Icon(item.icon ?? appearance.icon,
+                          size: 22, color: appearance.foreground),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
@@ -198,18 +237,17 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
                           children: [
                             Text(
                               item.title,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(color: appearance.foreground),
+                              style: (splitTime ? Theme.of(context).textTheme.titleLarge
+                                  : Theme.of(context).textTheme.titleMedium)
+                                  ?.copyWith(color: timeline ? tokens.textPrimary : appearance.foreground),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              '${item.detail} · ${appearance.label}',
+                              splitTime ? appearance.label : '${item.detail} · ${appearance.label}',
                               style: Theme.of(context)
                                   .textTheme
                                   .bodyMedium
-                                  ?.copyWith(color: appearance.foreground),
+                                  ?.copyWith(color: timeline ? tokens.textSecondary : appearance.foreground),
                             ),
                           ],
                         ),

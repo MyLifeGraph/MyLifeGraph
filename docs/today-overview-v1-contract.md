@@ -139,11 +139,19 @@ fixed commitments remain non-executable context.
 
 Deadline Planner-managed tasks are excluded from Today selection and progress
 because their execution authority belongs to Preparation Plans. They remain visible in
-`Show all tasks`, where editing redirects to the owning plan. Future, undated,
+`All tasks`, where editing redirects to the owning plan. Future, undated,
 completed, and cancelled tasks also remain available in that expansion. Inline
 complete/undo and Focus actions reuse the existing Task/Focus contracts; no new
 write path is introduced. Creating a future or undated task expands the full
 list so the saved result does not appear to vanish.
+`Tasks due today` uses compact Habit-style rows: the leading circle invokes
+the existing completion action, while Focus and restore remain separate.
+Pending writes replace that circle with a spinner and disable row actions.
+The expanded full task list uses the same compact rows and a heading-adjacent
+`Open Planner` icon. Managed-plan navigation, Focus, restore, and all task
+commands and selection rules remain unchanged.
+`Tasks due today` places the `Open Planner` calendar icon beside its heading
+when space permits; very narrow or large-text layouts stack it for readability.
 
 `Today's habits` includes active daily habits, selected-weekday habits scheduled
 for the local weekday, and weekly-target habits while their completed outcome
@@ -155,12 +163,13 @@ commands. Skipped outcomes stay distinct from completion.
 
 The primary Today order is:
 
-1. profile-local date and source, with the shared optional unread-Coach and
-   Settings header actions;
+1. Today title with optional unread-Coach and Settings actions aligned
+   top-right, then the profile-local date; no redundant account/source Info;
 2. Check-in streak with Morning and Evening save state/actions;
 3. green Today progress bar;
 4. `Today's schedule` vertical agenda;
-5. `Tasks due today`, followed by collapsed `Show all tasks`;
+5. `Tasks due today`, followed by collapsed `All tasks`, with compact task rows
+   directly inside and a header-adjacent Planner icon, without a nested heading;
 6. `Habits for today`;
 7. a direct `Weekly review` navigation entry, followed by the independently
    collapsed `Full week` section. The Weekly Review entry is omitted when its
@@ -184,10 +193,10 @@ Recommendation and Decision Feedback accordions are retired rather than hidden
 behind compatibility UI.
 
 Explanatory copy is initially hidden behind an independent circled information
-control beside each affected heading. This applies to the Today source/updated
-line, the normal streak explanation, the progress-inclusion explanation,
-`Today's schedule`, `Tasks due today`, `Show all tasks`, its expanded `Tasks`
-subsection, `Habits for today`, and the Full-week accordion description.
+control beside each affected heading. This applies to the normal streak
+explanation, the progress-inclusion explanation, `Today's schedule`,
+`Tasks due today`, `Habits for today`, and the Full-week accordion description.
+Today and All tasks have no information control or redundant descriptions.
 The direct `Weekly review` entry keeps its summary visible and has no
 information control. Each disclosure has local, non-persisted state; several
 may remain open at the same time, and a newly created Today route starts them
@@ -195,7 +204,7 @@ closed. Error, loading, result, unavailable, action, counter, progress, and
 empty-state content remains visible according to its owning state and is never
 gated by an information control.
 
-An information click inside `Show all tasks` or a supporting accordion does not
+An information click inside a supporting accordion does not
 toggle that accordion. In particular it does not begin Full-week loading; that
 projection is watched only after its content accordion opens. Each information control is a keyboard-operable
 button with a real 44×44 logical hit, focus, and semantics rectangle. Its visible
@@ -281,7 +290,10 @@ Sunday so two real cards remain. Horizontal movement snaps by one day and
 cannot pass Monday or Sunday. Web switches to seven columns only when all seven
 cards can retain at least 208 logical pixels; otherwise it uses the same
 bounded horizontal strip. Day cards grow with content rather than clipping a
-dense agenda. Only Full week may escape Today's compact content width.
+dense agenda. Full week and Weekly review share Today's 1080-pixel maximum
+content width; Full week uses its existing day pager when seven columns cannot
+fit. Check-in button colors and outlined surfaces are shared across breakpoints,
+while mobile and desktop retain their respective content arrangements.
 
 The application-level projection coordinator invalidates `Beat yesterday`
 after a durable Daily Capture change. Habit outcome/definition, Today Task or

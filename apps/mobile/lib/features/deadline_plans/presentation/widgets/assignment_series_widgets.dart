@@ -139,6 +139,7 @@ class _AssignmentSeriesEditorSheetState
         const SizedBox(height: AppSpacing.sm),
         const ListTile(
           key: ValueKey('assignment-series-locked-kind'),
+          dense: true,
           contentPadding: EdgeInsets.zero,
           leading: Icon(AppIcons.checkCircleOutline),
           title: Text('Assignment'),
@@ -150,6 +151,7 @@ class _AssignmentSeriesEditorSheetState
           maxLength: 160,
           decoration: const InputDecoration(
             labelText: 'Shared assignment title',
+            counterText: '',
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -250,18 +252,9 @@ class _AssignmentSeriesEditorSheetState
           'These values apply to every future occurrence. You can still edit one occurrence later; a later whole-series edit intentionally overwrites future deviations.',
         ),
         const SizedBox(height: AppSpacing.md),
-        const Text('Preferred focus block'),
-        const SizedBox(height: AppSpacing.sm),
-        SegmentedButton<int>(
-          direction: _choiceDirection(context),
-          segments: const [
-            ButtonSegment(value: 25, label: Text('25 min')),
-            ButtonSegment(value: 50, label: Text('50 min')),
-            ButtonSegment(value: 90, label: Text('90 min')),
-          ],
-          selected: {_sessionMinutes},
-          onSelectionChanged: (values) =>
-              setState(() => _sessionMinutes = values.single),
+        _PreparationSessionPicker(
+          minutes: _sessionMinutes,
+          onChanged: (minutes) => setState(() => _sessionMinutes = minutes),
         ),
         const SizedBox(height: AppSpacing.md),
         TextField(
@@ -414,6 +407,10 @@ class _AssignmentSeriesEditorSheetState
   }
 
   void _submit() {
+    if (_sessionMinutes < 25 || _sessionMinutes > 180) {
+      _showValidation('Enter a focus block from 25 to 180 minutes.');
+      return;
+    }
     final count = int.tryParse(_countController.text.trim());
     final total = _totalMinutes;
     final daily = int.tryParse(_dailyCapController.text.trim());

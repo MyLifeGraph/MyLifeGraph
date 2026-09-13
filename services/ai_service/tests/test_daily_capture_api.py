@@ -109,6 +109,41 @@ async def _request(
         )
 
 
+@pytest.mark.parametrize("branch", ["morning", "evening"])
+@pytest.mark.parametrize("value", [None, 0, 1, 2])
+def test_optional_skillset_values_reach_authenticated_owner_unchanged(branch, value):
+    repository = Repository()
+    capture = (
+        _v5_morning_capture()
+        if branch == "morning"
+        else {
+            **_evening_capture(),
+            "branch_version": "daily-capture-v5",
+        }
+    )
+    fields = (
+        {"motivation": value}
+        if branch == "morning"
+        else {"sport": value, "social": value}
+    )
+    capture["skillset"] = {"version": "skillset-capture-v1", **fields}
+    response = asyncio.run(
+        _request(
+            repository,
+            branch=branch,
+            body={
+                "contract_version": "daily-capture-write-v1",
+                "request_id": REQUEST_ID,
+                "expected_capture": None,
+                "capture": capture,
+            },
+        )
+    )
+    assert response.status_code == 200
+    assert repository.calls[0]["user_id"] == USER_ID
+    assert repository.calls[0]["capture"]["skillset"] == capture["skillset"]
+
+
 def test_daily_capture_put_passes_complete_branch_and_expected_identity() -> None:
     repository = Repository()
     body = {

@@ -993,7 +993,7 @@ export function extractFastApiRoutesFromTexts(
     prefixes.add(`${apiPrefix}${routerPrefix}` || '/');
 
     const decoratorPattern =
-      /@router\.(get|post|put|patch|delete)\(\s*['"]([^'"]*)['"]/g;
+      /@(?:router|app)\.(get|post|put|patch|delete)\(\s*['"]([^'"]*)['"]/g;
     for (const match of text.matchAll(decoratorPattern)) {
       const routePath = `${apiPrefix}${routerPrefix}${match[2]}` || '/';
       routes.push({
@@ -1025,7 +1025,15 @@ export function extractFastApiRoutes(root) {
         readUtf8(join(routeDirectory, name)),
       ]),
   );
-  return extractFastApiRoutesFromTexts(routeSources, apiPrefix);
+  const inventory = extractFastApiRoutesFromTexts(routeSources, apiPrefix);
+  const speechPath = 'services/speech_service/app.py';
+  if (existsSync(resolve(root, speechPath))) {
+    const speech = extractFastApiRoutesFromTexts(
+      new Map([[speechPath, readUtf8(resolve(root, speechPath))]]), '',
+    );
+    inventory.routes.push(...speech.routes);
+  }
+  return inventory;
 }
 
 function routePattern(routePath) {
@@ -1077,6 +1085,12 @@ export function findDocumentedRouteErrorsFromTexts(routeInventory, documents) {
       continue;
     }
     for (const match of text.matchAll(routeReferencePattern)) {
+      const preceding = text.slice(0, match.index);
+      const token = preceding.match(/\S+$/)?.[0] ?? '';
+      const followsHost = /https?:\/\/[^/\s`]+$/.test(token);
+      // /auth/v1 and /rest/v1 are not root FastAPI routes. Still check
+      // absolute API URLs such as https://api.example.test/v1/missing.
+      if (!followsHost && /[A-Za-z0-9_./-]$/.test(preceding)) continue;
       const documentedRoute = normalizeDocumentedRoute(match[0]);
       const matchingRoutes = actualPatterns.filter(({ pattern }) =>
         pattern.test(documentedRoute),

@@ -10,8 +10,10 @@ import 'package:my_life_graph/composition/coach_response_cancellation.dart';
 import '../../application/coach_controller.dart';
 import '../../application/coach_turn_notice.dart';
 import '../../data/coach_api_data_source.dart';
+import '../../data/coach_dictation_request_impl.dart';
 import '../../data/coach_repository_impl.dart';
 import '../../domain/coach.dart';
+import '../../domain/coach_dictation_request.dart';
 import '../../domain/coach_repository.dart';
 
 final coachApiDataSourceProvider = Provider<CoachApiDataSource>(
@@ -22,6 +24,18 @@ final coachAccessTokenProvider = Provider<CoachAccessTokenProvider>(
   (ref) =>
       () => ref.read(supabaseClientProvider)?.auth.currentSession?.accessToken,
 );
+
+final coachDictationRequestFactoryProvider =
+    Provider<CoachDictationRequest Function()>((ref) {
+  return () {
+    const override = String.fromEnvironment('SPEECH_SERVICE_BASE_URL');
+    return CoachDictationRequestImpl(
+      baseUrl: override.isEmpty
+          ? ref.read(appConfigProvider).aiServiceBaseUrl
+          : override,
+    );
+  };
+});
 
 final coachRepositoryProvider = Provider<CoachRepository>((ref) {
   final isLocalDemo = ref.watch(
@@ -38,7 +52,9 @@ final coachRepositoryProvider = Provider<CoachRepository>((ref) {
     accessTokenProvider: ref.watch(coachAccessTokenProvider),
     isLocalDemo: isLocalDemo,
     canAccessCoachBackend: canAccessCoachBackend,
-    credentialsProvider: () {
+    credentialsProvider: () async {
+      // The first capability read must wait for the default selection and keys.
+      await ref.read(coachCredentialsProvider.notifier).initialization;
       final credentials = ref.read(coachCredentialsProvider);
       final provider = credentials.provider;
       final key = credentials.activeKey;
@@ -88,6 +104,25 @@ final coachTurnNoticeProvider =
   return CoachTurnNoticeController(
     profileId: ref.watch(coachActiveProfileIdProvider),
   );
+});
+
+// Memory-only disclosure acknowledgement for the current signed-in app session.
+// Profile loss/change resets it; navigating away from Coach does not.
+final coachDictationConsentProvider = StateProvider<bool>((ref) {
+  ref.watch(coachActiveProfileIdProvider);
+  return false;
+});
+
+// Dictation can be tested without a hosted Project Coach on the dev stack.
+// Hosted clients and guest/mock sessions retain their existing availability gate.
+final coachLocalDictationProvider = Provider<bool>((ref) {
+  try {
+    final config = ref.watch(appConfigProvider);
+    return config.environment == 'development' && !config.useMockData &&
+        ref.watch(coachActiveProfileIdProvider) != null;
+  } on StateError {
+    return false;
+  }
 });
 
 final coachControllerProvider =

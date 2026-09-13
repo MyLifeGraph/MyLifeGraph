@@ -43,6 +43,7 @@ void main() {
     );
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-header-settings')), findsNothing);
     expect(find.text('Planning and learning'), findsOneWidget);
     await _revealText(tester, 'Daily preparation budget', pageScrollable);
     expect(
@@ -63,7 +64,7 @@ void main() {
     );
     expect(
       find.text(
-        'Review routine candidates, study setup, and fixed commitments.',
+        'Routines, study rhythm and fixed commitments.',
         skipOffstage: false,
       ),
       findsOneWidget,
@@ -75,9 +76,9 @@ void main() {
     await _revealText(tester, 'Delete account', pageScrollable);
     expect(find.text('Delete account'), findsOneWidget);
     expect(
-      find.text(
-        'Available only for a synced account.',
-        skipOffstage: false,
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'Delete account'),
+        matching: find.text('A local guest has no synced account to delete.'),
       ),
       findsOneWidget,
     );

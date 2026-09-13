@@ -39,7 +39,7 @@ class AppHeaderActions extends ConsumerWidget {
             notice: notice,
             onPressed: () => _showCoachNotice(context, notice),
           ),
-        _SettingsButton(selected: settingsSelected),
+        if (!settingsSelected) const _SettingsButton(selected: false),
       ],
     );
   }

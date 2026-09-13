@@ -29,15 +29,18 @@ class TodayInfoDisclosure extends StatelessWidget {
   });
 
   final String topic;
-  final String description;
+  final String? description;
   final TodayInfoHeaderBuilder headerBuilder;
   final TextStyle? descriptionStyle;
 
   @override
   Widget build(BuildContext context) {
+    if (description == null) {
+      return headerBuilder(context, const SizedBox.shrink());
+    }
     return AppInfoDisclosure(
       topic: topic,
-      description: description,
+      description: description!,
       descriptionStyle: descriptionStyle,
       layout: AppInfoDisclosureLayout.compact,
       keyPrefix: 'today-info',
@@ -191,6 +194,7 @@ class DashboardSectionTitle extends StatelessWidget {
     this.icon,
     this.iconColor,
     this.trailing,
+    this.compactTrailing = false,
   });
 
   final String title;
@@ -199,6 +203,7 @@ class DashboardSectionTitle extends StatelessWidget {
   final IconData? icon;
   final Color? iconColor;
   final Widget? trailing;
+  final bool compactTrailing;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +255,7 @@ class DashboardSectionTitle extends StatelessWidget {
     if (trailing == null) return copy;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stack = constraints.maxWidth < 520 ||
+        final stack = constraints.maxWidth < (compactTrailing ? 280 : 520) ||
             MediaQuery.textScalerOf(context).scale(16) >= 24;
         if (stack) {
           return Column(
@@ -391,14 +396,16 @@ class DashboardInlineExpansionCard extends StatefulWidget {
   const DashboardInlineExpansionCard({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
+    this.trailing,
     required this.expanded,
     required this.onToggle,
     required this.child,
   });
 
   final String title;
-  final String subtitle;
+  final String? subtitle;
+  final Widget? trailing;
   final bool expanded;
   final VoidCallback onToggle;
   final Widget child;
@@ -511,6 +518,7 @@ class _DashboardInlineExpansionCardState
                     ),
                   ),
                   infoButton,
+                  if (widget.trailing != null) widget.trailing!,
                 ],
               ),
             ),

@@ -254,6 +254,17 @@ void main() {
       find.byType(DropdownButton<String?>),
     );
     expect(selector.isExpanded, isTrue);
+    expect(selector.menuMaxHeight, lessThanOrEqualTo(320));
+    await tester.ensureVisible(find.byType(DropdownButton<String?>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButton<String?>));
+    await tester.pumpAndSettle();
+    final lastOption = find.textContaining('A very long focus target').last;
+    await tester.ensureVisible(lastOption);
+    await tester.pumpAndSettle();
+    expect(tester.getBottomLeft(lastOption).dy, lessThan(568));
+    await tester.tap(lastOption);
+    await tester.pumpAndSettle();
     final targetLabel = tester.widget<Text>(
       find
           .textContaining(

@@ -719,6 +719,26 @@
     },
     {
       "coverage": "shared_named",
+      "key": "skillsetCapture",
+      "version": "skillset-capture-v1",
+      "sources": [
+        {"path": "apps/mobile/lib/features/quick_action/domain/skillset_signals.dart", "symbol": "skillsetCaptureVersion"},
+        {"path": "services/ai_service/app/contracts/skillset_capture.py", "symbol": "SKILLSET_CAPTURE_VERSION"}
+      ],
+      "owners": ["docs/daily-briefing-implementation-plan.md", "docs/personal-learning-v1-contract.md", "docs/supabase-current-state.md"]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "skillsetObservations",
+      "version": "skillset-observations-v1",
+      "sources": [
+        {"path": "apps/mobile/lib/features/insights/domain/entities/skillset_observations.dart", "symbol": "skillsetViewVersion"},
+        {"path": "services/ai_service/app/models/personal_patterns.py", "symbol": "SKILLSET_VIEW_VERSION"}
+      ],
+      "owners": ["docs/personal-learning-v1-contract.md"]
+    },
+    {
+      "coverage": "shared_named",
       "key": "sleepRecommendation",
       "version": "sleep-recommendation-v1",
       "sources": [

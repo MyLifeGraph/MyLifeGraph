@@ -106,24 +106,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/coach');
       expect(find.byType(CoachPage), findsOneWidget);
-      expect(container.read(coachTurnNoticeProvider), isNotNull);
-
-      final details = await _scrollUntilBuilt(
-        tester,
-        find.text('Data and analysis details'),
+      final chat = tester.widget<SingleChildScrollView>(
+        find.byKey(const Key('coach-chat-scroll')),
       );
-      await Scrollable.ensureVisible(
-        tester.element(details),
-        alignment: 0.7,
-        duration: Duration.zero,
-      );
-      await tester.pumpAndSettle();
+      expect(chat.controller!.offset, chat.controller!.position.maxScrollExtent);
+      // Reopening now reveals the reply end automatically; the popup alone
+      // above still does not mark it read.
       expect(container.read(coachTurnNoticeProvider), isNull);
     },
   );
 
   testWidgets('short fully visible answer is read after its first layout',
       (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 1000);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
     final repository = _ControlledCoachRepository();
     final router = _router();
     addTearDown(router.dispose);
@@ -145,12 +143,22 @@ void main() {
     expect(container.read(coachTurnNoticeProvider), isNull);
   });
 
-  testWidgets('Settings is pushed, selected, and returns to the source page',
+  testWidgets('Settings hides its self-link, keeps Coach notice and returns back',
       (tester) async {
     final repository = _ControlledCoachRepository();
     final router = _router(initialLocation: '/today');
     addTearDown(router.dispose);
     await _pumpApp(tester, router: router, repository: repository);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Today content')),
+    );
+    container.read(coachTurnNoticeProvider.notifier).publish(
+          profileId: 'profile-1',
+          requestId: coachRequestId,
+          status: CoachTurnNoticeStatus.completed,
+        );
+    await tester.pumpAndSettle();
 
     final settingsButton = tester.widget<IconButton>(
       find.byKey(const ValueKey('global-header-settings')),
@@ -160,18 +168,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Settings content'), findsOneWidget);
-    expect(find.byIcon(AppIcons.settings), findsOneWidget);
-    expect(find.byTooltip('Settings, current page'), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-header-settings')), findsNothing);
+    expect(find.byTooltip('Settings, current page'), findsNothing);
     final pushedMatchCount = _imperativeMatchCount(
       router.routerDelegate.currentConfiguration.matches,
     );
     expect(pushedMatchCount, 1);
 
     await tester.tap(
-      find.byKey(const ValueKey('global-header-settings')),
+      find.byKey(const ValueKey('global-header-coach-notice')),
     );
     await tester.pumpAndSettle();
     expect(find.text('Settings content'), findsOneWidget);
+    expect(find.text('Your Coach answer is ready.'), findsOneWidget);
     expect(
       _imperativeMatchCount(
         router.routerDelegate.currentConfiguration.matches,
@@ -182,6 +191,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('app-page-back')));
     await tester.pumpAndSettle();
     expect(find.text('Today content'), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-header-settings')), findsOneWidget);
   });
 
   testWidgets('header actions retain 44 pixel targets at 320px and 200% text',
@@ -297,21 +307,6 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
-}
-
-Future<Finder> _scrollUntilBuilt(
-  WidgetTester tester,
-  Finder finder,
-) async {
-  for (var attempt = 0; attempt < 20 && finder.evaluate().isEmpty; attempt++) {
-    await tester.drag(
-      find.byType(Scrollable).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
-  }
-  expect(finder, findsWidgets);
-  return finder.last;
 }
 
 int _imperativeMatchCount(Iterable<RouteMatchBase> matches) {

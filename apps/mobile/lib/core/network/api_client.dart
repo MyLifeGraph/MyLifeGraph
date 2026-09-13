@@ -107,6 +107,33 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> postBytesWithTimeout(
+    String path, {
+    required Uint8List bytes,
+    required Duration sendTimeout,
+    required Duration receiveTimeout,
+    Map<String, String>? headers,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        path,
+        data: Stream.value(bytes),
+        cancelToken: cancelToken,
+        options: Options(
+          headers: headers,
+          contentType: 'application/octet-stream',
+          sendTimeout: sendTimeout,
+          receiveTimeout: receiveTimeout,
+          followRedirects: false,
+        ),
+      );
+      return response.data ?? <String, dynamic>{};
+    } on DioException catch (error) {
+      throw _networkRequestException(error);
+    }
+  }
+
   Future<Map<String, dynamic>> patchJson(
     String path, {
     Map<String, dynamic>? body,

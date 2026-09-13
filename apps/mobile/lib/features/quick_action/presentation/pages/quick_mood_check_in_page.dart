@@ -13,6 +13,9 @@ import '../../../focus/presentation/widgets/focus_reflection_sheet.dart';
 import '../../domain/quick_check_in.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
+import '../../../../composition/skillset_providers.dart';
+import '../../domain/skillset_signals.dart';
+import '../widgets/optional_skillset_controls.dart';
 
 class QuickMoodCheckInPage extends ConsumerStatefulWidget {
   const QuickMoodCheckInPage({super.key});
@@ -29,7 +32,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   late EveningShutdownDraft _draft;
   var _stepIndex = 0;
   var _isLoading = true;
-  var _loadedSavedCapture = false;
   var _safeCaptureLoaded = false;
   var _isSaving = false;
   String? _loadError;
@@ -111,6 +113,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Widget _buildCheckInStep() {
+    final dimensions = ref.watch(skillsetDimensionsProvider);
+    final allowExtras = ref.watch(optionalSkillsetCaptureProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -118,18 +122,16 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           label: 'Mood',
           value: _draft.mood,
           semanticPrefix: 'evening mood',
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(mood: value),
-          ),
+          onChanged: (value) =>
+              setState(() => _draft = _draft.copyWith(mood: value)),
         ),
         const SizedBox(height: AppSpacing.md),
         CaptureRatingControl(
           label: 'Energy left',
           value: _draft.energy,
           semanticPrefix: 'evening energy',
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(energy: value),
-          ),
+          onChanged: (value) =>
+              setState(() => _draft = _draft.copyWith(energy: value)),
         ),
         const SizedBox(height: AppSpacing.md),
         CaptureRatingControl(
@@ -140,11 +142,50 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             _draft = _draft.copyWith(
               stress: value,
               stressSource: value < 5 ? null : _draft.stressSource,
-              stressControllability:
-                  value < 5 ? null : _draft.stressControllability,
+              stressControllability: value < 5
+                  ? null
+                  : _draft.stressControllability,
             );
           }),
         ),
+        if (allowExtras &&
+            (dimensions.contains('sport') ||
+                dimensions.contains('social') ||
+                dimensions.contains('discipline')))
+          Material(
+            type: MaterialType.transparency,
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('More (optional)'),
+              children: [
+                if (dimensions.contains('sport') ||
+                    dimensions.contains('discipline'))
+                  OptionalSkillsetChoice(
+                    label: 'Sport today',
+                    choices: const ['None', 'Light', 'Intense'],
+                    value: _draft.skillset?.values['sport'],
+                    onChanged: (value) => setState(
+                      () => _draft = _draft.copyWith(
+                        skillset: (_draft.skillset ?? const SkillsetSignals({}))
+                            .withValue('sport', value),
+                      ),
+                    ),
+                  ),
+                if (dimensions.contains('social'))
+                  OptionalSkillsetChoice(
+                    label: 'Social contact',
+                    choices: const ['Little', 'Some', 'Lots'],
+                    value: _draft.skillset?.values['social'],
+                    onChanged: (value) => setState(
+                      () => _draft = _draft.copyWith(
+                        skillset: (_draft.skillset ?? const SkillsetSignals({}))
+                            .withValue('social', value),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -164,9 +205,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           semanticLabel: 'planned sleep time',
           value: _draft.plannedSleepTime,
           quickValues: const ['22:00', '23:00', '00:00'],
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(plannedSleepTime: value),
-          ),
+          onChanged: (value) =>
+              setState(() => _draft = _draft.copyWith(plannedSleepTime: value)),
         ),
         const SizedBox(height: AppSpacing.xl),
         const CaptureInfoDisclosure(
@@ -207,9 +247,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
                   ),
                 )
                 .toList(),
-            onChanged: (value) => setState(
-              () => _draft = _draft.copyWith(stressSource: value),
-            ),
+            onChanged: (value) =>
+                setState(() => _draft = _draft.copyWith(stressSource: value)),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
@@ -235,10 +274,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           ),
           const SizedBox(height: AppSpacing.md),
         ],
-        Text(
-          'Optional notes',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Optional notes', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.md),
         _optionalNoteField(
           controller: _reflectionController,
@@ -286,8 +322,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     required String hint,
   }) {
     final countStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        );
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
     return Stack(
       children: [
         TextField(
@@ -364,7 +400,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     try {
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveEvening(draft);
-      await ref.read(projectionRefreshCoordinatorProvider).dailyCaptureChanged(
+      await ref
+          .read(projectionRefreshCoordinatorProvider)
+          .dailyCaptureChanged(
             targetDate: draft.entryDate,
             refreshDailySnapshot:
                 store.target == QuickCheckInSaveTarget.supabase,
@@ -422,7 +460,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           capturedAt: saved == null ? null : _draft.capturedAt,
           plannedSleepTime:
               source.plannedSleepTime ?? sleepPlan?.plannedSleepTime,
-          sleepTargetMinutes: source.sleepTargetMinutes ??
+          sleepTargetMinutes:
+              source.sleepTargetMinutes ??
               sleepPlan?.sleepTargetMinutes ??
               EveningShutdownDraft.defaultSleepTargetMinutes,
         );
@@ -431,7 +470,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           if (saved != null) {
             _reflectionController.text = saved.reflectionNote;
             _blockerController.text = saved.specificBlocker;
-            _loadedSavedCapture = true;
           }
           _todayFocusSessions = focusData?.sessions ?? const [];
           _todayFocusReflections = focusData?.reflections ?? const {};
@@ -591,24 +629,24 @@ class _TodayFocusReflectionData {
 }
 
 String _stressSourceLabel(StressSource value) => switch (value) {
-      StressSource.workload => 'Workload',
-      StressSource.avoidablePressure => 'Avoidable pressure',
-      StressSource.privateEmotional => 'Private or emotional',
-      StressSource.physicalRecovery => 'Physical recovery',
-      StressSource.externalEnvironment => 'External environment',
-    };
+  StressSource.workload => 'Workload',
+  StressSource.avoidablePressure => 'Avoidable pressure',
+  StressSource.privateEmotional => 'Private or emotional',
+  StressSource.physicalRecovery => 'Physical recovery',
+  StressSource.externalEnvironment => 'External environment',
+};
 
 String _stressSourceDescription(StressSource value) => switch (value) {
-      StressSource.workload => 'Deadlines, volume, meetings, or responsibility',
-      StressSource.avoidablePressure =>
-        'Late starts, unclear next actions, or planning debt',
-      StressSource.privateEmotional =>
-        'Personal events, conflict, grief, family, or worry',
-      StressSource.physicalRecovery =>
-        'Illness, pain, poor sleep, exhaustion, or recovery',
-      StressSource.externalEnvironment =>
-        'Travel, noise, interruptions, or external constraints',
-    };
+  StressSource.workload => 'Deadlines, volume, meetings, or responsibility',
+  StressSource.avoidablePressure =>
+    'Late starts, unclear next actions, or planning debt',
+  StressSource.privateEmotional =>
+    'Personal events, conflict, grief, family, or worry',
+  StressSource.physicalRecovery =>
+    'Illness, pain, poor sleep, exhaustion, or recovery',
+  StressSource.externalEnvironment =>
+    'Travel, noise, interruptions, or external constraints',
+};
 
 String _stressControllabilityLabel(StressControllability value) =>
     switch (value) {
@@ -617,11 +655,7 @@ String _stressControllabilityLabel(StressControllability value) =>
       StressControllability.mostlyControllable => 'Mostly',
     };
 
-enum _EveningStepKind {
-  checkIn,
-  sleepPlan,
-  context,
-}
+enum _EveningStepKind { checkIn, sleepPlan, context }
 
 class _EveningStep {
   const _EveningStep({

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -337,15 +338,23 @@ void main() {
         requestContractVersion: 'coach-request-v4',
       ),
     );
-    final repository = _repository(
-      client,
+    final credentials = Completer<CoachProviderCredentials?>();
+    final repository = CoachRepositoryImpl(
       config: pilotConfig,
-      credentials: const CoachProviderCredentials(
-        provider: CoachProviderName.operatorCodexPilot,
-      ),
+      apiDataSource: CoachApiDataSource(client),
+      accessTokenProvider: () => 'access-token',
+      isLocalDemo: false,
+      canAccessCoachBackend: true,
+      credentialsProvider: () => credentials.future,
     );
 
-    final capability = await repository.getCapabilities();
+    final pendingCapability = repository.getCapabilities();
+    await Future<void>.delayed(Duration.zero);
+    expect(client.totalCalls, 0);
+    credentials.complete(const CoachProviderCredentials(
+      provider: CoachProviderName.operatorCodexPilot,
+    ));
+    final capability = await pendingCapability;
     final events = await repository
         .respond(requestId: coachRequestId, message: 'Compare my data.')
         .toList();

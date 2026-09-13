@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/core/widgets/app_card.dart';
 import 'package:my_life_graph/composition/today_command_providers.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
@@ -17,6 +18,25 @@ import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 import 'support/dashboard_full_week_fixture.dart';
 
 void main() {
+  testWidgets('desktop Today supporting cards share the main content width',
+      (tester) async {
+    await _pumpDashboard(tester, size: const Size(1800, 2200),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false, canUseSyncedHabits: true,
+        canUseSyncedExecution: true, canUseWeeklyReview: true,
+      ),
+    );
+    final streak = find.ancestor(
+      of: find.text('Check-in streak'), matching: find.byType(AppCard)).first;
+    final expected = tester.getRect(streak);
+    expect(expected.width, 1080);
+    for (final key in ['dashboard-weekly-review', 'dashboard-full-week']) {
+      final rect = tester.getRect(find.byKey(ValueKey(key)));
+      expect(rect.width, expected.width);
+      expect(rect.left, expected.left);
+    }
+  });
+
   testWidgets('guest Today makes zero Exam Plan Health reads', (tester) async {
     var healthReads = 0;
     await _pumpDashboard(
@@ -104,20 +124,18 @@ void main() {
     );
 
     const disclosures = <String, String>{
-      'Today': 'Your account data · updated 10:00',
       'Check-in streak':
           'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
       'Today\'s progress':
           'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
       'Today\'s schedule':
-          'This is today\'s timed agenda, not a to-do list. Setup, preparation, calendar, and focus blocks appear here in order.',
+          'Today\'s scheduled time blocks, in order.',
       'Tasks due today':
-          'These are planner tasks due, overdue, in progress, or completed today. They are not repeating habits.',
-      'Show all tasks': 'Future, undated, completed, and cancelled tasks',
+          'Due, overdue, in progress or completed today.',
       'Habits for today':
-          'These come back on a schedule. They are not one-off planner tasks.',
+          'Repeating activities for today.',
       'Full week':
-          'Your profile-local Monday–Sunday agenda across Setup, Preparation, Calendar, Focus, Planner Tasks, Habits, and Fixed commitments.',
+          'Your Monday–Sunday schedule in your account timezone.',
     };
 
     for (final description in disclosures.values) {
@@ -125,7 +143,7 @@ void main() {
     }
     expect(
       find.text(
-        'Look back at last week. This is not a today to-do.',
+        'Look back at last week.',
       ),
       findsOneWidget,
     );
@@ -143,13 +161,11 @@ void main() {
 
     expect(find.text('Future task'), findsNothing);
     await _tapExpansion(tester, const ValueKey('today-all-tasks'));
-    const allTasksDescription =
-        'Finite actions with durable estimates and deadlines.';
-    expect(find.text(allTasksDescription), findsNothing);
-    await _tapInfo(tester, 'Tasks');
-    expect(find.text(allTasksDescription), findsOneWidget);
-    await _tapInfo(tester, 'Tasks');
-    expect(find.text(allTasksDescription), findsNothing);
+    expect(find.text('All tasks'), findsOneWidget);
+    expect(find.text('Tasks'), findsNothing);
+    for (final topic in ['Today', 'All tasks', 'Tasks']) {
+      expect(find.byKey(ValueKey('today-info-control-$topic')), findsNothing);
+    }
 
     await _tapInfo(tester, 'Check-in streak');
     await _tapInfo(tester, 'Today\'s progress');
@@ -226,7 +242,7 @@ void main() {
     expect(fullWeekLoads, 2);
     expect(find.text('Full week unavailable'), findsNothing);
     expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+      find.byKey(const ValueKey('dashboard-full-week-day-pager')),
       findsOneWidget,
     );
   });
@@ -258,6 +274,7 @@ void main() {
 
     await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
     await tester.ensureVisible(find.text('Evening walk'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Evening walk'));
     await tester.pumpAndSettle();
 
@@ -359,7 +376,7 @@ void main() {
     expect(find.text('Full-week lecture'), findsOneWidget);
   });
 
-  testWidgets('Show all tasks reveals future and planner-managed tasks',
+  testWidgets('All tasks reveals future and planner-managed tasks',
       (tester) async {
     await _pumpDashboard(tester, snapshot: _todaySnapshot());
 
@@ -439,7 +456,7 @@ void main() {
     );
 
     await _tapInfo(tester, 'Tasks due today');
-    await _tapInfo(tester, 'Show all tasks');
+    await _tapExpansion(tester, const ValueKey('today-all-tasks'));
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
     await tester.pumpAndSettle();
@@ -560,7 +577,7 @@ Future<void> _ensureExpansionVisible(
 String _expansionTitle(ValueKey<String> key) {
   final title = switch (key.value) {
     'dashboard-full-week' => 'Full week',
-    'today-all-tasks' => 'Show all tasks',
+    'today-all-tasks' => 'All tasks',
     _ => throw StateError('Unknown expansion key ${key.value}.'),
   };
   return title;

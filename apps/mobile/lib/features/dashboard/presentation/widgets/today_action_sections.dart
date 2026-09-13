@@ -111,8 +111,14 @@ class TodayTaskSections extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         DashboardInlineExpansionCard(
           key: const ValueKey('today-all-tasks'),
-          title: 'Show all tasks',
-          subtitle: 'Future, undated, completed, and cancelled tasks',
+          title: 'All tasks',
+          trailing: canExecute
+              ? IconButton(
+                  onPressed: actions.onOpenPlanner,
+                  tooltip: 'Open Planner',
+                  icon: const Icon(AppIcons.calendarMonthOutlined, size: 18),
+                )
+              : null,
           expanded: visibility.showAll,
           onToggle: actions.onToggleAll,
           child: _TasksSection(
@@ -123,7 +129,6 @@ class TodayTaskSections extends StatelessWidget {
             updatingTaskIds: commands.updatingTaskIds,
             showCompletedTasks: visibility.showCompleted,
             showCancelledTasks: visibility.showCancelled,
-            onAdd: actions.onOpenPlanner,
             onComplete: actions.onComplete,
             onRestore: actions.onRestore,
             onStartFocus: actions.onStartFocus,
@@ -161,7 +166,7 @@ class TodayHabitSection extends StatelessWidget {
           title: 'Habits for today',
           caption: 'Repeating habits due today',
           subtitle:
-              'These come back on a schedule. They are not one-off planner tasks.',
+              'Repeating activities for today.',
           icon: AppIcons.repeat,
         ),
         const SizedBox(height: AppSpacing.md),
@@ -227,13 +232,14 @@ class _TodayTasksSection extends StatelessWidget {
           title: 'Tasks due today',
           caption: 'From Planner · one-off actions',
           subtitle:
-              'These are planner tasks due, overdue, in progress, or completed today. They are not repeating habits.',
+              'Due, overdue, in progress or completed today.',
           icon: AppIcons.taskAltOutlined,
+          compactTrailing: true,
           trailing: canExecute
-              ? FilledButton.icon(
+              ? IconButton(
                   onPressed: onAdd,
+                  tooltip: 'Open Planner',
                   icon: const Icon(AppIcons.calendarMonthOutlined, size: 18),
-                  label: const Text('Open Planner'),
                 )
               : null,
         ),
@@ -256,6 +262,7 @@ class _TodayTasksSection extends StatelessWidget {
                 task: task,
                 isUpdating: updatingTaskIds.contains(task.id),
                 isCompleted: task.status == 'done',
+                compact: true,
                 onComplete: canExecute && task.status != 'done'
                     ? () => onComplete(task)
                     : null,
@@ -282,7 +289,6 @@ class _TasksSection extends StatelessWidget {
     required this.updatingTaskIds,
     required this.showCompletedTasks,
     required this.showCancelledTasks,
-    required this.onAdd,
     required this.onComplete,
     required this.onRestore,
     required this.onStartFocus,
@@ -297,7 +303,6 @@ class _TasksSection extends StatelessWidget {
   final Set<String> updatingTaskIds;
   final bool showCompletedTasks;
   final bool showCancelledTasks;
-  final VoidCallback onAdd;
   final ValueChanged<PlanItem> onComplete;
   final ValueChanged<PlanItem> onRestore;
   final ValueChanged<PlanItem> onStartFocus;
@@ -309,18 +314,6 @@ class _TasksSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DashboardSectionTitle(
-          title: 'Tasks',
-          subtitle: 'Finite actions with durable estimates and deadlines.',
-          trailing: canExecute
-              ? FilledButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(AppIcons.calendarMonthOutlined, size: 18),
-                  label: const Text('Open Planner'),
-                )
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.md),
         if (activeTasks.isEmpty)
           const DashboardEmptySectionCard(
             icon: AppIcons.taskAltOutlined,
@@ -332,6 +325,7 @@ class _TasksSection extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _TaskCard(
                 task: task,
+                compact: true,
                 isUpdating: updatingTaskIds.contains(task.id),
                 onComplete: canExecute ? () => onComplete(task) : null,
                 onStartFocus: canExecute ? () => onStartFocus(task) : null,
@@ -353,6 +347,7 @@ class _TasksSection extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: _TaskCard(
                   task: task,
+                  compact: true,
                   isUpdating: updatingTaskIds.contains(task.id),
                   isCompleted: true,
                   onRestore: canExecute ? () => onRestore(task) : null,
@@ -375,6 +370,7 @@ class _TasksSection extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: _TaskCard(
                   task: task,
+                  compact: true,
                   isUpdating: updatingTaskIds.contains(task.id),
                   isCancelled: true,
                   onRestore: canExecute ? () => onRestore(task) : null,
@@ -407,7 +403,6 @@ class _HabitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final completed = outcomeOverride == 'completed';
-    final skipped = outcomeOverride == 'skipped';
     final tokens = context.visualTokens;
     final open = outcomeOverride == null;
     return AppCard(
@@ -490,6 +485,7 @@ class _TaskCard extends StatelessWidget {
     required this.isUpdating,
     this.isCompleted = false,
     this.isCancelled = false,
+    this.compact = false,
     this.onComplete,
     this.onRestore,
     this.onStartFocus,
@@ -499,6 +495,7 @@ class _TaskCard extends StatelessWidget {
   final bool isUpdating;
   final bool isCompleted;
   final bool isCancelled;
+  final bool compact;
   final VoidCallback? onComplete;
   final VoidCallback? onRestore;
   final VoidCallback? onStartFocus;
@@ -510,20 +507,48 @@ class _TaskCard extends StatelessWidget {
         : 'Due ${DateFormat.yMMMd().format(task.deadline!)}';
     final estimate =
         task.estimatedMinutes == null ? null : '${task.estimatedMinutes} min';
+    final stateIcon = Icon(
+      isCompleted
+          ? AppIcons.checkCircle
+          : isCancelled
+              ? AppIcons.cancelOutlined
+              : AppIcons.radioButtonUnchecked,
+      color: compact && isCompleted
+          ? context.visualTokens.success
+          : isCompleted || isCancelled
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+    );
     return AppCard(
+      padding: compact
+          ? const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.xs,
+            )
+          : const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
-          Icon(
-            isCompleted
-                ? AppIcons.checkCircle
-                : isCancelled
-                    ? AppIcons.cancelOutlined
-                    : AppIcons.radioButtonUnchecked,
-            color: isCompleted || isCancelled
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: AppSpacing.md),
+          if (compact && isUpdating)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (compact && !isCompleted && !isCancelled &&
+              !task.isDeadlinePlanManaged && onComplete != null)
+            IconButton(
+              tooltip: 'Complete task ${task.title}',
+              onPressed: onComplete,
+              icon: stateIcon,
+            )
+          else if (compact)
+            Padding(padding: const EdgeInsets.all(12), child: stateIcon)
+          else ...[
+            stateIcon,
+            const SizedBox(width: AppSpacing.md),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -552,7 +577,9 @@ class _TaskCard extends StatelessWidget {
                     if (estimate != null) estimate,
                     if (due != null) due,
                   ].join(' · '),
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: compact
+                      ? Theme.of(context).textTheme.bodySmall
+                      : Theme.of(context).textTheme.bodyMedium,
                 ),
                 if (task.description != null) ...[
                   const SizedBox(height: AppSpacing.xs),
@@ -566,7 +593,7 @@ class _TaskCard extends StatelessWidget {
               ],
             ),
           ),
-          if (isUpdating)
+          if (isUpdating && !compact)
             const Padding(
               padding: EdgeInsets.all(AppSpacing.sm),
               child: SizedBox.square(
@@ -574,7 +601,7 @@ class _TaskCard extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
-          else ...[
+          else if (!isUpdating) ...[
             if (task.isDeadlinePlanManaged) ...[
               if (onStartFocus != null)
                 IconButton(
@@ -589,7 +616,7 @@ class _TaskCard extends StatelessWidget {
                   icon: const Icon(AppIcons.arrowForward),
                 ),
             ] else ...[
-              if (onComplete != null)
+              if (onComplete != null && !compact)
                 IconButton(
                   tooltip: 'Complete task ${task.title}',
                   onPressed: onComplete,

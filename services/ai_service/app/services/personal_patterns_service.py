@@ -12,6 +12,7 @@ from typing import Any, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models.learning import LearningPreferencesState
+from app.services.skillset_observations import skillset_observations
 from app.models.personal_patterns import (
     PERSONAL_PATTERNS_CONTRACT_VERSION,
     LearnedFocusPlannerPreference,
@@ -308,6 +309,20 @@ class PersonalPatternsService:
                 sessions=sessions,
                 observations=observations,
                 evidence_fingerprint=fingerprint,
+            )
+            response = PersonalPatternsResponse.model_validate(
+                {
+                    **response.model_dump(),
+                    "skillset_points": skillset_observations(
+                        daily_rows=daily_log_rows,
+                        sessions=sessions,
+                        reflections=reflections,
+                        session_rows=session_rows,
+                        generated_at=generated_at,
+                        first_date=window.local_starts_on,
+                        last_date=window.local_ends_on,
+                    ),
+                }
             )
         except Exception:
             _log_failure(

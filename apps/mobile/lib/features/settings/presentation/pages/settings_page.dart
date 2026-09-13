@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
-import '../../../../composition/coach_credentials_providers.dart';
+import '../../../../composition/widgets/coach_provider_settings_card.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -18,8 +18,6 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../../core/widgets/app_surface.dart';
 import '../../../focus_protection/application/focus_protection_gateway.dart';
-import '../../../coach/application/coach_credentials_controller.dart';
-import '../../../coach/domain/coach.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../domain/account_settings.dart';
@@ -54,8 +52,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final profile = session?.profile;
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final themeSelection = ref.watch(appThemeSelectionProvider);
-    final androidFocusProtection =
-        ref.watch(focusProtectionPlatformSupportedProvider);
+    final androidFocusProtection = ref.watch(
+      focusProtectionPlatformSupportedProvider,
+    );
     final syncedAccount =
         session?.isAuthenticated == true && capabilities.canUseSyncedExecution;
     final profileTimezone = capabilities.isLocalDemo && profile != null
@@ -64,12 +63,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     return AppPage(
       title: 'Settings',
-      subtitle: 'Profile, planning, connections, and account',
+      compactHeader: true,
       actions: const [AppHeaderActions(settingsSelected: true)],
       children: [
         const AppSectionHeader(
           title: 'Profile',
-          description: 'Your identity, timezone, and account type.',
         ),
         AppCard(
           child: Column(
@@ -121,7 +119,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         const AppSectionHeader(
           title: 'Planning and learning',
-          description: 'Routines, Focus support, and preparation preferences.',
         ),
         AppCard(
           padding: EdgeInsets.zero,
@@ -129,7 +126,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             leading: const Icon(AppIcons.tuneOutlined),
             title: const Text('Setup and commitments'),
             subtitle: const Text(
-              'Review routine candidates, study setup, and fixed commitments.',
+              'Routines, study rhythm and fixed commitments.',
             ),
             trailing: const Icon(AppIcons.chevronRight),
             onTap: () => context.push('${AppRoutes.onboarding}?edit=1'),
@@ -196,7 +193,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         const AppSectionHeader(
           title: 'Tools and connections',
-          description: 'Inbox, reminders, calendar import, and optional tools.',
         ),
         AppCard(
           padding: EdgeInsets.zero,
@@ -205,7 +201,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             leading: const Icon(AppIcons.inboxOutlined),
             title: const Text('Inbox'),
             subtitle: const Text(
-              'Read saved notifications and manage their read or dismissed state.',
+              'Your saved notifications.',
             ),
             trailing: const Icon(AppIcons.chevronRight),
             onTap: () => context.push(AppRoutes.alerts),
@@ -227,7 +223,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 : null,
           ),
         ),
-        if (capabilities.canShowCoachSurface) const _CoachByokSettingsCard(),
+        if (capabilities.canShowCoachSurface) const CoachProviderSettingsCard(),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
@@ -242,7 +238,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         const AppSectionHeader(
           title: 'Account and appearance',
-          description: 'Export, deletion, device theme, and sign-out.',
         ),
         if (config?.isHostedEnvironment == true)
           AppCard(
@@ -497,17 +492,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         sharePositionOrigin: sharePositionOrigin,
       );
       if (!mounted) return;
-      _showMessage(
-        switch (result) {
-          AccountExportSaveResult.saved => 'Account export saved.',
-          AccountExportSaveResult.shared =>
-            'Account export handoff opened on this device.',
-          AccountExportSaveResult.cancelled =>
-            'Export cancelled. No destination was selected.',
-          AccountExportSaveResult.shareDismissed =>
-            'Share dismissed. No destination was selected; the platform may retain a temporary protected cache copy until cleanup.',
-        },
-      );
+      _showMessage(switch (result) {
+        AccountExportSaveResult.saved => 'Account export saved.',
+        AccountExportSaveResult.shared =>
+          'Account export handoff opened on this device.',
+        AccountExportSaveResult.cancelled =>
+          'Export cancelled. No destination was selected.',
+        AccountExportSaveResult.shareDismissed =>
+          'Share dismissed. No destination was selected; the platform may retain a temporary protected cache copy until cleanup.',
+      });
     } on AccountExportTooLargeException {
       if (mounted) {
         _showMessage(
@@ -664,198 +657,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-class _CoachByokSettingsCard extends ConsumerStatefulWidget {
-  const _CoachByokSettingsCard();
-
-  @override
-  ConsumerState<_CoachByokSettingsCard> createState() =>
-      _CoachByokSettingsCardState();
-}
-
-class _CoachByokSettingsCardState
-    extends ConsumerState<_CoachByokSettingsCard> {
-  final _openAiController = TextEditingController();
-  final _geminiController = TextEditingController();
-
-  @override
-  void dispose() {
-    _openAiController.dispose();
-    _geminiController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    late final CoachCredentials credentials;
-    try {
-      credentials = ref.watch(coachCredentialsProvider);
-    } on StateError {
-      return AppCard(
-        padding: EdgeInsets.zero,
-        child: ListTile(
-          leading: const Icon(AppIcons.forumOutlined),
-          title: const Text('Coach'),
-          subtitle: const Text('Read-only Coach and provider keys.'),
-          trailing: const Icon(AppIcons.chevronRight),
-          onTap: () => context.push(AppRoutes.coach),
-        ),
-      );
-    }
-    final selected = credentials.provider;
-    final isByok = const {
-      CoachProviderName.openai,
-      CoachProviderName.gemini,
-    }.contains(selected);
-    final input = selected == CoachProviderName.gemini
-        ? _geminiController
-        : _openAiController;
-    final hasKey = selected != null && isByok && credentials.hasKey(selected);
-    final subtitle = selected == CoachProviderName.operatorCodexPilot
-        ? 'Project Coach selected; no personal API key required.'
-        : isByok
-            ? 'Personal API-key provider selected.'
-            : 'Choose Project Coach or use your own API key.';
-    return AppCard(
-      padding: EdgeInsets.zero,
-      child: ExpansionTile(
-        key: const ValueKey('settings-coach-provider'),
-        leading: const Icon(AppIcons.forumOutlined),
-        title: const Text('Coach'),
-        subtitle: Text(subtitle),
-        childrenPadding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          0,
-          AppSpacing.md,
-          AppSpacing.md,
-        ),
-        children: [
-          DropdownButtonFormField<CoachProviderName>(
-            key: const ValueKey('coach-provider-selection'),
-            initialValue: selected,
-            decoration: const InputDecoration(
-              labelText: 'Coach mode',
-              hintText: 'Choose a mode',
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: CoachProviderName.operatorCodexPilot,
-                child: Text('Project Coach'),
-              ),
-              DropdownMenuItem(
-                value: CoachProviderName.openai,
-                child: Text('Use my OpenAI key'),
-              ),
-              DropdownMenuItem(
-                value: CoachProviderName.gemini,
-                child: Text('Use my Gemini key'),
-              ),
-            ],
-            onChanged: credentials.busy
-                ? null
-                : (value) {
-                    if (value != null) {
-                      ref.read(coachCredentialsProvider.notifier).select(value);
-                    }
-                  },
-          ),
-          if (selected == CoachProviderName.operatorCodexPilot) ...[
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              'The project VPS creates a temporary read-only snapshot of your '
-              'app data. Restricted Coach tools send your question and only '
-              'the results they query to the shared pilot Codex account. It '
-              'has limited shared capacity: '
-              'up to 5 turns per account and 15 dispatched turns in total per '
-              'UTC day. Busy or unavailable never falls back to your key.',
-            ),
-          ] else if (isByok) ...[
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              key: ValueKey('coach-key-${selected!.code}'),
-              controller: input,
-              obscureText: true,
-              enableSuggestions: false,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: hasKey ? 'Replacement API key' : 'API key',
-                helperText: hasKey
-                    ? 'A tested key is saved on this device.'
-                    : 'No key is saved for this provider.',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                FilledButton(
-                  key: const ValueKey('coach-key-test-save'),
-                  onPressed: credentials.busy
-                      ? null
-                      : () async {
-                          final saved = await ref
-                              .read(coachCredentialsProvider.notifier)
-                              .testAndSave(selected, input.text);
-                          if (saved && context.mounted) {
-                            input.clear();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Provider key tested and saved.'),
-                              ),
-                            );
-                          }
-                        },
-                  child: Text(hasKey ? 'Test and replace' : 'Test and save'),
-                ),
-                if (hasKey)
-                  OutlinedButton(
-                    key: const ValueKey('coach-key-delete'),
-                    onPressed: credentials.busy
-                        ? null
-                        : () => ref
-                            .read(coachCredentialsProvider.notifier)
-                            .delete(selected),
-                    child: const Text('Delete key'),
-                  ),
-              ],
-            ),
-          ] else ...[
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              'Select a mode explicitly. The app never switches providers '
-              'after an error.',
-            ),
-          ],
-          if (credentials.error case final error?) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              error,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => context.push(AppRoutes.coach),
-              child: const Text('Open Coach'),
-            ),
-          ),
-          Text(
-            'Personal provider requests may cost money. Relevant results from '
-            'your read-only Coach query are sent only to the mode you select. '
-            'On web, personal keys exist only in this tab and are cleared by '
-            'reload.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 String _exportFileName(DateTime utcNow) {
   String two(int value) => value.toString().padLeft(2, '0');
   return 'mylifegraph-export-${utcNow.year}-${two(utcNow.month)}-'
@@ -991,9 +792,7 @@ class _AppearanceOption extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: swatch,
                       borderRadius: BorderRadius.circular(AppRadii.sm),
-                      border: Border.all(
-                        color: context.visualTokens.focus,
-                      ),
+                      border: Border.all(color: context.visualTokens.focus),
                     ),
                   ),
               ],
@@ -1076,7 +875,6 @@ class _TimezoneDialogState extends State<_TimezoneDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Custom IANA timezone',
                   hintText: 'Africa/Johannesburg',
-                  helperText: 'The account service validates the zone.',
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -1193,16 +991,14 @@ class _PreparationBudgetDialogState extends State<_PreparationBudgetDialog> {
         ),
         if (widget.current != null)
           TextButton(
-            onPressed: () => Navigator.of(context).pop(
-              const _PreparationBudgetChoice(null),
-            ),
+            onPressed: () =>
+                Navigator.of(context).pop(const _PreparationBudgetChoice(null)),
             child: const Text('Remove budget'),
           ),
         FilledButton(
           onPressed: valid
-              ? () => Navigator.of(context).pop(
-                    _PreparationBudgetChoice(minutes),
-                  )
+              ? () =>
+                    Navigator.of(context).pop(_PreparationBudgetChoice(minutes))
               : null,
           child: const Text('Save budget'),
         ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../constants/app_spacing.dart';
+import '../constants/app_radii.dart';
 import '../theme/app_icons.dart';
 
 class AppPage extends StatelessWidget {
@@ -10,6 +11,11 @@ class AppPage extends StatelessWidget {
     required this.children,
     this.subtitle,
     this.actions,
+    this.compactHeader = false,
+    this.bottomPanel,
+    this.viewportBody,
+    this.outlineBody = false,
+    this.outlineStartKey,
     this.backFallback,
     this.showBackForFallback = true,
     this.maxWidth = 1120,
@@ -20,6 +26,12 @@ class AppPage extends StatelessWidget {
   final String? subtitle;
   final List<Widget> children;
   final List<Widget>? actions;
+  final bool compactHeader;
+  final Widget? bottomPanel;
+  /// Opt-in bounded content below a fixed header; ordinary pages still scroll.
+  final Widget? viewportBody;
+  final bool outlineBody;
+  final GlobalKey? outlineStartKey;
   final String? backFallback;
   final bool showBackForFallback;
   final double maxWidth;
@@ -48,16 +60,13 @@ class AppPage extends StatelessWidget {
           final showBack = hasImperativeHistory ||
               (backFallback != null && showBackForFallback);
 
-          return CustomScrollView(
-            slivers: [
-              SliverPadding(
+          final header = Padding(
                 padding: EdgeInsets.fromLTRB(
                   horizontalPadding,
-                  AppSpacing.lg,
+                  compactHeader ? AppSpacing.md : AppSpacing.lg,
                   horizontalPadding,
-                  AppSpacing.sm,
+                  compactHeader ? 0 : AppSpacing.sm,
                 ),
-                sliver: SliverToBoxAdapter(
                   child: Center(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -69,17 +78,33 @@ class AppPage extends StatelessWidget {
                         backFallback: backFallback,
                         stackActions: stackHeaderActions,
                         actions: actions,
+                        compact: compactHeader,
                       ),
                     ),
                   ),
-                ),
-              ),
+              );
+          if (viewportBody != null) {
+            return Column(children: [
+              header,
+              Expanded(child: Padding(
+                padding: EdgeInsets.fromLTRB(horizontalPadding, AppSpacing.md,
+                    horizontalPadding, desktopShell ? AppSpacing.md : AppSpacing.xl),
+                child: Center(child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: viewportBody,
+                )),
+              )),
+            ]);
+          }
+          final scrollView = CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: header),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                   horizontalPadding,
                   AppSpacing.md,
                   horizontalPadding,
-                  bottomPadding,
+                  bottomPanel == null ? bottomPadding : AppSpacing.md,
                 ),
                 sliver: SliverList.separated(
                   itemBuilder: (context, index) => Center(
@@ -95,7 +120,117 @@ class AppPage extends StatelessWidget {
               ),
             ],
           );
+          if (bottomPanel == null) return scrollView;
+          final body = Column(
+            children: [
+              Expanded(child: scrollView),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight * 0.45,
+                ),
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding, AppSpacing.sm, horizontalPadding,
+                      desktopShell ? AppSpacing.md : AppSpacing.xl,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxWidth),
+                        child: bottomPanel,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+          if (!outlineBody) return body;
+          return _AnchoredOutline(
+            anchor: outlineStartKey,
+            body: body,
+            outlineBuilder: (top) => Positioned.fill(
+                top: top,
+                bottom: desktopShell ? AppSpacing.sm : AppSpacing.lg,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Container(
+                      key: const Key('app-page-body-outline'),
+                      width: maxWidth + AppSpacing.md,
+                      margin: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding - AppSpacing.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          );
         },
+      ),
+    );
+  }
+}
+
+class _AnchoredOutline extends StatefulWidget {
+  const _AnchoredOutline({
+    required this.anchor,
+    required this.body,
+    required this.outlineBuilder,
+  });
+
+  final GlobalKey? anchor;
+  final Widget body;
+  final Widget Function(double top) outlineBuilder;
+
+  @override
+  State<_AnchoredOutline> createState() => _AnchoredOutlineState();
+}
+
+class _AnchoredOutlineState extends State<_AnchoredOutline> {
+  final _bodyKey = GlobalKey();
+  double? _top;
+  bool _measurementScheduled = false;
+
+  void _measureAfterLayout() {
+    if (_measurementScheduled) return;
+    _measurementScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measurementScheduled = false;
+      if (!mounted) return;
+      final body = _bodyKey.currentContext?.findRenderObject() as RenderBox?;
+      final anchor = widget.anchor?.currentContext?.findRenderObject() as RenderBox?;
+      if (body == null || !body.hasSize) return;
+      final top = anchor == null || !anchor.hasSize
+          ? AppSpacing.xs
+          : (anchor.localToGlobal(Offset.zero, ancestor: body).dy - AppSpacing.sm)
+              .clamp(0.0, body.size.height);
+      if (_top != top) setState(() => _top = top);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _measureAfterLayout();
+    return NotificationListener<Notification>(
+      onNotification: (notification) {
+        if (notification is ScrollNotification ||
+            notification is SizeChangedLayoutNotification) {
+          _measureAfterLayout();
+        }
+        return false;
+      },
+      child: Stack(
+        key: _bodyKey,
+        children: [
+          widget.body,
+          if (_top != null) widget.outlineBuilder(_top!),
+        ],
       ),
     );
   }
@@ -110,6 +245,7 @@ class _AppPageHeader extends StatelessWidget {
     required this.backFallback,
     required this.stackActions,
     required this.actions,
+    required this.compact,
   });
 
   final String title;
@@ -118,6 +254,7 @@ class _AppPageHeader extends StatelessWidget {
   final bool showBack;
   final String? backFallback;
   final bool stackActions;
+  final bool compact;
   final List<Widget>? actions;
 
   @override
@@ -151,7 +288,7 @@ class _AppPageHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: titleStyle),
-              if (subtitle != null) ...[
+              if (subtitle != null && !compact) ...[
                 const SizedBox(height: AppSpacing.xs),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -175,6 +312,13 @@ class _AppPageHeader extends StatelessWidget {
       runSpacing: AppSpacing.xs,
       children: pageActions,
     );
+    if (compact) {
+      return AppPageHeading(
+        title: titleRow,
+        actions: actionWrap,
+        subtitle: subtitle == null ? null : Text(subtitle!),
+      );
+    }
     if (stackActions) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -191,6 +335,47 @@ class _AppPageHeader extends StatelessWidget {
         Expanded(child: titleRow),
         const SizedBox(width: AppSpacing.sm),
         Flexible(child: actionWrap),
+      ],
+    );
+  }
+}
+
+/// Compact main-page heading; enlarged text keeps actions above the title.
+class AppPageHeading extends StatelessWidget {
+  const AppPageHeading({
+    required this.title,
+    required this.actions,
+    this.subtitle,
+    super.key,
+  });
+
+  final Widget title;
+  final Widget actions;
+  final Widget? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (largeText) ...[
+          Align(alignment: Alignment.topRight, child: actions),
+          const SizedBox(height: AppSpacing.xs),
+          title,
+        ] else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: AppSpacing.xs),
+              actions,
+            ],
+          ),
+        if (subtitle != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          subtitle!,
+        ],
       ],
     );
   }

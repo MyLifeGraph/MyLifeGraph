@@ -417,27 +417,28 @@ class _CheckInButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = '${saved ? 'Edit' : 'Add'} $label';
+    final style = ButtonStyle(
+      backgroundColor: WidgetStatePropertyAll(
+        saved
+            ? Colors.transparent
+            : context.visualTokens.brand.withValues(alpha: 0.12),
+      ),
+    );
     return Semantics(
       button: true,
       label: '$text. ${saved ? 'Saved' : 'Not saved'} today.',
       child: compact
-          ? _compactButton(context)
-          : saved
-              ? OutlinedButton.icon(
-                  onPressed: onPressed,
-                  icon: const Icon(AppIcons.checkCircleOutline),
-                  label: Text(text),
-                )
-              : FilledButton.tonalIcon(
-                  onPressed: onPressed,
-                  icon: Icon(icon),
-                  label: Text(text),
-                ),
+          ? _compactButton(context, style)
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              style: style,
+              icon: Icon(saved ? AppIcons.checkCircleOutline : icon),
+              label: Text(text),
+            ),
     );
   }
 
-  Widget _compactButton(BuildContext context) {
-    final tokens = context.visualTokens;
+  Widget _compactButton(BuildContext context, ButtonStyle style) {
     final textTheme = Theme.of(context).textTheme;
     final child = Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -465,14 +466,11 @@ class _CheckInButton extends StatelessWidget {
     );
     return OutlinedButton(
       onPressed: onPressed,
-      style: ButtonStyle(
+      style: style.copyWith(
         padding: const WidgetStatePropertyAll(EdgeInsets.zero),
         minimumSize: const WidgetStatePropertyAll(Size.zero),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: VisualDensity.compact,
-        backgroundColor: WidgetStatePropertyAll(
-          saved ? Colors.transparent : tokens.brand.withValues(alpha: 0.12),
-        ),
       ),
       child: child,
     );
@@ -580,7 +578,7 @@ class _TodayAgenda extends StatelessWidget {
           title: 'Today\'s schedule',
           caption: 'Timed blocks from your calendar and plans',
           subtitle:
-              'This is today\'s timed agenda, not a to-do list. Setup, preparation, calendar, and focus blocks appear here in order.',
+              'Today\'s scheduled time blocks, in order.',
           icon: AppIcons.schedule,
         ),
         if (sourceErrors.isNotEmpty) ...[

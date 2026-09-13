@@ -16,6 +16,7 @@ class _AdvancedPaneTabs extends StatelessWidget {
       (_AdvancedPane.compare, 'Compare', AppIcons.tuneOutlined),
       (_AdvancedPane.topPatterns, 'Top patterns', AppIcons.autoGraphOutlined),
       (_AdvancedPane.trend, 'Trend overlay', AppIcons.viewTimelineOutlined),
+      (_AdvancedPane.skillset, 'Skillset', AppIcons.insightsOutlined),
       (_AdvancedPane.matrix, 'Matrix', AppIcons.calendarViewWeekOutlined),
       (_AdvancedPane.discovered, 'Discovered', AppIcons.psychologyOutlined),
     ];
@@ -346,27 +347,47 @@ class _TrendOverlayCard extends StatelessWidget {
     final chipsAndChart = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
+        ExpansionTile(
+          key: const ValueKey('insights-trend-signals'),
+          leading: const Icon(AppIcons.tuneOutlined),
+          title: Text('Signals (${selectedMetrics.length} selected)'),
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.md),
+            side: BorderSide(color: colors.outlineVariant),
+          ),
+          collapsedShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.md),
+            side: BorderSide(color: colors.outlineVariant),
+          ),
           children: [
             for (final metric in report.metrics)
-              FilterChip(
-                label: Text(metric.label),
-                selected: selectedMetricIds.contains(metric.id),
-                onSelected: !selectedMetricIds.contains(metric.id) &&
+              CheckboxListTile(
+                key: ValueKey('insights-trend-signal-${metric.id}'),
+                title: Text(metric.label),
+                value: selectedMetricIds.contains(metric.id),
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                ),
+                onChanged: !selectedMetricIds.contains(metric.id) &&
                         selectedMetricIds.any(
-                          (selected) =>
-                              const CorrelationPairPolicy().isBlocked(
+                          (selected) => const CorrelationPairPolicy().isBlocked(
                             selected,
                             metric.id,
                           ),
                         )
                     ? null
                     : (_) => onMetricToggled(metric.id),
-                selectedColor: _trendColorForMetric(metric.id, brightness)
-                    .withValues(alpha: 0.22),
-                checkmarkColor: _trendColorForMetric(metric.id, brightness),
+                secondary: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: _trendColorForMetric(metric.id, brightness),
+                    shape: BoxShape.circle,
+                  ),
+                ),
               ),
           ],
         ),
@@ -896,137 +917,129 @@ class _CorrelationMatrixCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final grid = LayoutBuilder(
-            builder: (context, constraints) {
-              final desktop = constraints.maxWidth >= 700;
-              final textScale = MediaQuery.textScalerOf(context).scale(13) / 13;
-              final widthScale = textScale.clamp(1.0, 2.0);
-              final rowLabelScale = textScale.clamp(1.0, 1.25);
-              final rowLabelWidth = (desktop ? 196.0 : 144.0) * rowLabelScale;
-              final cellWidth = 88.0 * widthScale;
-              final cellStride = cellWidth + AppSpacing.xs;
-              final rowHeight = math.max(56.0, 70 * textScale);
-              final headerHeight = math.max(
-                desktop ? 72.0 : 64.0,
-                70 * textScale,
-              );
+      builder: (context, constraints) {
+        final desktop = constraints.maxWidth >= 700;
+        final textScale = MediaQuery.textScalerOf(context).scale(13) / 13;
+        final compact = isMobile && textScale <= 1.3;
+        final widthScale = textScale.clamp(1.0, 2.0);
+        final rowLabelScale = textScale.clamp(1.0, 1.25);
+        final rowLabelWidth =
+            (compact ? 108.0 : (desktop ? 196.0 : 144.0)) * rowLabelScale;
+        final cellWidth = (compact ? 72.0 : 88.0) * widthScale;
+        final cellStride = cellWidth + AppSpacing.xs;
+        final rowHeight = math.max(56.0, (compact ? 64 : 70) * textScale);
+        final headerHeight = math.max(desktop ? 72.0 : 64.0, 70 * textScale);
 
-              return Row(
-                key: const ValueKey('insights-correlation-matrix-grid'),
+        return Row(
+          key: const ValueKey('insights-correlation-matrix-grid'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: rowLabelWidth,
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width: rowLabelWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: headerHeight + AppSpacing.xs,
-                          child: Align(
-                            alignment: Alignment.bottomLeft,
-                            child: Text(
-                              'Metric',
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                          ),
-                        ),
-                        ...report.metrics.map(
-                          (metric) => Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.xs,
-                            ),
-                            child: _MatrixRowLabel(
-                              metricId: metric.id,
-                              label: metric.label,
-                              height: rowHeight,
-                            ),
-                          ),
-                        ),
-                      ],
+                    height: headerHeight + AppSpacing.xs,
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Text(
+                        'Metric',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: report.metrics
-                                .map(
-                                  (metric) => _MatrixHeaderCell(
-                                    metricId: metric.id,
-                                    label: metric.label,
-                                    width: cellStride,
-                                    height: headerHeight,
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          ...report.metrics.map(
-                            (rowMetric) => Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.xs,
-                              ),
-                              child: Row(
-                                children: report.metrics.map(
-                                  (columnMetric) {
-                                    final result = report.resultFor(
-                                      rowMetric.id,
-                                      columnMetric.id,
-                                    );
-                                    final color = _resultColor(
-                                      context,
-                                      result,
-                                      rowMetric,
-                                      columnMetric,
-                                    );
-                                    final selected = _isSelectedPair(
-                                      rowMetric.id,
-                                      columnMetric.id,
-                                    );
-                                    final overlapping =
-                                        const CorrelationPairPolicy().isBlocked(
-                                      rowMetric.id,
-                                      columnMetric.id,
-                                    );
-                                    final disabled =
-                                        rowMetric.id == columnMetric.id ||
-                                            overlapping;
-                                    return _MatrixCell(
-                                      cellKey: ValueKey(
-                                        'insights-matrix-cell-${rowMetric.id}-${columnMetric.id}',
-                                      ),
-                                      rowLabel: rowMetric.label,
-                                      columnLabel: columnMetric.label,
-                                      result: result,
-                                      color: color,
-                                      selected: selected && !disabled,
-                                      disabled: disabled,
-                                      overlappingSignals: overlapping,
-                                      width: cellWidth,
-                                      height: rowHeight,
-                                      onTap: disabled
-                                          ? null
-                                          : () => onPairSelected(
-                                                rowMetric.id,
-                                                columnMetric.id,
-                                              ),
-                                    );
-                                  },
-                                ).toList(growable: false),
-                              ),
-                            ),
-                          ),
-                        ],
+                  ...report.metrics.map(
+                    (metric) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                      child: _MatrixRowLabel(
+                        metricId: metric.id,
+                        label: metric.label,
+                        height: rowHeight,
                       ),
                     ),
                   ),
                 ],
-              );
-            },
-          );
+              ),
+            ),
+            SizedBox(width: compact ? AppSpacing.xs : AppSpacing.sm),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: report.metrics
+                          .map(
+                            (metric) => _MatrixHeaderCell(
+                              metricId: metric.id,
+                              label: metric.label,
+                              width: cellStride,
+                              height: headerHeight,
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    ...report.metrics.map(
+                      (rowMetric) => Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: Row(
+                          children: report.metrics.map((columnMetric) {
+                            final result = report.resultFor(
+                              rowMetric.id,
+                              columnMetric.id,
+                            );
+                            final color = _resultColor(
+                              context,
+                              result,
+                              rowMetric,
+                              columnMetric,
+                            );
+                            final selected = _isSelectedPair(
+                              rowMetric.id,
+                              columnMetric.id,
+                            );
+                            final overlapping =
+                                const CorrelationPairPolicy().isBlocked(
+                              rowMetric.id,
+                              columnMetric.id,
+                            );
+                            final disabled =
+                                rowMetric.id == columnMetric.id || overlapping;
+                            return _MatrixCell(
+                              cellKey: ValueKey(
+                                'insights-matrix-cell-${rowMetric.id}-${columnMetric.id}',
+                              ),
+                              rowLabel: rowMetric.label,
+                              columnLabel: columnMetric.label,
+                              result: result,
+                              color: color,
+                              selected: selected && !disabled,
+                              disabled: disabled,
+                              overlappingSignals: overlapping,
+                              width: cellWidth,
+                              height: rowHeight,
+                              onTap: disabled
+                                  ? null
+                                  : () => onPairSelected(
+                                        rowMetric.id,
+                                        columnMetric.id,
+                                      ),
+                            );
+                          }).toList(growable: false),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
 
     return _InsightsPanel(
       padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
@@ -1198,7 +1211,7 @@ class _MatrixCell extends StatelessWidget {
                     : disabled
                         ? '·'
                         : result?.coefficientLabel ?? '--',
-                maxLines: 3,
+                maxLines: 4,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color:

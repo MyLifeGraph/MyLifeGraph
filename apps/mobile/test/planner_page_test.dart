@@ -2,21 +2,97 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/widgets/app_page.dart';
+import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 import 'package:my_life_graph/composition/projection_refresh_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/exam_week_outlook.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/planner/application/planner_controller.dart';
 import 'package:my_life_graph/features/planner/data/planner_api_data_source.dart';
 import 'package:my_life_graph/features/planner/presentation/pages/planner_page.dart';
+import 'package:my_life_graph/features/planner/presentation/widgets/planner_sections.dart';
 import 'package:my_life_graph/features/planner/presentation/providers/planner_providers.dart';
 
 import 'support/planner_fixtures.dart';
 
 void main() {
+  for (final size in const [Size(390, 1000), Size(834, 1100), Size(1536, 1024), Size(320, 1000)]) {
+    testWidgets('Planner reference layout ${size.width.toInt()}', (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await (FontLoader('InstrumentSans')
+        ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Regular.ttf'))
+        ..addFont(rootBundle.load('assets/fonts/InstrumentSans-SemiBold.ttf'))
+        ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Bold.ttf'))).load();
+      await (FontLoader('packages/phosphor_flutter/PhosphorRegular')
+        ..addFont(rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor.ttf'))).load();
+      await (FontLoader('packages/phosphor_flutter/PhosphorFill')
+        ..addFont(rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor-Fill.ttf'))).load();
+      await (FontLoader('MaterialIcons')
+        ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+      final backend = _PlannerBackend(emptyAttention: true);
+      await _pumpPlanner(tester, backend: backend, preview: true,
+        capabilities: const AppSurfaceCapabilities(isLocalDemo: false,
+          canUseSyncedHabits: true, canUseSyncedExecution: true,
+          canUseDeadlinePlanner: true, canShowCoachSurface: true),
+        textScale: size.width == 320 ? 2 : 1);
+      expect(tester.takeException(), isNull);
+      final page = tester.widget<AppPage>(find.byType(AppPage));
+      expect(page.children.first, isA<PlannerSevenDaySection>());
+      if (size.width < 1280) {
+        expect(page.children[1], isA<PlannerAddNewSection>());
+      }
+      final agenda = find.byKey(const ValueKey('planner-seven-days'));
+      await _scrollPlannerUntilVisible(tester,agenda, 300,
+        scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      if (const bool.fromEnvironment('PLANNER_PREVIEW')) {
+        await expectLater(find.byKey(const Key('planner-preview')),
+          matchesGoldenFile('../../../.tools/planner-${size.width.toInt()}.png'));
+      }
+      await tester.ensureVisible(find.byTooltip('Next day'));
+      await tester.tap(find.byTooltip('Next day'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Wednesday, Jul'), findsOneWidget);
+      if (size.width == 390) {
+        final emptyDay = find.text('No planned or fixed items.');
+        await tester.ensureVisible(emptyDay);
+        await tester.pumpAndSettle();
+        await tester.fling(emptyDay, const Offset(240, 0), 1000);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Tuesday, Jul'), findsOneWidget);
+        await tester.ensureVisible(find.byTooltip('Next day'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Next day'));
+        await tester.pumpAndSettle();
+      }
+      await tester.ensureVisible(find.byTooltip('List'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('List'));
+      await tester.pumpAndSettle();
+      expect(find.text('Monday, Jul 27'), findsOneWidget);
+      await tester.ensureVisible(find.byTooltip('Days'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Days'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Wednesday, Jul'), findsOneWidget);
+      for (final key in ['planner-habits', 'planner-unscheduled-tasks', 'planner-history']) {
+        await _scrollPlannerUntilVisible(tester,find.byKey(ValueKey(key)), 300,
+          scrollable: find.byType(Scrollable).first);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+      expect(backend.requests.where((request) => request.method != 'GET'), isEmpty);
+    });
+  }
   for (final overnight in [false, true]) {
     testWidgets('weekly conflict preview includes ${overnight ? 'midnight' : 'recovery'} in profile time',
         (tester) async {
@@ -33,7 +109,7 @@ void main() {
           }
         };
       await _pumpPlanner(tester, backend: backend);
-      await tester.tap(find.byKey(const ValueKey('planner-add-commitment')));
+      await _invokeAddNew(tester, 'planner-add-commitment');
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('planner-commitment-title')),
@@ -163,9 +239,7 @@ void main() {
     await _pumpPlanner(tester, backend: backend);
 
     const sectionKeys = [
-      'planner-add-new',
       'planner-needs-attention',
-      'planner-seven-days',
       'planner-ongoing-preparation',
       'planner-habits',
       'planner-unscheduled-tasks',
@@ -176,7 +250,8 @@ void main() {
         tester.getTopLeft(find.byKey(ValueKey(key))).dy,
     ];
     expect(sectionTops, orderedEquals(sectionTops.toList()..sort()));
-
+    expect(tester.getTopLeft(find.byKey(const ValueKey('planner-seven-days'))).dx,
+      lessThan(tester.getTopLeft(find.byKey(const ValueKey('planner-needs-attention'))).dx));
     for (final key in const [
       'planner-add-task',
       'planner-add-habit',
@@ -186,6 +261,8 @@ void main() {
     ]) {
       expect(find.byKey(ValueKey(key)), findsOneWidget);
     }
+    await tester.tap(find.byTooltip('List'));
+    await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('planner-availability-warning')),
       findsNothing,
@@ -249,7 +326,7 @@ void main() {
     final backend = _PlannerBackend();
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.scrollUntilVisible(
+    await _scrollPlannerUntilVisible(tester,
       find.byKey(const ValueKey('planner-habits')),
       400,
     );
@@ -326,7 +403,7 @@ void main() {
     );
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.scrollUntilVisible(
+    await _scrollPlannerUntilVisible(tester,
       find.byKey(const ValueKey('planner-habits')),
       400,
     );
@@ -385,7 +462,7 @@ void main() {
     final backend = _PlannerBackend(failNextProposal: true);
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.scrollUntilVisible(
+    await _scrollPlannerUntilVisible(tester,
       find.byKey(const ValueKey('planner-habits')),
       400,
     );
@@ -410,7 +487,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(
+    await _scrollPlannerUntilVisible(tester,
       find.byKey(const ValueKey('planner-habits')),
       400,
     );
@@ -453,7 +530,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('planner-habit-preview')));
     await tester.pumpAndSettle();
 
-    _invokeAddNew(tester, 'planner-add-task');
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -1065,7 +1142,7 @@ void main() {
     final backend = _PlannerBackend(failNextProposalStatus: 503);
     final controller = await _pumpPlanner(tester, backend: backend);
 
-    _invokeAddNew(tester, 'planner-add-task');
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -1096,7 +1173,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('planner-confirm-plan')));
     await tester.pumpAndSettle();
-    _invokeAddNew(tester, 'planner-add-task');
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     expect(
       tester
@@ -1125,7 +1202,7 @@ void main() {
         of: find.byKey(const ValueKey('planner-pending-previews')),
         matching: find.text('Old persisted Setup title'),
       );
-      await tester.scrollUntilVisible(pending, 300);
+      await _scrollPlannerUntilVisible(tester,pending, 300);
       await tester.tap(pending);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('planner-replace-preview')));
@@ -1195,7 +1272,7 @@ void main() {
     );
     await _pumpPlanner(tester, backend: backend);
 
-    _invokeAddNew(tester, 'planner-add-task');
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -1212,7 +1289,7 @@ void main() {
         of: find.byKey(const ValueKey('planner-pending-previews')),
         matching: find.text('Old persisted Setup title'),
       );
-      await tester.scrollUntilVisible(pending, 300);
+      await _scrollPlannerUntilVisible(tester,pending, 300);
       await tester.tap(pending);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('planner-replace-preview')));
@@ -1300,7 +1377,7 @@ void main() {
     );
     final controller = await _pumpPlanner(tester, backend: backend);
 
-    _invokeAddNew(tester, 'planner-add-task');
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -1327,7 +1404,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('planner-confirm-plan')));
     await tester.pumpAndSettle();
 
-    _invokeAddNew(tester, 'planner-add-task');
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     expect(
       tester
@@ -1352,7 +1429,7 @@ void main() {
     );
 
     final controller = await _pumpPlanner(tester, backend: backend);
-    await tester.scrollUntilVisible(find.text('Undated reading'), 400);
+    await _scrollPlannerUntilVisible(tester,find.text('Undated reading'), 400);
     await tester.tap(find.text('Undated reading'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -1377,7 +1454,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.state.loadError, isNull);
-    await tester.scrollUntilVisible(find.text('Server current Task'), 400);
+    await _scrollPlannerUntilVisible(tester,find.text('Server current Task'), 400);
     await tester.tap(find.text('Server current Task'));
     await tester.pumpAndSettle();
     expect(find.text('Create a new preview?'), findsOneWidget);
@@ -2322,7 +2399,7 @@ void main() {
     final backend = _PlannerBackend(failNextProposal: true);
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.scrollUntilVisible(find.text('Undated reading'), 400);
+    await _scrollPlannerUntilVisible(tester,find.text('Undated reading'), 400);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Undated reading'));
     await tester.tap(find.text('Undated reading'));
@@ -2334,7 +2411,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('planner-task-preview')));
     await tester.pumpAndSettle();
 
-    _invokeAddNew(tester, 'planner-add-task');
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     expect(
       tester
@@ -2348,7 +2425,7 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('Undated reading'), 400);
+    await _scrollPlannerUntilVisible(tester,find.text('Undated reading'), 400);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Undated reading'));
     await tester.tap(find.text('Undated reading'));
@@ -2373,7 +2450,7 @@ void main() {
     final backend = _PlannerBackend(failNextProposal: true);
 
     await _pumpPlanner(tester, backend: backend);
-    _invokeAddNew(tester, 'planner-add-habit');
+    await _invokeAddNew(tester, 'planner-add-habit');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-habit-title')),
@@ -2393,7 +2470,7 @@ void main() {
     _invokeFilledButton(tester, 'planner-habit-preview');
     await tester.pumpAndSettle();
 
-    _invokeAddNew(tester, 'planner-add-habit');
+    await _invokeAddNew(tester, 'planner-add-habit');
     await tester.pumpAndSettle();
     expect(
       tester
@@ -2420,7 +2497,7 @@ void main() {
     _invokeFilledButton(tester, 'planner-habit-preview');
     await tester.pumpAndSettle();
 
-    _invokeAddNew(tester, 'planner-add-habit');
+    await _invokeAddNew(tester, 'planner-add-habit');
     await tester.pumpAndSettle();
     expect(
       tester
@@ -2623,7 +2700,7 @@ void main() {
     final backend = _PlannerBackend();
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.scrollUntilVisible(find.text('Undated reading'), 400);
+    await _scrollPlannerUntilVisible(tester,find.text('Undated reading'), 400);
     await tester.tap(find.text('Undated reading'));
     await tester.pumpAndSettle();
 
@@ -2660,10 +2737,40 @@ void main() {
       textScale: 2,
     );
 
-    expect(find.bySemanticsLabel('Task'), findsWidgets);
-    expect(find.bySemanticsLabel('Habit'), findsWidgets);
-    expect(find.bySemanticsLabel('Fixed commitment'), findsWidgets);
-    await tester.scrollUntilVisible(
+    await _scrollPlannerUntilVisible(
+      tester, find.byKey(const ValueKey('planner-add-new-button')), 300,
+    );
+    await tester.tap(find.byKey(const ValueKey('planner-add-new-button')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'Add new choices at large text');
+    final sheetScroller = find.ancestor(
+      of: find.byKey(const ValueKey('planner-add-task')),
+      matching: find.byType(Scrollable),
+    ).last;
+    for (final option in const {
+      'planner-add-task': 'Task',
+      'planner-add-habit': 'Habit',
+      'planner-add-exam': 'Exam',
+      'planner-add-assignment': 'Assignment',
+      'planner-add-commitment': 'Fixed commitment',
+    }.entries) {
+      final choice = find.byKey(ValueKey(option.key));
+      await tester.scrollUntilVisible(
+        choice.hitTestable(), 80, scrollable: sheetScroller,
+      );
+      await tester.pumpAndSettle();
+      expect(choice.hitTestable(), findsOneWidget);
+      expect(find.bySemanticsLabel(option.value), findsWidgets);
+      expect(tester.widget<ListTile>(choice).onTap, isNotNull);
+    }
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('planner-add-commitment')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('planner-commitment-review')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    Navigator.of(tester.element(find.byKey(const ValueKey('planner-commitment-review')))).pop();
+    await tester.pumpAndSettle();
+    await _scrollPlannerUntilVisible(tester,
       find.byKey(const ValueKey('planner-habits')),
       300,
     );
@@ -2673,9 +2780,10 @@ void main() {
       of: find.byKey(const ValueKey('planner-habits')),
       matching: find.text('Read'),
     );
-    await tester.scrollUntilVisible(setupHabit, 200);
+    await _scrollPlannerUntilVisible(tester,setupHabit, 200);
     await tester.tap(setupHabit);
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'Setup Habit editor at large text');
     expect(
       find.byKey(const ValueKey('planner-habit-read-only-definition')),
       findsOneWidget,
@@ -2707,7 +2815,7 @@ void main() {
       backend: _PlannerBackend(),
       outlookLoader: () => Future<ExamWeekOutlook?>.error(StateError('read')),
     );
-    await tester.scrollUntilVisible(
+    await _scrollPlannerUntilVisible(tester,
       find.byKey(const ValueKey('planner-exam-week-outlook-error')),
       300,
     );
@@ -2771,7 +2879,7 @@ void main() {
         includeSleepPlan: false,
       ),
     );
-    await tester.scrollUntilVisible(
+    await _scrollPlannerUntilVisible(tester,
       find.byKey(const ValueKey('planner-exam-week-outlook-exam_week')),
       300,
     );
@@ -2795,15 +2903,42 @@ void _invokeHeaderReload(WidgetTester tester) {
   tester.widget<IconButton>(button).onPressed?.call();
 }
 
-void _invokeAddNew(WidgetTester tester, String key) {
-  final button = find.descendant(
-    of: find.byKey(ValueKey(key)),
-    matching: find.byType(OutlinedButton),
+Future<void> _scrollPlannerUntilVisible(
+  WidgetTester tester, Finder target, double delta, {Finder? scrollable}
+) async {
+  final viewport = scrollable ?? find.descendant(
+    of: find.byType(PlannerPage), matching: find.byType(Scrollable),
+  ).first;
+  if (target.evaluate().isEmpty) {
+    tester.state<ScrollableState>(viewport).position.jumpTo(0);
+    await tester.pump();
+  }
+  // Drag the outer page gutter, not the nested day's appointment viewport.
+  for (var attempt = 0; target.evaluate().isEmpty && attempt < 50; attempt++) {
+    await tester.dragFrom(
+      tester.getTopLeft(viewport) + Offset(4, tester.getSize(viewport).height / 2),
+      Offset(0, -delta.abs()),
+    );
+    await tester.pump();
+  }
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _invokeAddNew(WidgetTester tester, String key) async {
+  await _scrollPlannerUntilVisible(
+    tester, find.byKey(const ValueKey('planner-add-new')), -400,
   );
+  final button = find.byKey(ValueKey(key));
+  if (button.evaluate().isEmpty) {
+    await tester.tap(find.byKey(const ValueKey('planner-add-new-button')));
+    await tester.pumpAndSettle();
+  }
   expect(button, findsOneWidget);
-  final callback = tester.widget<OutlinedButton>(button).onPressed;
-  expect(callback, isNotNull);
-  callback!.call();
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
 }
 
 void _invokeFilledButton(WidgetTester tester, String key) {
@@ -2815,7 +2950,7 @@ void _invokeFilledButton(WidgetTester tester, String key) {
 }
 
 Future<void> _openPlannerHabit(WidgetTester tester, String title) async {
-  await tester.scrollUntilVisible(
+  await _scrollPlannerUntilVisible(tester,
     find.byKey(const ValueKey('planner-habits')),
     400,
   );
@@ -2831,7 +2966,7 @@ Future<void> _openPlannerHabit(WidgetTester tester, String title) async {
       matching: find.text(title),
     );
   }
-  await tester.scrollUntilVisible(habit, 250);
+  await _scrollPlannerUntilVisible(tester,habit, 250);
   await tester.tap(habit);
   await tester.pumpAndSettle();
 }
@@ -2845,7 +2980,7 @@ Future<void> _exerciseAmbiguousCreateReconciliation(
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pumpAndSettle();
   final controller = await _pumpPlanner(tester, backend: backend);
-  _invokeAddNew(tester, habit ? 'planner-add-habit' : 'planner-add-task');
+  await _invokeAddNew(tester, habit ? 'planner-add-habit' : 'planner-add-task');
   await tester.pumpAndSettle();
   await tester.enterText(
     find.byKey(
@@ -2896,7 +3031,7 @@ Future<void> _exerciseAmbiguousCreateReconciliation(
     hasLength(1),
   );
 
-  _invokeAddNew(tester, habit ? 'planner-add-habit' : 'planner-add-task');
+  await _invokeAddNew(tester, habit ? 'planner-add-habit' : 'planner-add-task');
   await tester.pumpAndSettle();
   expect(
     tester
@@ -2929,7 +3064,7 @@ Future<void> _exerciseStaleReplacementRetention(
         matching: find.text(pendingTitle),
       );
 
-  await tester.scrollUntilVisible(pendingRow(), 300);
+  await _scrollPlannerUntilVisible(tester,pendingRow(), 300);
   await tester.tap(pendingRow());
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('planner-replace-preview')));
@@ -2971,7 +3106,7 @@ Future<void> _exerciseStaleReplacementRetention(
     );
   }
 
-  await tester.scrollUntilVisible(pendingRow(), 300);
+  await _scrollPlannerUntilVisible(tester,pendingRow(), 300);
   await tester.tap(pendingRow());
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('planner-replace-preview')));
@@ -2998,7 +3133,7 @@ Future<void> _exerciseStaleReplacementExactRetry(
     of: find.byKey(const ValueKey('planner-pending-previews')),
     matching: find.text(pendingTitle),
   );
-  await tester.scrollUntilVisible(pending, 300);
+  await _scrollPlannerUntilVisible(tester,pending, 300);
   await tester.tap(pending);
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('planner-replace-preview')));
@@ -3073,7 +3208,7 @@ Future<void> _exerciseStaleReplacementExactRetryFailure(
         matching: find.text(pendingTitle),
       );
 
-  await tester.scrollUntilVisible(pendingRow(), 300);
+  await _scrollPlannerUntilVisible(tester,pendingRow(), 300);
   await tester.tap(pendingRow());
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('planner-replace-preview')));
@@ -3122,7 +3257,7 @@ Future<void> _exerciseStaleReplacementExactRetryFailure(
     expect(controller.state.reloadSuggested, isFalse, reason: pendingTitle);
   }
 
-  await tester.scrollUntilVisible(pendingRow(), 300);
+  await _scrollPlannerUntilVisible(tester,pendingRow(), 300);
   await tester.tap(pendingRow());
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('planner-replace-preview')));
@@ -3168,6 +3303,7 @@ Future<PlannerController> _pumpPlanner(
   double textScale = 1,
   Future<ExamWeekOutlook?> Function()? outlookLoader,
   bool settle = true,
+  bool preview = false,
 }) async {
   final controller = PlannerController(
     api: PlannerApiDataSource(ApiClient(backend.dio)),
@@ -3192,7 +3328,10 @@ Future<PlannerController> _pumpPlanner(
         examPlanHealthProvider.overrideWith((ref) async => null),
       ],
       child: MaterialApp(
-        home: const Scaffold(body: PlannerPage()),
+        theme: preview ? AppTheme.dark : null,
+        home: preview ? const RepaintBoundary(key: Key('planner-preview'),
+          child: MainShell(currentPath: '/planner', child: PlannerPage()))
+          : const Scaffold(body: PlannerPage()),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),

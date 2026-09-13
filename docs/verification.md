@@ -48,6 +48,660 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Branch publication checks — 2026-09-13
+
+Publication target: `preview/morning-evening-check-in`; task base
+`002c968c3427c6b5a6c52fb56bc58bb143a8457f`. Includes the previously approved
+uncommitted UI, dictation, Android signing, local Cloud transport and additive
+Skillset changes. Private local files and generated golden-failure PNGs are not
+publication inputs. No visual baselines were regenerated to hide failures.
+
+- Full Flutter analysis passed. Full Windows Flutter run: 1,135 passed and six
+  component-reference golden failures; functional/widget tests otherwise passed.
+- Full Windows backend collection cannot load the Unix-socket executor test.
+  Excluding only that module: 1,678 passed, 60 failed, two skipped; Linux-specific
+  socket/filesystem/journal failures require the Linux gate, not relaxed guards.
+- Docs, visual contracts and fail-closed Android release checks passed.
+  Windows web-script subprocess checks are not a substitute for Linux CI.
+- Read-only VPS health and readiness passed for the running RC4 API; API,
+  Coach, socket and Caddy are active. The additional project `check` helper
+  reports a bounded `env` failure, which must be resolved before promotion.
+
+These checks do not authorize or prove a protected-main update, a production
+API release, a Cloud migration, or an installed signed APK. Linux CI and the
+separate concrete main confirmation remain release prerequisites.
+
+### Additive Skillset capture — local candidate, 2026-09-13
+
+Task base: `002c968c3427c6b5a6c52fb56bc58bb143a8457f`, dirty preview checkout;
+unrelated prior UI work is retained. Focused evidence for this addition:
+
+- Backend: 79 tests passed across optional observations, Daily Capture API/sleep
+  validation, and Personal Patterns API/repository/service. All optional choices
+  (including explicit zero and clearing) reach the authenticated owner unchanged;
+  the existing analysis output is identical when only new answers change.
+- Flutter: 29 domain/storage/radar tests and 60 Morning/Evening/Insights page
+  tests passed. New chip selections reach saved drafts; existing flows remain.
+- PostgreSQL: the exact new RPC passed isolated PG17 assertions for old V4
+  preservation, new values, opposite-branch preservation, null clearing, replay,
+  conflict, unchanged numeric/event projections and service-only execution.
+  This used minimal synthetic table fixtures in a networkless RAM-only container,
+  not a full migration-chain/RLS integration gate. The container was removed.
+  Reproducible SQL fixtures are in `supabase/migration_tests/skillset_capture/`:
+  bootstrap, additive migration, then assertions in a fresh isolated container.
+- Focal Flutter analysis, backend Ruff, documentation consistency/regressions
+  and `git diff --check` passed. The existing Focus-source foreign keys were
+  inspected read-only in Cloud; no live observation content was read.
+- Windows backend test environment uses the repository's pinned development
+  packages except Linux-only uvloop, plus local-version tzdata/colorama support;
+  no repository dependency/lockfile update was needed.
+
+Cloud migration and VPS API release are **not applied**. The VPS release process
+requires a reviewed protected-main RC; no main update, push, deploy, or live
+account write was performed for this task. UI capabilities keep new Cloud
+questions hidden until the upgraded API is released. These focused results do
+not claim the unrelated full-checkout suite or a live Cloud round trip is green.
+
+### Compact Skillset labels and details (2026-09-13)
+
+Three focused Skillset widget tests passed, including collapsed raw details,
+short radar-axis labels and 320px/200%-text layout. Evidence:
+`.tools/insights-skillset-labels-test.log`. Targeted analysis, Docs/Visual and
+diff hygiene passed. Source-only data-flow inspection confirmed Morning
+sleep/energy and rated Focus reflection paths; Evening mood/stress are persisted
+but absent from real Personal Patterns correlation points. Other unsupported
+dimensions gained no inferred source. No Cloud database or backend was changed.
+
+### Advanced Skillset radar (2026-09-13)
+
+The scoped Insights, Skillset and app widget run passed 49 tests with one
+desktop Matrix navigation-test failure (`.tools/insights-skillset-test.log`).
+After waiting for scrolling before the test's tab tap, that remaining test
+passed (`.tools/insights-skillset-matrix-test.log`). The new tests cover tab
+ordering, sparse access, retained dimensions, real median ratings, invalid and
+missing values, optional selections, window callbacks and 320px/200%-text layout.
+Targeted Flutter analysis, Docs/Visual gates and diff hygiene passed. The local
+Cloud frontend was restarted and returned HTTP 200. No backend, data source,
+persisted profile, remote configuration or deployment changed; browser visual
+acceptance remains manual.
+
+### Insights Overview / Advanced tabs (2026-09-13)
+
+Insights and app widget suites passed 45 tests, including retained trend choices,
+expanded signal details, window changes and sparse/loaded tab switching.
+Evidence: `.tools/insights-tabs-test.log`. After limiting desktop toggle width,
+both 320px/200%-text tab regressions passed again
+(`.tools/insights-tabs-layout-test.log`). Targeted analysis, Docs/Visual source
+gates and diff hygiene passed. No backend, calculation or remote state changed.
+
+### Compact plan lifecycle action row (2026-09-13)
+
+Deadline page and product-copy suites passed 73 tests, including equal-row
+placement and minimum targets at 320 pixels with 100%/200% text. Evidence:
+`.tools/preparation-action-row-test.log`. Labels changed, callbacks/guards did
+not. Dialog Cancel finders distinguish dismissal from the new plan Cancel label;
+the final focused dialog regression passed without a missed-tap warning
+(`.tools/preparation-dialog-cancel-test.log`). Docs/visual source gates passed.
+
+### Concise Preparation notices (2026-09-13)
+
+The Deadline page and product-copy suites passed all 71 tests after shortening
+status-dependent notices and moving detailed Focus-credit copy into the existing
+planning disclosure. Tests verify that credit rules remain reachable and current
+reservation warnings stay visible. Evidence: `.tools/preparation-copy-test.log`.
+Documentation/visual source checks and diff hygiene passed. Only presentation
+changed; no full-suite or remote deployment claim.
+
+### Preparation block date/time presentation (2026-09-13)
+
+All 69 Deadline page tests passed after separating block dates, time ranges
+and metadata and displaying a shared profile-timezone heading. Evidence:
+`.tools/preparation-block-layout-test.log`. Existing expand/collapse and
+deep-link checks now assert the separate date/time text. Documentation and
+visual source checks passed. No scheduling, persistence or remote changes.
+
+### Planner creation controls follow-up (2026-09-13)
+
+The Deadline page, Planner page and Planner timezone suites passed 147 tests
+after adding 20/30-hour presets, custom preparation Focus minutes and compact
+creation fields. Evidence: `.tools/planner-create-polish-test.log`.
+The new regression was initially registered twice; after removing that duplicate
+and extending invalid-input coverage, its single focused rerun passed
+(`.tools/planner-custom-minutes-test.log`). No runtime code changed between runs.
+Analysis of the four changed presentation files found no issues; documentation
+and visual source gates passed. Scheduling/backend code is unchanged. No
+complete-suite, deployed-client or live-account save acceptance is claimed.
+
+### Coach default selection startup race (2026-09-13)
+
+Credential initialization now completes before capabilities or sends resolve the
+selected provider. The focused credential, repository and controller suites
+passed all 38 tests, including delayed initialization, explicit later selection,
+key-free Standard headers and existing profile/storage failure guards.
+Evidence: `.tools/coach-default-start-test.log`. Documentation checks passed;
+no complete-suite rerun or live provider response is claimed by this follow-up.
+
+### Coach voice-level visibility follow-up (2026-09-13)
+
+- Task base remains `002c968c3427c6b5a6c52fb56bc58bb143a8457f`. All 17 focused
+  dictation widget/transport tests pass. The waveform test now supplies normal
+  low-level audio (about -40 dBFS) instead of near-full-scale samples, and checks
+  actual rendered bar height: flat at silence, visibly taller with speech,
+  including reduced motion without interpolation. Display scaling alone changed;
+  uploaded PCM, consent, countdown, cancellation, and send behavior are unchanged.
+- No full-suite rerun or live laptop-microphone acceptance is claimed. The known
+  golden and platform/dependency limitations below remain open. Focused log:
+  `.tools/coach-wave-visibility-test.log` (gitignored).
+
+### Coach session disclosure, countdown and voice bars (2026-09-13)
+
+- Task base: `002c968c3427c6b5a6c52fb56bc58bb143a8457f`, still dirty/uncommitted.
+  The full Flutter suite completed with 1,119 passed and six failed. All six
+  failures are the unchanged Dark/Light/Space mobile/desktop component goldens,
+  with the same pixel-difference counts as the earlier run; that fixture does
+  not render Coach. No reference images or tolerances were changed. Rendering
+  platform/font versus baseline origin still needs a matched-environment check,
+  not a blind app-style change. All 17 final targeted dictation checks pass
+  after the last theme-radius-token correction; no new full-suite pass is claimed.
+  Static analysis reports no issues; docs (18 tests plus consistency), visual
+  source checks, and `git diff --check` pass.
+- New checks cover decline versus acknowledgement, repeated recording and
+  route revisits, logout/re-login and account changes without a route listener,
+  real PCM-driven bars, reduced motion, the countdown, and automatic draft-only
+  stop at 30 seconds. Existing guest, discard, account-change, and direct-Send
+  tests remain active. Supabase/server authorization and app login are unchanged.
+- All 85 script/support Node tests were attempted: 76 passed and nine failed
+  on Windows. Four grouped-runner tests require POSIX `PATH=/usr/bin:/bin`;
+  three Vercel trust/environment tests invoke `/bin/bash`; two receipt/defines
+  permission assertions expect mode 0600 but Windows reports 0666. These are
+  platform-dependent security/tooling checks, not grounds to relax permissions
+  or trust rules. A concurrent elevated attempt also hit a temporary pytest-cache
+  scan error; the final same-context run and standalone docs check do not.
+- Backend pytest stops during collection with 28 missing-FastAPI import errors
+  in the available Python environment; its application tests did not run. Ruff,
+  Docker/local database/E2E prerequisites, and a completed Gradle distribution
+  are absent (the wrapper cache contains only a partial download). Those gates
+  remain blocked; dependencies, machines, remote services, and published clients
+  were not changed to bypass them. This is not a green full-release gate.
+- Run logs are gitignored under `.tools/coach-session-*.log` and
+  `.tools/coach-dictation-session-focused-final.log`. No real audio, credentials,
+  or account-data acceptance test was performed. Initial implementation/test
+  issues were corrected before handoff; failed diagnostic logs are not the
+  final result.
+
+### Approved Fixed commitment large-text fix (2026-09-13)
+
+- Task base remains `002c968c3427c6b5a6c52fb56bc58bb143a8457f`. Four targeted
+  Planner tests pass: the Add new-to-commitment journey at 320px/200% text,
+  recurrence/weekday selection and retained weekly draft values at 320px/200%
+  and 390px/100%, and the existing profile-timezone editing check. The empty
+  and populated dialog no longer overflow in those checks. Only scroll/layout
+  properties changed; validation, callbacks, and stored-value logic are intact.
+- This resolves the separate dialog finding below. No complete Flutter suite,
+  native device, or hosted acceptance rerun is claimed; the previously recorded
+  golden differences and environment limitations remain open. Focused output:
+  `.tools/planner-commitment-layout-test.log` (gitignored).
+
+### Approved Planner Add new scroll fix (2026-09-13)
+
+- On the same dirty task base `002c968c3427c6b5a6c52fb56bc58bb143a8457f`,
+  the targeted Planner test at 320px and 200% text passes after wrapping only
+  the Add new sheet content in a scroll view. It now scrolls to all five
+  options and checks their visible semantics and enabled callbacks; the
+  existing Setup Habit editor check also passes. Labels, ordering, colors,
+  callbacks, and data logic are unchanged. No full-suite rerun is claimed.
+- An extra exploratory tap on Fixed commitment at the same large-text size
+  exposed a separate overflow in `planner_dialogs.dart` (including the
+  recurrence dropdown). The final scoped menu test does not open that editor;
+  the failure is retained in `.tools/planner-add-new-scroll-test.log` and is
+  not claimed fixed in that run; the approved follow-up above resolves it. The six
+  golden differences and environment limitations recorded below remain open.
+
+### Conservative test and transport repairs (2026-09-13)
+
+- On the dirty checkout based at
+  `002c968c3427c6b5a6c52fb56bc58bb143a8457f`, the final complete
+  `flutter test --no-pub --reporter expanded` run completed with 1,112 passed
+  and seven failed. This supersedes the earlier 1,064/48 Flutter result below;
+  it is still not a green full-app gate. The focused Insights, copy, and
+  timezone rerun passed all 45 tests. `flutter analyze --no-pub` reports no
+  issues. Logs are gitignored under `.tools/test-repair-final-*.log`.
+- Intentional copy and responsive-layout changes remain intact. Test repairs
+  exercise the actual Planner creation controls, outer-page scrolling, guest
+  time picker, Days/List timezone presentation, and Insights window selection.
+  Windows path separators no longer bypass the presentation-copy scan or
+  misidentify visual-contract owners. Documentation route checks distinguish
+  nested external Auth/REST paths from actual root FastAPI references and
+  include the standalone speech route inventory without loosening root checks.
+- Dictation transport now lives in Coach data/shared networking, not its UI.
+  Seven added tests cover PCM/bearer routing, timeout/error classification,
+  output bounds, native no-redirect options, Stop versus Send, and cancellation/account
+  changes during a pending upload. Existing consent, guest, lifecycle,
+  authorization, and Planner retry/mutation assertions remain enabled. Removed
+  unused locals/fields have no behavior; their existing feature owners need
+  no new behavior claims.
+- The seven failures remain visible: all six component-reference goldens
+  differ in text pixels (rendering/baseline cause not established), and the
+  Planner Add new sheet overflows vertically at 320px with 200% text. All
+  creation actions are present, but lower choices are clipped in that case.
+  No goldens were regenerated, tolerance widened, or tests skipped. The
+  sheet's minimal scroll-only fix was awaiting user approval in that run;
+  the approved follow-up above supersedes that specific finding.
+- `verify:docs` passes 18 checker tests plus route/owner consistency;
+  `verify:visual` passes its test and source guard; `verify:android-release`
+  passes six tests and the release source guard. These do not prove a built
+  APK or device behavior. The previously recorded Gradle/backend dependency,
+  Unix source-gate, and local database/E2E prerequisite limitations remain
+  unverified, not product pass evidence. No server, database, deployed APK,
+  Vercel configuration, branch, or remote repository was changed in this pass.
+- The local Cloud launcher and Flutter child were restarted; the ready server
+  returned HTTP 200 at `http://127.0.0.1:7357`. Authenticated browser acceptance
+  remains manual. Final `git diff --check` passed; nothing was staged or
+  committed. Generated golden comparison images are untracked test artifacts,
+  not approved replacement baselines.
+
+### Signed APK automation and Focus/Settings technical review (2026-09-13)
+
+- On the dirty checkout based at
+  `002c968c3427c6b5a6c52fb56bc58bb143a8457f`, the final full Flutter run
+  completed with 1,064 passed and 48 failed. These are the existing broader
+  failures recorded below, not a green full-app gate. The temporary additional
+  Settings lifecycle failure was corrected to assert the intentionally absent
+  self-link, retained unread Coach result, and working Back navigation.
+- Independent technical review passed all 27 tests across Coach lifecycle and
+  Focus session pages, plus all six Android release identity/configuration
+  tests and the source guard. It added a first-parent-main guard for tagged
+  APKs so tagged and automatic builds share the versionCode sequence. Native
+  Focus Protection received read-only review; no native behavior was changed.
+- Four signing secrets and the public certificate fingerprint were provisioned
+  in the GitHub `pilot-release` environment; existing app secrets, environment
+  rules, servers and deployed clients were unchanged. Private recovery material
+  remains gitignored on the laptop. The workflow/code changes are not pushed;
+  no signed APK, CI deployment, distribution, or device acceptance is claimed.
+- Local Android unit/lint/build verification was blocked while downloading
+  Gradle 8.14 by TLS `bad_record_mac` / `Tag mismatch`, including a retry using
+  TLS 1.2. Backend pytest dependency provisioning was blocked by TLS download
+  failures; the Linux lock also contains Windows-unsupported uvloop. Backend
+  tests did not run. No alternate server or database was modified to bypass
+  these limitations. No physical Android device is connected.
+- The captured-base affected selector chose the full gate. Its source phase
+  encountered the missing Unix `setsid` prerequisite in Git Bash; its backend
+  phase could not resolve `python3`. The stalled wrapper was stopped; the
+  independently completed Flutter and focused runs above are the available
+  evidence, not a completed full gate. Local database
+  and browser E2E prerequisites are absent; no reset or hosted E2E was attempted.
+  Documentation verification retains the pre-existing route-reference errors
+  recorded below. These blocked/failed gates remain open, not pass evidence.
+- The existing local Cloud launcher and its Flutter child were restarted;
+  `http://127.0.0.1:7357` returned HTTP 200. No authenticated browser acceptance
+  was performed. Final `git diff --check` passed; no files were staged/committed.
+
+### Full Flutter run after calendar-first layout (2026-09-12)
+
+- User-requested `flutter test --reporter expanded` completed with 1,064 passed
+  and 48 failed on the current dirty checkout based at
+  `002c968c3427c6b5a6c52fb56bc58bb143a8457f`. This is not a green full-app gate.
+  Failures include Planner workflow/scrollable-finder checks, Planner timezone,
+  Quick actions at large text, Insights copy, guest journeys, six visual
+  reference goldens, and the architecture check rejecting a direct Dio import
+  in `coach_dictation_button.dart`. No golden baselines were regenerated and
+  those wider issues were not repaired under this presentation task.
+- The focused 41 Dashboard and four Planner reference-layout checks passed.
+  The local Flutter restart completed with HTTP 200. `verify:docs` still fails
+  on the two previously recorded route references (16 checker tests pass, one
+  fails); `git diff --check` passed. No backend/database suites, remote changes,
+  deployments or installed-device checks were performed.
+
+### Direct All tasks and calendar-first Planner (2026-09-12)
+
+- All 41 Dashboard page/section tests and four responsive Planner reference
+  layout tests passed. Checks cover absent redundant Today/Tasks info, direct
+  compact task rows, completion/Focus/restore and Planner navigation, and the
+  calendar-first layout. Only presentation changed; provider, scheduling and
+  mutation contracts remain unchanged. The broader Planner workflow-suite gap
+  recorded below remains open. `git diff --check` passed.
+
+### Concise supporting copy (2026-09-12)
+
+- Coach, Dashboard page/sections, Setup, and Settings checks passed after updating
+  copy expectations, waiting for the edited Setup draft to rebuild before
+  duplication, and scoping the Settings guest-deletion assertion to its own row.
+  The four responsive Planner reference-layout checks also passed: 79 checks
+  across these focused runs. Local Flutter restarted and returned HTTP 200;
+  no authenticated browser journey or remote acceptance is claimed.
+- The broader initial six-file run was not green (112 passed, 28 failed before
+  the above test corrections). The remaining Planner workflow checks were not
+  repaired or rerun as part of this copy-only task; multiple failures encounter
+  ambiguous scrollable finders. Planner functionality is not fully verified by
+  the reference-layout checks. The known documentation route-reference errors
+  still block `verify:docs`; `git diff --check` passed.
+
+### Coach reply loading and compact all-tasks follow-up (2026-09-12)
+
+- All 259 tests across 28 relevant Calendar/Preparation, Coach page/lifecycle,
+  and Dashboard page/section files passed on the working tree based at
+  `002c968c3427c6b5a6c52fb56bc58bb143a8457f`. Coverage includes the Coach activity
+  placeholder and cancellation, compact task completion/Focus/restore at mobile
+  and desktop widths, and the existing preparation controls. Stale disclosure
+  copy/day-pager expectations and a test scroll-settling step were corrected;
+  no planning or command logic changed.
+- `git diff --check` passed. `npm run verify:docs` remains blocked by the two
+  previously recorded route-reference errors (16 checker tests pass, one fails).
+  No live provider, deployment, or installed-device acceptance is claimed.
+
+### Restored study controls and matched card widths (2026-09-12)
+
+- Eight targeted widget checks passed. The Exam picker and preview button stay
+  visible but disabled without prerequisites, then enable through the existing
+  target-selection guards. Empty Health and balance cards have matching widths
+  at 390px and 1100px. Dynamic results/retry and narrow large-text page checks
+  also passed. Only presentation changed; live browser acceptance is manual.
+- The known docs route-reference failures remain open; no remote changes.
+
+### Compact directly visible study tools (2026-09-12)
+
+- Eight targeted widget checks passed, covering shorter Health/balance copy, explicit target
+  selection and no-auto-move promise, dynamic Health results/errors/retry, compact
+  empty states, and directly visible tools at mobile/desktop/large-text widths.
+  No backend, calculation, or confirmation changes; live browser acceptance
+  remains manual and the existing docs route-reference failures remain open.
+
+### Calendar preparation header controls (2026-09-12)
+
+- Six focused header/reload checks passed, covering create without expanding saved plans,
+  preserved additional tools, visible-tooltip event retry, and prefill behavior.
+  Mobile, desktop, and 320px/200-percent text are exercised; live browser
+  acceptance remains manual. No remote or planning-logic changes were made.
+
+### Focused Calendar preparation page (2026-09-12)
+
+- Eight targeted preparation checks passed, including the page itself at 390px
+  and 1100px: related plans stay visible, other plans and advanced tools reopen,
+  and merely opening the groups makes no proposal or confirmation call. Existing
+  Calendar prefill/retry, Assignment defaults, detachment, and explicit
+  confirmation checks also passed.
+- UI-only local grouping; no backend or deployment changes. The existing docs
+  route-reference gate failures remain unrelated and unresolved.
+
+### Guided Calendar preparation (2026-09-12)
+
+- Ten targeted preparation widget checks passed, covering the two-input-screen
+  Calendar flow, collapsed fields/options, retained custom limits, minimum
+  estimate validation, all-day required time at 320px/200-percent text, prefill
+  retry/loading, existing replans, budgets, and explicit confirmation.
+- Proposal source identity and confirmation calls remain checked; these tests
+  do not prove live browser or backend acceptance. UI-only local changes, no
+  deployment. The pre-existing docs route-reference gate failures remain open.
+
+### Calendar source menu and compact study-time wizard (2026-09-12)
+
+- Fourteen Calendar page checks passed, including header source-menu actions,
+  disconnect/delete confirmation and exact retries. Six targeted preparation
+  checks passed: mobile calendar prefill and independent disclosures, Assignment
+  defaults, shared budget, same-day explicit confirmation, source detachment,
+  and narrow large-text rendering of the adjacent balance review.
+- Only local UI/copy changed. The documentation gate still fails on the two
+  previously recorded invalid route references; no remote changes were made.
+
+### Compact imported events and preparation entry (2026-09-12)
+
+- Sixteen focused Calendar page/route checks passed, including mobile event
+  expansion, optional study planning, past-event explanation, and unchanged
+  read-only/consent/retry behavior. The single current-calendar-prefill widget
+  check also passed, preserving the existing source-backed editor.
+- UI/copy only; no import, scheduling, backend, or remote changes. Live browser
+  acceptance remains a manual check; existing docs route-reference failures
+  are not fixed by this change.
+
+### Compact calendar-import page (2026-09-12)
+
+- All 13 checks in `calendar_integration_page_test.dart` passed: import-first
+  ordering, expandable statistics, explicit consent, unchanged retry identities,
+  disconnect/delete separation, local-demo gate, and narrow large-text labels.
+- UI/copy only; no import parser, controller, backend, or remote changes.
+
+### Planner import entry and Coach/Today controls (2026-09-12)
+
+- Twelve focused widget checks passed for the existing Planner import callback
+  at three widths, the Today header action, recording-bar controls, Stop-versus-
+  Send callbacks, and hardware/software Enter. The five Coach checks were rerun
+  successfully after explicitly implementing Shift+Enter line insertion.
+- Real microphone/transcription acceptance remains a manual browser check;
+  widget fixtures do not prove a live speech-service response.
+- Existing documentation route-reference failures remain; no Google OAuth/sync,
+  backend, database, or remote deployment changes were made.
+
+### Consistent Today desktop styling (2026-09-12)
+
+- Five focused Today widget checks passed: matching saved/unsaved check-in
+  button backgrounds at mobile/desktop widths, aligned supporting-card widths,
+  existing capture/agenda callbacks, and narrow large-text layout.
+- The width fixture explicitly enables Weekly review. Existing documentation
+  route-reference failures remain unrelated and unchanged.
+- Only responsive presentation changed; no data, command, or remote changes.
+
+### Compact sleep card and Today due tasks (2026-09-12)
+
+- Sleep Recommendation: 11 focused widget checks passed, covering ready mobile
+  rows, three desktop themes, large-text states, warnings, and local failure.
+- Today: 4 focused checks passed for the leading completion circle/Focus callback,
+  unchanged full-list navigation, 320-pixel/200%-text layout, and stale-projection
+  action locking. A failed stale-lock UI assertion was corrected and rerun.
+- Presentation only; data, command authority, and existing releases unchanged.
+  The documentation gate retains its two previously recorded route-reference
+  failures; no remote acceptance is claimed.
+
+### Compact Insights exploration (2026-09-12)
+
+- Focused Flutter selection/matrix checks: 6 passed, including desktop and
+  320-pixel/200%-text matrix labels, compact mobile labels, and unchanged
+  overlapping-signal/last-selection guards.
+- Only presentation changed: collapsed signal checkboxes, compact mobile matrix,
+  and descriptive icons for the demo observation/example-profile headings.
+- Documentation gate still fails on the two previously recorded unrelated
+  route references in the home-network guide and this verification document.
+  No remote deployment or backend check is claimed.
+
+### Consistent compact Setup editors (2026-09-12)
+
+- Presentation-only follow-up across Required, Routines, Semester planning,
+  fixed commitments and summary. Start ritual retains the approved layout.
+  No controller, validation, model, persistence or remote change.
+- Targeted Dart analysis passed. `flutter test test/setup_controller_test.dart
+  --dart-define=SETUP_PREVIEW=true --update-goldens`: 15 passed, now also opening
+  all optional sections and exercising title edits and commitment duplicate/
+  removal at 390, 1280 and 320/200% text. Existing save/retry tests remain green.
+- Reviewed mobile fixture renders for the expanded routine, semester and
+  commitment editors. Diff hygiene passed; Docs still reports the pre-existing
+  route-reference error and its earlier verification-note duplicate.
+
+### Direct Start ritual icons (2026-09-12)
+
+- Position-only follow-up: field, checkbox, down/up arrows side by side and
+  delete at the right. Icon spacing is tighter with targets at least 44 px.
+  The same three layout/interaction checks passed again; callbacks are unchanged.
+
+- Replaced only the preparation-item menu with direct up/down/delete icons;
+  checkbox, callbacks and boundary disabling stay unchanged.
+- The three `Setup reference layout` widget checks passed at 390, 1280 and
+  320/200% text, including toggle, reorder and removal. Local Flutter restarted
+  and loopback HTTP returned 200. Diff hygiene passed; Docs retains the known
+  unrelated route-reference errors. No deployment.
+
+### Compact Start ritual item rows (2026-09-12)
+
+- Preparation items combine the existing text input, include checkbox and
+  labelled move/remove menu in one row. Routine/commitment secondary actions
+  use tooltip-labelled icons. Validation and persistence remain unchanged.
+- Targeted Dart analysis passed; `flutter test test/setup_controller_test.dart
+  --dart-define=SETUP_PREVIEW=true --update-goldens` passed all 15 checks,
+  including checkbox mutation, disabled first move, reorder/removal and the
+  existing save/retry tests. Widths include 390, 1280 and 320 at 200% text.
+- The expanded 390 px fixture render was visually inspected. Diff hygiene
+  passed; Docs retains the already recorded unrelated route-reference errors.
+
+### Compact grouped Setup follow-up (2026-09-12)
+
+- One Optional setup frame now contains all four independent accordions.
+  Shortened copy preserves activation, recovery and local-only checklist meaning.
+  No controller, model, validation, save, backend or deployment changes.
+- `flutter test test/setup_controller_test.dart --dart-define=SETUP_PREVIEW=true
+  --update-goldens`: 15 passed. Layout checks additionally enable Focus and
+  exercise preparation-item reorder/removal at 390, 1280 and 320/200% text.
+- Reviewed the local 390 px collapsed and expanded Focus fixture renders.
+  `git diff --check` passed. Docs gate still reports the existing unrelated
+  route-reference error and its earlier verification-note duplicate.
+
+### Setup reference presentation (2026-09-12)
+
+- Setup-only layout and styling; controllers, validation, persistence and APIs
+  unchanged. The reference stepper is deliberately omitted and existing theme
+  colors retained. Copy meaning is unchanged; Optional moves to visible badges.
+- `flutter test test/setup_controller_test.dart --dart-define=SETUP_PREVIEW=true
+  --update-goldens`: 15 checks passed, including layout at 390/1280 px and
+  320 px with 200% text, expansion, editing and existing save/retry behavior.
+- The ignored `.tools/setup-390.png` fixture render was visually inspected;
+  this is not a live-account save or installed-device claim.
+- Targeted Dart analysis of `onboarding_page.dart` and `git diff --check` passed.
+- Documentation gate retains the unrelated local Markdown route error at
+  `Heimnetz-Handy-VPS-Dev-Anleitung.md:257`; no deployment is claimed.
+
+### Stable Planner day viewport (2026-09-12)
+
+Seven focused widget checks passed on task base `002c968`: three new viewport
+checks at 390px, 1100px and 320px/200% text, plus the four existing reference
+layout checks. Empty, one-, three- and six-item days retain the same frame and
+following-section position; overflow remains scrollable, the last item keeps its
+action, and date navigation returns to the top. Days/List selection and mobile
+horizontal swipe remain covered. Mobile/desktop fixture renders were inspected.
+Only Planner presentation/tests and their owning docs changed; no shared Today
+widget, backend, data or scheduling authority changed for this task.
+`git diff --check` passed. `verify:docs` still fails on the pre-existing
+local-guide Auth endpoint (token/password grant), unrelated to this viewport.
+
+### Explicit single-account demo transfer (2026-09-12)
+
+On task base `002c968`, a separately user-authorized, gitignored one-off transfer
+copied the existing private-development Student App data into one verified Google
+Pilot account. Matching live migration/column/constraint/trigger state was checked;
+the original six destination App rows were backed up before replacing three content
+rows and updating the profile/preferences. No source account or Auth credentials,
+roles, Google identity, participation, operational ledgers, RLS, grants, schema,
+runtime, or other destination account was changed. Normal seed guards remain intact.
+
+The first rolled-back trial detected the existing reflection timestamp trigger.
+The second trial compared every imported content/identity field while accepting
+only its two server-owned timestamps, passed, and verified the original destination
+unchanged. The same content-checked account-locked serializable transaction was
+committed. Readback verified all 361 rows in 22 tables and preserved identity fields,
+including 44 daily logs, 37 Focus sessions/reflections, 3 Habits, 4 Tasks, and 5
+calendar events. Browser rendering and a fresh Coach response were not tested.
+The local backup/mapping/receipt and removal instructions are under
+`.tools/transfer-student-20260912/`; these private artifacts must not be committed.
+This account-specific approval does not create general Pilot seeding authority.
+
+### Local Cloud proxy origin follow-up (2026-09-12)
+
+The running laptop proxy rejected `localhost:7357` with 403 while the same
+synthetic invalid-bearer request from `127.0.0.1:7357` reached upstream (401).
+The focused Node proxy test passed after allowing both exact loopback browser
+origins; foreign origins/ports remain rejected and upstream auth is preserved.
+After the scoped restart, Flutter served HTTP 200, both allowed origins returned
+204 for preflight and upstream 401 for a synthetic invalid bearer; port 7358's
+browser origin remained blocked with 403. No real account credentials were used.
+The user's actual login method/host and successful sign-in remain unverified.
+This changes only the optional laptop transport, not hosted Auth, APK or Vercel.
+`git diff --check` passed. `verify:docs` remains blocked by the pre-existing
+invalid local-guide route described in the Planner baseline below.
+
+### Reference-based Planner presentation (2026-09-12)
+
+On the uncommitted branch based on `002c968`, six focused Planner checks passed
+across the final runs: reference layouts at 390px, 834px, 1536px and 320px/200%
+text, desktop section/create-action access, and unchanged unscheduled-task edit
+identity. The mobile layout check also exercises horizontal day swipe; all four
+sizes check Days/List selection retention and zero mutation requests while
+browsing. Six shared day-card action/semantics/focus/layout tests passed.
+Rendered fixture screenshots were inspected against both supplied references;
+they do not prove live account data or a hosted release. No backend/API/model
+or scheduling code changed. `git diff --check` passed; `verify:docs` still fails
+only on the pre-existing local-guide route at line 257 described below.
+
+### Composer model dialog and local CLI access (2026-09-12)
+
+All 13 tests in `coach_page_test.dart` passed for the composer model dialog,
+including 320px/200% text, provider refresh and visible error states. Matthias
+confirmed a real local Standard/Project Coach answer before this UI relocation.
+The local Supabase CLI help and project listing now succeed for Staging and
+Production; the earlier Windows CLI-block observation is no longer current.
+No VM/VPS login, deployment or remote configuration mutation was needed.
+Read-only Production config comparison confirmed Google enabled, Turnstile
+enabled, the reported Vercel Site URL and matching Vercel/local redirect entries.
+This does not prove a successful Vercel OAuth round trip or identify its failure.
+
+### Coach selector follow-up (2026-09-12)
+
+The follow-up adds the fixed 8px chat inset, selector on capability errors and
+Project Coach default after profile initialization. Related test expectations
+were updated; no new Flutter test run was requested for this small follow-up.
+The 23-test result below predates these changes and is not their pass evidence.
+
+### Fixed Coach chat viewport (2026-09-12)
+
+On the uncommitted branch based on `002c968`, all 23 tests in
+`coach_page_test.dart`, `app_page_navigation_test.dart` and
+`coach_app_lifecycle_test.dart` passed. Coverage includes the permanent outline,
+fixed provider/composer positions, initial latest-message scrolling, large-text
+provider controls, draft/turn navigation survival and visible-answer notices.
+This is widget evidence, not live provider or installed-device acceptance.
+The docs gate still reports the pre-existing local-guide route error below.
+No backend, hosted release or Auth configuration was changed.
+
+### Private Cloud-account transport and CAPTCHA sizing (2026-09-12)
+
+On the uncommitted branch based on `002c968`, four focused Node tests passed:
+the loopback proxy's Host/Origin/path/header/bearer boundaries and upstream-error
+preservation, plus Turnstile token binding, invalid-action rejection and compact
+versus flexible sizing. The Cloud launcher compiled the local frontend and
+served HTTP 200; its unauthenticated proxy probe returned 401. Actual Google
+sign-in, a live Project Coach reply and the real resized widget remain manual
+acceptance, not evidence from these tests. No hosted release or server/Auth
+configuration was changed. The confirmed failing Production Vercel origin has
+valid API CORS, uses Pilot Supabase, and public API readiness returned 200;
+its post-login failure still needs the actual failing browser request. The
+separate Preview CORS/target findings are not its diagnosis. Supabase connector
+was disconnected, Windows application control blocked the installed CLI, and
+Home-server SSH became unreachable. `verify:docs` still reports the known old
+local-guide route error described below; `git diff --check` passed.
+
+### Recording composer interaction (2026-09-12)
+
+On the uncommitted branch based on `002c968`, focused Coach page tests passed
+including draft preservation and explicit direct-send dispatch. Six dictation
+tests passed, including the 320px recording bar, discard, Stop, Send gating,
+guest denial and disclosure. Recorder tests use a fake platform; result-dispatch
+tests inject recognized text, so they do not prove end-to-end microphone upload
+or provider availability. Matthias reported local transcription working before
+this UI change. The new controls still need his manual browser acceptance.
+`git diff --check` passed. `verify:docs` remains blocked by the pre-existing
+invalid route in the local `Heimnetz-Handy-VPS-Dev-Anleitung.md:257`.
+No deployment or server/Auth configuration was changed for this UI task.
+
+### Speech sidecar preparation (2026-09-12)
+
+On the uncommitted working branch based on `002c968`, targeted Coach page and
+lifecycle tests, dictation guest/disclosure tests, and the separate service's
+auth/body/busy/installer tests passed. VPS preparation used only a new OPS-owned
+directory; no existing runtime was replaced. A public German model sample
+(2.75 seconds) transcribed in 10.16 seconds including model startup, with 832 MiB
+peak child RSS under a 2 GiB / 150% CPU user-unit limit. The additive Caddy
+candidate parsed successfully. Matthias subsequently ran the privileged installer;
+read-only checks confirmed Speech/Caddy active, speech health HTTP 200 through
+the laptop tunnel, existing production/development API health HTTP 200, and
+unauthenticated speech HTTP 401. Authenticated microphone upload, external HTTPS
+acceptance, hosted frontend deployment and physical Android behavior remain
+unverified. This is installation/liveness evidence, not full product acceptance.
+
 ### Matthias project-maintainer installed (2026-09-07)
 
 Gregor ran the reviewed administrator package with SHA256

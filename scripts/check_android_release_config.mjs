@@ -253,6 +253,22 @@ export function checkAndroidReleaseConfig() {
   requireExactJavaVersion(stagingWorkflow, '21', 'pilot debug APK workflow');
   requireImmutableActionPins(workflow, 'release workflow');
   requireImmutableActionPins(stagingWorkflow, 'pilot debug APK workflow');
+  for (const value of [
+    "if: github.ref == 'refs/heads/main'", 'fetch-depth: 0',
+    'flutter build apk --release', 'flutter pub get --enforce-lockfile',
+    'ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD',
+    'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD', 'ANDROID_SIGNING_CERT_SHA256',
+    'apksigner verify', '"${#signer_digests[@]}" -eq 1',
+    'git rev-list --first-parent --count HEAD',
+    'APP_RELEASE_TAG: main-${{ github.sha }}', 'if: always()',
+    'MyLifeGraph-Pilot-Signed-', 'SHA256SUMS',
+  ]) requireText(stagingWorkflow, value, 'automatic signed APK workflow');
+  if (stagingWorkflow.includes('flutter build apk --debug') ||
+      stagingWorkflow.includes('pull_request:')) {
+    throw new Error('Automatic signing must not build debug APKs or run on pull requests.');
+  }
+  requireText(workflow, 'git rev-list --first-parent --count HEAD', 'tagged version sequence');
+  requireText(workflow, 'git rev-list --first-parent origin/main | grep -Fx "$GITHUB_SHA" > /dev/null', 'tagged main history guard');
   requireText(
     mobilePubspec,
     'webview_flutter_android: 4.14.0',

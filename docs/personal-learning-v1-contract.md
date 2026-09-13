@@ -165,6 +165,10 @@ evidence fingerprint.
 Insights replaces the generic observation for real accounts with one
 `Personal study pattern` card supporting collecting, emerging, stable,
 disabled, and error states. Expanded evidence cannot grant Planner authority.
+The default `Overview` tab groups Personal study pattern and Sleep recommendation;
+guest/demo retains its observation and example profile there. `Advanced` directly
+shows the existing correlation tools, or the sparse-signal explanation. Tab
+switching retains selected signals, comparison pair, window and disclosure state.
 Advanced correlations remain exploratory and use profile-timezone backend
 points; unsupported reconstructed Planner and Habit histories are excluded.
 Flutter presents target-based sleep as non-negative `Sleep shortfall` while
@@ -192,6 +196,57 @@ The correlation matrix keeps its row labels fixed while only the data grid
 scrolls horizontally. Row and column labels wrap without ellipsis, and their
 cells expand with text scaling so the complete metric names remain readable on
 desktop and at the supported 320-pixel/200%-text boundary.
+At ordinary mobile text sizes, narrower labels/cells and tighter row spacing
+reduce scrolling. Trend signals live in a collapsed multi-select disclosure,
+preserving metric order, per-series colors, pair exclusions, and the final
+selected signal. Normalization and evidence-timing explanations remain visible.
+
+### Advanced Skillset display
+
+Both viewport layouts use Compare, Top patterns, Trend overlay, Skillset,
+Matrix, then Discovered tabs. Skillset remains selectable with sparse data.
+It is a read-only presentation of recorded observations in the selected window,
+not the legacy persisted Skillset profile or a personal-strength model.
+The default dimensions are Sleep, Sport, Energy, Social activity, Learning,
+and Concentration; Stress, Mood, Productivity, Motivation, and Discipline are
+optional. Selection is shared with Capture for the current account session.
+
+Sleep uses sleep quality, Energy uses Morning energy (otherwise Evening), Concentration uses rated
+Focus quality, and Productivity uses rated useful progress. Stress and Mood
+use their own ratings when present in the existing report. Each displayed
+value is the median of valid daily ratings in the selected window, divided by
+its existing scale maximum for the radar (1–10 or 1–5); raw ratings, sources,
+and observed-day counts remain available under collapsed Details. Radar axes
+show their number and short dimension name. Stress is not inverted and explicitly
+says lower is calmer. The display does not rank abilities or prescribe targets.
+The additive `skillset-observations-v1` fields on Personal Patterns are
+`skillset_version`, `skillset_capture_version`, and `skillset_points` (daily
+date/value maps). They obey the existing analysis permission and window; the
+existing pattern calculations, correlation points, fingerprint and Planner
+preference remain unchanged. Valid check-ins contribute independently of Focus.
+The service advertises `skillset-capture-v1` support before new clients expose
+the optional Capture questions. Old servers remain usable without these fields.
+
+Sport and Social contact use explicit Evening choices on 0–2 scales. Study
+motivation uses an explicit Morning choice on 0–2. Capture stores these in an
+optional, separately versioned namespace; skipping is not zero. There is no
+duplicate Recovery axis. Learning is the completion percentage of terminal
+Focus sessions whose immutable schedule source is `deadline_plan_block` (study
+preparation); it needs at least three sessions. Discipline is an activity
+regularity proxy, not a character judgment: the equal-weight mean of Focus
+completion percentage and sport-positive days divided by explicitly sport-rated
+days. Each component needs at least three observations; unavailable components
+are omitted. Motivation and unreported days do not penalize it. Derived values
+use whole-window totals, not medians of daily percentages; the info dialog
+explains the formula. They never change schedules, goals or backend scores.
+
+Missing/non-finite/
+out-of-range ratings never become zero. At least three measured selected
+dimensions are needed for a radar; fewer retain their values and empty guidance.
+Unavailable dimensions are omitted from the polygon. Demo reports stay labelled
+as examples; real accounts never fall back to the demo Skillset provider.
+Mood and stress now use their own valid Evening check-in values in this separate
+view. Legacy correlation semantics and the demo source are unchanged.
 
 ## Learned sleep recommendation
 
@@ -285,7 +340,11 @@ Insights renders a separate `Sleep recommendation` card immediately below
 window yet` while explaining their distinct reason; disabled, loading, and
 route-error states are local to the card. Ready shows the three readable values
 `Sleep start`, `Wake time`, and `Duration`, plus the below-target warning when
-applicable. Flutter parses the raw median and confirmed target and rejects a V1
+applicable. Mobile presents compact label/value rows, falling back to stacked
+text for narrow widths or large text; desktop retains three columns. Status,
+warnings and expandable evidence remain intact. The standalone wake-day caption
+is omitted; parsed day offsets and clock-window labels remain unchanged.
+Flutter parses the raw median and confirmed target and rejects a V1
 response whose warning, status/reason, 90-day window, sample, or evidence bounds
 are inconsistent. It has no apply or automation control.
 

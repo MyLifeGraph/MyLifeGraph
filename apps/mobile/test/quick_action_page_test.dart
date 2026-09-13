@@ -163,6 +163,12 @@ void main() {
       textScale: 2,
     );
 
+    await tester.scrollUntilVisible(
+      find.text(_eveningTitle),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(
       _actionControl(
         title: _eveningTitle,
@@ -175,7 +181,7 @@ void main() {
 
     await tester.scrollUntilVisible(
       find.text(_morningTitle),
-      200,
+      -200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();

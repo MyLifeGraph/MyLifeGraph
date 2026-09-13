@@ -32,6 +32,9 @@ This slice adds no Google/Microsoft/Apple OAuth, provider access or refresh
 token, arbitrary calendar URL fetch, webhook, incremental cursor, background
 sync, provider write, LLM processing, notification, or deployed job. Supabase
 Google sign-in authenticates the app only and is not calendar authorization.
+The existing import screen is reachable from Settings and the `Import calendar
+(.ics)` icon beside Planner's `Next seven days`. Opening either entry performs
+no import; file selection and consent remain explicit inside the same screen.
 
 ## Contracts And Provenance
 
@@ -403,8 +406,8 @@ opens an honest local page with no network access. A real account sees:
 
 The page requires explicit consent, shows selected-file and import progress,
 keeps the selected bytes/request id after an ambiguous result, and confirms
-disconnect/delete consequences. Every event carries an `Imported · read-only`
-label, source label, local date/time, timezone, and import freshness. No event
+disconnect/delete consequences. Events share an `Imported · read-only`
+label and retain source label, local date/time, timezone, and import freshness. No event
 edit, provider delete, or provider-write control exists.
 
 Optional method and file-limit copy starts closed behind independent standard
@@ -419,11 +422,17 @@ Calendar import is a Settings-owned subpage. Its shared top back control pops
 the actual in-app history and falls back to Settings for a direct deep link;
 this navigation behavior performs no import, disconnect, or delete operation.
 
-An eligible current event may also expose `Plan preparation`. Navigation may
+An eligible current event may also expose `Plan study time`. Navigation may
 prefill only its id, current source fingerprint, visible title, and deadline.
-The separate planner wizard still requires the user to classify it as an exam
+The separate planner flow still requires the user to classify it as an exam
 or assignment and explicitly enter total active preparation and prior credit;
 opening the CTA creates nothing.
+The destination page foregrounds the selected event and its plans. Other plans
+and extra planning tools remain accessible in collapsed groups without changing
+Calendar data, source ownership, or any preparation command.
+Its new-plan UI groups input into event/type and total study time, then submits
+the existing explicit preview command. Event edits/linking and optional settings
+are expandable; missing required details and stale-source warnings stay visible.
 
 Calendar state uses an independent provider. A calendar failure cannot fail or
 replace Dashboard, Setup, capture, Today briefing, Weekly Review, Insights,
@@ -517,3 +526,15 @@ migration does not change consent, import identity, disconnect, deletion, or
 provider-write authority in this contract. Optional explanations use the
 standard 44×44 disclosure; connection/import state uses shared labelled status
 pills rather than route-local chips.
+For connected sources, file selection/import is the first card. The calendar
+name/status and imported events follow. Source actions live in the events
+header overflow menu, with unchanged disconnect/delete confirmations and a
+visible exact-retry action when needed. Read-only/no-sync
+copy remains visible, while file limits and detailed explanations share one
+disclosure. The replacement notice appears beside the selected-file import
+action. Import window/counts are expandable; timezone invalidation remains
+visible. New-source setup keeps the existing explicit consent and commands.
+Imported events use compact expandable title/date rows and one shared read-only
+badge. Expanded details retain timezone, source, and location. `Plan study time`
+is an optional, separate exam/assignment preparation action; past events and
+disconnected imports explain why it is unavailable. Eligibility is unchanged.

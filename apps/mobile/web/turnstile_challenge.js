@@ -52,6 +52,9 @@
     window.turnstile.render('#turnstile-widget', {
       sitekey,
       action,
+      // Flexible still needs 300px; compact is Cloudflare's narrow layout.
+      size: document.getElementById('turnstile-widget').clientWidth < 300
+        ? 'compact' : 'flexible',
       callback(token) {
         status.textContent = 'Verification complete.';
         deliver({ token });

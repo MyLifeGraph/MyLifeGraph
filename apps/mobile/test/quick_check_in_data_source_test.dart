@@ -5,8 +5,27 @@ import 'package:my_life_graph/features/quick_action/data/guest_quick_check_in_da
 import 'package:my_life_graph/features/quick_action/data/quick_check_in_supabase_data_source.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_life_graph/features/quick_action/domain/skillset_signals.dart';
 
 void main() {
+  test('optional signals survive save, reload, edit and clearing without changing core values', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = GuestQuickCheckInDataSource();
+    for (final value in [0, 1, 2, null]) {
+      final evening = _evening().copyWith(skillset: SkillsetSignals({'sport': value, 'social': value}));
+      final morning = _morning().copyWith(skillset: SkillsetSignals({'motivation': value}));
+      await store.saveEvening(evening);
+      await store.saveMorning(morning);
+      final saved = await store.loadToday(DateTime.parse(_entryDate));
+      expect(saved!.evening!.skillset!.values, {'sport': value, 'social': value});
+      expect(saved.morning!.skillset!.values, {'motivation': value});
+      expect(saved.morning!.forEditing().skillset!.values, {'motivation': value});
+      expect(saved.mood, _evening().mood);
+      expect(saved.sleepQuality, _morning().sleepQuality);
+    }
+    expect(_evening().toMetadataJson().containsKey('skillset'), isFalse);
+    expect(() => SkillsetSignals.fromJson({'version': skillsetCaptureVersion, 'sport': 3}, morning: false), throwsFormatException);
+  });
   group('Phase 1 capture domain', () {
     test('accepts every bounded current stress and focus code', () {
       for (final value in StressSource.values) {

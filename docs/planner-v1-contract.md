@@ -15,6 +15,10 @@ main page through the shared header action.
 
 ## Navigation And Surface
 
+The `Import calendar (.ics)` header icon beside `Next seven days` opens the
+existing calendar-import screen, also available in Settings. It does not
+introduce Google synchronization or change import consent/data behavior.
+
 When the development Coach surface is enabled, the mobile and desktop
 destinations are, in order: `Today`, `Insights`, `Quick actions`, `Planner`, and
 `Coach`. Release builds, production, or an explicit disabled gate omit Coach
@@ -38,6 +42,31 @@ engine; it renders one selected Preparation plan over the existing
 proposal/confirmation APIs.
 
 Planner renders:
+
+The calendar is the first content section at every width. At normal desktop
+widths (1280px and above), it spans the content width; below it, creation and
+preferences occupy the main column and attention/preparation/habits/unscheduled/
+history occupy the compact right column. `Add new` stays below the calendar,
+not in the page header, with the same five creation actions. Warnings, retries and
+pending previews remain visible. Narrower/tablet and enlarged-text layouts
+stack the same sections without changing their source or callbacks.
+The mobile `Add new` sheet scrolls when height or enlarged text would otherwise
+clip its five actions; their order, labels, and callbacks remain unchanged.
+The Fixed commitment dialog includes its title in constrained-height scrolling;
+its recurrence/weekday dropdowns fit the available width with flexible item
+heights. Fields, validation, review, and saved values remain unchanged.
+
+`Days` and `List` are available at every width. Days retains its selected date
+when switching views and supports arrows, weekday chips and horizontal swipe.
+Desktop chips include dates; narrow/large-text chips scroll instead of squeezing.
+Days keeps its appointments inside a softly outlined, count-independent viewport
+for roughly three normal rows; overflow scrolls within it and an empty day retains
+the same height. Large text gets a taller viewport without truncating rows. Date
+navigation stays outside the viewport, and each day starts at its first item.
+List retains its continuous vertical layout rather than seven nested scrollers.
+The date range remains the overview's seven profile-local dates. Appointment
+cards use an opt-in neutral surface with category-colored rail/icon and full
+source labels; Today retains the shared component's default presentation.
 
 1. `Add new`: Task, Habit, Exam, Assignment, and Fixed commitment;
 2. `Needs attention`: current conflicts, exact unplaced minutes, stale
@@ -596,6 +625,11 @@ definition mutation. It does not claim that energy windows predict performance
 or that imported Calendar data is complete availability.
 
 ## Visual presentation
+
+Task/Habit descriptions start at one line and grow to three, retaining the
+same character limits and full editable text. Compact fields retain every
+action; Habit cadence is labelled `How often?`, and fixed-commitment time rows
+use an edit-calendar icon. These changes do not alter draft or scheduling rules.
 
 Planner uses the shared [Frontend Visual System V2](frontend-visual-system-v2.md).
 Time-block presentation and semantic states do not alter previews,

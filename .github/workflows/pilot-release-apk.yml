@@ -31,6 +31,7 @@ jobs:
           [[ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" == "tag" ]]
           [[ "$(git rev-list -n 1 "$GITHUB_REF_NAME")" == "$GITHUB_SHA" ]]
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          git rev-list --first-parent origin/main | grep -Fx "$GITHUB_SHA" > /dev/null
           [[ -z "$(git status --porcelain=v1)" ]]
 
       - name: Install checksum-pinned SBOM generator
@@ -96,7 +97,7 @@ jobs:
 
       - name: Derive deterministic Android version
         id: identity
-        run: node scripts/android_release_identity.mjs "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+        run: node scripts/android_release_identity.mjs "$GITHUB_REF_NAME" "$(git rev-list --first-parent --count HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Decode private signing keystore
         env:

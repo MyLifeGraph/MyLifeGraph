@@ -16,7 +16,7 @@ The user deliberately starts the flow from one of these entries:
   kind already fixed;
 - Planner `Add new` -> `Assignment`, which opens a finite weekly Assignment
   Series flow with the kind already fixed; or
-- `Plan preparation` on one explicitly selected imported calendar event.
+- `Plan study time` on one explicitly selected imported calendar event.
 
 The generic imported-event entry still asks the user to choose `exam` or
 `assignment`, because that action has not already supplied a kind. A direct
@@ -575,6 +575,22 @@ backend anti-replay ledgers and export no request fingerprint.
 
 ## Flutter Surface
 
+Active-plan edit/complete/cancel controls share a compact icon-and-label row on
+mobile and desktop. Full-action tooltips, minimum touch targets, disabled guards
+and confirmation dialogs are preserved. Pending confirmation stays separate.
+
+Preparation block rows separate the full local date from the emphasized time
+range. One visible `Study blocks` heading names the current profile timezone
+for the displayed lists. Focus/recovery duration, state, tracked credit and
+start actions remain visible; cross-date ends include their date. Missing or
+invalid profile timezones still hide local times rather than using device time.
+
+Single-plan preparation estimates offer selected-state 2/5/10/20/30-hour shortcuts.
+Single-plan and weekly Assignment editors share wrapping 25/50/90-minute
+Focus choices plus `Custom` (25–180 whole minutes). Saved custom values remain
+visible; invalid input cannot create a preview. Existing daily-cap, estimate,
+source, revision and confirmation rules are unchanged.
+
 The authenticated synced surface is `/preparation-plans`, titled
 `Preparation plans`. Planner's direct `Exam` and `Assignment` Add-new controls
 open a kind-locked editor. The surface's general `Plan preparation` action asks
@@ -582,7 +598,7 @@ once between `Exam` and `Assignment`, then opens the kind-locked single Exam
 editor or finite weekly Assignment Series editor respectively. A route-level
 `kind` is a one-shot direct-entry command and must not constrain a later use of
 that general action on the same page. An eligible imported event also exposes
-`Plan preparation`; Calendar navigation may carry only the selected opaque
+`Plan study time`; Calendar navigation may carry only the selected opaque
 event id. The destination reads its current title, time, and source fingerprint
 through owner-scoped Calendar RLS before prefilling them; only this event-source
 entry keeps classification inside its prefilled plan editor. Every path
@@ -623,10 +639,29 @@ keeps `How the preview is calculated` closed. Both use the standard 44×44
 information control. Current reservations, staged-preview status, source
 changes, passed deadlines, automatic-change non-claims, confirmation
 requirements, and retry actions remain visible outside the disclosures.
+The detailed chronological Focus-credit explanation shares the existing planning
+disclosure; a short start hint stays visible. Preview, recovery, source/timezone
+and missed-block notices use concise copy without removing values or actions.
 Student-facing load failures name the unavailable view and next action without
 displaying backend, owner-scope, or contract diagnostics.
 
 `/preparation-plans` itself is grouped into `Open plans` and compact `History`.
+When entered for a Calendar event, the page prioritizes that event and plans
+whose active/pending revision references it. A plan newly created from this
+entry also stays visible for review if its source link was deliberately removed.
+The generic create action sits beside `All plans`; other plans and weekly series
+remain expandable below it (no empty expander). Calendar-source retry/reload
+actions use labelled refresh icons in their card headers.
+Health (`Enough study time?`) and multi-Exam (`Redistribute study time`) tools
+are directly visible, without the former `More planning options` accordion.
+Static introductory paragraphs are removed or shortened. Empty results show
+brief guidance; the Exam picker and preview button remain visible and disabled
+when prerequisites are missing. The Health card fills the same available width
+as the adjacent cards. Loaded results, retry/error states, previews and
+confirmation rules are unchanged. The saved-plans group starts closed and
+opens for selected details or errors. Health read errors and
+retained-input/global retry notices remain outside the groups. Normal navigation
+without a Calendar event keeps its existing layout and all commands are unchanged.
 Every plan is an accordion and
 at most one selected or newly previewed plan is open. Collapsed rows expose only
 status, Exam/Assignment type, title, and a short progress or attention summary.
@@ -1018,3 +1053,11 @@ Deadline Planner uses the shared
 [Frontend Visual System V2](frontend-visual-system-v2.md). The presentation
 migration leaves proposal identity, revisions, confirmation, reservations,
 managed-task ownership, and measured progress unchanged.
+New Calendar-source plans use two short input screens followed by the existing
+generated preview: event/type, then total study time. Prefilled event fields and
+source linking remain under `Edit event details`, initially open when required
+values are missing or the source needs review. `Adjust plan` reveals all existing
+placement controls and capacity checks on the study-time screen. Budget status,
+source warnings, and loaded capacity results/errors remain visible when collapsed.
+Validation, explicit proposal/confirmation, defaults, and retained draft values
+are unchanged. Existing-plan and non-Calendar editors retain their three steps.

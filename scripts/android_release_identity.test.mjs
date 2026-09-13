@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { androidReleaseIdentity } from './android_release_identity.mjs';
+import { androidCiBuildNumber, androidMainIdentity, androidReleaseIdentity } from './android_release_identity.mjs';
+
+test('automatic and tagged builds share a stable increasing CI versionCode', () => {
+  const sha = 'a'.repeat(40);
+  assert.deepEqual(androidMainIdentity(sha, '150'), {
+    build_name: 'main-aaaaaaaaaaaa', build_number: '10000150',
+  });
+  assert.equal(androidReleaseIdentity('v0.1.0-pilot.1-rc.1', '150').build_number,
+    androidMainIdentity(sha, '150').build_number);
+  assert.ok(Number(androidCiBuildNumber('151')) > Number(androidCiBuildNumber('150')));
+  for (const count of ['0', '-1', '01', '1.2', 'Infinity', '2090000001', 'x']) {
+    assert.throws(() => androidCiBuildNumber(count));
+  }
+  assert.throws(() => androidMainIdentity('short', '150'));
+});
 
 test('derives a stable monotonic Android identity from an RC tag', () => {
   assert.deepEqual(androidReleaseIdentity('v0.1.0-pilot.1-rc.1'), {

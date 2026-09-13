@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/features/dashboard/application/today_command_controller.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_full_week.dart';
@@ -19,6 +20,32 @@ import 'package:my_life_graph/features/dashboard/presentation/widgets/today_over
 import 'support/dashboard_full_week_fixture.dart';
 
 void main() {
+  for (final width in [390.0, 900.0]) {
+    testWidgets('check-in button styling matches at width $width', (tester) async {
+      await _pump(tester, TodayOverviewSections(
+        snapshot: _snapshot(),
+        canExecute: true,
+        actions: TodayOverviewActions(
+          onAddMorning: () {}, onAddEvening: () {},
+          onOpenPreparationPlan: (_) {}, onStartPreparationFocus: (_) {},
+        ),
+      ), size: Size(width, 1400), theme: AppTheme.dark);
+      final morning = find.ancestor(
+        of: find.text(width < 600 ? 'Morning Check-in' : 'Edit Morning check-in'),
+        matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
+      );
+      final evening = find.ancestor(
+        of: find.text(width < 600 ? 'Evening Check-in' : 'Add Evening check-in'),
+        matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
+      );
+      expect(tester.widget<OutlinedButton>(morning).style!.backgroundColor!
+        .resolve({}), Colors.transparent);
+      expect(tester.widget<OutlinedButton>(evening).style!.backgroundColor!
+        .resolve({}), tester.element(evening).visualTokens.brand.withValues(alpha: 0.12));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   test('Dashboard page composes section APIs instead of owning their widgets',
       () {
     final source = File(
@@ -518,9 +545,65 @@ void main() {
     );
   });
 
+  for (final width in [390.0, 1100.0]) {
+    testWidgets('All tasks use compact completion and keep restore at $width',
+        (tester) async {
+      PlanItem task(String id, String status) => PlanItem(
+        id: id, title: id, priority: 'high',
+        isCompleted: status == 'done', status: status,
+      );
+      var completed = '';
+      var focused = '';
+      var plannerOpened = false;
+      final restored = <String>[];
+      await _pump(tester, TodayTaskSections(
+        snapshot: _snapshot(todayTasks: const [], allTasks: [
+          task('Open task', 'todo'),
+          task('Finished task', 'done'),
+          task('Cancelled task', 'cancelled'),
+        ]),
+        commands: TodayCommandState.initial(),
+        canExecute: true,
+        visibility: const TodayTaskVisibility(
+          showAll: true, showCompleted: true, showCancelled: true,
+        ),
+        actions: TodayTaskActions(
+          onOpenPlanner: () => plannerOpened = true,
+          onComplete: (task) => completed = task.id,
+          onRestore: (task) => restored.add(task.id),
+          onStartFocus: (task) => focused = task.id,
+          onToggleAll: () {}, onToggleCompleted: () {}, onToggleCancelled: () {},
+        ),
+      ), size: Size(width, 1600));
+      final group = find.byKey(const ValueKey('today-all-tasks'));
+      expect(find.descendant(of: group, matching: find.text('All tasks')),
+          findsOneWidget);
+      expect(find.descendant(of: group, matching: find.text('Tasks')),
+          findsNothing);
+      final complete = find.byTooltip('Complete task Open task');
+      expect(find.descendant(of: complete,
+          matching: find.byIcon(AppIcons.radioButtonUnchecked)), findsOneWidget);
+      expect(tester.getCenter(complete).dx,
+          lessThan(tester.getTopLeft(find.text('Open task')).dx));
+      expect(find.descendant(of: group, matching: find.byIcon(AppIcons.check)), findsNothing);
+      await tester.tap(complete);
+      await tester.tap(find.byTooltip('Focus on Open task'));
+      await tester.tap(find.byTooltip('Restore task Finished task'));
+      await tester.tap(find.byTooltip('Restore task Cancelled task'));
+      await tester.tap(find.descendant(of: group,
+          matching: find.byTooltip('Open Planner')));
+      expect(completed, 'Open task');
+      expect(focused, 'Open task');
+      expect(restored, ['Finished task', 'Cancelled task']);
+      expect(plannerOpened, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('Task sections expose only their typed action boundary',
       (tester) async {
     var completedTaskId = '';
+    var focusedTaskId = '';
     var toggleAllCalls = 0;
     const task = PlanItem(
       id: 'task-1',
@@ -544,7 +627,7 @@ void main() {
           onOpenPlanner: () {},
           onComplete: (value) => completedTaskId = value.id,
           onRestore: (_) {},
-          onStartFocus: (_) {},
+          onStartFocus: (value) => focusedTaskId = value.id,
           onToggleAll: () => toggleAllCalls += 1,
           onToggleCompleted: () {},
           onToggleCancelled: () {},
@@ -552,8 +635,20 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Complete task Write summary'));
-    await tester.tap(find.byKey(const ValueKey('today-all-tasks')));
+    final openPlanner = find.byTooltip('Open Planner').first;
+    expect(tester.getCenter(openPlanner).dx,
+      greaterThan(tester.getTopRight(find.text('Tasks due today')).dx));
+    final complete = find.byTooltip('Complete task Write summary');
+    expect(find.descendant(of: complete,
+      matching: find.byIcon(AppIcons.radioButtonUnchecked)), findsOneWidget);
+    expect(tester.getCenter(complete).dx,
+      lessThan(tester.getTopLeft(find.text('Write summary')).dx));
+    expect(find.byIcon(AppIcons.check), findsNothing);
+    await tester.tap(find.byTooltip('Focus on Write summary'));
+    expect(focusedTaskId, 'task-1');
+    await tester.tap(complete);
+    await tester.tap(find.byKey(
+      const ValueKey('dashboard-expansion-control-All tasks')));
 
     expect(completedTaskId, 'task-1');
     expect(toggleAllCalls, 1);
@@ -620,7 +715,7 @@ void main() {
     expect(find.text('Weekly review'), findsOneWidget);
     expect(
       find.text(
-        'Look back at last week. This is not a today to-do.',
+        'Look back at last week.',
       ),
       findsOneWidget,
     );

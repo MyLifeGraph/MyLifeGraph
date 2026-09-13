@@ -64,8 +64,14 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
   final CoachApiDataSource _api;
   final Future<String?> Function() _accessToken;
   int _profileGeneration = 0;
+  Future<void> _initialization = Future<void>.value();
 
-  Future<void> setProfile(String? profileId) async {
+  Future<void> get initialization => _initialization;
+
+  Future<void> setProfile(String? profileId) =>
+      _initialization = _loadProfile(profileId);
+
+  Future<void> _loadProfile(String? profileId) async {
     final generation = ++_profileGeneration;
     final previous = state.profileId;
     state = CoachCredentials(
@@ -90,7 +96,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
       }
       state = CoachCredentials(
         profileId: profileId,
-        provider: null,
+        provider: CoachProviderName.operatorCodexPilot,
         keys: keys,
       );
     } catch (_) {

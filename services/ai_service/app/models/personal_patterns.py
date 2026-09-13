@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.contracts.skillset_capture import SKILLSET_CAPTURE_VERSION
 
 
 PERSONAL_PATTERNS_CONTRACT_VERSION = "personal-patterns-v1"
@@ -170,7 +171,39 @@ class PersonalPatternCorrelationPoint(BaseModel):
         return self
 
 
+SKILLSET_VIEW_VERSION = "skillset-observations-v1"
+
+
+class SkillsetObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    local_date: date
+    values: dict[
+        Literal[
+            "sleep_quality",
+            "energy_level",
+            "mood_score",
+            "stress_level",
+            "sport_activity",
+            "social_activity",
+            "study_motivation",
+            "focus_quality",
+            "useful_progress",
+            "focus_count",
+            "focus_completed",
+            "learning_count",
+            "learning_completed",
+        ],
+        float,
+    ] = Field(min_length=1, max_length=13)
+
+
 class PersonalPatternsResponse(BaseModel):
+    skillset_version: Literal["skillset-observations-v1"] = SKILLSET_VIEW_VERSION
+    skillset_capture_version: Literal["skillset-capture-v1"] = SKILLSET_CAPTURE_VERSION
+    skillset_points: list[SkillsetObservation] = Field(
+        default_factory=list, max_length=91
+    )
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     contract_version: Literal["personal-patterns-v1"]
@@ -208,6 +241,7 @@ class PersonalPatternsResponse(BaseModel):
             self.baseline is not None
             or self.patterns
             or self.correlation_points
+            or self.skillset_points
             or self.evidence_fingerprint is not None
             or self.planner_preference.reason != "analysis_disabled"
         ):

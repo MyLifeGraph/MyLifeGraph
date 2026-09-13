@@ -249,6 +249,8 @@ class _CalendarPrefillCard extends StatelessWidget {
     required this.onPrimary,
     this.secondaryLabel,
     this.onSecondary,
+    this.primaryIsReload = false,
+    this.secondaryIsReload = false,
   });
 
   final IconData icon;
@@ -258,6 +260,8 @@ class _CalendarPrefillCard extends StatelessWidget {
   final VoidCallback onPrimary;
   final String? secondaryLabel;
   final VoidCallback? onSecondary;
+  final bool primaryIsReload;
+  final bool secondaryIsReload;
 
   @override
   Widget build(BuildContext context) {
@@ -265,27 +269,45 @@ class _CalendarPrefillCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon),
-          const SizedBox(height: AppSpacing.sm),
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          if (primaryIsReload || secondaryIsReload)
+            Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text(title,
+                    style: Theme.of(context).textTheme.titleLarge)),
+                IconButton(
+                  tooltip: primaryIsReload ? primaryLabel : secondaryLabel,
+                  onPressed: primaryIsReload ? onPrimary : onSecondary,
+                  icon: const Icon(AppIcons.refresh),
+                ),
+              ],
+            )
+          else ...[
+            Icon(icon),
+            const SizedBox(height: AppSpacing.sm),
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+          ],
           const SizedBox(height: AppSpacing.sm),
           Text(message),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              OutlinedButton(
-                onPressed: onPrimary,
-                child: Text(primaryLabel),
-              ),
-              if (secondaryLabel != null && onSecondary != null)
-                TextButton(
-                  onPressed: onSecondary,
-                  child: Text(secondaryLabel!),
+          if (!primaryIsReload || secondaryLabel != null && !secondaryIsReload) ...[
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                if (!primaryIsReload) OutlinedButton(
+                  onPressed: onPrimary,
+                  child: Text(primaryLabel),
                 ),
-            ],
-          ),
+                if (secondaryLabel != null && onSecondary != null && !secondaryIsReload)
+                  TextButton(
+                    onPressed: onSecondary,
+                    child: Text(secondaryLabel!),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -322,17 +344,13 @@ class _ExamPlanHealthSection extends StatelessWidget {
   Widget build(BuildContext context) => AppCard(
         key: const ValueKey('preparation-exam-plan-health'),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Exam Plan Health',
+              'Enough study time?',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: AppSpacing.xs),
-            const Text(
-              'Capacity outlook for finishing preparation before each saved Exam buffer. This is separate from the sleep-focused Exam week outlook.',
-            ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
             value.when(
               skipLoadingOnRefresh: false,
               skipLoadingOnReload: false,
@@ -343,28 +361,28 @@ class _ExamPlanHealthSection extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text('Checking current Exam capacity…')),
+                  Expanded(child: Text('Checking study time…')),
                 ],
               ),
               error: (_, __) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Exam Plan Health could not be loaded. This is a connection or response error, not an Unknown capacity result.',
+                    'Could not load the study-time check. Try again.',
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   OutlinedButton.icon(
                     onPressed: onRetry,
                     icon: const Icon(AppIcons.refresh),
-                    label: const Text('Retry Exam Plan Health'),
+                    label: const Text('Retry study-time check'),
                   ),
                 ],
               ),
               data: (health) {
-                if (health == null) return const SizedBox.shrink();
+                if (health == null) return const Text('No assessment available.');
                 if (health.exams.isEmpty) {
                   return const Text(
-                    'No active Exam plan needs a capacity calculation.',
+                    'No active exam plans.',
                   );
                 }
                 return Column(

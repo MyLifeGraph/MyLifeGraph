@@ -7,6 +7,24 @@ import 'package:flutter/widgets.dart';
 class AppIcons {
   const AppIcons._();
 
+  static const moreHoriz = IconData(
+    0xe1fe,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+
+  static const stop = IconData(
+    0xe46c,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+
+  static const microphone = IconData(
+    0xe326,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+
   static const add = IconData(
     0xe3d4,
     fontFamily: 'PhosphorRegular',

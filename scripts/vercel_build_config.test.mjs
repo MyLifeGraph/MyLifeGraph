@@ -122,6 +122,7 @@ test('Vercel response headers enforce browser security boundaries', () => {
   assert.equal(values['X-Content-Type-Options'], 'nosniff');
   assert.equal(values['Referrer-Policy'], 'no-referrer');
   assert.match(values['Permissions-Policy'], /camera=\(\)/);
+  assert.match(values['Permissions-Policy'], /microphone=\(self\)/);
   assert.equal(values['Cross-Origin-Opener-Policy'], 'same-origin-allow-popups');
   assert.equal(vercel.outputDirectory, 'apps/mobile/build/web');
 });

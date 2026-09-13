@@ -1,4 +1,6 @@
 import 'correlation.dart';
+import 'skillset_observations.dart';
+import '../../../quick_action/domain/skillset_signals.dart';
 
 enum PersonalPatternsStatus {
   disabled,
@@ -19,6 +21,8 @@ enum PersonalPatternsStatus {
 
 class PersonalPatterns {
   const PersonalPatterns({
+    this.skillsetPoints = const [],
+    this.supportsSkillsetCapture = false,
     required this.status,
     required this.summary,
     required this.timezone,
@@ -46,6 +50,9 @@ class PersonalPatterns {
       throw const FormatException('Invalid personal patterns fingerprint.');
     }
     return PersonalPatterns(
+      skillsetPoints: parseSkillsetPoints(json),
+      supportsSkillsetCapture:
+          json['skillset_capture_version'] == skillsetCaptureVersion,
       status: PersonalPatternsStatus.parse(json['status']),
       summary: _string(json, 'summary'),
       timezone: _string(json, 'timezone'),
@@ -60,19 +67,20 @@ class PersonalPatterns {
       plannerPreference: LearnedPlannerPreference.fromJson(
         _map(json, 'planner_preference'),
       ),
-      limitations: rawLimitations.map((value) {
-        if (value is! String || value.isEmpty) {
-          throw const FormatException(
-            'Invalid personal pattern limitation.',
-          );
-        }
-        return value;
-      }).toList(growable: false),
+      limitations: rawLimitations
+          .map((value) {
+            if (value is! String || value.isEmpty) {
+              throw const FormatException(
+                'Invalid personal pattern limitation.',
+              );
+            }
+            return value;
+          })
+          .toList(growable: false),
       correlationPoints: rawPoints
           .map(
-            (value) => PersonalPatternCorrelationPoint.fromJson(
-              _typedMap(value),
-            ),
+            (value) =>
+                PersonalPatternCorrelationPoint.fromJson(_typedMap(value)),
           )
           .toList(growable: false),
       evidenceFingerprint: fingerprint as String?,
@@ -80,6 +88,8 @@ class PersonalPatterns {
   }
 
   final PersonalPatternsStatus status;
+  final List<CorrelationDataPoint> skillsetPoints;
+  final bool supportsSkillsetCapture;
   final String summary;
   final String timezone;
   final PersonalPatternsWindow window;
@@ -107,10 +117,7 @@ class PersonalPatterns {
     final dates = byDate.keys.toList()..sort();
     return [
       for (final day in dates)
-        CorrelationDataPoint(
-          date: day,
-          values: byDate[day]!.values,
-        ),
+        CorrelationDataPoint(date: day, values: byDate[day]!.values),
     ];
   }
 }
@@ -157,14 +164,8 @@ class PersonalPatternsSample {
       ratedSessions: _integer(json, 'rated_sessions', minimum: 0),
       ratedLocalDays: _integer(json, 'rated_local_days', minimum: 0),
       ratingCoverage: _number(json, 'rating_coverage', minimum: 0, maximum: 1),
-      firstRatedLocalDate: _optionalLocalDate(
-        json,
-        'first_rated_local_date',
-      ),
-      lastRatedLocalDate: _optionalLocalDate(
-        json,
-        'last_rated_local_date',
-      ),
+      firstRatedLocalDate: _optionalLocalDate(json, 'first_rated_local_date'),
+      lastRatedLocalDate: _optionalLocalDate(json, 'last_rated_local_date'),
     );
   }
 
@@ -197,12 +198,7 @@ class PersonalPatternsBaseline {
         minimum: 1,
         maximum: 5,
       ),
-      completionRate: _number(
-        json,
-        'completion_rate',
-        minimum: 0,
-        maximum: 1,
-      ),
+      completionRate: _number(json, 'completion_rate', minimum: 0, maximum: 1),
     );
   }
 
@@ -264,12 +260,14 @@ class PersonalPatternEvidence {
       comparisonGroup: _string(json, 'comparison_group'),
       preferredCount: _integer(json, 'preferred_count', minimum: 1),
       comparisonCount: _integer(json, 'comparison_count', minimum: 1),
-      details: _list(json, 'details').map((value) {
-        if (value is! String || value.isEmpty) {
-          throw const FormatException('Invalid pattern evidence detail.');
-        }
-        return value;
-      }).toList(growable: false),
+      details: _list(json, 'details')
+          .map((value) {
+            if (value is! String || value.isEmpty) {
+              throw const FormatException('Invalid pattern evidence detail.');
+            }
+            return value;
+          })
+          .toList(growable: false),
     );
   }
 
@@ -386,17 +384,17 @@ class _DailyCorrelationValues {
   }
 
   Map<String, double> get values => {
-        'focus_minutes': focusMinutes,
-        'planned_focus_minutes': plannedFocusMinutes,
-        'focus_quality': focusQuality / count,
-        'useful_progress': usefulProgress / count,
-        'focus_completion_rate': completed / count * 100,
-        if (sleepHours.isNotEmpty) 'sleep_hours': _average(sleepHours),
-        if (sleepTargetDeviation.isNotEmpty)
-          'sleep_target_deviation_minutes': _average(sleepTargetDeviation),
-        if (sleepQuality.isNotEmpty) 'sleep_quality': _average(sleepQuality),
-        if (morningEnergy.isNotEmpty) 'energy_level': _average(morningEnergy),
-      };
+    'focus_minutes': focusMinutes,
+    'planned_focus_minutes': plannedFocusMinutes,
+    'focus_quality': focusQuality / count,
+    'useful_progress': usefulProgress / count,
+    'focus_completion_rate': completed / count * 100,
+    if (sleepHours.isNotEmpty) 'sleep_hours': _average(sleepHours),
+    if (sleepTargetDeviation.isNotEmpty)
+      'sleep_target_deviation_minutes': _average(sleepTargetDeviation),
+    if (sleepQuality.isNotEmpty) 'sleep_quality': _average(sleepQuality),
+    if (morningEnergy.isNotEmpty) 'energy_level': _average(morningEnergy),
+  };
 }
 
 void _addOptional(List<double> values, double? value) {
@@ -509,6 +507,7 @@ DateTime? _optionalLocalDate(Map<String, dynamic> json, String key) {
   return _localDate(json, key);
 }
 
-String _dateKey(DateTime value) => '${value.year.toString().padLeft(4, '0')}-'
+String _dateKey(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-'
     '${value.month.toString().padLeft(2, '0')}-'
     '${value.day.toString().padLeft(2, '0')}';

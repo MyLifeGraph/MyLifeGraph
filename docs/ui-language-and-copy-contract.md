@@ -1,7 +1,35 @@
 # UI Language And Copy Contract
 
+Coach dictation uses `Dictate`, `Discard recording`, `Stop and review`, and `Send`.
+The recording bar shows remaining seconds (`30s` down to `0s`) with the accessible
+label `Recording. N seconds remaining`, then `Please wait…` while processing.
+Before recording, explain the 30-second limit, server-side transcription,
+non-persistence of audio, Stop to review versus explicit Send. Errors preserve typed text.
+That acknowledgement is once per signed-in app session, not per recording;
+sign-out/account change or full reload resets it. Countdown ticks do not
+repeatedly interrupt screen-reader speech.
+
+The empty invitation example is `For example: What patterns do you notice in
+my week?`. It is static help, not a prompt button or a generated observation.
+
+The empty Coach chat shows `Ask your coach anything` with one example question,
+without a second empty-history notice. It is an empty-state invitation, not provider-readiness
+or successful-history evidence when a load fails.
+
+Supporting copy avoids repeating headings or immediately visible fields.
+Settings section headings omit summary lists; individual options keep useful
+help and state. Setup explains required inputs once in its hero and retains
+field-level required/optional labels. Today keeps its independent information
+controls with brief descriptions, including unchanged streak/progress rules.
+Planner uses `Plan your tasks and study time`; preview/confirmation warnings,
+calendar import limits, data-quality caveats, costs, consent, and save errors
+remain available. These rules apply to both mobile and desktop.
+
 Coach provider settings must state that provider requests may cost money and
 that relevant read-only Coach query results are sent to the selected provider.
+Non-demo Coach offers `Choose Coach` inline in ready and unavailable states.
+Optional explanations use the `Coach modes` information control; selected-mode
+cost/data-sharing copy, unavailability, limits, and key errors remain visible.
 Web copy must say keys live only in the current tab and disappear on reload.
 Failed replacement testing must explicitly say the previous key is unchanged.
 Hosted mode selection uses `Project Coach`, `Use my OpenAI key`, and `Use my
@@ -50,6 +78,20 @@ including Coach V4 explicit-provider/busy behavior and shell behavior,
 Exam-Week Outlook, and Personal Learning terminology.
 
 ## Supported Language
+
+Setup groups its inputs under `Required setup` and `Optional setup`. Optional
+sections use short previews; Routines explains that new entries are candidates
+until a schedule is set and activation is explicit. Condensed Study Setup copy
+must retain recovery-reservation, local-only/unscored start-checklist, and
+no-automatic-task/calendar/notification meanings. `Include in start ritual`
+labels the checkbox through tooltip and item-specific semantics; it is not
+completion or a recorded score. Direct icon controls retain the tooltips
+`Move up`, `Move down`, and `Remove preparation item`. Compact remove and
+duplicate icons retain their existing action text as tooltips.
+The routine field uses `Schedule`; its activation prerequisite remains in the
+visible section guidance. `Setup summary` describes the complete setup state
+being saved and keeps manually created items separate. Semester date controls
+retain their start/end or opens/closes labels, with `Not set` for an unset date.
 
 The V1 product interface supports English only. User-entered text may of course
 use any language, but navigation, controls, validation, empty states, and help
@@ -141,7 +183,7 @@ The primary Today surface uses these exact concepts:
 - `Today's schedule` for the vertical timed agenda;
 - `Setup commitment`, `Preparation`, `Calendar`, and `Focus` for agenda source
   categories;
-- `Tasks due today`, `Show all tasks`, and `Habits for today` for execution;
+- `Tasks due today`, `All tasks`, and `Habits for today` for execution;
 - `Beat yesterday` for the compact latest-saved-check-in inset; and
 - `Weekly review` for the direct Weekly Review navigation entry; and
 - `Full week` for the independently lazy supporting accordion.
@@ -168,8 +210,9 @@ use `In progress`, `Completed`, `Ended`, `Missed`, `Skipped`, `Open`,
 two-source `fullyRated`/rating-status Full-week language is retired and does not
 alter Today at a glance.
 
-The Today source/update line and ordinary explanations for streak, progress,
-agenda, Task/Habit sections, `Show all tasks` plus its `Tasks` subsection, and
+The redundant Today source/update line and All tasks explanation are omitted.
+All tasks expands directly to task rows without a second Tasks heading.
+Ordinary explanations for streak, progress, agenda, due tasks, Habits, and
 the Full-week accordion start hidden. Their adjacent circled
 information controls use the exact semantics and tooltip labels
 `Show information about <heading>` and `Hide information about <heading>`.
@@ -186,6 +229,24 @@ the accordion header is an independent sibling control.
 multiple blocks never imply multiple required actions.
 
 ## Planner Copy
+
+Plan lifecycle actions use `Edit plan`, `Complete`, and `Cancel` in one row,
+with full-action tooltips and icons above the labels. `Complete` still means
+preparation completion; `Cancel` preserves history and is not permanent deletion.
+Drafts retain `Discard preview`; preview confirmation remains a separate action.
+
+Preparation keeps status-dependent warnings and exact plan values visible.
+Detailed Focus-credit mechanics belong in the existing planning disclosure;
+the visible start hint is `Start a block to focus on its remaining time.`
+Short preview copy must still distinguish staged from currently reserved time.
+
+Preparation lists name the profile timezone once in `Study blocks`; each row
+separates date and time without repeating the zone. Keep year, cross-date end
+dates, recovery reservation ends, status and tracked minutes explicit.
+
+Creation forms use `How often?` for Habit cadence. Preparation's `Custom`
+Focus choice names minutes and its existing 25–180 range. Hour chips are input
+shortcuts, never recommended workload. All preview and confirmation warnings stay.
 
 Planner Task and fixed-commitment time pickers reject an unresolvable local
 selection with `This time is skipped or repeated by a clock change. Choose
@@ -209,9 +270,14 @@ never presents the normal `Confirm plan` action. `Plan changed since preview`
 is a stale conflict, while `Saved, but some views could not refresh` preserves a
 durable mutation outcome. Avoid copy that promises automatic optimization.
 
-Planner leads with `Add new`, followed by `Needs attention`, the next seven
-days, `Ongoing preparation`, optional `Pending previews`, collapsed `Habits`,
-`Unscheduled Tasks`, and collapsed history under `planner-overview-v2`. The
+On mobile Planner leads with the next seven days, followed by `Add new`,
+`Needs attention`, `Ongoing preparation`, optional `Pending previews`, collapsed `Habits`,
+`Unscheduled Tasks`, and collapsed history under `planner-overview-v2`. Desktop
+places the agenda first, with creation/preferences and right-hand summaries below it.
+`Days` and `List` remain labelled toggle actions at all widths. No sample
+appointment is added to fill the fixed-height Days frame. Its empty label remains
+`No planned or fixed items.`; more items remain accessible by scrolling. No
+reference-only success claim or invented habit streak is shown. The
 preview section contains every staged create and update and says
 `Review every staged Task or Habit change before confirmation.` The
 Habit summary is exactly `N active · X unplanned`; Setup-owned rows say
@@ -332,13 +398,27 @@ change or recommend a sleep target. Planner preview provenance uses the compact
 line `Learned timing applied · N rated sessions`; unavailable analysis states
 `Personal pattern unavailable · Setup timing used`.
 The underlying existing response version is `personal-patterns-v1`.
+Insights groups summaries under the default `Overview` tab and exploratory
+correlations under `Advanced`. No extra introduction or Advanced accordion is
+needed; existing evidence warnings, metric names and controls remain unchanged.
+Advanced includes `Skillset` between `Trend overlay` and `Matrix`, on mobile
+and desktop. Its compact `Dimensions` multi-select defaults to Sleep, Sport,
+Energy, Social activity, Learning, and Concentration. `Your signals` identifies
+the read-only radar: numbered short names label its axes; source labels, raw
+scales and day counts are retained under the initially collapsed `Details`.
+Missing dimensions say `No data`, never a low ability score. Unsupported concepts
+are not inferred from loosely related metrics. Stress says lower is calmer.
+Optional Capture copy is limited to `More (optional)`, `Sport today` (None,
+Light, Intense), `Social contact` (Little, Some, Lots), and `Study motivation`
+(Low, Medium, High). Discipline is an explained activity-regularity percentage,
+not a personality assessment; Learning is completed study Focus sessions.
 
 The independent Insights card is titled `Sleep recommendation`. Non-ready
 states use `No stable window yet` with `Disabled`, `Collecting N/30`, or
 `Unstable`; ready uses `Best-supported sleep window` and `Ready`. Its three
-metric labels are exactly `Sleep start`, `Wake time`, and `Duration`, with
-`Same local day` on wake time when `wake_day_offset=0` and
-`Following local day` when `wake_day_offset=1`. Result copy may say
+metric labels are exactly `Sleep start`, `Wake time`, and `Duration`, without
+a separate same-day/next-day caption. Clock-window values and day-offset
+interpretation are unchanged. Result copy may say
 `associated with` and
 must not say optimal, ideal, caused, or medically recommended. The
 below-target warning is exactly `This observed duration is below your median
@@ -362,6 +442,14 @@ says `Early evidence`.
 ## Plain-language Rules
 
 - State the user outcome before implementation detail.
+- Calendar `Plan study time` follows Event, Study time, then the generated
+  preview. Prefilled fields stay under `Edit event details`; optional controls
+  stay under `Adjust plan`. Other preparation entries retain three input steps.
+  The preview/confirmation distinction and source warnings remain visible.
+- The Calendar-linked preparation page names the selected event first. `All
+  plans` separates other plans from this event. `Enough study time?` shows Exam
+  capacity; `Redistribute study time` offers an explicit multi-Exam preview.
+  Both are directly visible with short outcome-first or empty-state copy.
 - A retry message says: what happened, what input remains, and the next safe
   action.
 - When authentication succeeds but its backend-owned profile is missing, say
@@ -422,8 +510,10 @@ says `Early evidence`.
 
 ## Capability Truth
 
-- Real accounts do not show Skillset until a real producer and freshness
-  contract exist. Demo Skillset data is labelled as an example.
+- Real accounts do not load persisted Skillset profiles without a trusted
+  producer/freshness contract. The separate Advanced Skillset radar uses only
+  current measured report ratings, not a personal-ability score. Legacy demo
+  Skillset data and demo radar reports are labelled as examples.
 - In-app reminders may show a foreground banner only while MyLifeGraph is open.
   The app does not claim browser, phone-system, email, push, background-mobile,
   or deployed delivery.
@@ -440,11 +530,19 @@ says `Early evidence`.
   `Settings` remains the last top-right action on Today, Insights, Quick
   actions, Planner, Coach, and Settings and is not duplicated in the shell.
   Page-specific actions precede any unread Coach action and Settings. Surface
-  visibility does not prove provider readiness. Hosted users must explicitly
-  choose Project Coach or one personal OpenAI/Gemini key. Both strategies still
+  visibility does not prove provider readiness. Project Coach is preselected as
+  `Standard (provided)`; alternatives are `OpenAI (your key)` and
+  `Gemini (your key)`. Selecting a provider does not send a question. Both strategies still
   need public release gates; the local same-user Codex path proves one
   developer machine only and is not a production provider.
-- Current Coach uses `Ask anything`, `Your question`, and `Ask Coach`. It has no
+- Current Coach uses `Your question` in a bottom composer and an icon labelled
+  `Send` (or `Retry unchanged` for exact retry). User and Coach messages share
+  one oldest-first chat; there is no separate `Conversation history` section.
+  The composer model icon is labelled `Choose Coach` and opens provider/key
+  controls in a dialog with `Done`. Coach explanations remain there; optional
+  Coach modes information uses `Close`. Errors stay visible above the frame.
+  Loaded history opens at its newest message.
+  `Delete conversation`, cancellation, uncertainty, and details remain. It has no
   `Today`, `Patterns`, `Focus`, `Review`, horizon, session, prompt-starter,
   memory-selection, or structured suggestion controls. Older answers remain
   readable without recreating their fixed-mode controls.

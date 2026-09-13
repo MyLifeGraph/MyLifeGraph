@@ -9,7 +9,7 @@ import '../domain/coach_repository.dart';
 import 'coach_api_data_source.dart';
 
 typedef CoachAccessTokenProvider = FutureOr<String?> Function();
-typedef CoachCredentialsProvider = CoachProviderCredentials? Function();
+typedef CoachCredentialsProvider = FutureOr<CoachProviderCredentials?> Function();
 
 class CoachRepositoryImpl implements CoachRepository {
   CoachRepositoryImpl({
@@ -38,7 +38,7 @@ class CoachRepositoryImpl implements CoachRepository {
   Future<CoachCapabilities> getCapabilities() async {
     if (_isLocalDemo) return CoachCapabilities.localDemo();
     _requireRemote();
-    final credentials = _credentials();
+    final credentials = await _credentials();
     _requireHostedSelection(credentials);
     return _api.getCapabilities(
       accessToken: await _requireToken(),
@@ -63,7 +63,7 @@ class CoachRepositoryImpl implements CoachRepository {
     if (!isClientUuid(requestId)) {
       throw const CoachInputException('Coach request id is invalid.');
     }
-    final credentials = _credentials();
+    final credentials = await _credentials();
     _requireHostedSelection(credentials);
     final request = CoachRequest(
       requestId: requestId,
@@ -145,8 +145,8 @@ class CoachRepositoryImpl implements CoachRepository {
     }
   }
 
-  CoachProviderCredentials? _credentials() {
-    final credentials = _credentialsProvider();
+  Future<CoachProviderCredentials?> _credentials() async {
+    final credentials = await _credentialsProvider();
     if (credentials == null) return null;
     final environment = _config.environment.trim().toLowerCase();
     if (const {'staging', 'pilot', 'production'}.contains(environment)) {

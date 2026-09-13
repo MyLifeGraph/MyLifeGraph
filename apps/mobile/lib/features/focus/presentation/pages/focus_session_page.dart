@@ -717,6 +717,12 @@ class _StartFocusCard extends StatelessWidget {
             key: ValueKey('focus-target-selector-$visibleSelectedTarget'),
             initialValue: visibleSelectedTarget,
             isExpanded: true,
+            // Keep the popup inside the usable viewport, including system bars
+            // and the keyboard; all options remain reachable by scrolling.
+            menuMaxHeight: (MediaQuery.sizeOf(context).height -
+                    MediaQuery.paddingOf(context).vertical -
+                    MediaQuery.viewInsetsOf(context).bottom - 96)
+                .clamp(48.0, 320.0),
             decoration: InputDecoration(
               labelText: scheduledContext == null
                   ? 'Link task or habit (optional)'

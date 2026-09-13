@@ -1,7 +1,21 @@
 # MyLifeGraph AI Service
 
+Optional [speech dictation](../speech_service/README.md) is a separate sidecar;
+it does not add code to or replace this API process. Its admission check reuses
+the generation-free Coach history GET and accepts only successful account access.
+
 FastAPI service boundary for deterministic planning, learning, and Coach
 workflows.
+
+Personal Patterns adds `skillset_version`, `skillset_capture_version`, and
+`skillset_points` (bounded daily date/value maps), without changing its existing
+pattern/correlation fields. Valid check-ins and terminal Focus observations use
+the existing authenticated owner/window/analysis permission. V5 Capture accepts
+an optional `skillset` map: version plus Morning motivation or Evening sport/
+social, each null or integer 0–2. Existing RPC grants and projections are retained.
+Roll out the additive database preservation migration before the new API;
+the new Flutter questions require advertised capability. Old clients/servers
+continue without the new fields. See the Personal Learning and Capture owners.
 
 `APP_ENV` is a closed value: `development`, test-only `test`, `staging`, or
 `pilot`. Unknown, case-folded, whitespace-padded, and premature `production`

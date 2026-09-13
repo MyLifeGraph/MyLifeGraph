@@ -1,5 +1,13 @@
 # Architecture
 
+Skillset is an additive Capture-to-Insights path: optional versioned branch JSON
+is validated by authenticated FastAPI and stored by the existing service-only
+Capture RPC. The owner lock and old-client preservation protect existing data.
+Personal Patterns adds bounded daily observations under its existing analysis
+permission; previous correlations, fingerprints and Planner inputs do not change.
+Flutter derives only the labelled Learning/Discipline window summaries. No new
+database table, model service, scheduler or external provider is involved.
+
 Coach V4 keeps BYOK secrets at the client/device and in one FastAPI request
 only. FastAPI exports the authenticated owner's bounded SQLite snapshot,
 executes `inspect_data`/`query_data` locally, and sends only bounded tool
@@ -35,6 +43,12 @@ descriptions of Setup Goals, focus areas, friction answers, coaching style, or
 Setup-owned Reminder preferences.
 
 ## High-Level Shape
+
+The optional [speech sidecar](../services/speech_service/README.md) is independent
+of the API/Coach runtime: HTTPS forwards only its transcription path to loopback
+8002. It delegates account admission to the existing generation-free API history
+read, then runs a bounded disposable local Parakeet process. No database, new
+credentials, Coach provider changes, or audio persistence are introduced.
 
 ```text
 Flutter app <-> Supabase Auth/Postgres
@@ -110,6 +124,10 @@ Annotated tags separately bind immutable Android, VPS, and release-manifest
 artifacts; they are not prerequisites for an ordinary protected-`main` Web
 deployment. The build passes only an explicit public-value allowlist to
 Flutter, never backend or provider secrets.
+The additional automatic protected-main APK is a signed testing artifact,
+not the fully attested tagged candidate. It preserves the Pilot data endpoints
+and shares the protected app-signing identity and first-parent-count versionCode
+sequence with tagged Android builds. It neither publishes nor installs itself.
 OpenAI/Gemini BYOK remains request-scoped. The implemented shared operator
 Codex mode is an explicit provider choice with its own quota, concurrency,
 disclosure, and kill switch, never a failure fallback. Hosted Codex uses a
@@ -247,7 +265,13 @@ domain, and presentation layers do not import Dio. They keep their own
 conflict, stale-state, exact-retry, reload, and student-facing message rules;
 the Coach data boundary additionally converts transport evidence into its
 typed `CoachRemoteException`. Dio stream and cancellation types remain limited
-to `core/network` and the Coach data implementation that owns SSE transport.
+to `core/network` and Coach data implementations owning SSE and dictation.
+The dictation UI owns recording and account/lifecycle guards, and receives a
+framework-neutral cancellable request. Binary uploads use the same `ApiClient`
+failure mapping and keep audio in memory without logging it. Upload options
+disable native redirects; the existing browser adapter does not enforce that
+option, so this is not a cross-platform redirect-denial guarantee. The configured
+speech endpoint must remain canonical.
 
 Hosted FastAPI runs behind Caddy with one Uvicorn worker and a bounded
 route-class admission controller. It limits IP traffic before Auth, applies a
@@ -362,6 +386,13 @@ a subsequent retry starts. Opening Coach, seeing an older turn, or closing the
 floating notice does not acknowledge it.
 
 ## Runtime Configuration
+
+An explicit Windows Cloud-account development launcher may use the existing
+Pilot Supabase account and fixed HTTPS API through a loopback-only laptop proxy.
+This is transport only: no new identity authority, public endpoint, CORS policy,
+provider fallback, or backend permission. The default development/hosted launchers
+are unchanged. See the personal Cloud-account mode in `docs/local-dev.md` for
+its real-data boundary, Google-login prerequisite and rollback.
 
 The mobile app reads Dart defines through `AppConfig.fromEnvironment()`:
 

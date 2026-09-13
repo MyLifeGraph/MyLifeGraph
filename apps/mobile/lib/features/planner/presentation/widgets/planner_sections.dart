@@ -56,6 +56,7 @@ class PlannerAddNewSection extends StatelessWidget {
     required this.onCommitment,
     required this.onReviewSetup,
     required this.onCalendarPreference,
+    this.showCreationActions = true,
   });
 
   final bool busy;
@@ -68,6 +69,16 @@ class PlannerAddNewSection extends StatelessWidget {
   final VoidCallback onCommitment;
   final VoidCallback onReviewSetup;
   final ValueChanged<bool>? onCalendarPreference;
+  final bool showCreationActions;
+
+  Widget buildCreationButton(BuildContext context) => FilledButton.icon(
+    key: const ValueKey('planner-add-new-button'),
+    onPressed: busy ? null : () => _openPlannerAddNewSheet(context,
+      onTask: onTask, onHabit: onHabit, onExam: onExam,
+      onAssignment: onAssignment, onCommitment: onCommitment),
+    icon: const Icon(AppIcons.add),
+    label: const Text('Add new'),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +87,7 @@ class PlannerAddNewSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (MediaQuery.sizeOf(context).width < 620)
+            if (showCreationActions && MediaQuery.sizeOf(context).width < 620)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
@@ -95,7 +106,7 @@ class PlannerAddNewSection extends StatelessWidget {
                   label: const Text('Add new'),
                 ),
               )
-            else ...[
+            else if (showCreationActions) ...[
               Text('Add new', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: AppSpacing.md),
               Wrap(
@@ -264,7 +275,8 @@ Future<void> _openPlannerAddNewSheet(
         ),
       ];
       return SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
@@ -298,6 +310,7 @@ Future<void> _openPlannerAddNewSheet(
               ),
             const SizedBox(height: AppSpacing.sm),
           ],
+          ),
         ),
       );
     },
@@ -755,9 +768,10 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Needs attention',
-            style: Theme.of(context).textTheme.titleLarge,
+          _PlannerSectionHeading(
+            title: 'Needs attention', icon: AppIcons.errorOutline,
+            color: context.visualTokens.danger,
+            count: healthLoading || healthError ? null : items.length + healthItems.length,
           ),
           const SizedBox(height: AppSpacing.sm),
           if (showEmpty)
@@ -894,12 +908,14 @@ class PlannerSevenDaySection extends StatefulWidget {
     required this.days,
     required this.timezone,
     required this.onItemTap,
+    this.onImportCalendar,
     this.enabled = true,
   });
 
   final List<PlannerDay> days;
   final String timezone;
   final ValueChanged<PlannerDayItem> onItemTap;
+  final VoidCallback? onImportCalendar;
   final bool enabled;
 
   @override
@@ -908,12 +924,19 @@ class PlannerSevenDaySection extends StatefulWidget {
 
 class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
   _SevenDayView _view = _SevenDayView.swipe;
+  final _dayScrollController = ScrollController(keepScrollOffset: false);
   late int _page;
 
   @override
   void initState() {
     super.initState();
     _page = _initialPage(widget.days);
+  }
+
+  @override
+  void dispose() {
+    _dayScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -928,8 +951,10 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 620;
-    return Column(
+    return LayoutBuilder(builder: (context, constraints) {
+    final wide = constraints.maxWidth >= 600 &&
+        MediaQuery.textScalerOf(context).scale(16) < 24;
+    final content = Column(
       key: const ValueKey('planner-seven-days'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -938,19 +963,41 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
             Expanded(
               child: Text(
                 'Next seven days',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: wide ? Theme.of(context).textTheme.headlineSmall
+                    : Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            if (compact) _sevenDayViewToggle(context),
+            if (wide) TextButton(
+              onPressed: widget.days.isEmpty ? null : () => _goTo(_initialPage(widget.days)),
+              child: const Text('Today'),
+            ),
+            if (widget.onImportCalendar != null)
+              IconButton(
+                key: const ValueKey('planner-import-calendar'),
+                tooltip: 'Import calendar (.ics)',
+                onPressed: widget.onImportCalendar,
+                icon: const Icon(AppIcons.uploadFileOutlined),
+              ),
+            if (wide) ...[
+              IconButton(tooltip: 'Previous day',
+                onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
+                icon: const RotatedBox(quarterTurns: 2, child: Icon(AppIcons.chevronRight))),
+              IconButton(tooltip: 'Next day',
+                onPressed: _page < widget.days.length - 1 ? () => _goTo(_page + 1) : null,
+                icon: const Icon(AppIcons.chevronRight)),
+            ],
+            _sevenDayViewToggle(context),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        if (!compact || _view == _SevenDayView.list)
+        if (_view == _SevenDayView.list)
           _sevenDayList()
         else
-          _sevenDayPager(context),
+          _sevenDayPager(context, wide: wide),
       ],
     );
+    return wide ? AppCard(child: content) : content;
+    });
   }
 
   Widget _sevenDayViewToggle(BuildContext context) {
@@ -996,6 +1043,7 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
     return IconButton(
       key: key,
       tooltip: tooltip,
+      isSelected: selected,
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,
       icon: Icon(
@@ -1013,6 +1061,7 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
       children: [
         for (final day in widget.days) ...[
           AppScheduleDayCard(
+            timelineStyle: true,
             localDate: day.localDate,
             items: day.items
                 .map(
@@ -1033,14 +1082,16 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
     );
   }
 
-  Widget _sevenDayPager(BuildContext context) {
+  Widget _sevenDayPager(BuildContext context, {required bool wide}) {
     if (widget.days.isEmpty) {
-      return const Text('No planned or fixed items.');
+      return _dayViewport(context,
+        child: const Center(child: Text('No planned or fixed items.')));
     }
     final day = widget.days[_page.clamp(0, widget.days.length - 1)];
     final tokens = context.visualTokens;
     return Column(
       children: [
+        if (!wide)
         Row(
           children: [
             IconButton(
@@ -1067,39 +1118,73 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
             ),
           ],
         ),
-        Row(
-          children: [
-            for (var index = 0; index < widget.days.length; index++)
-              Expanded(
-                child: InkWell(
-                  onTap: () => _goTo(index),
+        LayoutBuilder(builder: (context, constraints) {
+          final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+          final dayWidth = (constraints.maxWidth / widget.days.length)
+              .clamp(largeText ? 72.0 : 48.0, double.infinity);
+          final chips = Row(children: [
+              for (var index = 0; index < widget.days.length; index++)
+                SizedBox(width: dayWidth, child: Semantics(
+                  selected: index == _page,
+                  button: true,
+                  label: DateFormat('EEEE, MMMM d').format(widget.days[index].localDate),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      DateFormat('E').format(widget.days[index].localDate),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: index == _page
-                                ? tokens.brand
-                                : tokens.textSecondary,
-                            fontWeight: index == _page
-                                ? FontWeight.w600
-                                : FontWeight.w500,
-                          ),
+                    padding: EdgeInsets.symmetric(horizontal: wide ? 4 : 0),
+                    child: InkWell(
+                      key: ValueKey('planner-day-chip-$index'),
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      onTap: () => _goTo(index),
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        padding: EdgeInsets.symmetric(vertical: wide ? 12 : 10),
+                        decoration: wide ? BoxDecoration(
+                          color: index == _page ? tokens.brand.withValues(alpha: .12) : tokens.surfaceRaised,
+                          borderRadius: BorderRadius.circular(AppRadii.sm),
+                          border: Border.all(color: index == _page ? tokens.brand : tokens.outlineSoft),
+                        ) : BoxDecoration(border: Border(bottom: BorderSide(
+                          width: 2, color: index == _page ? tokens.brand : Colors.transparent,
+                        ))),
+                        child: Column(children: [
+                          Text(DateFormat('E').format(widget.days[index].localDate),
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: index == _page ? tokens.brand : tokens.textSecondary,
+                            )),
+                          if (wide) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(DateFormat.MMMd().format(widget.days[index].localDate),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: index == _page ? tokens.brand : tokens.textSecondary)),
+                          ],
+                        ]),
+                      ),
                     ),
                   ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
+                )),
+            ]);
+          return dayWidth * widget.days.length <= constraints.maxWidth + .5
+              ? chips : SingleChildScrollView(scrollDirection: Axis.horizontal, child: chips);
+        }),
+        const SizedBox(height: AppSpacing.md),
+        if (wide) ...[
+          Align(alignment: Alignment.centerLeft,
+            child: Text(DateFormat('EEEE, MMMM d').format(day.localDate),
+              style: Theme.of(context).textTheme.titleLarge)),
+          const SizedBox(height: AppSpacing.md),
+        ],
         GestureDetector(
           onHorizontalDragEnd: (details) {
             final velocity = details.primaryVelocity ?? 0;
             if (velocity < -180) _goTo(_page + 1);
             if (velocity > 180) _goTo(_page - 1);
           },
-          child: AppScheduleDayCard(
+          child: _dayViewport(context,
+            child: day.items.isEmpty
+                ? const Center(child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.md),
+                    child: Text('No planned or fixed items.', textAlign: TextAlign.center),
+                  ))
+                : AppScheduleDayCard(
+            timelineStyle: true,
             localDate: day.localDate,
             showDate: false,
             items: day.items
@@ -1114,9 +1199,48 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
             emptyLabel: 'No planned or fixed items.',
             onItemTap: (view) =>
                 widget.onItemTap(view.payload! as PlannerDayItem),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _dayViewport(BuildContext context, {
+    required Widget child,
+  }) {
+    // About three normal appointments; independent of the selected day's count.
+    // Larger text gets more room, while every row remains readable by scrolling.
+    final textScale = (MediaQuery.textScalerOf(context).scale(16) / 16)
+        .clamp(1.0, 1.5);
+    final height = 280.0 * textScale;
+    return Container(
+      key: const ValueKey('planner-day-viewport'),
+      height: height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: context.visualTokens.surfaceSubtle,
+        border: Border.all(color: context.visualTokens.outlineSoft),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadii.md - 1),
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: Scrollbar(
+            controller: _dayScrollController,
+            child: SingleChildScrollView(
+              key: const ValueKey('planner-day-scroll'),
+              controller: _dayScrollController,
+              primary: false,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: height - 2),
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1124,6 +1248,7 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
     final last = widget.days.length - 1;
     final next = page.clamp(0, last);
     if (next == _page) return;
+    if (_dayScrollController.hasClients) _dayScrollController.jumpTo(0);
     setState(() => _page = next);
   }
 
@@ -1195,10 +1320,9 @@ class PlannerPreparationSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Ongoing preparation',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            _PlannerSectionHeading(title: 'Ongoing preparation',
+              icon: AppIcons.schoolOutlined, color: context.visualTokens.info,
+              count: plans.length),
             const SizedBox(height: AppSpacing.sm),
             if (plans.isEmpty)
               const Text('No active exam or assignment preparation.')
@@ -1291,7 +1415,9 @@ class PlannerHabitsSection extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: ExpansionTile(
         initiallyExpanded: false,
-        title: const Text('Habits'),
+        leading: _PlannerSummaryIcon(icon: AppIcons.repeatOutlined,
+          color: context.visualTokens.info),
+        title: Text('Habits', style: Theme.of(context).textTheme.titleLarge),
         subtitle: Text('${items.length} active · $unplanned unplanned'),
         children: [
           if (items.isEmpty)
@@ -1346,11 +1472,13 @@ class PlannerUnscheduledTasksSection extends StatelessWidget {
     required this.items,
     required this.onOpen,
     this.enabled = true,
+    this.onAdd,
   });
 
   final List<PlannerUnscheduledTask> items;
   final ValueChanged<PlannerUnscheduledTask> onOpen;
   final bool enabled;
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) => AppCard(
@@ -1358,10 +1486,13 @@ class PlannerUnscheduledTasksSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Unscheduled Tasks',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            _PlannerSectionHeading(title: 'Unscheduled Tasks',
+              icon: AppIcons.taskOutlined, color: context.visualTokens.brand,
+              count: items.length,
+              action: onAdd == null ? null : IconButton(
+                tooltip: 'Add task', onPressed: enabled ? onAdd : null,
+                icon: const Icon(AppIcons.add),
+              )),
             const SizedBox(height: AppSpacing.sm),
             if (items.isEmpty)
               const Text('No open Tasks are waiting for a plan.')
@@ -1390,7 +1521,9 @@ class PlannerHistorySection extends StatelessWidget {
         key: const ValueKey('planner-history'),
         padding: EdgeInsets.zero,
         child: ExpansionTile(
-          title: const Text('Completed and archived'),
+          leading: _PlannerSummaryIcon(icon: AppIcons.archiveOutlined,
+            color: context.visualTokens.textSecondary),
+          title: Text('Completed and archived', style: Theme.of(context).textTheme.titleLarge),
           subtitle: Text('${items.length} historical items'),
           children: [
             if (items.isEmpty)
@@ -1411,6 +1544,45 @@ class PlannerHistorySection extends StatelessWidget {
           ],
         ),
       );
+}
+
+class _PlannerSummaryIcon extends StatelessWidget {
+  const _PlannerSummaryIcon({required this.icon, required this.color});
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(color: color.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(AppRadii.sm)),
+    child: Icon(icon, size: 22, color: color),
+  );
+}
+
+class _PlannerSectionHeading extends StatelessWidget {
+  const _PlannerSectionHeading({required this.title, required this.icon,
+    required this.color, this.count, this.action});
+  final String title;
+  final IconData icon;
+  final Color color;
+  final int? count;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    _PlannerSummaryIcon(icon: icon, color: color),
+    const SizedBox(width: AppSpacing.sm),
+    Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
+    if (count != null) ...[
+      const SizedBox(width: AppSpacing.xs),
+      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(color: context.visualTokens.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadii.pill)),
+        child: Text('$count', style: Theme.of(context).textTheme.labelMedium)),
+    ],
+    if (action != null) action!,
+  ]);
 }
 
 class PlannerMutationError extends StatelessWidget {

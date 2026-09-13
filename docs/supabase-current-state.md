@@ -1,7 +1,14 @@
 # Supabase Current State
 
 The latest repository migration is
-`20260820200000_account_deletion_replayer_role_guard_v2.sql`. It normalizes the
+`20260913113853_optional_skillset_capture.sql`. It preserves the optional
+`skillset-capture-v1` branch namespace when older clients omit it. It adds no
+tables, grants, projections or event types. Explicit new-client maps can clear
+answers with null. Existing service-only RPC authority, owner lock, replay and
+optimistic-conflict rules remain unchanged. Repository presence does not prove
+Cloud application; rollout evidence belongs in Verification.
+
+The preceding `20260820200000_account_deletion_replayer_role_guard_v2.sql` normalizes the
 restore-only `mylifegraph_deletion_replayer` role boundary to
 `NOLOGIN/NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOINHERIT`,
 zero login connections, and no role settings. The original V2 boundary creates
@@ -1644,7 +1651,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260820200000_account_deletion_replayer_role_guard_v2.sql
+20260913113853_optional_skillset_capture.sql
 ```
 
 Then configure `.env` with:

@@ -1,4 +1,4 @@
-name: Staging debug APK
+name: Automatic signed pilot APK
 
 on:
   push:
@@ -8,13 +8,27 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: automatic-signed-pilot-apk
+  cancel-in-progress: false
+
 jobs:
   build:
-    name: Build pilot debug APK
+    name: Build and verify signed pilot APK
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: pilot-release
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify protected main source
+        run: |
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]]
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
@@ -24,6 +38,9 @@ jobs:
 
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
 
+      - name: Install pinned Android SDK components
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: 3.44.0
@@ -32,7 +49,25 @@ jobs:
 
       - name: Resolve Flutter dependencies
         working-directory: apps/mobile
-        run: flutter pub get
+        run: |
+          flutter pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.yaml pubspec.lock
+
+      - name: Verify release configuration
+        run: npm run verify:android-release
+
+      - name: Derive update-safe Android identity
+        id: identity
+        run: node scripts/android_release_identity.mjs --main "$GITHUB_SHA" "$(git rev-list --first-parent --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Decode private signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          umask 077
+          [[ -n "$ANDROID_KEYSTORE_BASE64" ]]
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/mylifegraph-upload.jks"
+          [[ -s "$RUNNER_TEMP/mylifegraph-upload.jks" ]]
 
       - name: Prepare protected pilot defines
         env:
@@ -40,7 +75,7 @@ jobs:
           USE_MOCK_DATA: "false"
           COACH_SURFACE_ENABLED: "true"
           APP_BUILD_SHA: ${{ github.sha }}
-          APP_RELEASE_TAG: v0.1.0-pilot.0-rc.${{ github.run_number }}
+          APP_RELEASE_TAG: main-${{ github.sha }}
           STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
           PILOT_SUPABASE_PROJECT_REF: ${{ vars.PILOT_SUPABASE_PROJECT_REF }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -51,25 +86,60 @@ jobs:
           PILOT_PARTICIPATION_REQUIRED: ${{ vars.PILOT_PARTICIPATION_REQUIRED }}
           AI_SERVICE_BASE_URL: ${{ vars.AI_SERVICE_BASE_URL }}
         run: |
-          export MLG_DEFINES_FILE="$RUNNER_TEMP/mylifegraph-pilot-debug-defines.json"
+          export MLG_DEFINES_FILE="$RUNNER_TEMP/mylifegraph-pilot-defines.json"
           node scripts/write_hosted_flutter_defines.mjs "$MLG_DEFINES_FILE"
 
-      - name: Build debug APK
+      - name: Build signed release APK
         working-directory: apps/mobile
-        run: flutter build apk --debug --dart-define-from-file="$RUNNER_TEMP/mylifegraph-pilot-debug-defines.json"
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/mylifegraph-upload.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: >-
+          flutter build apk --release
+          --build-name='${{ steps.identity.outputs.build_name }}'
+          --build-number='${{ steps.identity.outputs.build_number }}'
+          --dart-define-from-file="$RUNNER_TEMP/mylifegraph-pilot-defines.json"
+
+      - name: Verify APK signer and checksum
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          set -Eeuo pipefail
+          apk='apps/mobile/build/app/outputs/flutter-apk/app-release.apk'
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          [[ -s "$apk" && -x "$apksigner" && -n "$EXPECTED_CERT_SHA256" ]]
+          signer_output="$($apksigner verify --print-certs "$apk")"
+          mapfile -t signer_digests < <(
+            printf '%s\n' "$signer_output" |
+              awk -F': ' '/certificate SHA-256 digest/ {print tolower($2)}'
+          )
+          [[ "${#signer_digests[@]}" -eq 1 ]]
+          actual="${signer_digests[0]}"
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d ':')"
+          [[ "$actual" =~ ^[0-9a-f]{64}$ && "$actual" == "$expected" ]]
+          mkdir -p "$RUNNER_TEMP/mylifegraph-signed"
+          cp "$apk" "$RUNNER_TEMP/mylifegraph-signed/MyLifeGraph-Pilot.apk"
+          cd "$RUNNER_TEMP/mylifegraph-signed"
+          sha256sum MyLifeGraph-Pilot.apk > SHA256SUMS
+          printf '%s\n' "$actual" > signing-certificate-sha256.txt
+          printf '%s\n' "$GITHUB_SHA" > source-commit.txt
 
       - name: Compute artifact identity
         id: artifact
         run: echo "commit=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload debug APK
+      - name: Upload verified signed APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: MyLifeGraph-Pilot-Debug-${{ steps.artifact.outputs.commit }}
-          path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+          name: MyLifeGraph-Pilot-Signed-${{ steps.artifact.outputs.commit }}
+          path: ${{ runner.temp }}/mylifegraph-signed/
           if-no-files-found: error
           retention-days: 14
 
-      - name: Remove protected pilot defines
+      - name: Remove private signing and define material
         if: always()
-        run: rm -f "$RUNNER_TEMP/mylifegraph-pilot-debug-defines.json"
+        run: |
+          rm -f "$RUNNER_TEMP/mylifegraph-pilot-defines.json"
+          rm -f "$RUNNER_TEMP/mylifegraph-upload.jks"

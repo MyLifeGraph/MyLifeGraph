@@ -48,6 +48,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       return snapshot.when(
         loading: () => const AppPage(
           title: 'Today',
+          compactHeader: true,
           actions: [AppHeaderActions()],
           children: [
             Center(child: CircularProgressIndicator()),
@@ -55,6 +56,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ),
         error: (error, stackTrace) => AppPage(
           title: 'Today',
+          compactHeader: true,
           actions: const [AppHeaderActions()],
           children: [
             _DashboardLoadError(
@@ -470,7 +472,9 @@ class _DashboardHome extends StatelessWidget {
                 sliver: SliverToBoxAdapter(
                   child: Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1080),
+                      constraints: const BoxConstraints(
+                        maxWidth: dashboardFullWeekMaximumWidth,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -580,60 +584,10 @@ class _DashboardHeader extends StatelessWidget {
     final date = DateFormat(
       'EEEE, MMMM d',
     ).format(snapshot.localDate ?? DateTime.now());
-    final sourceLabel = snapshot.origin == DashboardOrigin.localDemo
-        ? 'Local data'
-        : 'Your account data';
-
-    final copy = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(date, style: Theme.of(context).textTheme.bodyMedium),
-        const SizedBox(height: AppSpacing.xs),
-        TodayInfoDisclosure(
-          topic: 'Today',
-          description:
-              '$sourceLabel · updated ${DateFormat.Hm().format(snapshot.loadedAt)}',
-          descriptionStyle: Theme.of(context).textTheme.labelMedium,
-          headerBuilder: (context, infoButton) => Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xs),
-                  child: Text(
-                    'Today',
-                    style: Theme.of(context).textTheme.headlineLarge,
-                  ),
-                ),
-              ),
-              infoButton,
-            ],
-          ),
-        ),
-      ],
-    );
-    final stackActions = MediaQuery.sizeOf(context).width < 600 ||
-        MediaQuery.textScalerOf(context).scale(16) >= 24;
-    if (stackActions) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          copy,
-          const SizedBox(height: AppSpacing.sm),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: AppHeaderActions(),
-          ),
-        ],
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: copy),
-        const SizedBox(width: AppSpacing.sm),
-        const AppHeaderActions(),
-      ],
+    return AppPageHeading(
+      title: Text('Today', style: Theme.of(context).textTheme.headlineMedium),
+      subtitle: Text(date, style: Theme.of(context).textTheme.bodyMedium),
+      actions: const AppHeaderActions(),
     );
   }
 }

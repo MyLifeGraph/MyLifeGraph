@@ -101,6 +101,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
   final Map<String, _ProposalPreviewBinding> _proposalBindingsByPreview = {};
   PlannerCommitmentDraft? _retainedCommitmentDraft;
   bool _continuedWithoutAvailability = false;
+  final _sevenDayKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +109,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     if (!capabilities.canUseSyncedExecution) {
       return AppPage(
         title: 'Planner',
-        subtitle: 'Turn explicit estimates into reviewable time blocks',
+        compactHeader: true,
+        subtitle: 'Plan your tasks and study time',
         backFallback: AppRoutes.dashboard,
         showBackForFallback: false,
         actions: const [AppHeaderActions()],
@@ -123,10 +125,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     final examPlanHealth = ref.watch(examPlanHealthProvider);
     final controller = ref.read(plannerControllerProvider.notifier);
     final overview = state.overview;
+    final desktop = MediaQuery.sizeOf(context).width >= 1280 &&
+        MediaQuery.textScalerOf(context).scale(16) < 24;
     final availabilityIncomplete =
         overview != null && _availabilityIsIncomplete(overview);
     final children = <Widget>[
       PlannerAddNewSection(
+        showCreationActions: true,
         busy: !state.canMutate,
         calendarPreference: overview?.preferences,
         availabilityIncomplete: availabilityIncomplete,
@@ -272,7 +277,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       );
       return AppPage(
         title: 'Planner',
-        subtitle: 'Turn explicit estimates into reviewable time blocks',
+        compactHeader: true,
+        subtitle: 'Plan your tasks and study time',
         backFallback: AppRoutes.dashboard,
         showBackForFallback: false,
         actions: [
@@ -303,11 +309,14 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         enabled: state.canMutate,
       ),
     );
-    children.add(
+    children.insert(
+      0,
       PlannerSevenDaySection(
+        key: _sevenDayKey,
         days: overview.days,
         timezone: overview.timezone,
         onItemTap: (item) => _openDayItem(item, overview),
+        onImportCalendar: () => context.push(AppRoutes.calendarIntegration),
         enabled: state.canMutate,
       ),
     );
@@ -343,13 +352,27 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     children.add(
       PlannerUnscheduledTasksSection(
         items: overview.unscheduledTasks,
+        onAdd: _createTask,
         onOpen: (item) => _openUnscheduledTask(item, overview),
         enabled: state.canMutate,
       ),
     );
     children.add(PlannerHistorySection(items: overview.history));
+    final agenda = children.whereType<PlannerSevenDaySection>().single;
+    bool isSummary(Widget child) => child is PlannerNeedsAttentionSection ||
+        child is PlannerPreparationSection || child is PlannerHabitsSection ||
+        child is PlannerUnscheduledTasksSection || child is PlannerHistorySection;
+    Widget stack(List<Widget> items) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [for (var i = 0; i < items.length; i++) ...[
+        if (i > 0) const SizedBox(height: AppSpacing.md),
+        items[i],
+      ]],
+    );
     return AppPage(
       title: 'Planner',
+      maxWidth: 1440,
+        compactHeader: true,
       subtitle: 'Preview first. Times are reserved only after confirmation.',
       backFallback: AppRoutes.dashboard,
       showBackForFallback: false,
@@ -365,7 +388,30 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
           ],
         ),
       ],
-      children: children,
+      children: desktop ? [
+        agenda,
+        LayoutBuilder(builder: (context, constraints) => Row(
+          key: const ValueKey('planner-desktop-columns'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: stack([
+              // Keep creation, preferences, warnings and retries below the
+              // calendar, with unchanged callbacks and authority.
+              ...children.where((child) => !isSummary(child) && child != agenda),
+            ])),
+            const SizedBox(width: AppSpacing.lg),
+            SizedBox(
+              width: (constraints.maxWidth * .29).clamp(280.0, 360.0),
+              child: stack(children.where(isSummary).toList()),
+            ),
+          ],
+        )),
+      ] : [
+        ...children,
+        if (MediaQuery.sizeOf(context).width < 1100 &&
+            MediaQuery.textScalerOf(context).scale(16) >= 24)
+          SizedBox(height: MediaQuery.textScalerOf(context).scale(72)),
+      ],
     );
   }
 

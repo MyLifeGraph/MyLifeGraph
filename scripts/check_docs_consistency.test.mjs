@@ -111,6 +111,27 @@ async def read_thing():
   assert.ok(errors.some((error) => /\/v1\/missing\/123/.test(error)));
 });
 
+test('route checks do not misclassify nested external API paths as FastAPI', () => {
+  const inventory = extractFastApiRoutesFromTexts(new Map());
+  const errors = findDocumentedRouteErrorsFromTexts(inventory, new Map([
+    ['README.md', [
+      'POST http://127.0.0.1:54321/auth/v1/token?grant_type=password',
+      'GET /auth/v1/user and /rest/v1/profiles',
+      'GET /v1/missing and https://api.example.test/v1/missing',
+    ].join('\n')],
+  ]));
+  assert.equal(errors.length, 2);
+  assert.ok(errors.every((error) => error.includes("'/v1/missing'")));
+});
+
+test('standalone speech app routes have their own prefix', () => {
+  const inventory = extractFastApiRoutesFromTexts(new Map([
+    ['speech/app.py', "@app.post('/v1/speech/transcribe')\nasync def transcribe(): pass"],
+  ]), '');
+  assert.ok(inventory.routes.some((route) =>
+    route.method === 'POST' && route.path === '/v1/speech/transcribe'));
+});
+
 test('exact verification evidence is centralized unless a report is historical', () => {
   const historical =
     '# Old report\n\nStatus: historical checkout evidence.\n\n42 passed.\n';

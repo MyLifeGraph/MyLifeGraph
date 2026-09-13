@@ -108,7 +108,7 @@ void main() {
     expect(createButton().onPressed, isNotNull);
   });
 
-  testWidgets('optional import details start closed and stay independent',
+  testWidgets('file import leads and optional explanations start closed',
       (tester) async {
     final repository = _FakeCalendarRepository(
       _connectedFeed(includeImport: false),
@@ -120,18 +120,8 @@ void main() {
       findsNothing,
     );
     expect(find.textContaining('no larger than 512 KiB'), findsNothing);
-
-    await tester.tap(
-      find.byKey(
-        const ValueKey('calendar-info-control-Read-only import'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.textContaining('There is no live calendar connection'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('no larger than 512 KiB'), findsNothing);
+    expect(tester.getTopLeft(find.text('Choose .ics file')).dy,
+        lessThan(tester.getTopLeft(find.text('Connected')).dy));
 
     await tester.tap(
       find.byKey(const ValueKey('calendar-info-control-Import a file')),
@@ -142,6 +132,58 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('no larger than 512 KiB'), findsOneWidget);
+  });
+
+  testWidgets('import statistics remain accessible in compact details',
+      (tester) async {
+    final repository = _FakeCalendarRepository(_connectedFeed(includeImport: true));
+    await _pumpPage(tester, repository: repository);
+    expect(find.textContaining('recurring unsupported'), findsNothing);
+    final details = find.text('Import details');
+    await tester.ensureVisible(details);
+    await tester.pumpAndSettle();
+    await tester.tap(details);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('recurring unsupported'), findsOneWidget);
+    expect(find.textContaining('Window:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('individual events expand to optional study planning on mobile',
+      (tester) async {
+    final repository = _FakeCalendarRepository(
+      _connectedFeed(includeImport: true),
+      eventRows: [
+        {
+          ...calendarTimedEventJson(),
+          'starts_at': '2099-07-13T20:30:00Z',
+          'ends_at': '2099-07-13T23:30:00Z',
+          'local_starts_at': '2099-07-13T22:30:00',
+          'local_ends_at': '2099-07-14T01:30:00',
+        },
+        calendarAllDayEventJson(),
+      ],
+    );
+    await _pumpPage(tester, repository: repository, size: const Size(390, 844));
+
+    expect(find.text('Room 2'), findsNothing);
+    expect(find.text('Plan study time'), findsNothing);
+    final event = find.byKey(const ValueKey('calendar-event-$calendarTimedEventId'));
+    await tester.ensureVisible(event);
+    await tester.tap(find.text('Late planning session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Room 2'), findsOneWidget);
+    expect(find.text('Plan study time'), findsOneWidget);
+    expect(find.text('For an exam or assignment. Review a plan before scheduling.'),
+        findsOneWidget);
+
+    await tester.ensureVisible(find.text('Company holiday'));
+    await tester.tap(find.text('Company holiday'));
+    await tester.pumpAndSettle();
+    expect(find.text('Study planning is available for upcoming events only.'),
+        findsOneWidget);
+    expect(repository.mutationCalls, 0);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('source label keeps focus while request identity rotates',
@@ -248,7 +290,7 @@ void main() {
     expect(repository.importRequestIds, hasLength(2));
     expect(repository.importRequestIds.toSet(), hasLength(1));
     expect(repository.importTexts, ['BEGIN', 'BEGIN']);
-    expect(find.text('Imported · read-only'), findsNWidgets(2));
+    expect(find.text('Imported · read-only'), findsOneWidget);
     expect(
       find.text('2026-07-13 · 22:30–2026-07-14 01:30'),
       findsOneWidget,
@@ -300,7 +342,9 @@ void main() {
     expect(find.text('Disconnected'), findsOneWidget);
     expect(find.textContaining('No file was imported'), findsOneWidget);
     expect(find.text('No file has been imported yet.'), findsNWidgets(2));
-    await tester.ensureVisible(find.text('Delete imported data'));
+    await tester.ensureVisible(find.byTooltip('Source actions'));
+    await tester.tap(find.byTooltip('Source actions'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete imported data'));
     await tester.pumpAndSettle();
     expect(find.text('Delete imported calendar data?'), findsOneWidget);
@@ -321,7 +365,10 @@ void main() {
     );
     await _pumpPage(tester, repository: repository);
 
-    await tester.ensureVisible(find.text('Disconnect source'));
+    expect(find.text('Source controls'), findsNothing);
+    await tester.ensureVisible(find.byTooltip('Source actions'));
+    await tester.tap(find.byTooltip('Source actions'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Disconnect source'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Disconnect'));
@@ -349,7 +396,9 @@ void main() {
     );
     await _pumpPage(tester, repository: repository);
 
-    await tester.ensureVisible(find.text('Delete imported data'));
+    await tester.ensureVisible(find.byTooltip('Source actions'));
+    await tester.tap(find.byTooltip('Source actions'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete imported data'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete local imported data'));
@@ -441,6 +490,7 @@ class _FakeCalendarRepository implements CalendarIntegrationRepository {
     this.failFirstImportAmbiguously = false,
     this.failFirstDisconnectAmbiguously = false,
     this.failFirstDeleteAmbiguously = false,
+    this.eventRows,
   });
 
   CalendarIntegrationFeed feed;
@@ -448,6 +498,7 @@ class _FakeCalendarRepository implements CalendarIntegrationRepository {
   final bool failFirstImportAmbiguously;
   final bool failFirstDisconnectAmbiguously;
   final bool failFirstDeleteAmbiguously;
+  final List<Map<String, dynamic>>? eventRows;
   int getCalls = 0;
   final List<String> createRequestIds = [];
   final List<String> createLabels = [];
@@ -507,7 +558,7 @@ class _FakeCalendarRepository implements CalendarIntegrationRepository {
     required String connectionId,
     String? cursor,
   }) async {
-    return CalendarEventPage.fromJson(calendarEventsPageJson());
+    return CalendarEventPage.fromJson(calendarEventsPageJson(events: eventRows));
   }
 
   @override

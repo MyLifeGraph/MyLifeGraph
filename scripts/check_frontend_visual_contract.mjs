@@ -41,7 +41,7 @@ function filesBelow(root, relativeRoot) {
     if (info.isDirectory()) {
       files.push(...filesBelow(root, relative(root, candidate)));
     } else if (extname(candidate) === '.dart') {
-      files.push(relative(root, candidate));
+      files.push(relative(root, candidate).replaceAll('\\', '/'));
     }
   }
   return files;

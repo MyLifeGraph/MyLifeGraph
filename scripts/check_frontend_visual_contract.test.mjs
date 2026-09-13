@@ -74,6 +74,21 @@ test('visual guard rejects uncontrolled route styling', () => {
     assert.ok(
       errors.some((error) => error.includes('only production ImageFilter.blur')),
     );
+
+    writeFixture(root,
+      'apps/mobile/lib/features/example/presentation/example.dart',
+      'final color = context.visualTokens.brand;',
+    );
+    writeFixture(root,
+      'apps/mobile/lib/features/auth/presentation/pages/auth_page.dart',
+      'final googleLogo = Color(0xFF123456);',
+    );
+    writeFixture(root,
+      'apps/mobile/lib/features/insights/presentation/widgets/insights_exploration_widgets.dart',
+      'final series = Color(0xFF123456); final chartLabel = TextStyle();',
+    );
+    assert.deepEqual(findVisualContractErrors(root), [],
+      'existing exact owners and allowlists must work with native path separators');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

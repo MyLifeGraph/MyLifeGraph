@@ -1,5 +1,32 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+After authenticated profile initialization, the client preselects Project Coach
+(`Standard (provided)`); personal OpenAI/Gemini keys remain opt-in. Every request
+still names its provider explicitly, with unchanged server admission and no
+fallback. The selector remains available when capabilities fail, with or without
+saved history. The chat has a fixed 8px top inset inside its outline.
+Capability reads and sends await credential initialization, so the first read
+already names Standard instead of racing the stored-key load. This wait does
+not replace a subsequent explicit provider choice or bypass storage failures.
+
+The composer model icon opens the existing provider/key controls in a dialog,
+including Coach explanations. Errors remain visible above the chat. Opening the
+dialog or switching providers never sends a question.
+
+The permanent chat outline starts below the fixed capability status card and
+continues through the fixed bottom composer. Only the timeline scrolls within
+the frame, including when messages exist. Opening or refreshing loaded history
+positions it at the newest message; typing does not reset the scroll position.
+The empty invitation adds one non-interactive example question. Optional Coach
+information opens in a dialog so expanded copy cannot push the fixed panels away.
+At very small remaining heights the composer participates in that same chat
+viewport instead of creating another scroll region or clipping its controls.
+
+An empty, successfully loaded chat shows a softly outlined
+`Ask your coach anything` invitation with one example, without a redundant
+empty-history notice. Loading, failed
+history reads, active requests, and existing messages do not show that invitation.
+
 ## Explicit-provider V4 extension (current repository contract)
 
 The current public contracts are `coach-capabilities-v5`,
@@ -36,6 +63,11 @@ dispatch RPCs preserve advisory-lock order, retry identity, local/global
 budgets, append-only usage, RLS, and grants.
 
 ## Status
+
+The opt-in Windows Cloud-account launcher connects the local browser to the
+existing Pilot API with its real Cloud bearer. Project Coach remains subject to
+that API's normal explicit-provider admission and budgets; Development provider
+guards are not relaxed. See `docs/local-dev.md` for the private loopback transport.
 
 The Coach is implemented as a free-question, read-only personal-data agent.
 The current Flutter surface no longer asks the user to
@@ -664,12 +696,49 @@ an ambiguous API/executor crash and always continues to consume global budget.
 
 ## Flutter Contract
 
+Optional [dictation](../services/speech_service/README.md) adds a microphone
+immediately before Send. Recording requires an explicit audio-data notice and
+microphone permission, is capped at 30 seconds, and inserts recognized text into
+the existing draft. Existing text is preserved; an overlong combined draft is
+rejected without truncation.
+The audio-data notice is acknowledged once per signed-in app session, in memory
+only; route revisits retain it, while sign-out/profile change or a full app
+reload resets it. Declining never records consent. OS/browser microphone
+permission remains independent. A seconds-remaining label and PCM-level bars
+fill the recording bar. Display-only logarithmic scaling makes normal speech
+visible; silence stays flat. Reduced motion disables interpolation, not live
+level feedback. Audio sent for transcription is unchanged. No extra audio
+capture, persistent storage, or backend change is introduced.
+During recording the input becomes a compact bar:
+X discards, square Stop transcribes into the draft, and explicit Send transcribes
+then invokes the existing send flow, subject to current Coach availability and
+limits. Automatic stop never sends. While transcribing, only discard is enabled.
+If sending becomes unavailable, recognized text stays in the draft.
+Cancel, leaving the route, backgrounding or
+profile changes discard local recording state. Guest/mock cannot upload audio.
+The independent sidecar does not change Coach provider, history or reply contracts.
+Dictation transport lives in Coach data behind a cancellable domain request and
+the shared `ApiClient` exception boundary. The recording widget does not import
+Dio. Existing PCM/text/time limits and bearer delivery are unchanged. Native
+upload options disable redirects; web retains browser-managed redirect behavior
+and requires the canonical endpoint. Late replies and errors after discard or account change
+cannot replace the current draft or display a stale error.
+Composer Enter (including the mobile keyboard Send action) invokes the existing
+guarded send flow; Shift+Enter remains multiline editing. Active IME composition
+does not trigger hardware-key submission. Recording Stop remains draft-only;
+recording Send requests transcription followed by the same guarded send flow.
+
+Only authenticated non-mock `development` sessions may use dictation and edit
+the draft independently of Coach availability. Hosted and guest/mock gates are
+unchanged, and unavailable Coach responses remain blocked in every environment.
+
 Coach remains the fifth development-gated shell destination. Today, Insights,
 Quick actions, Planner, Coach, and Settings share the same top action group:
 page-specific actions such as Refresh first, an unread Coach result second, and
 Settings last. Settings is pushed so Back returns to the originating main page;
-on Settings its filled control remains visible, selected, and does not push
-again. Loading, empty, and error states retain the same actions. Sub-pages,
+on Settings the redundant self-link is omitted while the unread result and
+Back remain available. Loading, empty, and error states retain their page's
+same actions. Sub-pages,
 Auth, Setup, and Capture flows remain outside this header contract. In
 `staging`, `pilot`, and `production`, including release builds, Coach is visible only
 when `COACH_SURFACE_ENABLED=true`; route visibility does not make a provider
@@ -686,6 +755,11 @@ Hosted Settings requires one deliberate mode selection: `Project Coach`,
 `Use my OpenAI key`, or `Use my Gemini key`. Project Coach never reads or
 stores a key. BYOK keys remain isolated per provider, tab-memory-only on web
 and encrypted device-local on Android. A failed mode never changes providers.
+Non-demo Coach places a compact `Choose Coach` dropdown directly below the
+header, including when ready. Unavailable and rate-limit states stay visible;
+provider/key changes refresh availability. Key fields appear only for BYOK.
+Optional explanations use Info; short cost/data-sharing copy stays visible.
+Settings keeps the same controls. No provider is selected automatically.
 For `provider_busy`, Flutter preserves the exact request id/message, shows the
 bounded server countdown, and enables only a manual retry after it expires.
 
@@ -723,7 +797,7 @@ Header controls have 44 by 44 logical-pixel targets, keyboard focus, unique
 tooltips/semantics, and wrapping layout that remains usable at 320 logical
 pixels with 200-percent text.
 
-The capability card uses the shared check status when ready and a labelled
+The compact capability card omits a redundant ready heading and uses a labelled
 cloud-off icon when unavailable; a generic information icon is not used as an
 error state. Ordinary unavailable/failure copy is outcome-first and does not
 expose provider configuration, transport dumps, or raw contract exceptions.
@@ -731,11 +805,14 @@ expose provider configuration, transport dumps, or raw contract exceptions.
 Inside Coach, the current surface contains:
 
 - capability/status and remaining-question truth;
-- persisted conversation history;
-- one free text field and Send;
+- one chronological chat timeline, oldest turns first, with current/history
+  turns deduplicated by request id and separate user/Coach message surfaces;
+- a fixed bottom composer with one free text field and an icon labelled `Send`;
+- the pending user message during analysis;
 - a Cancel action only while a stream is active;
-- short safe activity text;
-- Clear history; and
+- a Coach reply placeholder after the pending user message, with a spinner and
+  short safe activity text; Cancel stays in the composer;
+- `Delete conversation` with the existing confirmation; and
 - an expandable `Data & analysis` section below each current answer.
 
 The detail section labels the backend-owned `evidence` rows as

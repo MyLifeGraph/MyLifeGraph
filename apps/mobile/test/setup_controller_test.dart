@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/auth/data/intake_setup_repository.dart';
@@ -12,6 +14,168 @@ import 'package:my_life_graph/features/auth/presentation/pages/onboarding_page.d
 import 'package:my_life_graph/features/auth/presentation/providers/setup_providers.dart';
 
 void main() {
+  for (final (width, scale) in [(390.0, 1.0), (1280.0, 1.0), (320.0, 2.0)]) {
+    testWidgets('Setup reference layout at $width and text scale $scale', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await (FontLoader('InstrumentSans')
+            ..addFont(
+              rootBundle.load('assets/fonts/InstrumentSans-Regular.ttf'),
+            )
+            ..addFont(
+              rootBundle.load('assets/fonts/InstrumentSans-SemiBold.ttf'),
+            )
+            ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Bold.ttf')))
+          .load();
+      await (FontLoader('packages/phosphor_flutter/PhosphorRegular')..addFont(
+            rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor.ttf'),
+          ))
+          .load();
+      await (FontLoader(
+        'MaterialIcons',
+      )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+      final gateway = _FakeSetupGateway(
+        fetched: const IntakeSetupReadState.empty(),
+      );
+      late SetupController controller;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            setupControllerProvider.overrideWith((ref) {
+              return controller = SetupController(
+                repository: gateway,
+                session: _guestSession(onboardingDone: false),
+                onApplied: (_) {},
+              );
+            }),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: const RepaintBoundary(
+              key: ValueKey('setup-preview'),
+              child: OnboardingPage(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(Stepper), findsNothing);
+      expect(find.text('Required setup'), findsOneWidget);
+      expect(find.text('Optional setup'), findsOneWidget);
+      expect(controller.state.draft!.weekdayShape, isNull);
+      expect(controller.state.draft!.bestEnergyWindow, isNull);
+      expect(tester.takeException(), isNull);
+      if (const bool.fromEnvironment('SETUP_PREVIEW')) {
+        await expectLater(
+          find.byKey(const ValueKey('setup-preview')),
+          matchesGoldenFile('../../../.tools/setup-${width.toInt()}.png'),
+        );
+      }
+      await tester.enterText(
+        find.byKey(const ValueKey('setup-display-name')),
+        'My name',
+      );
+      expect(controller.state.draft!.displayName, 'My name');
+      await tester.ensureVisible(find.text('Focus setup'));
+      await tester.tap(find.text('Focus setup'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('study-focus-enabled')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('study-focus-enabled')));
+      await tester.tap(find.byKey(const ValueKey('study-focus-enabled')));
+      await tester.pumpAndSettle();
+      final originalItems = controller.state.draft!.studySetup!.focusRhythm!.preparationItems;
+      expect(originalItems, hasLength(5));
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.byKey(const ValueKey('study-focus-minutes')));
+      if (const bool.fromEnvironment('SETUP_PREVIEW')) {
+        await expectLater(find.byKey(const ValueKey('setup-preview')),
+          matchesGoldenFile('../../../.tools/setup-focus-${width.toInt()}.png'));
+      }
+      final activeItem = find.byKey(ValueKey('study-ritual-active-${originalItems.first.key}'));
+      await tester.ensureVisible(activeItem);
+      await tester.tap(activeItem);
+      await tester.pumpAndSettle();
+      expect(controller.state.draft!.studySetup!.focusRhythm!.preparationItems.first.active, isFalse);
+      expect(tester.widget<IconButton>(find.byWidgetPredicate(
+        (widget) => widget is IconButton && widget.tooltip == 'Move up').first).onPressed, isNull);
+      await tester.ensureVisible(find.byTooltip('Move down').first);
+      await tester.tap(find.byTooltip('Move down').first);
+      await tester.pumpAndSettle();
+      expect(controller.state.draft!.studySetup!.focusRhythm!.preparationItems[1].key,
+        originalItems.first.key);
+      await tester.ensureVisible(find.byTooltip('Remove preparation item').first);
+      await tester.tap(find.byTooltip('Remove preparation item').first);
+      await tester.pumpAndSettle();
+      expect(controller.state.draft!.studySetup!.focusRhythm!.preparationItems, hasLength(4));
+      await tester.ensureVisible(find.text('Focus setup'));
+      await tester.tap(find.text('Focus setup'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Routines'));
+      await tester.tap(find.text('Routines'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Add routine candidate'));
+      await tester.tap(find.text('Add routine candidate'));
+      await tester.pumpAndSettle();
+      final routineKey = controller.state.draft!.routines.single.key;
+      final routineTitle = find.byKey(ValueKey('routine-title-$routineKey'));
+      await tester.ensureVisible(routineTitle);
+      await tester.enterText(routineTitle, 'Read after breakfast');
+      expect(controller.state.draft!.routines.single.title, 'Read after breakfast');
+      await _previewSetupSection(tester, routineTitle, 'routines', width);
+      await tester.ensureVisible(find.text('Routines'));
+      await tester.tap(find.text('Routines'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Semester planning'));
+      await tester.tap(find.text('Semester planning'));
+      await tester.pumpAndSettle();
+      final semesterToggle = find.byKey(const ValueKey('study-semester-enabled'));
+      await tester.ensureVisible(semesterToggle);
+      await tester.tap(semesterToggle);
+      await tester.pumpAndSettle();
+      final semesterName = find.byKey(const ValueKey('study-current-semester-name'));
+      await tester.ensureVisible(semesterName);
+      await tester.enterText(semesterName, 'Autumn semester');
+      await _previewSetupSection(tester, semesterName, 'semester', width);
+      await tester.ensureVisible(find.text('Semester planning'));
+      await tester.tap(find.text('Semester planning'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Fixed commitments'));
+      await tester.tap(find.text('Fixed commitments'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Add fixed commitment'));
+      await tester.tap(find.text('Add fixed commitment'));
+      await tester.pumpAndSettle();
+      final commitmentKey = controller.state.draft!.fixedCommitments.single.key;
+      final commitmentTitle = find.byKey(ValueKey('commitment-title-$commitmentKey'));
+      await tester.ensureVisible(commitmentTitle);
+      await tester.enterText(commitmentTitle, 'Algorithms lecture');
+      await tester.pumpAndSettle();
+      await _previewSetupSection(tester, commitmentTitle, 'commitments', width);
+      final duplicate = find.byKey(ValueKey('commitment-duplicate-$commitmentKey'));
+      await tester.ensureVisible(duplicate);
+      await tester.tap(duplicate);
+      await tester.pumpAndSettle();
+      expect(controller.state.draft!.fixedCommitments, hasLength(2));
+      await tester.ensureVisible(find.byTooltip('Remove from setup').last);
+      await tester.tap(find.byTooltip('Remove from setup').last);
+      await tester.pumpAndSettle();
+      expect(controller.state.draft!.fixedCommitments.single.title, 'Algorithms lecture');
+      await tester.ensureVisible(find.text('Save setup'));
+      expect(tester.takeException(), isNull);
+      expect(gateway.requests, isEmpty);
+    });
+  }
+
   test('only first-time authenticated UTC setup requires confirmation', () {
     final utcAccount = AppSession.authenticated(
       const AppProfile(
@@ -518,6 +682,16 @@ void main() {
     expect(commitments.last.validUntil, DateTime.utc(2026, 9, 30));
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _previewSetupSection(WidgetTester tester, Finder target, String name, double width) async {
+  expect(tester.takeException(), isNull);
+  if (!const bool.fromEnvironment('SETUP_PREVIEW')) return;
+  final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+  position.jumpTo((position.pixels + tester.getTopLeft(target).dy - 24).clamp(0.0, position.maxScrollExtent));
+  await tester.pumpAndSettle();
+  await expectLater(find.byKey(const ValueKey('setup-preview')),
+    matchesGoldenFile('../../../.tools/setup-$name-${width.toInt()}.png'));
 }
 
 Future<void> _settleController() async {

@@ -73,6 +73,7 @@ class AppInfoDisclosure extends StatefulWidget {
     this.descriptionStyle,
     this.layout = AppInfoDisclosureLayout.standard,
     this.keyPrefix = 'app-info',
+    this.useDialog = false,
     super.key,
   });
 
@@ -81,6 +82,7 @@ class AppInfoDisclosure extends StatefulWidget {
   final AppInfoHeaderBuilder headerBuilder;
   final TextStyle? descriptionStyle;
   final AppInfoDisclosureLayout layout;
+  final bool useDialog;
   final String keyPrefix;
 
   @override
@@ -219,7 +221,24 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
     );
   }
 
-  void _toggle() => setState(() => _expanded = !_expanded);
+  void _toggle() {
+    if (!widget.useDialog) {
+      setState(() => _expanded = !_expanded);
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.topic),
+        scrollable: true,
+        content: Text(widget.description, style: widget.descriptionStyle),
+        actions: [TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        )],
+      ),
+    );
+  }
 
   void _handleFocus() {
     if (mounted && _focused != _focusNode.hasFocus) {

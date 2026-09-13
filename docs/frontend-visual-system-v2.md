@@ -1,8 +1,43 @@
 # Frontend Visual System V2
 
+Settings uses the compact page header without a redundant Settings cog on that
+same page; optional Coach-result notices and Back remain. Other page header
+actions are unchanged. Focus target menus cap their height to the usable
+viewport and scroll their options rather than clipping the last entry.
+
+The hosted Turnstile page includes padding inside its viewport width. At render,
+containers below the provider's 300px flexible minimum use its supported compact
+layout; wider containers use flexible sizing. Do not crop or scale the challenge.
+
+Coach dictation uses the shared Phosphor microphone in a normal icon button
+immediately before Send. Recording has a labelled stop action and semantic error
+color; transcription shows a compact progress indicator with a cancellation label.
+
+The permanent Coach outline encloses the timeline and bottom composer below the
+fixed capability status card. Only the timeline scrolls on the main page;
+the header, frame and composer stay fixed. Loaded history
+starts at its newest message. The frame uses existing outline color and radius;
+message cards retain their existing styling. Empty-state typography is unchanged.
+The frame retains an 8px top inset even while its timeline scrolls. The composer
+model icon remains available when capability loading fails; errors stay above.
+Optional Coach explanations open in a scrollable dialog instead of expanding
+the fixed panels, retaining access at large text sizes.
+
 The Coach provider/key controls use the existing Settings card, field,
 dropdown, button, spacing, and error-text primitives; they introduce no new
 visual token or icon family.
+Coach places a tune icon before the microphone, replacing the composer Info
+icon. It opens the existing dropdown/key controls and explanations in a dialog,
+with BYOK fields only when selected. Cost/data-sharing and errors remain visible.
+The bottom composer starts at one text line, grows to four, and uses a Send
+icon with a visible tooltip/semantic label; its zero character count is hidden.
+The chat scrolls independently above it; the text field retains its own editing
+scroll behavior. When the remaining frame is too short (for example at large
+text sizes), the composer joins the same chat scroller so its controls stay
+reachable. The main page has no additional composer/page scroll container.
+User messages align right on the existing raised surface; Coach replies use
+existing cards with uncertainty and expandable analysis details. No new colors,
+fonts, radii, provider behavior, or chat-memory contract is introduced.
 
 The hosted `pilot-participation-v1` /
 `pilot-participation-notice-v1` adult/privacy gate and persistent staging identity use existing
@@ -104,8 +139,15 @@ Today and Planner share one semantic category mapping:
 | Fixed commitment | Danger |
 
 Exam and Assignment therefore share a color while retaining distinct labels
-and icons. The mapping colors the entire Planner seven-day row—surface, border,
-icon, and text—not only an avatar. It never replaces the visible category
+and icons. Default agenda cards color the row with category tokens. The Planner
+reference layout instead uses neutral raised appointment surfaces, category
+rails and icon badges, primary titles and secondary details. This opt-in skin
+uses a rounded `outlineSoft` frame around Days appointments, with stable height
+at a given width/text scale, internal overflow scrolling, and a centered empty
+label. The date controls remain outside; List and Today stay unbounded by this
+Planner-only viewport. Approximately three normal rows fit without restricting
+long titles or enlarging the frame with the day's item count. This presentation
+does not alter Today. Color never replaces the visible category
 label. Preparation status pills use Attention for Preview/Source changed,
 Success for Active/Completed, Danger for Cancelled, and Information for the
 Exam/Assignment type.
@@ -175,8 +217,10 @@ Main-page top actions use one shared wrapping group on Today, Insights, Quick
 actions, Planner, Coach, and Settings. Page-specific actions come first, an
 unread Coach action comes second when present, and Settings comes last. Every
 icon action owns a 44 by 44 logical-pixel target and keyboard/semantic label.
-At narrow width or 200-percent text, `AppPage` stacks the action group below the
-title instead of shrinking or overflowing it. The selected Settings icon uses
+Today, Insights, Planner, and Coach align title-left/icon-actions-right at the
+same 16-pixel mobile top/right inset. Large text moves actions above the title.
+Insights Refresh is an icon with its existing tooltip. Other pages retain their
+existing narrow-screen stacked header. The selected Settings icon uses
 the filled icon and selected surface without creating another route.
 
 ## Shape And Surface Roles
@@ -393,6 +437,22 @@ Image and painter layers are pointer-ignoring, semantics-free
 the conservative luminance bound for every possible backdrop pixel.
 
 ## Responsive And Accessibility Gates
+
+Coach recording uses compact theme-colored PCM-level bars plus remaining seconds
+between Discard and Stop/Send. Display-only logarithmic scaling makes normal
+speech visible and leaves silence flat. Bars animate only as audio levels change;
+reduced motion updates levels immediately without interpolation. The countdown remains readable without a per-second
+live-region announcement. Existing recording controls retain their target sizes.
+
+Color, typography, icons, and surface treatments stay consistent between mobile
+and desktop; responsive positioning and layout may differ. Today uses one
+1080-pixel maximum content width, including Weekly review and Full week.
+
+Planner uses the supplied mobile/desktop references through existing tokens:
+mobile weekday underlines, desktop date chips, wide event rows, compact icon-led
+summary cards and a desktop agenda/summary split. Days/List is always available.
+Existing shell navigation/FAB remains authoritative; large mobile text gets
+additional bottom clearance and full-width stacked appointment text.
 
 `exam-plan-health-v1` uses an icon plus text status pill for every state.
 Preparation's value grid uses wrapping layout; Planner and Today use wrapping

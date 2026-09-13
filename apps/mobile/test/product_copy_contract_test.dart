@@ -11,7 +11,7 @@ void main() {
         .where(
           (file) =>
               file.path.endsWith('.dart') &&
-              file.path.contains('/presentation/'),
+              file.path.replaceAll('\\', '/').contains('/presentation/'),
         )
         .toList(growable: false);
     expect(presentationSources, isNotEmpty);
@@ -73,8 +73,8 @@ void main() {
     final coach = File(
       'lib/features/coach/presentation/pages/coach_page.dart',
     ).readAsStringSync();
-    expect(coach, contains('Ask freely. Personal data stays read-only.'));
-    expect(coach, contains('It cannot change the app.'));
+    expect(coach, contains('Coach answers using your read-only app data.'));
+    expect(coach, contains('but cannot change the app.'));
     expect(coach, contains('Local development-only agent'));
     expect(coach, contains('This is not a production service'));
 

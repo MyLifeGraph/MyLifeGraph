@@ -9,6 +9,28 @@ import 'package:my_life_graph/features/coach/data/coach_credential_store.dart';
 import 'package:my_life_graph/features/coach/domain/coach.dart';
 
 void main() {
+  test('initialization waits for stored keys before selecting Standard', () async {
+    final read = Completer<void>();
+    final controller = CoachCredentialsController(
+      store: _Store()..readBarriers['profile-a:openai'] = read,
+      api: _Api(),
+      accessToken: () async => 'access-token',
+    );
+    addTearDown(controller.dispose);
+    final load = controller.setProfile('profile-a');
+    expect(controller.initialization, same(load));
+    var initialized = false;
+    controller.initialization.then((_) => initialized = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(initialized, isFalse);
+    read.complete();
+    await controller.initialization;
+    expect(controller.state.provider, CoachProviderName.operatorCodexPilot);
+    controller.select(CoachProviderName.gemini);
+    await controller.initialization;
+    expect(controller.state.provider, CoachProviderName.gemini);
+  });
+
   test('web keys are tab-memory only and a new store represents reload',
       () async {
     final tab = PlatformCoachCredentialStore(web: true);
@@ -39,6 +61,7 @@ void main() {
       accessToken: () async => 'access-token',
     );
     await controller.setProfile('profile-a');
+    expect(controller.state.provider, CoachProviderName.operatorCodexPilot);
     controller.select(CoachProviderName.openai);
 
     expect(

@@ -8,6 +8,57 @@ import 'package:my_life_graph/features/planner/presentation/widgets/planner_sect
 import 'support/planner_fixtures.dart';
 
 void main() {
+  for (final layout in [(320.0, 2.0), (390.0, 1.0)]) {
+    testWidgets('fixed commitment stays usable at ${layout.$1}px / ${layout.$2}x',
+        (tester) async {
+      tester.view.physicalSize = Size(layout.$1, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const initial = PlannerCommitmentDraft(
+        title: 'Seminar', location: 'Room 1', recurrence: 'weekly',
+        startsAt: null, endsAt: null, weekday: 1,
+        localStartsAt: '09:00:00', localEndsAt: '10:00:00',
+      );
+      PlannerCommitmentDraft? saved;
+      await _pumpDialog<PlannerCommitmentDraft>(
+        tester,
+        const PlannerCommitmentDialog(initial: initial, timezone: 'Europe/Berlin'),
+        (value) => saved = value,
+        textScale: layout.$2,
+      );
+      expect(tester.takeException(), isNull);
+      for (final label in ['One time', 'Every week']) {
+        final repeat = find.byType(DropdownButtonFormField<String>);
+        await tester.ensureVisible(repeat);
+        await tester.tap(repeat);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text(label).last);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+      final weekday = find.byType(DropdownButtonFormField<int>);
+      await tester.ensureVisible(weekday);
+      await tester.tap(weekday);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tue').last);
+      await tester.pumpAndSettle();
+      final review = find.byKey(const ValueKey('planner-commitment-review'));
+      await tester.ensureVisible(review);
+      expect(review.hitTestable(), findsOneWidget);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(saved?.title, initial.title);
+      expect(saved?.location, initial.location);
+      expect(saved?.recurrence, 'weekly');
+      expect(saved?.weekday, 2);
+      expect(saved?.localStartsAt, initial.localStartsAt);
+      expect(saved?.localEndsAt, initial.localEndsAt);
+    });
+  }
+
   testWidgets(
     'agenda keeps profile day and clock together across UTC midnight',
     (tester) async {
@@ -29,6 +80,10 @@ void main() {
           onItemTap: (_) {},
         ),
       );
+      expect(find.text('Tuesday, July 21'), findsOneWidget);
+      expect(find.text('01:30–02:30 · Setup commitment'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('planner-seven-days-list')));
+      await tester.pumpAndSettle();
       expect(find.text('Tuesday, Jul 21'), findsOneWidget);
       expect(find.text('01:30–02:30 · Setup commitment'), findsOneWidget);
     },
@@ -208,11 +263,16 @@ Future<void> _pumpContent(WidgetTester tester, Widget child) async {
 Future<void> _pumpDialog<T>(
   WidgetTester tester,
   Widget dialog,
-  ValueChanged<T?> onClosed,
-) async {
+  ValueChanged<T?> onClosed, {
+  double textScale = 1,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: Builder(
         builder: (context) {
           return Scaffold(

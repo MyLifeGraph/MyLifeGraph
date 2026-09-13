@@ -95,7 +95,7 @@ class DashboardFullWeekSection extends StatelessWidget {
       key: const ValueKey('dashboard-full-week'),
       title: 'Full week',
       subtitle:
-          'Your profile-local Monday–Sunday agenda across Setup, Preparation, Calendar, Focus, Planner Tasks, Habits, and Fixed commitments.',
+          'Your Monday–Sunday schedule in your account timezone.',
       expanded: expanded,
       onToggle: actions.onToggleFullWeek,
       child: _FullWeekContent(
@@ -123,7 +123,7 @@ class _WeeklyReviewEntry extends StatelessWidget {
         ),
         title: const Text('Weekly review'),
         subtitle: const Text(
-          'Look back at last week. This is not a today to-do.',
+          'Look back at last week.',
         ),
         trailing: const Icon(AppIcons.chevronRight),
         onTap: onOpen,
@@ -136,7 +136,8 @@ const dashboardFullWeekMinimumWebCardWidth = 208.0;
 const dashboardFullWeekDayGap = AppSpacing.sm;
 const dashboardFullWeekNarrowBreakpoint = 400.0;
 const dashboardFullWeekLargeTextThreshold = 24.0;
-const dashboardFullWeekMaximumWidth = 1680.0;
+// Shared by the main Today content and its supporting sections.
+const dashboardFullWeekMaximumWidth = 1080.0;
 
 class _FullWeekContent extends StatelessWidget {
   const _FullWeekContent({

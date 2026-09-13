@@ -1,3 +1,5 @@
+import 'skillset_signals.dart';
+
 enum QuickCheckInSaveTarget { guest, supabase }
 
 enum StressSource {
@@ -11,12 +13,8 @@ enum StressSource {
 
   final String code;
 
-  static StressSource fromCode(Object? value) => _enumFromCode(
-        values,
-        value,
-        (item) => item.code,
-        'stress source',
-      );
+  static StressSource fromCode(Object? value) =>
+      _enumFromCode(values, value, (item) => item.code, 'stress source');
 }
 
 enum StressControllability {
@@ -29,11 +27,11 @@ enum StressControllability {
   final String code;
 
   static StressControllability fromCode(Object? value) => _enumFromCode(
-        values,
-        value,
-        (item) => item.code,
-        'stress controllability',
-      );
+    values,
+    value,
+    (item) => item.code,
+    'stress controllability',
+  );
 }
 
 enum FocusBand {
@@ -47,12 +45,8 @@ enum FocusBand {
 
   final String code;
 
-  static FocusBand fromCode(Object? value) => _enumFromCode(
-        values,
-        value,
-        (item) => item.code,
-        'focus band',
-      );
+  static FocusBand fromCode(Object? value) =>
+      _enumFromCode(values, value, (item) => item.code, 'focus band');
 }
 
 enum MainFriction {
@@ -70,12 +64,8 @@ enum MainFriction {
 
   final String code;
 
-  static MainFriction fromCode(Object? value) => _enumFromCode(
-        values,
-        value,
-        (item) => item.code,
-        'main friction',
-      );
+  static MainFriction fromCode(Object? value) =>
+      _enumFromCode(values, value, (item) => item.code, 'main friction');
 }
 
 enum StressIntensityLabel {
@@ -139,7 +129,7 @@ String dailyCaptureClock(DateTime value) {
 }
 
 ({DateTime estimatedSleepStartedAt, DateTime wokeAt})
-    estimatedSleepIntervalForLocalClocks({
+estimatedSleepIntervalForLocalClocks({
   required String entryDate,
   required String estimatedSleepStartedAt,
   required String wokeAt,
@@ -181,6 +171,7 @@ const dailyCaptureV2 = 'daily-capture-v2';
 class EveningShutdownDraft {
   const EveningShutdownDraft({
     required this.captureId,
+    this.skillset,
     required this.entryDate,
     required this.capturedAt,
     required this.mood,
@@ -198,13 +189,10 @@ class EveningShutdownDraft {
     this.sleepTargetMinutes,
     this.branchVersion = dailyCaptureV5,
     this.isCompatibilityBranch = false,
-  })  : mainFriction = null,
-        additionalFrictions = const <MainFriction>[];
+  }) : mainFriction = null,
+       additionalFrictions = const <MainFriction>[];
 
-  factory EveningShutdownDraft.empty(
-    DateTime capturedAt, {
-    String? entryDate,
-  }) {
+  factory EveningShutdownDraft.empty(DateTime capturedAt, {String? entryDate}) {
     final date = entryDate ?? dailyCaptureEntryDate(capturedAt);
     return EveningShutdownDraft(
       captureId: 'evening-$date-${capturedAt.toUtc().microsecondsSinceEpoch}',
@@ -264,10 +252,10 @@ class EveningShutdownDraft {
       reflectionNote: _optionalString(json['reflection_note']) ?? '',
       specificBlocker: _optionalString(json['specific_blocker']) ?? '',
       plannedSleepTime: _optionalString(json['planned_sleep_time']),
-      sleepTargetMinutes: _optionalWholeNumber(
-        json,
-        'sleep_target_minutes',
-      ),
+      sleepTargetMinutes: _optionalWholeNumber(json, 'sleep_target_minutes'),
+      skillset: json['skillset'] == null
+          ? null
+          : SkillsetSignals.fromJson(json['skillset'], morning: false),
       branchVersion: branch.version,
       isCompatibilityBranch: branch.isCompatibility,
     );
@@ -285,6 +273,7 @@ class EveningShutdownDraft {
   static const maxSpecificBlockerLength = 280;
   static const defaultSleepTargetMinutes = 480;
 
+  final SkillsetSignals? skillset;
   final String captureId;
   final String entryDate;
   final DateTime capturedAt;
@@ -327,6 +316,7 @@ class EveningShutdownDraft {
       stressIntensityLabelFor(stress!);
 
   EveningShutdownDraft copyWith({
+    SkillsetSignals? skillset,
     String? captureId,
     String? entryDate,
     DateTime? capturedAt,
@@ -347,6 +337,7 @@ class EveningShutdownDraft {
     bool? isCompatibilityBranch,
   }) {
     return EveningShutdownDraft(
+      skillset: skillset ?? this.skillset,
       captureId: captureId ?? this.captureId,
       entryDate: entryDate ?? this.entryDate,
       capturedAt: capturedAt ?? this.capturedAt,
@@ -378,18 +369,18 @@ class EveningShutdownDraft {
   }
 
   EveningShutdownDraft normalized() => copyWith(
-        captureId: captureId.trim(),
-        tomorrowPriority: tomorrowPriority.trim(),
-        reflectionNote: reflectionNote.trim(),
-        specificBlocker: specificBlocker.trim(),
-        plannedSleepTime: plannedSleepTime?.trim(),
-      );
+    captureId: captureId.trim(),
+    tomorrowPriority: tomorrowPriority.trim(),
+    reflectionNote: reflectionNote.trim(),
+    specificBlocker: specificBlocker.trim(),
+    plannedSleepTime: plannedSleepTime?.trim(),
+  );
 
   EveningShutdownDraft forEditing() => copyWith(
-        branchVersion: dailyCaptureV5,
-        isCompatibilityBranch: false,
-        sleepTargetMinutes: sleepTargetMinutes ?? defaultSleepTargetMinutes,
-      );
+    branchVersion: dailyCaptureV5,
+    isCompatibilityBranch: false,
+    sleepTargetMinutes: sleepTargetMinutes ?? defaultSleepTargetMinutes,
+  );
 
   void validate({bool preservingCompatibility = false}) {
     _validateCaptureIdentity(
@@ -437,12 +428,12 @@ class EveningShutdownDraft {
     }
   }
 
-  Map<String, dynamic> toMetadataJson({
-    bool preservingCompatibility = true,
-  }) {
+  Map<String, dynamic> toMetadataJson({bool preservingCompatibility = true}) {
     validate(preservingCompatibility: preservingCompatibility);
     final value = normalized();
     return {
+      if (value.skillset != null)
+        'skillset': value.skillset!.toJson(morning: false),
       'branch_version': value.branchVersion,
       if (!value.isV5) 'compatibility': true,
       'capture_kind': 'evening',
@@ -474,6 +465,7 @@ class EveningShutdownDraft {
 class MorningCalibrationDraft {
   MorningCalibrationDraft({
     required this.captureId,
+    this.skillset,
     required this.entryDate,
     required this.capturedAt,
     double? sleepHours,
@@ -487,10 +479,10 @@ class MorningCalibrationDraft {
     this.branchVersion = dailyCaptureV5,
     this.isCompatibilityBranch = false,
     String? legacyDayShapeCode,
-  })  : _legacyDayShapeCode = legacyDayShapeCode,
-        sleepHours = estimatedSleepMinutes == null
-            ? sleepHours
-            : estimatedSleepMinutes / 60;
+  }) : _legacyDayShapeCode = legacyDayShapeCode,
+       sleepHours = estimatedSleepMinutes == null
+           ? sleepHours
+           : estimatedSleepMinutes / 60;
 
   factory MorningCalibrationDraft.empty(
     DateTime capturedAt, {
@@ -559,27 +551,26 @@ class MorningCalibrationDraft {
           : null,
       wokeAt: hasPreciseSleep ? _requiredAwareDateTime(json, 'woke_at') : null,
       estimatedSleepMinutes: estimatedSleepMinutes,
-      sleepTargetMinutes: _optionalWholeNumber(
-        json,
-        'sleep_target_minutes',
+      sleepTargetMinutes: _optionalWholeNumber(json, 'sleep_target_minutes'),
+      sourceEveningCaptureId: _optionalString(
+        json['source_evening_capture_id'],
       ),
-      sourceEveningCaptureId:
-          _optionalString(json['source_evening_capture_id']),
+      skillset: json['skillset'] == null
+          ? null
+          : SkillsetSignals.fromJson(json['skillset'], morning: true),
       branchVersion: branch.version,
       isCompatibilityBranch: branch.isCompatibility,
       legacyDayShapeCode: legacyDayShapeCode,
     );
     // V2 Morning captures written before sleep quality was introduced remain
     // readable. A new Morning save still requires an explicit value.
-    draft.validate(
-      requireSleepQuality: false,
-      preservingCompatibility: true,
-    );
+    draft.validate(requireSleepQuality: false, preservingCompatibility: true);
     return draft;
   }
 
   static const maxCaptureIdLength = 160;
 
+  final SkillsetSignals? skillset;
   final String captureId;
   final String entryDate;
   final DateTime capturedAt;
@@ -616,6 +607,7 @@ class MorningCalibrationDraft {
       (isV5 || _legacyDayShapeCode != null);
 
   MorningCalibrationDraft copyWith({
+    SkillsetSignals? skillset,
     String? captureId,
     String? entryDate,
     DateTime? capturedAt,
@@ -635,13 +627,14 @@ class MorningCalibrationDraft {
         ? this.estimatedSleepMinutes
         : estimatedSleepMinutes as int?;
     return MorningCalibrationDraft(
+      skillset: skillset ?? this.skillset,
       captureId: captureId ?? this.captureId,
       entryDate: entryDate ?? this.entryDate,
       capturedAt: capturedAt ?? this.capturedAt,
       sleepHours: nextEstimatedMinutes == null
           ? (identical(sleepHours, _unset)
-              ? this.sleepHours
-              : sleepHours as double?)
+                ? this.sleepHours
+                : sleepHours as double?)
           : null,
       sleepQuality: identical(sleepQuality, _unset)
           ? this.sleepQuality
@@ -668,18 +661,17 @@ class MorningCalibrationDraft {
   }
 
   MorningCalibrationDraft normalized() => copyWith(
-        captureId: captureId.trim(),
-        sourceEveningCaptureId: sourceEveningCaptureId?.trim(),
-      );
+    captureId: captureId.trim(),
+    sourceEveningCaptureId: sourceEveningCaptureId?.trim(),
+  );
 
-  MorningCalibrationDraft forEditing({
-    EveningShutdownDraft? sleepPlan,
-  }) =>
+  MorningCalibrationDraft forEditing({EveningShutdownDraft? sleepPlan}) =>
       copyWith(
         branchVersion: dailyCaptureV5,
         isCompatibilityBranch: false,
         legacyDayShapeCode: null,
-        sleepTargetMinutes: sleepTargetMinutes ??
+        sleepTargetMinutes:
+            sleepTargetMinutes ??
             sleepPlan?.sleepTargetMinutes ??
             EveningShutdownDraft.defaultSleepTargetMinutes,
         sourceEveningCaptureId: sourceEveningCaptureId ?? sleepPlan?.captureId,
@@ -766,9 +758,7 @@ class MorningCalibrationDraft {
     }
   }
 
-  Map<String, dynamic> toMetadataJson({
-    bool preservingCompatibility = true,
-  }) {
+  Map<String, dynamic> toMetadataJson({bool preservingCompatibility = true}) {
     // This serializer is also used while preserving an older Morning branch
     // during an Evening-only edit.
     validate(
@@ -777,6 +767,8 @@ class MorningCalibrationDraft {
     );
     final value = normalized();
     return {
+      if (value.skillset != null)
+        'skillset': value.skillset!.toJson(morning: true),
       'branch_version': value.branchVersion,
       if (!value.isV5) 'compatibility': true,
       'capture_kind': 'morning',
@@ -788,8 +780,9 @@ class MorningCalibrationDraft {
       'current_energy': value.energy,
       if (!value.isV5) 'day_shape': value._legacyDayShapeCode,
       if (value.hasPreciseSleepEpisode) ...{
-        'estimated_sleep_started_at':
-            _awareIso8601String(value.estimatedSleepStartedAt!),
+        'estimated_sleep_started_at': _awareIso8601String(
+          value.estimatedSleepStartedAt!,
+        ),
         'woke_at': _awareIso8601String(value.wokeAt!),
         'estimated_sleep_minutes': value.estimatedSleepMinutes,
         'sleep_target_minutes': value.sleepTargetMinutes,
@@ -811,9 +804,7 @@ class LegacyQuickCheckInValues {
     required this.contextNote,
   });
 
-  factory LegacyQuickCheckInValues.fromV1GuestJson(
-    Map<String, dynamic> json,
-  ) {
+  factory LegacyQuickCheckInValues.fromV1GuestJson(Map<String, dynamic> json) {
     final capturedAt = DateTime.parse('${json['createdAt']}');
     final value = LegacyQuickCheckInValues(
       captureId:
@@ -860,14 +851,14 @@ class LegacyQuickCheckInValues {
   }
 
   Map<String, dynamic> toGuestJson() => {
-        'captureId': captureId,
-        'createdAt': capturedAt.toIso8601String(),
-        if (mood != null) 'mood': mood,
-        if (energy != null) 'energy': energy,
-        if (sleepHours != null) 'sleepHours': sleepHours,
-        if (stress != null) 'stress': stress,
-        if (contextNote.trim().isNotEmpty) 'contextNote': contextNote.trim(),
-      };
+    'captureId': captureId,
+    'createdAt': capturedAt.toIso8601String(),
+    if (mood != null) 'mood': mood,
+    if (energy != null) 'energy': energy,
+    if (sleepHours != null) 'sleepHours': sleepHours,
+    if (stress != null) 'stress': stress,
+    if (contextNote.trim().isNotEmpty) 'contextNote': contextNote.trim(),
+  };
 }
 
 class DailyCaptureEntry {
@@ -1003,10 +994,7 @@ class DailyCaptureEntry {
       evening: other.evening ?? evening,
       morning: other.morning ?? morning,
       legacy: other.legacy ?? legacy,
-      preservedMetadata: {
-        ...preservedMetadata,
-        ...other.preservedMetadata,
-      },
+      preservedMetadata: {...preservedMetadata, ...other.preservedMetadata},
     );
   }
 
@@ -1042,35 +1030,35 @@ class DailyCaptureEntry {
   }
 
   Map<String, dynamic> toCaptureMetadata() => {
-        ...preservedMetadata,
-        'capture_version': captureVersion,
-        'captures': {
-          if (evening != null)
-            'evening': evening!.toMetadataJson(
-              preservingCompatibility: !evening!.isV5,
-            ),
-          if (morning != null)
-            'morning': morning!.toMetadataJson(
-              preservingCompatibility: !morning!.isV5,
-            ),
-        },
-      };
+    ...preservedMetadata,
+    'capture_version': captureVersion,
+    'captures': {
+      if (evening != null)
+        'evening': evening!.toMetadataJson(
+          preservingCompatibility: !evening!.isV5,
+        ),
+      if (morning != null)
+        'morning': morning!.toMetadataJson(
+          preservingCompatibility: !morning!.isV5,
+        ),
+    },
+  };
 
   Map<String, dynamic> toGuestJson() => {
-        'entryDate': entryDate,
-        'captureVersion': captureVersion,
-        'captures': {
-          if (evening != null)
-            'evening': evening!.toMetadataJson(
-              preservingCompatibility: !evening!.isV5,
-            ),
-          if (morning != null)
-            'morning': morning!.toMetadataJson(
-              preservingCompatibility: !morning!.isV5,
-            ),
-        },
-        if (legacy != null) 'legacy': legacy!.toGuestJson(),
-      };
+    'entryDate': entryDate,
+    'captureVersion': captureVersion,
+    'captures': {
+      if (evening != null)
+        'evening': evening!.toMetadataJson(
+          preservingCompatibility: !evening!.isV5,
+        ),
+      if (morning != null)
+        'morning': morning!.toMetadataJson(
+          preservingCompatibility: !morning!.isV5,
+        ),
+    },
+    if (legacy != null) 'legacy': legacy!.toGuestJson(),
+  };
 
   void _requireMatchingEntryDate(String other) {
     if (entryDate != other) {
@@ -1097,14 +1085,14 @@ class QuickCheckInDraft {
   });
 
   factory QuickCheckInDraft.empty(DateTime capturedAt) => QuickCheckInDraft(
-        captureId: 'daily-${capturedAt.toUtc().microsecondsSinceEpoch}',
-        capturedAt: capturedAt,
-        mood: null,
-        energy: null,
-        sleepHours: null,
-        stress: null,
-        contextNote: '',
-      );
+    captureId: 'daily-${capturedAt.toUtc().microsecondsSinceEpoch}',
+    capturedAt: capturedAt,
+    mood: null,
+    energy: null,
+    sleepHours: null,
+    stress: null,
+    contextNote: '',
+  );
 
   factory QuickCheckInDraft.fromJson(Map<String, dynamic> json) {
     final legacy = LegacyQuickCheckInValues.fromV1GuestJson(json);
@@ -1138,16 +1126,15 @@ class QuickCheckInDraft {
     double? sleepHours,
     int? stress,
     String? contextNote,
-  }) =>
-      QuickCheckInDraft(
-        captureId: captureId,
-        capturedAt: capturedAt,
-        mood: mood ?? this.mood,
-        energy: energy ?? this.energy,
-        sleepHours: sleepHours ?? this.sleepHours,
-        stress: stress ?? this.stress,
-        contextNote: contextNote ?? this.contextNote,
-      );
+  }) => QuickCheckInDraft(
+    captureId: captureId,
+    capturedAt: capturedAt,
+    mood: mood ?? this.mood,
+    energy: energy ?? this.energy,
+    sleepHours: sleepHours ?? this.sleepHours,
+    stress: stress ?? this.stress,
+    contextNote: contextNote ?? this.contextNote,
+  );
 
   QuickCheckInDraft normalized() => copyWith(contextNote: contextNote.trim());
 
@@ -1298,10 +1285,7 @@ String _requiredString(Map<String, dynamic> json, String field) {
   return value;
 }
 
-int? _optionalWholeNumber(
-  Map<String, dynamic> json,
-  String field,
-) {
+int? _optionalWholeNumber(Map<String, dynamic> json, String field) {
   final raw = json[field];
   if (raw == null) {
     return null;
@@ -1323,10 +1307,7 @@ DateTime _requiredDateTime(Map<String, dynamic> json, String field) {
   return parsed;
 }
 
-DateTime _requiredAwareDateTime(
-  Map<String, dynamic> json,
-  String field,
-) {
+DateTime _requiredAwareDateTime(Map<String, dynamic> json, String field) {
   final value = _optionalString(json[field]);
   final hasOffset =
       value != null && RegExp(r'(?:Z|[+-]\d{2}:\d{2})$').hasMatch(value);
@@ -1418,29 +1399,23 @@ _CaptureBranchIdentity _captureBranchIdentity(
         'Current capture branch cannot be compatibility data.',
       );
     }
-    return _CaptureBranchIdentity(
-      version: version,
-      isCompatibility: false,
-    );
+    return _CaptureBranchIdentity(version: version, isCompatibility: false);
   }
   if (compatibility != true) {
     throw const FormatException(
       'An older branch inside a current container must be explicit compatibility data.',
     );
   }
-  return _CaptureBranchIdentity(
-    version: version,
-    isCompatibility: true,
-  );
+  return _CaptureBranchIdentity(version: version, isCompatibility: true);
 }
 
 int _captureVersionOrder(String value) => switch (value) {
-      dailyCaptureV2 => 2,
-      dailyCaptureV3 => 3,
-      dailyCaptureV4 => 4,
-      dailyCaptureV5 => 5,
-      _ => 99,
-    };
+  dailyCaptureV2 => 2,
+  dailyCaptureV3 => 3,
+  dailyCaptureV4 => 4,
+  dailyCaptureV5 => 5,
+  _ => 99,
+};
 
 String _parseLegacyDayShapeCode(Object? value) {
   if (value is String && _legacyDayShapeCodes.contains(value)) {

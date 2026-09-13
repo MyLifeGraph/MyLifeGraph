@@ -82,24 +82,26 @@ class _MultiExamPlanSection extends StatelessWidget {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      'Balance exam plans',
+                      'Redistribute study time',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'Choose one saved Exam explicitly. MyLifeGraph will calculate a preview across affected Exams. Nothing moves until you review and confirm the whole preview; no external calendar or notification is changed.',
-              ),
-              const SizedBox(height: AppSpacing.md),
+              if (candidates.isNotEmpty) ...[
+                const Text(
+                  'Preview a new split across exams. Nothing moves until you confirm; external calendars stay unchanged.',
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               DropdownButtonFormField<String>(
                 key: const ValueKey('multi-exam-target-picker'),
                 initialValue: selected,
                 isExpanded: true,
                 itemHeight: null,
                 decoration: const InputDecoration(
-                  labelText: 'Exam to rebalance',
+                  labelText: 'Choose an exam',
                   border: OutlineInputBorder(),
                 ),
                 items: [
@@ -119,7 +121,7 @@ class _MultiExamPlanSection extends StatelessWidget {
               if (candidates.isEmpty) ...[
                 const SizedBox(height: AppSpacing.sm),
                 const Text(
-                  'Confirm an Exam preparation plan before balancing Exam reservations.',
+                  'Confirm an exam plan to use this.',
                 ),
               ],
               if (hasSinglePreview) ...[
@@ -143,7 +145,7 @@ class _MultiExamPlanSection extends StatelessWidget {
                     ? null
                     : onPropose,
                 icon: const Icon(AppIcons.visibilityOutlined),
-                label: const Text('Preview exam balance'),
+                label: const Text('Preview changes'),
               ),
               if (state.operation == MultiExamPlanOperation.proposing) ...[
                 const SizedBox(height: AppSpacing.sm),

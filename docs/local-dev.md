@@ -378,6 +378,47 @@ iOS callback handling.
 
 ## Frontend Script
 
+### Personal Windows browser with existing Cloud accounts
+
+Explicit opt-in: `node scripts/start_cloud_frontend.mjs` from the repository root
+(laptop shortcut: `bash .tools/start-web-cloud.sh`). Stop the current Flutter
+process on 7357 first; never run both launchers together.
+
+This uses **real Pilot accounts and data**, not the development demo users.
+It reads only the existing public publishable key from the fixed released app,
+checks the expected Pilot project hostname, and keeps that key in process memory.
+Use the existing Google account. Supabase must already permit the exact local
+OAuth return `http://127.0.0.1:7357`; a successful Google redirect still needs a
+valid app session. This development launcher does not supply hosted CAPTCHA for
+email/password flows. It does not weaken server-side CAPTCHA or change Auth settings.
+
+A laptop-only API proxy listens on `127.0.0.1:8003`, accepts only the exact local
+web origins `http://127.0.0.1:7357` and `http://localhost:7357`, rejects foreign
+Host/Origin and non-API paths, and forwards the normal
+bearer plus allowed API headers to the fixed HTTPS Pilot API. It forwards no
+cookies, does not mint or replace tokens, and preserves upstream errors, owner
+checks and Coach budgets. Speech uses the production transcription route with
+the same Cloud session. There are no public port/domain/CORS changes or SSH needs.
+Loopback is a machine boundary, not an additional per-account allowlist: other
+trusted local OS processes are not isolated from it. Account authorization remains
+the existing backend's responsibility. Do not expose either local port to the LAN.
+
+Local proxy rejection logs contain only a fixed stage label and HTTP status;
+they never log request URLs, headers, bodies, keys or account data. The two
+browser hosts still have separate browser session storage: use one consistently
+through the complete login. This local alias support changes no hosted CORS/Auth
+configuration and does not bypass password/CAPTCHA or account checks.
+
+Rollback: stop this launcher and its Flutter child, then use the unchanged
+`.tools/start-web-real.sh` for the separate development account/SSH tunnels.
+Never seed demo users or run database setup against the Cloud target.
+
+Optional Coach dictation: `SPEECH_SERVICE_BASE_URL` overrides only the speech
+endpoint base and is forwarded as a Dart define. For the isolated VPS setup,
+forward loopback 8002 over SSH and use `http://127.0.0.1:8002/dev`.
+An empty override uses the normal API base. See the
+[speech sidecar](../services/speech_service/README.md) for installation and limits.
+
 Default Flutter web-server mode:
 
 ```bash
@@ -1218,6 +1259,13 @@ and uploads a held checksummed candidate. It does not publish/install it and
 cannot run positively without the protected keystore secrets. See
 `apps/mobile/android/RELEASE_SIGNING.md`. Installing a release also requires
 the remote Supabase redirect allowlist entry described above.
+
+The retained `staging-debug-apk.yml` workflow now prepares signed release-mode
+testing APKs automatically on protected `main`, using the same Pilot public
+defines and long-lived signing key. Both automatic and tagged workflows use
+the full first-parent commit count for the shared Android update sequence.
+Only verified APK/checksum/public-identity files become automatic artifacts;
+private signing material is removed in an always-run cleanup step.
 
 ## Supabase
 

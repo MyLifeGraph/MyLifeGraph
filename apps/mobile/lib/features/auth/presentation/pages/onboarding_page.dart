@@ -75,14 +75,28 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'PERSONAL COACH',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                              letterSpacing: 4,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'PERSONAL COACH',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    letterSpacing: 2,
+                                  ),
                             ),
+                          ),
+                          const ExcludeSemantics(
+                            child: AppIconBadge(
+                              icon: AppIcons.autoGraphOutlined,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
                       Text(
                         widget.editing
                             ? 'Review your setup'
@@ -93,11 +107,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       Text(
                         widget.editing
                             ? 'Update your weekday and energy window, then review setup-owned routines and fixed commitments.'
-                            : 'Choose your typical weekday and best energy window. Routines, commitments, and study setup stay optional.',
+                            : 'Start with your weekday and energy. Add optional details now or later.',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: _SetupColors.muted(context),
-                              height: 1.5,
-                            ),
+                          color: _SetupColors.muted(context),
+                          height: 1.5,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       if (state.isEditLocked) ...[
@@ -118,89 +132,128 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                 onChanged: _updateDraft,
                               ),
                               const SizedBox(height: AppSpacing.md),
-                              _OptionalSetupSection(
-                                key: const ValueKey('optional-routines'),
-                                title: 'Routines',
-                                subtitle:
-                                    'Optional · named routines stay candidates until cadence and activation are explicit',
-                                initiallyExpanded:
-                                    widget.editing && draft.routines.isNotEmpty,
-                                children: [
-                                  _RoutineEditors(
-                                    routines: draft.routines,
-                                    onChanged: (routines) {
-                                      _updateDraft(
-                                        draft.copyWith(routines: routines),
-                                      );
-                                    },
-                                    onInvalidActivation: _showMessage,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              _OptionalSetupSection(
-                                key: const ValueKey('optional-focus-setup'),
-                                title: 'Focus setup',
-                                subtitle:
-                                    'Optional · rhythm and a local start ritual',
-                                initiallyExpanded: false,
-                                children: [
-                                  _StudyFocusEditor(
-                                    rhythm: draft.studySetup?.focusRhythm,
-                                    onChanged: (rhythm) {
-                                      _updateStudyFocus(draft, rhythm);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              _OptionalSetupSection(
-                                key: const ValueKey(
-                                  'optional-semester-planning',
-                                ),
-                                title: 'Semester planning',
-                                subtitle:
-                                    'Optional · current semester and next course selection window',
-                                initiallyExpanded: widget.openStudySetup,
-                                children: [
-                                  _StudySemesterEditor(
-                                    planning:
-                                        draft.studySetup?.semesterPlanning,
-                                    onChanged: (planning) {
-                                      _updateSemesterPlanning(draft, planning);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              _OptionalSetupSection(
-                                key: const ValueKey('optional-commitments'),
-                                title: 'Fixed commitments',
-                                subtitle:
-                                    'Optional · recurring classes, work, and other weekly blocks',
-                                initiallyExpanded: widget.editing &&
-                                    draft.fixedCommitments.isNotEmpty,
-                                children: [
-                                  _CommitmentEditors(
-                                    commitments: draft.fixedCommitments,
-                                    currentSemester: draft.studySetup
-                                        ?.semesterPlanning?.currentSemester,
-                                    onChanged: (commitments) {
-                                      _updateDraft(
-                                        draft.copyWith(
-                                          fixedCommitments: commitments,
+                              _SetupSurface(
+                                padding: EdgeInsets.zero,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(AppSpacing.md),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const ExcludeSemantics(
+                                                child: AppIconBadge(icon: AppIcons.tuneOutlined),
+                                              ),
+                                              const SizedBox(width: AppSpacing.md),
+                                              Expanded(
+                                                child: Wrap(
+                                                  spacing: AppSpacing.sm,
+                                                  runSpacing: AppSpacing.xs,
+                                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                                  children: [
+                                                    Text('Optional setup', style: Theme.of(context).textTheme.titleLarge),
+                                                    const AppStatusPill(label: 'Optional'),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: AppSpacing.xs),
+                                          Text('Choose what helps. You can return in Settings.',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: _SetupColors.muted(context))),
+                                        ],
+                                      ),
+                                    ),
+                                    const Divider(height: 1),
+                                    _OptionalSetupSection(
+                                      key: const ValueKey('optional-routines'),
+                                      icon: AppIcons.calendarTodayOutlined,
+                                      title: 'Routines',
+                                      subtitle:
+                                          'Habits you may want to build',
+                                      initiallyExpanded:
+                                          widget.editing && draft.routines.isNotEmpty,
+                                      children: [
+                                        _RoutineEditors(
+                                          routines: draft.routines,
+                                          onChanged: (routines) {
+                                            _updateDraft(
+                                              draft.copyWith(routines: routines),
+                                            );
+                                          },
+                                          onInvalidActivation: _showMessage,
                                         ),
-                                      );
-                                    },
-                                  ),
-                                ],
+                                      ],
+                                    ),
+                                    const Divider(height: 1),
+                                    _OptionalSetupSection(
+                                      key: const ValueKey('optional-focus-setup'),
+                                      icon: AppIcons.centerFocusStrong,
+                                      title: 'Focus setup',
+                                      subtitle: 'Focus, recovery and a start checklist',
+                                      initiallyExpanded: false,
+                                      children: [
+                                        _StudyFocusEditor(
+                                          rhythm: draft.studySetup?.focusRhythm,
+                                          onChanged: (rhythm) {
+                                            _updateStudyFocus(draft, rhythm);
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    const Divider(height: 1),
+                                    _OptionalSetupSection(
+                                      key: const ValueKey(
+                                        'optional-semester-planning',
+                                      ),
+                                      icon: AppIcons.schoolOutlined,
+                                      title: 'Semester planning',
+                                      subtitle:
+                                          'Semester dates and course selection',
+                                      initiallyExpanded: widget.openStudySetup,
+                                      children: [
+                                        _StudySemesterEditor(
+                                          planning:
+                                              draft.studySetup?.semesterPlanning,
+                                          onChanged: (planning) {
+                                            _updateSemesterPlanning(draft, planning);
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    const Divider(height: 1),
+                                    _OptionalSetupSection(
+                                      key: const ValueKey('optional-commitments'),
+                                      icon: AppIcons.assignmentOutlined,
+                                      title: 'Fixed commitments',
+                                      subtitle:
+                                          'Weekly classes, work and other blocks',
+                                      initiallyExpanded:
+                                          widget.editing &&
+                                          draft.fixedCommitments.isNotEmpty,
+                                      children: [
+                                        _CommitmentEditors(
+                                          commitments: draft.fixedCommitments,
+                                          currentSemester: draft
+                                              .studySetup
+                                              ?.semesterPlanning
+                                              ?.currentSemester,
+                                          onChanged: (commitments) {
+                                            _updateDraft(
+                                              draft.copyWith(
+                                                fixedCommitments: commitments,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                              if (widget.editing ||
-                                  draft.routines.isNotEmpty ||
-                                  draft.fixedCommitments.isNotEmpty) ...[
-                                const SizedBox(height: AppSpacing.lg),
-                                _SetupReviewSection(draft: draft),
-                              ],
                             ],
                           ),
                         ),
@@ -213,6 +266,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(56),
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                          ),
                           onPressed: state.canSave ? _save : null,
                           icon: state.isSaving
                               ? const SizedBox.square(
@@ -226,12 +283,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                             state.isSaving
                                 ? 'Saving setup...'
                                 : state.retryLocked
-                                    ? 'Retry unchanged'
-                                    : state.isPending
-                                        ? 'Resume pending setup'
-                                        : state.saveError == null
-                                            ? 'Save setup'
-                                            : 'Retry setup save',
+                                ? 'Retry unchanged'
+                                : state.isPending
+                                ? 'Resume pending setup'
+                                : state.saveError == null
+                                ? 'Save setup'
+                                : 'Retry setup save',
                           ),
                         ),
                       ),
@@ -243,8 +300,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                             onPressed: state.isSaving
                                 ? null
                                 : ref
-                                    .read(setupControllerProvider.notifier)
-                                    .load,
+                                      .read(setupControllerProvider.notifier)
+                                      .load,
                             icon: const Icon(AppIcons.refresh),
                             label: const Text('Reload saved setup'),
                           ),
@@ -374,10 +431,7 @@ bool shouldConfirmInitialUtcTimezone({
 }
 
 class _RequiredSetupSection extends StatelessWidget {
-  const _RequiredSetupSection({
-    required this.draft,
-    required this.onChanged,
-  });
+  const _RequiredSetupSection({required this.draft, required this.onChanged});
 
   final IntakeResponseDraft draft;
   final ValueChanged<IntakeResponseDraft> onChanged;
@@ -385,10 +439,10 @@ class _RequiredSetupSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final weekdayValues = <String, String>{
-      'school_or_work': 'School or work blocks',
-      'flexible': 'Flexible schedule',
-      'split_day': 'Split day',
-      'shift_based': 'Shift based',
+      'school_or_work': 'Regular school or work hours',
+      'flexible': 'Flexible daily schedule',
+      'split_day': 'Day split into separate blocks',
+      'shift_based': 'Work shifts',
     };
     final savedWeekdayShape = draft.weekdayShape;
     if (savedWeekdayShape != null &&
@@ -399,25 +453,43 @@ class _RequiredSetupSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Required setup', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Nothing is selected for you. Choose the answers that are true now.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: _SetupColors.muted(context),
+          Row(
+            children: [
+              const ExcludeSemantics(
+                child: AppIconBadge(icon: AppIcons.personOutlineRounded),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      'Required setup',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const AppStatusPill(label: 'Required'),
+                  ],
                 ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           TextFormField(
             key: const ValueKey('setup-display-name'),
             initialValue: draft.displayName,
             textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(labelText: 'Name optional'),
+            decoration: const InputDecoration(
+              labelText: 'Name (optional)',
+              floatingLabelBehavior: FloatingLabelBehavior.always,
+            ),
             onChanged: (value) => onChanged(draft.copyWith(displayName: value)),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           _NullableSelectField<String>(
-            label: 'Typical weekday required',
+            label: 'Typical weekday (required)',
+            icon: AppIcons.calendarTodayOutlined,
             value: draft.weekdayShape,
             values: weekdayValues,
             onChanged: (value) {
@@ -426,7 +498,8 @@ class _RequiredSetupSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           _NullableSelectField<String>(
-            label: 'Best energy window required',
+            label: 'Best energy window (required)',
+            icon: AppIcons.boltOutlined,
             value: draft.bestEnergyWindow,
             values: const {
               'early_morning': 'Early morning',
@@ -460,13 +533,22 @@ class _RoutineEditors extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        Text(
+          'Routines start as candidates. Set a schedule and activate them when ready.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: _SetupColors.muted(context)),
+        ),
+        const SizedBox(height: AppSpacing.md),
         for (var index = 0; index < routines.length; index++)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: _EditorCard(
               child: Column(
                 children: [
-                  TextFormField(
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: TextFormField(
                     key: ValueKey('routine-title-${routines[index].key}'),
                     initialValue: routines[index].title,
                     decoration: const InputDecoration(
@@ -479,9 +561,24 @@ class _RoutineEditors extends StatelessWidget {
                       );
                     },
                   ),
+                      ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      tooltip: 'Remove from setup',
+                      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      onPressed: () {
+                        final updated = [...routines]..removeAt(index);
+                        onChanged(updated);
+                      },
+                      icon: const Icon(AppIcons.deleteOutline),
+                    ),
+                  ),
+                    ],
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   _NullableSelectField<String>(
-                    label: 'Cadence (required before activation)',
+                    label: 'Schedule',
                     value: routines[index].frequency,
                     values: const {
                       'daily': 'Daily',
@@ -556,17 +653,6 @@ class _RoutineEditors extends StatelessWidget {
                       _replace(index, routines[index].copyWith(status: status));
                     },
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        final updated = [...routines]..removeAt(index);
-                        onChanged(updated);
-                      },
-                      icon: const Icon(AppIcons.deleteOutline),
-                      label: const Text('Remove from setup'),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -620,7 +706,7 @@ class _StudyFocusEditor extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           title: const Text('Use a study rhythm'),
           subtitle: const Text(
-            'New study plans can reserve a full recovery buffer after each focus block.',
+            'New study plans can reserve recovery time after each focus block.',
           ),
           value: value != null,
           onChanged: (enabled) {
@@ -634,6 +720,7 @@ class _StudyFocusEditor extends StatelessWidget {
               final fields = [
                 DropdownButtonFormField<int>(
                   key: const ValueKey('study-focus-minutes'),
+                  isExpanded: true,
                   initialValue: value.focusMinutes,
                   decoration: const InputDecoration(
                     labelText: 'Focus length',
@@ -643,7 +730,7 @@ class _StudyFocusEditor extends StatelessWidget {
                     for (var minutes = 25; minutes <= 180; minutes += 5)
                       DropdownMenuItem(
                         value: minutes,
-                        child: Text('$minutes minutes'),
+                        child: Text('$minutes min'),
                       ),
                   ],
                   onChanged: (minutes) {
@@ -654,6 +741,7 @@ class _StudyFocusEditor extends StatelessWidget {
                 ),
                 DropdownButtonFormField<int>(
                   key: const ValueKey('study-recovery-minutes'),
+                  isExpanded: true,
                   initialValue: value.recoveryMinutes,
                   decoration: const InputDecoration(
                     labelText: 'Recovery length',
@@ -663,7 +751,7 @@ class _StudyFocusEditor extends StatelessWidget {
                     for (var minutes = 5; minutes <= 60; minutes += 5)
                       DropdownMenuItem(
                         value: minutes,
-                        child: Text('$minutes minutes'),
+                        child: Text('$minutes min'),
                       ),
                   ],
                   onChanged: (minutes) {
@@ -673,7 +761,7 @@ class _StudyFocusEditor extends StatelessWidget {
                   },
                 ),
               ];
-              if (constraints.maxWidth < 560) {
+              if (constraints.maxWidth < 300 || MediaQuery.textScalerOf(context).scale(16) > 20) {
                 return Column(
                   children: [
                     fields.first,
@@ -699,7 +787,7 @@ class _StudyFocusEditor extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'This checklist appears before a focus session. Ready and “not needed today” choices stay on this device only for that start and are never saved or scored.',
+            'Shown before Focus. Ready / not needed choices stay on this device for that start only; never saved or scored.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: _SetupColors.muted(context),
                 ),
@@ -708,9 +796,11 @@ class _StudyFocusEditor extends StatelessWidget {
           for (var index = 0; index < value.preparationItems.length; index++)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _EditorCard(
+              child: AppSurface(
+                variant: AppSurfaceVariant.plain,
+                padding: const EdgeInsets.all(AppSpacing.sm),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
                       child: TextFormField(
@@ -721,6 +811,7 @@ class _StudyFocusEditor extends StatelessWidget {
                         maxLength: 120,
                         decoration: const InputDecoration(
                           labelText: 'Preparation item',
+                          counterText: '',
                         ),
                         onChanged: (label) {
                           _replaceItem(
@@ -733,53 +824,55 @@ class _StudyFocusEditor extends StatelessWidget {
                         },
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Column(
-                      children: [
-                        Switch.adaptive(
+                    Tooltip(
+                      message: 'Include in start ritual',
+                      child: SizedBox(
+                        width: 44,
+                      child: Checkbox(
+                          key: ValueKey('study-ritual-active-${value.preparationItems[index].key}'),
+                          semanticLabel: 'Include ${value.preparationItems[index].label} in start ritual',
                           value: value.preparationItems[index].active,
                           onChanged: (active) {
                             _replaceItem(
                               value,
                               index,
                               value.preparationItems[index].copyWith(
-                                active: active,
+                                active: active!,
                               ),
                             );
                           },
                         ),
-                        Wrap(
-                          spacing: 0,
-                          children: [
-                            IconButton(
-                              tooltip: 'Move up',
-                              onPressed: index == 0
-                                  ? null
-                                  : () => _moveItem(value, index, index - 1),
-                              icon: const Icon(AppIcons.arrowUpward),
-                            ),
-                            IconButton(
-                              tooltip: 'Move down',
-                              onPressed: index ==
-                                      value.preparationItems.length - 1
-                                  ? null
-                                  : () => _moveItem(value, index, index + 1),
-                              icon: const Icon(AppIcons.arrowDownward),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove preparation item',
-                              onPressed: () {
-                                final items = [...value.preparationItems]
-                                  ..removeAt(index);
-                                onChanged(
-                                  value.copyWith(preparationItems: items),
-                                );
-                              },
-                              icon: const Icon(AppIcons.deleteOutline),
-                            ),
-                          ],
-                        ),
-                      ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Move down',
+                      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      iconSize: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                      onPressed: index == value.preparationItems.length - 1 ? null : () => _moveItem(value, index, index + 1),
+                      icon: const Icon(AppIcons.arrowDownward),
+                    ),
+                    IconButton(
+                      tooltip: 'Move up',
+                      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      iconSize: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                      onPressed: index == 0 ? null : () => _moveItem(value, index, index - 1),
+                      icon: const Icon(AppIcons.arrowUpward),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove preparation item',
+                      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      iconSize: 20,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                      onPressed: () {
+                        final items = [...value.preparationItems]..removeAt(index);
+                        onChanged(value.copyWith(preparationItems: items));
+                      },
+                      icon: const Icon(AppIcons.deleteOutline),
                     ),
                   ],
                 ),
@@ -852,7 +945,7 @@ class _StudySemesterEditor extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           title: const Text('Track semester dates'),
           subtitle: const Text(
-            'Course selection stays a reminder in Planner. It never creates tasks, changes a calendar, or sends a notification.',
+            'Planner reminder only: no automatic tasks, calendar changes or notifications.',
           ),
           value: value != null,
           onChanged: (enabled) {
@@ -876,7 +969,7 @@ class _StudySemesterEditor extends StatelessWidget {
                   key: const ValueKey('study-current-semester-name'),
                   initialValue: value.currentSemester.name,
                   maxLength: 120,
-                  decoration: const InputDecoration(labelText: 'Name'),
+                  decoration: const InputDecoration(labelText: 'Name', counterText: ''),
                   onChanged: (name) {
                     onChanged(
                       value.copyWith(
@@ -913,7 +1006,7 @@ class _StudySemesterEditor extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Only newly added fixed commitments are prefilled with these dates. Existing commitments are never changed.',
+                  'Prefills dates for new commitments only. Existing ones stay unchanged.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: _SetupColors.muted(context),
                       ),
@@ -935,7 +1028,7 @@ class _StudySemesterEditor extends StatelessWidget {
                   key: const ValueKey('study-next-semester-name'),
                   initialValue: value.nextSemester.name,
                   maxLength: 120,
-                  decoration: const InputDecoration(labelText: 'Name'),
+                  decoration: const InputDecoration(labelText: 'Name', counterText: ''),
                   onChanged: (name) {
                     onChanged(
                       value.copyWith(
@@ -1004,7 +1097,7 @@ class _StudySemesterEditor extends StatelessWidget {
                 TextFormField(
                   key: const ValueKey('study-course-names'),
                   initialValue: value.nextSemester.courseNames.join('\n'),
-                  minLines: 3,
+                  minLines: 2,
                   maxLines: 12,
                   decoration: const InputDecoration(
                     labelText: 'Courses optional',
@@ -1072,27 +1165,38 @@ class _StudyDateButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        OutlinedButton.icon(
-          key: startKey,
-          onPressed: () => _pick(context, start ?? end, onStartChanged),
-          icon: const Icon(AppIcons.dateRangeOutlined),
-          label: Text(
-            start == null ? startLabel : '$startLabel ${_dateLabel(start!)}',
-          ),
-        ),
-        OutlinedButton.icon(
-          key: endKey,
-          onPressed: () => _pick(context, end ?? start, onEndChanged),
-          icon: const Icon(AppIcons.eventAvailableOutlined),
-          label: Text(
-            end == null ? endLabel : '$endLabel ${_dateLabel(end!)}',
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sideBySide = constraints.maxWidth >= 260 &&
+            MediaQuery.textScalerOf(context).scale(16) <= 20;
+        final width = sideBySide
+            ? (constraints.maxWidth - AppSpacing.sm) / 2
+            : constraints.maxWidth;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final (key, label, date, pick) in [
+              (startKey, startLabel, start, () => _pick(context, start ?? end, onStartChanged)),
+              (endKey, endLabel, end, () => _pick(context, end ?? start, onEndChanged)),
+            ])
+              SizedBox(
+                width: width,
+                child: OutlinedButton(
+                  key: key,
+                  onPressed: pick,
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(AppSpacing.sm)),
+                  child: Column(
+                    children: [
+                      Text(label, style: Theme.of(context).textTheme.labelSmall),
+                      Text(date == null ? '—' : _dateLabel(date)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -1131,8 +1235,9 @@ class _CommitmentEditors extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Add the weekly times when planning must stay free. Semester dates are optional; without them, a block repeats until you archive it.',
+        Text(
+          'Keep these weekly times free from planned work. Without semester dates, they repeat until archived.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: _SetupColors.muted(context)),
         ),
         const SizedBox(height: AppSpacing.md),
         for (var index = 0; index < commitments.length; index++)
@@ -1141,7 +1246,11 @@ class _CommitmentEditors extends StatelessWidget {
             child: _EditorCard(
               child: Column(
                 children: [
-                  TextFormField(
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: TextFormField(
                     key: ValueKey(
                       'commitment-title-${commitments[index].key}',
                     ),
@@ -1153,6 +1262,45 @@ class _CommitmentEditors extends StatelessWidget {
                         commitments[index].copyWith(title: value),
                       );
                     },
+                  ),
+                      ),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 0,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      IconButton(
+                        tooltip: 'Duplicate for another day',
+                        style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        key: ValueKey(
+                          'commitment-duplicate-${commitments[index].key}',
+                        ),
+                        onPressed: commitments.length >= 10
+                            ? null
+                            : () {
+                                final updated = [...commitments]..insert(
+                                    index + 1,
+                                    commitments[index].copyWith(
+                                      key: generateSetupUuid(),
+                                      weekday: null,
+                                    ),
+                                  );
+                                onChanged(updated);
+                              },
+                        icon: const Icon(AppIcons.copyOutlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove from setup',
+                        style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        onPressed: () {
+                          final updated = [...commitments]..removeAt(index);
+                          onChanged(updated);
+                        },
+                        icon: const Icon(AppIcons.deleteOutline),
+                      ),
+                    ],
+                  ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.md),
                   TextFormField(
@@ -1200,7 +1348,9 @@ class _CommitmentEditors extends StatelessWidget {
                           ),
                           initialValue: commitments[index].startsAt,
                           decoration: const InputDecoration(
-                            labelText: 'Starts (HH:mm)',
+                            labelText: 'Starts',
+                            hintText: 'HH:mm',
+                            floatingLabelBehavior: FloatingLabelBehavior.always,
                           ),
                           onChanged: (value) {
                             _replace(
@@ -1218,7 +1368,9 @@ class _CommitmentEditors extends StatelessWidget {
                           ),
                           initialValue: commitments[index].endsAt,
                           decoration: const InputDecoration(
-                            labelText: 'Ends (HH:mm)',
+                            labelText: 'Ends',
+                            hintText: 'HH:mm',
+                            floatingLabelBehavior: FloatingLabelBehavior.always,
                           ),
                           onChanged: (value) {
                             _replace(
@@ -1312,40 +1464,6 @@ class _CommitmentEditors extends StatelessWidget {
                       );
                     },
                   ),
-                  Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      TextButton.icon(
-                        key: ValueKey(
-                          'commitment-duplicate-${commitments[index].key}',
-                        ),
-                        onPressed: commitments.length >= 10
-                            ? null
-                            : () {
-                                final updated = [...commitments]..insert(
-                                    index + 1,
-                                    commitments[index].copyWith(
-                                      key: generateSetupUuid(),
-                                      weekday: null,
-                                    ),
-                                  );
-                                onChanged(updated);
-                              },
-                        icon: const Icon(AppIcons.copyOutlined),
-                        label: const Text('Duplicate for another day'),
-                      ),
-                      TextButton.icon(
-                        onPressed: () {
-                          final updated = [...commitments]..removeAt(index);
-                          onChanged(updated);
-                        },
-                        icon: const Icon(AppIcons.deleteOutline),
-                        label: const Text('Remove from setup'),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -1420,118 +1538,51 @@ class _CommitmentEditors extends StatelessWidget {
   }
 }
 
-class _SetupReviewSection extends StatelessWidget {
-  const _SetupReviewSection({required this.draft});
-
-  final IntakeResponseDraft draft;
-
-  @override
-  Widget build(BuildContext context) {
-    final routines =
-        draft.routines.where((routine) => routine.title.trim().isNotEmpty);
-    final commitments = draft.fixedCommitments
-        .where((commitment) => commitment.title.trim().isNotEmpty);
-    return _SetupSurface(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Review setup-created commitments',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Status changes above are saved as the complete desired setup state. Other manually created records are not included.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: _SetupColors.muted(context),
-                ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          if (routines.isEmpty && commitments.isEmpty)
-            const Text('No optional setup commitments.')
-          else ...[
-            for (final routine in routines)
-              _ReviewRow(
-                icon: AppIcons.repeat,
-                title: routine.title,
-                status: routine.status == IntakeRoutineStatus.candidate
-                    ? 'Candidate · not active'
-                    : _statusLabel(routine.status.name),
-              ),
-            for (final commitment in commitments)
-              _ReviewRow(
-                icon: AppIcons.schedule,
-                title: commitment.title,
-                status: _commitmentReviewStatus(commitment),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewRow extends StatelessWidget {
-  const _ReviewRow({
-    required this.icon,
-    required this.title,
-    required this.status,
-  });
-
-  final IconData icon;
-  final String title;
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text(title)),
-          Text(status, style: Theme.of(context).textTheme.labelMedium),
-        ],
-      ),
-    );
-  }
-}
 
 class _OptionalSetupSection extends StatelessWidget {
   const _OptionalSetupSection({
     super.key,
     required this.title,
+    required this.icon,
     required this.subtitle,
     required this.initiallyExpanded,
     required this.children,
   });
 
   final String title;
+  final IconData icon;
   final String subtitle;
   final bool initiallyExpanded;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: _SetupColors.panel(context),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-      ),
-      child: ExpansionTile(
+    final largeText = MediaQuery.textScalerOf(context).scale(16) > 24;
+    return ExpansionTile(
         initiallyExpanded: initiallyExpanded,
-        title: Text(title),
-        subtitle: Text(subtitle),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.all(AppSpacing.md),
+        leading: largeText
+            ? null
+            : ExcludeSemantics(child: AppIconBadge(icon: icon)),
+        title: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs),
+          child: Text(
+            subtitle,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: _SetupColors.muted(context)),
+          ),
+        ),
         childrenPadding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
+          AppSpacing.md,
           0,
-          AppSpacing.lg,
-          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.md,
         ),
         children: children,
-      ),
     );
   }
 }
@@ -1542,28 +1593,34 @@ class _NullableSelectField<T> extends StatelessWidget {
     required this.value,
     required this.values,
     required this.onChanged,
+    this.icon,
   });
 
   final String label;
   final T? value;
   final Map<T, String> values;
   final ValueChanged<T?> onChanged;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final hasUnsupportedValue = value != null && !values.containsKey(value);
     return InputDecorator(
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(
+        labelText: label,
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+        floatingLabelBehavior: icon == null
+            ? null
+            : FloatingLabelBehavior.always,
+        prefixIcon: icon == null ? null : Icon(icon),
+      ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
           isExpanded: true,
           hint: const Text('Select'),
           items: [
-            DropdownMenuItem<T>(
-              value: null,
-              child: Text('Not set'),
-            ),
+            DropdownMenuItem<T>(value: null, child: Text('—')),
             if (hasUnsupportedValue)
               DropdownMenuItem<T>(
                 value: value as T,
@@ -1599,7 +1656,10 @@ class _EnumSelectField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InputDecorator(
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(
+        labelText: label,
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+      ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
@@ -1631,7 +1691,7 @@ class _EditorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppSurface(
-      variant: AppSurfaceVariant.subtle,
+      variant: AppSurfaceVariant.plain,
       padding: const EdgeInsets.all(AppSpacing.md),
       child: child,
     );
@@ -1639,16 +1699,28 @@ class _EditorCard extends StatelessWidget {
 }
 
 class _SetupSurface extends StatelessWidget {
-  const _SetupSurface({required this.child});
+  const _SetupSurface({
+    required this.child,
+    this.padding = const EdgeInsets.all(AppSpacing.md),
+  });
 
   final Widget child;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
-    return AppSurface(
-      variant: AppSurfaceVariant.raised,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: child,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: context.visualTokens.outlineSoft),
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+      ),
+      position: DecorationPosition.foreground,
+      child: AppSurface(
+        variant: AppSurfaceVariant.subtle,
+        radius: AppRadii.xl,
+        padding: padding,
+        child: child,
+      ),
     );
   }
 }
@@ -1829,22 +1901,9 @@ String _statusLabel(String value) {
 
 String _dateLabel(DateTime value) => DateFormat.yMMMd().format(value);
 
-String _commitmentReviewStatus(IntakeCommitmentDraft commitment) {
-  final status = _statusLabel(commitment.status.name);
-  final validFrom = commitment.validFrom;
-  final validUntil = commitment.validUntil;
-  if (validFrom == null && validUntil == null) return status;
-  if (validFrom != null && validUntil != null) {
-    return '$status · ${_dateLabel(validFrom)}–${_dateLabel(validUntil)}';
-  }
-  if (validFrom != null) return '$status · from ${_dateLabel(validFrom)}';
-  return '$status · until ${_dateLabel(validUntil!)}';
-}
 
 class _SetupColors {
   const _SetupColors._();
-
-  static Color panel(BuildContext context) => context.visualTokens.surface;
 
   static Color muted(BuildContext context) =>
       context.visualTokens.textSecondary;

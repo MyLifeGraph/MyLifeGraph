@@ -12,6 +12,13 @@ automatic plan movement.
 
 ## Daily Capture Write Authority
 
+The optional Skillset namespace is additive to V5 branch JSON. The current RPC
+preserves saved `skillset` when an older writer omits that key; a present map
+replaces it, with explicit null answers representing clears. There is no new
+direct client write, owner identity, lock, grant, retry or projection path.
+Apply the additive migration before activating an API advertising this support;
+clients hide new questions until that capability is present.
+
 Authenticated Morning and Evening writes use:
 
 ```text
