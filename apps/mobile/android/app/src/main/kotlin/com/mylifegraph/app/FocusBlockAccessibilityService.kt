@@ -40,7 +40,15 @@ class FocusBlockAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        lastForegroundPackage = event.packageName?.toString()
+        val foregroundPackage = event.packageName?.toString()
+        // Our overlay emits window events too. Keep the underlying package;
+        // real entry into MyLifeGraph is reported by MainActivity.onResume.
+        if (!FocusProtectionDecision.ignoreForegroundEvent(
+                foregroundPackage, packageName, overlay != null,
+            )
+        ) {
+            lastForegroundPackage = foregroundPackage
+        }
         refreshOverlay()
     }
 
@@ -286,6 +294,13 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     companion object {
         private const val HOLD_DURATION_MS = 5_000L
         private var runningService: WeakReference<FocusBlockAccessibilityService>? = null
+
+        fun onAppResumed(context: Context) {
+            runningService?.get()?.let { service ->
+                service.lastForegroundPackage = context.packageName
+                service.refreshOverlay()
+            }
+        }
 
         fun refreshOverlayIfRunning(context: Context) {
             // The context parameter keeps callers explicit about process locality.

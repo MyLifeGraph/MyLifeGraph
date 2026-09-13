@@ -203,6 +203,11 @@ selected signal. Normalization and evidence-timing explanations remain visible.
 
 ### Advanced Skillset display
 
+The shared Advanced tab strip shows edge chevrons only where more tabs are
+offscreen. They scroll the strip on desktop or mobile without changing the
+selected pane or filters; touch scrolling remains available.
+Only visible chevrons reserve space; tabs use the full edge when its chevron is absent.
+
 Both viewport layouts use Compare, Top patterns, Trend overlay, Skillset,
 Matrix, then Discovered tabs. Skillset remains selectable with sparse data.
 Compare, Top patterns, Trend overlay, Skillset and Matrix expose the shared

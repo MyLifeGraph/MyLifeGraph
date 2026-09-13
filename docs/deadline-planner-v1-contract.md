@@ -575,6 +575,11 @@ backend anti-replay ledgers and export no request fingerprint.
 
 ## Flutter Surface
 
+The saved replan review uses concise instructions and wrapping value groups for
+preferred Focus blocks, the plan's daily maximum and clear days. Recovery and
+first-block reservation, planning start, imported busy-time use, account budget,
+Exam health, source warnings and explicit preview/confirmation rules stay visible.
+
 Active-plan edit/complete/cancel controls share a compact icon-and-label row on
 mobile and desktop. Full-action tooltips, minimum touch targets, disabled guards
 and confirmation dialogs are preserved. Pending confirmation stays separate.

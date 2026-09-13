@@ -543,7 +543,7 @@ void main() {
     expect(find.textContaining('latest safe'), findsWidgets);
 
     await _tapPlanAction(tester, 'Edit plan');
-    expect(find.text('Current saved Exam values'), findsOneWidget);
+    expect(find.text('Saved Exam status'), findsOneWidget);
     expect(find.textContaining('Recommended start:'), findsWidgets);
 
     await _tap(tester, find.text('Change values'));
@@ -1318,7 +1318,7 @@ void main() {
 
     await _tapPlanAction(tester, 'Edit plan');
     expect(
-      find.textContaining('imported source changed or became unavailable'),
+      find.textContaining('Imported source changed or unavailable'),
       findsOneWidget,
     );
     final quickPreview = tester.widget<FilledButton>(
@@ -1591,7 +1591,7 @@ void main() {
 
     expect(find.text('Replan remaining preparation'), findsOneWidget);
     expect(
-      find.textContaining('missed, uncredited preparation'),
+      find.textContaining('Missed preparation remains'),
       findsOneWidget,
     );
     expect(
@@ -1621,6 +1621,10 @@ void main() {
     await _tapPlanAction(tester, 'Edit plan');
     expect(find.text('Replan remaining preparation'), findsOneWidget);
     expect(find.textContaining('Plan from Jul 22, 2026'), findsOneWidget);
+    expect(find.text('Preferred blocks'), findsOneWidget);
+    expect(find.text('Daily maximum'), findsOneWidget);
+    expect(find.text(revision.bufferDays == 1 ? 'Clear day' : 'Clear days'), findsOneWidget);
+    expect(find.textContaining('Current reservations stay active until you confirm'), findsOneWidget);
     expect(find.textContaining('fixed planning rules'), findsNothing);
     await tester.tap(
       find.byKey(
@@ -1681,7 +1685,7 @@ void main() {
 
     await _tapPlanAction(tester, 'Edit plan');
     expect(
-      find.textContaining('saved finish-by time has passed'),
+      find.textContaining('Finish-by time has passed'),
       findsOneWidget,
     );
     final quickPreview = tester.widget<FilledButton>(

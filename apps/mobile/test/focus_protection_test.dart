@@ -8,6 +8,41 @@ import 'package:my_life_graph/features/focus_protection/domain/focus_protection.
 import 'package:my_life_graph/features/focus_protection/presentation/pages/focus_protection_settings_page.dart';
 
 void main() {
+  testWidgets('app list collapses from both ends and bulk selection preserves manual choices', (tester) async {
+    final gateway = _FakeGateway(_status())..apps = const [
+      InstalledLaunchableApp(packageName: 'video.app', label: 'Video'),
+      InstalledLaunchableApp(packageName: 'com.instagram.android', label: 'Instagram'),
+      InstalledLaunchableApp(packageName: 'com.twitter.android', label: 'X'),
+      InstalledLaunchableApp(packageName: 'unrelated.app', label: 'Instagram lookalike'),
+    ];
+    await _pumpSettings(tester, gateway);
+    Future<void> tapVisible(Finder finder) async {
+      if (finder.evaluate().isEmpty) {
+        await tester.scrollUntilVisible(finder, 300,
+            scrollable: find.byType(Scrollable).first);
+      }
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+    }
+    await tapVisible(find.text('Choose apps'));
+    await tapVisible(find.text('Agree and show apps'));
+    await tapVisible(find.byKey(const ValueKey('focus-app-video.app')));
+    await tapVisible(find.text('Block social media'));
+    expect(gateway.status.configuration.selectedPackages,
+        {'video.app', 'com.instagram.android', 'com.twitter.android'});
+    await tapVisible(find.byKey(const ValueKey('collapse-focus-apps-bottom')));
+    expect(find.byType(CheckboxListTile), findsNothing);
+    await tapVisible(find.text('Choose apps'));
+    expect(gateway.listCalls, 1);
+    await tapVisible(find.text('Deselect all'));
+    expect(gateway.status.configuration.selectedPackages, isEmpty);
+    await tapVisible(find.byKey(const ValueKey('collapse-focus-apps-top')));
+    expect(find.byType(CheckboxListTile), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   test('typed status parses all supported warnings and lease state', () {
     final status = FocusProtectionStatus.fromMap({
       'platformSupported': true,
@@ -220,6 +255,9 @@ class _FakeGateway implements FocusProtectionGateway {
   FocusProtectionStatus status;
   int listCalls = 0;
   final savedConfigurations = <FocusProtectionConfiguration>[];
+  List<InstalledLaunchableApp> apps = const [
+    InstalledLaunchableApp(packageName: 'video.app', label: 'Video'),
+  ];
 
   @override
   Future<FocusProtectionStatus> readStatus() async => status;
@@ -227,9 +265,7 @@ class _FakeGateway implements FocusProtectionGateway {
   @override
   Future<List<InstalledLaunchableApp>> listLaunchableApps() async {
     listCalls++;
-    return const [
-      InstalledLaunchableApp(packageName: 'video.app', label: 'Video'),
-    ];
+    return apps;
   }
 
   @override

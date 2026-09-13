@@ -550,7 +550,7 @@ class _TodayProgressCard extends StatelessWidget {
   }
 }
 
-class _TodayAgenda extends StatelessWidget {
+class _TodayAgenda extends StatefulWidget {
   const _TodayAgenda({
     required this.snapshot,
     required this.canExecute,
@@ -564,7 +564,33 @@ class _TodayAgenda extends StatelessWidget {
   final ValueChanged<String> onStartPreparationFocus;
 
   @override
+  State<_TodayAgenda> createState() => _TodayAgendaState();
+}
+
+class _TodayAgendaState extends State<_TodayAgenda> {
+  bool _showAll = false;
+  bool _showCompleted = false;
+
+  Widget _item(TodayTimelineItem item) => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: _AgendaItem(
+          item: item,
+          canExecute: widget.canExecute,
+          onOpenPreparationPlan: widget.onOpenPreparationPlan,
+          onStartPreparationFocus: widget.onStartPreparationFocus,
+        ),
+      );
+
+  @override
   Widget build(BuildContext context) {
+    final snapshot = widget.snapshot;
+    // Elapsed calendar entries and abandoned Focus are not completions.
+    final completed = snapshot.timeline
+        .where((item) => const {'completed', 'done'}.contains(item.state))
+        .toList(growable: false);
+    final active = snapshot.timeline
+        .where((item) => !const {'completed', 'done'}.contains(item.state))
+        .toList(growable: false);
     final sourceErrors = snapshot.sourceStates?.timelineStates
             .where((state) => state.status == TodaySourceStatus.unavailable)
             .map((state) => state.message)
@@ -595,18 +621,22 @@ class _TodayAgenda extends StatelessWidget {
             icon: AppIcons.calendarTodayOutlined,
             message: 'Nothing timed on the calendar today.',
           )
-        else
-          ...snapshot.timeline.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _AgendaItem(
-                item: item,
-                canExecute: canExecute,
-                onOpenPreparationPlan: onOpenPreparationPlan,
-                onStartPreparationFocus: onStartPreparationFocus,
-              ),
+        else ...[
+          ...(_showAll ? active : active.take(3)).map(_item),
+          if (active.length > 3)
+            TextButton.icon(
+              onPressed: () => setState(() => _showAll = !_showAll),
+              icon: Icon(_showAll ? AppIcons.expandLess : AppIcons.expandMore),
+              label: Text(_showAll ? 'Show less' : 'Show all (${active.length})'),
             ),
-          ),
+          if (completed.isNotEmpty)
+            DashboardInlineExpansionCard(
+              title: 'Completed (${completed.length})',
+              expanded: _showCompleted,
+              onToggle: () => setState(() => _showCompleted = !_showCompleted),
+              child: Column(children: completed.map(_item).toList()),
+            ),
+        ],
       ],
     );
   }
@@ -727,7 +757,7 @@ class _AgendaItem extends StatelessWidget {
                 if ((item.kind == TodayTimelineKind.preparation &&
                         item.planId != null) ||
                     (canExecute && item.kind == TodayTimelineKind.taskBlock))
-                  Column(
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (item.kind == TodayTimelineKind.preparation &&

@@ -48,6 +48,30 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Authorized Student Cloud data transfer — 2026-09-14
+
+- The preserved local Student snapshot was imported only into the explicitly
+  authorized newly created Student Cloud test account, not the Google account.
+- 361 source App rows across 22 tables are represented with fresh/remapped IDs;
+  two pre-existing Coach messages remain (363 resulting rows in those tables).
+- Exact table-column/constraint/trigger compatibility, a rolled-back trial with
+  unchanged-target verification, full transactional content checks and post-commit
+  counts/identity/non-import inventory checks passed. Existing accounting and
+  consent were preserved; no schema, grants, RLS, runtime or seed guards changed.
+- Private backup/manifest/receipt: `.tools/transfer-student-cloud-20260914/`.
+  Browser login and installed-device acceptance were not part of this transfer.
+
+### Focus Protection overlay and app selection — 2026-09-14
+
+- Focus Protection settings/lifecycle Flutter suites: 17 passing tests; targeted
+  Dart analysis, Docs, Visual and the Android release source gate passed.
+- Regression coverage includes top/bottom collapse, preserving manual selection
+  with the installed-app Social media preset, and clearing all selections.
+- The native own-overlay event filter has a JVM regression test, but the local
+  Gradle run stopped at toolchain initialization with Java 25.0.2; no successful
+  Kotlin/JVM build or installed-device flicker fix is claimed for this checkout.
+  Recheck with the repository's Java 21 toolchain and an updated APK on-device.
+
 ### Check-in inputs independent of Insights filters — 2026-09-13
 
 Task base `f79f7f3aea1e74f4fe80fd88bbf541f7ed8040a8`: Morning motivation and

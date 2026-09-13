@@ -30,6 +30,13 @@ The native configuration and lease use the private SharedPreferences file
 without a Flutter engine. Configuration is locked while an unexpired active
 protection lease exists.
 
+The consent-gated app list can collapse from its top or bottom without losing
+selection. Deselect all clears the local selection. Block social media adds
+installed selectable apps from an explicit package-ID preset (including X,
+Instagram, Facebook, Threads, TikTok, Snapchat, Reddit, Pinterest, LinkedIn and
+YouTube), preserving manual choices. No fuzzy labels, catalog upload, extra
+visibility permission, or active-lease configuration bypass is introduced.
+
 ## Synced Focus Reconciliation
 
 After the manual or scheduled backend `startSession` returns a confirmed row,
@@ -96,6 +103,13 @@ Lifting the original hold never confirms release. Accessibility `ACTION_CLICK`
 starts the same five-second gate and requires a second action after it arms;
 `ACTION_LONG_CLICK` has no shortcut. The screen scrolls, scales text, and
 exposes accessibility descriptions.
+
+While the overlay is visible, window events from MyLifeGraph itself and events
+without a package do not replace the remembered foreground package. The service
+still rechecks the lease on those events. MainActivity reports actual app resume
+directly to dismiss the overlay, while other app/System UI events retain the
+normal allow/block rules. This prevents overlay-generated events from repeatedly
+removing and recreating the block screen without inspecting window content.
 
 ## Notification Silencing
 

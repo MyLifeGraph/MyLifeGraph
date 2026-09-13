@@ -339,9 +339,9 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     final canCreatePreview = sourceCurrent && deadlineFuture;
     final contextCopy = switch (widget.replanContext) {
       _DeadlineReplanContext.workload =>
-        'You opened this from a daily workload that needs review. A fresh preview applies the current account budget again.',
+        'Daily workload needs review. A new preview reapplies your current account budget.',
       _DeadlineReplanContext.missed =>
-        'This plan has missed, uncredited preparation. A fresh preview starts no earlier than today, while completed linked Focus remains counted.',
+        'Missed preparation remains. The preview starts today or later; completed linked Focus still counts.',
       _DeadlineReplanContext.general => null,
     };
 
@@ -356,7 +356,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           ),
           const SizedBox(height: AppSpacing.xs),
           const Text(
-            'Review the saved values below. You only need the full editor when one of them should change.',
+            'Review saved values; use Change values to edit.',
           ),
           if (contextCopy != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -372,7 +372,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           if (revision.kind == DeadlinePlanKind.exam &&
               widget.savedExamHealth != null) ...[
             const SizedBox(height: AppSpacing.md),
-            const Text('Current saved Exam values'),
+            const Text('Saved Exam status'),
             const SizedBox(height: AppSpacing.sm),
             _SavedExamHealthSummary(exam: widget.savedExamHealth!),
           ],
@@ -393,43 +393,49 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            revision.recoveryMinutes > 0
-                ? '${_duration(revision.preferredSessionMinutes)} focus + '
-                    '${_duration(revision.recoveryMinutes)} recovery · '
-                    'reserved through ${DateFormat.Hm().format(_profileLocal(revision.blocks.isEmpty ? revision.deadlineAt : revision.blocks.first.reservedEndsAt))} ${widget.profileTimezone} for the first block'
-                : '${_duration(revision.preferredSessionMinutes)} preferred blocks · '
-                    '${_duration(revision.maxDailyMinutes)} maximum per day · '
-                    '${revision.bufferDays} ${revision.bufferDays == 1 ? 'clear day' : 'clear days'}',
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _ProgressValue(label: 'Preferred blocks', value: _duration(revision.preferredSessionMinutes)),
+              _ProgressValue(label: 'Daily maximum', value: _duration(revision.maxDailyMinutes)),
+              _ProgressValue(label: revision.bufferDays == 1 ? 'Clear day' : 'Clear days', value: '${revision.bufferDays}'),
+            ],
           ),
+          if (revision.recoveryMinutes > 0)
+            Text(
+              '${_duration(revision.recoveryMinutes)} recovery · first block reserved until '
+              '${DateFormat.Hm().format(_profileLocal(revision.blocks.isEmpty ? revision.deadlineAt : revision.blocks.first.reservedEndsAt))} ${widget.profileTimezone}',
+            ),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             'Plan from ${DateFormat.yMMMd().format(_planningStart)} · '
-            '${revision.useCalendarAvailability ? 'use latest imported busy times' : 'do not use imported busy times'}',
+            '${revision.useCalendarAvailability ? 'Latest imported busy times: used' : 'Imported busy times: not used'}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             !widget.accountDailyPreparationBudgetKnown
-                ? 'Your account-wide budget is temporarily unavailable here. Any saved total budget still limits confirmed plans.'
+                ? 'Account daily budget unavailable; any saved limit still applies to confirmed plans.'
                 : widget.accountDailyPreparationBudgetMinutes == null
-                    ? 'No account-wide daily preparation budget is set.'
-                    : 'Current account-wide budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} per day.',
+                    ? 'Account daily budget: not set.'
+                    : 'Account daily budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)}.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           if (!sourceCurrent) ...[
             const SizedBox(height: AppSpacing.md),
             const Text(
-              'The imported source changed or became unavailable. Change values and review the source before creating another preview.',
+              'Imported source changed or unavailable. Change values and review the source before previewing.',
             ),
           ] else if (!deadlineFuture) ...[
             const SizedBox(height: AppSpacing.md),
             const Text(
-              'The saved finish-by time has passed. Change values before creating another preview.',
+              'Finish-by time has passed. Change values before previewing.',
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
           const Text(
-            'Creating a preview stores a staged replacement. Your current reservations stay active until you confirm it. Nothing changes automatically.',
+            'Preview saves a draft replacement. Current reservations stay active until you confirm; no automatic changes.',
           ),
           const AppInfoSectionDisclosure(
             heading: 'How the preview is calculated',

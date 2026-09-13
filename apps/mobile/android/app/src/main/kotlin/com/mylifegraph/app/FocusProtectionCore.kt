@@ -17,6 +17,13 @@ data class LocalFocusLease(
 }
 
 object FocusProtectionDecision {
+    fun ignoreForegroundEvent(
+        eventPackage: String?,
+        ownPackage: String,
+        overlayVisible: Boolean,
+    ): Boolean = eventPackage.isNullOrBlank() ||
+        (overlayVisible && eventPackage == ownPackage)
+
     fun reconcileActivation(
         currentLease: LocalFocusLease?,
         suppressedSessionId: String?,

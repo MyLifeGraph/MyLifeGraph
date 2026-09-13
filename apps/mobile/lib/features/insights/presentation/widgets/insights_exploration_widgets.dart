@@ -1,13 +1,75 @@
 part of '../pages/insights_page.dart';
 
-class _AdvancedPaneTabs extends StatelessWidget {
-  const _AdvancedPaneTabs({
-    required this.selected,
-    required this.onSelected,
-  });
+class _AdvancedPaneTabs extends StatefulWidget {
+  const _AdvancedPaneTabs({required this.selected, required this.onSelected});
 
   final _AdvancedPane selected;
   final ValueChanged<_AdvancedPane> onSelected;
+
+  @override
+  State<_AdvancedPaneTabs> createState() => _AdvancedPaneTabsState();
+}
+
+class _AdvancedPaneTabsState extends State<_AdvancedPaneTabs> {
+  final _scroll = ScrollController();
+  bool _hasBefore = false;
+  bool _hasAfter = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_updateEdges);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateEdges());
+  }
+
+  void _updateEdges() {
+    if (!mounted ||
+        !_scroll.hasClients ||
+        !_scroll.position.hasContentDimensions) {
+      return;
+    }
+    final position = _scroll.position;
+    final fullWidth =
+        position.viewportDimension +
+        (_hasBefore ? 48 : 0) +
+        (_hasAfter ? 48 : 0);
+    final overflows =
+        position.maxScrollExtent + position.viewportDimension > fullWidth + 1;
+    final before = overflows && position.extentBefore > 1;
+    final after = overflows && position.extentAfter > 1;
+    if (before != _hasBefore || after != _hasAfter) {
+      setState(() {
+        _hasBefore = before;
+        _hasAfter = after;
+      });
+    }
+  }
+
+  void _move(double direction) {
+    final fullWidth =
+        _scroll.position.viewportDimension +
+        (_hasBefore ? 48 : 0) +
+        (_hasAfter ? 48 : 0);
+    final target = (_scroll.offset + direction * fullWidth * .65).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _scroll.jumpTo(target);
+    } else {
+      _scroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,26 +85,63 @@ class _AdvancedPaneTabs extends StatelessWidget {
     return Container(
       key: const Key('insights-advanced-pane-tabs'),
       padding: const EdgeInsets.all(4),
+      constraints: const BoxConstraints(minHeight: 56),
       decoration: BoxDecoration(
         color: tokens.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadii.lg),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (var i = 0; i < panes.length; i++) ...[
-              if (i > 0) const SizedBox(width: 4),
-              _AdvancedPaneChip(
-                pane: panes[i].$1,
-                label: panes[i].$2,
-                icon: panes[i].$3,
-                selected: selected == panes[i].$1,
-                onPressed: () => onSelected(panes[i].$1),
+      child: Row(
+        children: [
+          if (_hasBefore)
+            SizedBox(
+              width: 48,
+              child: IconButton(
+                tooltip: 'Previous tabs',
+                onPressed: () => _move(-1),
+                icon: const RotatedBox(
+                  quarterTurns: 2,
+                  child: Icon(AppIcons.chevronRight, size: 20),
+                ),
               ),
-            ],
-          ],
-        ),
+            ),
+          Expanded(
+            child: NotificationListener<ScrollMetricsNotification>(
+              onNotification: (_) {
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => _updateEdges(),
+                );
+                return false;
+              },
+              child: SingleChildScrollView(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < panes.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 4),
+                      _AdvancedPaneChip(
+                        pane: panes[i].$1,
+                        label: panes[i].$2,
+                        icon: panes[i].$3,
+                        selected: widget.selected == panes[i].$1,
+                        onPressed: () => widget.onSelected(panes[i].$1),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_hasAfter)
+            SizedBox(
+              width: 48,
+              child: IconButton(
+                tooltip: 'More tabs',
+                onPressed: () => _move(1),
+                icon: const Icon(AppIcons.chevronRight, size: 20),
+              ),
+            ),
+        ],
       ),
     );
   }

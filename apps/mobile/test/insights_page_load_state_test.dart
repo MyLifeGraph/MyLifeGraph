@@ -48,6 +48,31 @@ void main() {
         await tester.tap(find.text('Advanced').hitTestable());
         await tester.pumpAndSettle();
         final container = ProviderScope.containerOf(tester.element(find.byType(InsightsPage)));
+        final strip = find.byKey(const Key('insights-advanced-pane-tabs'));
+        final stripScroll = find.descendant(of: strip, matching: find.byType(SingleChildScrollView));
+        expect(tester.getTopLeft(stripScroll).dx, tester.getTopLeft(strip).dx + 4);
+        if (width == 390) {
+          expect(find.byTooltip('More tabs'), findsOneWidget);
+          expect(find.byTooltip('Previous tabs'), findsNothing);
+          await tester.tap(find.byTooltip('More tabs'));
+          await tester.pumpAndSettle();
+          expect(find.byTooltip('Previous tabs'), findsOneWidget);
+          expect(tester.getTopLeft(stripScroll).dx,
+              tester.getTopRight(find.byTooltip('Previous tabs')).dx);
+          await tester.tap(find.byTooltip('Previous tabs'));
+          await tester.pumpAndSettle();
+          expect(find.byTooltip('Previous tabs'), findsNothing);
+          expect(tester.getTopLeft(stripScroll).dx, tester.getTopLeft(strip).dx + 4);
+          for (var step = 0; step < 8 && find.byTooltip('More tabs').evaluate().isNotEmpty; step++) {
+            await tester.tap(find.byTooltip('More tabs'));
+            await tester.pumpAndSettle();
+          }
+          expect(find.byTooltip('More tabs'), findsNothing);
+          expect(tester.getTopRight(stripScroll).dx, tester.getTopRight(strip).dx - 4);
+        } else {
+          expect(find.byTooltip('More tabs'), findsNothing);
+          expect(find.byTooltip('Previous tabs'), findsNothing);
+        }
         var selected = 14;
         for (final pane in ['compare', 'topPatterns', 'trend', 'skillset', 'matrix']) {
           final tab = find.byKey(Key('insights-advanced-pane-$pane'));

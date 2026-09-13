@@ -5,6 +5,11 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    override fun onResume() {
+        super.onResume()
+        FocusBlockAccessibilityService.onAppResumed(applicationContext)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val manager = FocusProtectionManager(applicationContext)

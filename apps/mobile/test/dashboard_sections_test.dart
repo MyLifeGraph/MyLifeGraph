@@ -320,6 +320,57 @@ void main() {
     expect(find.text('Independent information.'), findsNothing);
   });
 
+  testWidgets('Today schedule limits active rows and keeps completed actions accessible', (tester) async {
+    tester.view.physicalSize = const Size(390, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    String? openedPlan;
+    String? startedBlock;
+    await _pump(tester, TodayOverviewSections(
+      snapshot: _snapshot(timeline: [
+        for (var i = 0; i < 6; i++)
+          TodayTimelineItem(
+            kind: TodayTimelineKind.preparation, id: 'block-$i',
+            blockId: 'block-$i', planId: 'plan-$i', title: 'Preparation $i',
+            allDay: false, startsAt: DateTime(2026, 7, 31, 9 + i),
+            endsAt: DateTime(2026, 7, 31, 10 + i),
+            state: i == 0 ? 'completed' : 'upcoming', plannedMinutes: 60,
+          ),
+        TodayTimelineItem(kind: TodayTimelineKind.calendarEvent, id: 'past-event',
+          title: 'Elapsed calendar event', allDay: false, state: 'ended'),
+        TodayTimelineItem(kind: TodayTimelineKind.focusSession, id: 'abandoned',
+          title: 'Abandoned Focus', allDay: false, state: 'abandoned'),
+      ]),
+      canExecute: true,
+      actions: TodayOverviewActions(onAddEvening: () {}, onAddMorning: () {},
+        onOpenPreparationPlan: (id) => openedPlan = id,
+        onStartPreparationFocus: (id) => startedBlock = id),
+    ));
+    expect(find.text('Preparation 0'), findsNothing);
+    expect(find.text('Preparation 3'), findsOneWidget);
+    expect(find.text('Preparation 4'), findsNothing);
+    final planIcon = find.byTooltip('Open plan').first;
+    final focusIcon = find.byTooltip('Start focus').first;
+    expect(tester.getCenter(planIcon).dy, tester.getCenter(focusIcon).dy);
+    await tester.tap(focusIcon);
+    expect(startedBlock, 'block-1');
+    await tester.ensureVisible(find.text('Show all (7)'));
+    await tester.tap(find.text('Show all (7)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Preparation 5'), findsOneWidget);
+    expect(find.text('Elapsed calendar event'), findsOneWidget);
+    expect(find.text('Abandoned Focus'), findsOneWidget);
+    await tester.ensureVisible(find.text('Completed (1)'));
+    await tester.tap(find.text('Completed (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Preparation 0'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('Open plan').last);
+    await tester.tap(find.byTooltip('Open plan').last);
+    expect(openedPlan, 'plan-0');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Today summary owns capture, progress, and agenda callbacks',
       (tester) async {
     var morningCalls = 0;

@@ -132,6 +132,11 @@ fixed commitments remain non-executable context.
 Schedule rows keep their category treatment and use compact, labelled icon
 actions on the right for Open plan and Start focus. The time/category column
 leaves space for wrapping titles; action eligibility and destinations are unchanged.
+Open plan and Start focus sit side by side. Initially, three non-completed
+entries are shown, with Show all/Show less for the rest. Completed/done entries
+remain accessible under a separately collapsed Completed section. Both groups
+preserve source order; elapsed Calendar and abandoned Focus are not relabelled
+as completed. This is display grouping only, with no changes to source state.
 
 ## Task And Habit Selection
 

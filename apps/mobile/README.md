@@ -5,6 +5,10 @@ its compact header reduces the gap before Profile. The Focus target dropdown
 has a viewport-bounded scrollable menu so the final option remains reachable.
 These are presentation-only changes. Android Focus Protection remains tied to
 the confirmed Focus start and chosen duration; it is not a separate clock schedule.
+Its app list can collapse from either end, clear all selections, or add an
+installed-only Social media preset while preserving manual choices. All remain
+device-local and locked during an active protection lease. The native overlay
+ignores its own window-event feedback; actual app resume clears it separately.
 Pilot privacy notice is available in hosted Pilot/Staging on Web and Android,
 not in the local Development configuration.
 
@@ -731,7 +735,12 @@ nullable 0–2 choices, enabled only when the backend advertises support (or loc
 demo). Energy replaces Recovery. Learning and Discipline are labelled window
 summaries with a formula disclosure; see the Personal Learning owner.
 
-Today schedule actions use compact Open plan/Start focus icons. Planner's
+Today schedule actions use side-by-side Open plan/Start focus icons. Three
+non-completed entries show initially, with Show all/Show less for longer lists;
+Completed is separately collapsed without hiding its existing actions.
+The replan review keeps all saved values and warnings in shorter copy and value
+groups. Advanced tabs offer overflow-only edge chevrons alongside touch scrolling.
+Planner's
 Exam Outlook expands from its risk/summary into the existing details and
 icon-labelled Review/Replan actions. Coach puts its daily quota beside the
 title and the full-width input above its model/microphone/Send toolbar.

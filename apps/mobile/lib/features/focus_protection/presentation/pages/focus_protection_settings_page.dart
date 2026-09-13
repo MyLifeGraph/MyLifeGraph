@@ -22,6 +22,8 @@ class _FocusProtectionSettingsPageState
     with WidgetsBindingObserver {
   FocusProtectionStatus? _status;
   List<InstalledLaunchableApp>? _apps;
+  bool _appsExpanded = false;
+  final _appsHeadingKey = GlobalKey();
   String _query = '';
   bool _busy = true;
   String? _error;
@@ -191,6 +193,7 @@ class _FocusProtectionSettingsPageState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  key: _appsHeadingKey,
                   children: [
                     Expanded(
                       child: Text(
@@ -206,15 +209,41 @@ class _FocusProtectionSettingsPageState
                   'Only package names are saved on this device. The app list and your choices are never uploaded.',
                 ),
                 const SizedBox(height: AppSpacing.md),
-                if (_apps == null)
+                if (!_appsExpanded)
                   OutlinedButton(
                     key: const ValueKey('load-focus-protection-apps'),
                     onPressed: controlsEnabled && enabled
-                        ? _loadAppsWithDisclosure
+                        ? () {
+                            if (_apps == null) {
+                              _loadAppsWithDisclosure();
+                            } else {
+                              setState(() => _appsExpanded = true);
+                            }
+                          }
                         : null,
                     child: const Text('Choose apps'),
                   )
                 else ...[
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
+                      TextButton.icon(
+                        key: const ValueKey('collapse-focus-apps-top'),
+                        onPressed: _collapseApps,
+                        icon: const Icon(AppIcons.expandLess),
+                        label: const Text('Hide apps'),
+                      ),
+                      TextButton(
+                        onPressed: controlsEnabled && enabled && configuration.selectedPackages.isNotEmpty
+                            ? () => _save(configuration.copyWith(selectedPackages: {})) : null,
+                        child: const Text('Deselect all'),
+                      ),
+                      TextButton(
+                        onPressed: controlsEnabled && enabled ? () => _selectSocialApps(configuration) : null,
+                        child: const Text('Block social media'),
+                      ),
+                    ],
+                  ),
                   TextField(
                     enabled: controlsEnabled && enabled,
                     decoration: const InputDecoration(
@@ -247,6 +276,12 @@ class _FocusProtectionSettingsPageState
                         subtitle: Text(app.packageName),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
+                  TextButton.icon(
+                    key: const ValueKey('collapse-focus-apps-bottom'),
+                    onPressed: _collapseApps,
+                    icon: const Icon(AppIcons.expandLess),
+                    label: const Text('Hide apps'),
+                  ),
                 ],
               ],
             ),
@@ -346,7 +381,10 @@ class _FocusProtectionSettingsPageState
       final apps =
           await ref.read(focusProtectionGatewayProvider).listLaunchableApps();
       if (!isCurrent()) return;
-      setState(() => _apps = apps);
+      setState(() {
+        _apps = apps;
+        _appsExpanded = true;
+      });
     } catch (_) {
       if (isCurrent()) {
         _showMessage('Could not load launchable apps on this device.');
@@ -454,6 +492,35 @@ class _FocusProtectionSettingsPageState
     final packages = configuration.selectedPackages.toSet();
     selected ? packages.add(packageName) : packages.remove(packageName);
     _save(configuration.copyWith(selectedPackages: packages));
+  }
+
+  void _collapseApps() {
+    setState(() => _appsExpanded = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final headingContext = _appsHeadingKey.currentContext;
+      if (mounted && headingContext != null) {
+        Scrollable.ensureVisible(headingContext);
+      }
+    });
+  }
+
+  void _selectSocialApps(FocusProtectionConfiguration configuration) {
+    // Exact package IDs, intersected with the native, essential-app-safe catalog.
+    const socialPackages = {
+      'com.instagram.android', 'com.twitter.android',
+      'com.facebook.katana', 'com.facebook.lite', 'com.instagram.barcelona',
+      'com.zhiliaoapp.musically', 'com.zhiliaoapp.musically.go',
+      'com.ss.android.ugc.trill', 'com.snapchat.android',
+      'com.reddit.frontpage', 'com.pinterest', 'com.linkedin.android',
+      'com.google.android.youtube',
+    };
+    final matches = (_apps ?? const <InstalledLaunchableApp>[])
+        .map((app) => app.packageName).where(socialPackages.contains).toSet();
+    if (matches.isEmpty) {
+      _showMessage('No matching social media apps installed. You can still choose apps manually.');
+      return;
+    }
+    _save(configuration.copyWith(selectedPackages: {...configuration.selectedPackages, ...matches}));
   }
 
   void _showMessage(String message) {

@@ -8,6 +8,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FocusProtectionCoreTest {
+    @Test
+    fun ownOverlayEventsDoNotReplaceTheBlockedForegroundPackage() {
+        var foreground = "com.instagram.android"
+        for (eventPackage in listOf("com.mylifegraph.app", null, "", "com.instagram.android")) {
+            if (!FocusProtectionDecision.ignoreForegroundEvent(eventPackage, "com.mylifegraph.app", true)) {
+                foreground = eventPackage!!
+            }
+            assertEquals("com.instagram.android", foreground)
+        }
+        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("com.android.settings", "com.mylifegraph.app", true))
+        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("launcher.app", "com.mylifegraph.app", true))
+        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("com.mylifegraph.app", "com.mylifegraph.app", false))
+    }
+
     private val lease = LocalFocusLease(
         sessionId = "session-1",
         startedAtEpochMs = 1_000L,
