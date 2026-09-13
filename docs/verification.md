@@ -48,6 +48,60 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Matthias development backup and disk recovery — 2026-09-13
+
+User-authorized cleanup was limited to Unix user `mylifegraph-matthias` (UID
+1003), Docker socket `unix:///run/user/1003/docker.sock`, project `mylifegraph`.
+The existing `npm run db:backup:local` helpers were checksum-matched to this
+checkout and successfully dump/restore-verified the development database in a
+separate RAM-only container. The archive contains four Auth users/four profiles,
+migration head `20260820200000`; its SHA-256 is
+`03d832b5acdb9a2d28d47ad95371df87f7b94c31671f64f7dd4fe9ceb4644733`.
+The user-requested Desktop folder `MyLifeGraph-Dev-Backup-2026-09-13` holds the
+verified downloaded archive, checksum, metadata, inventories, existing VPS
+source patch and recovery README. These private files are not Git inputs.
+
+After Desktop checksum verification, `supabase stop --project-id mylifegraph`
+(without `--no-backup`/`--all`) removed only those development containers.
+Only their twelve recorded image tags were removed, without force or prune.
+Both `supabase_db_mylifegraph` and `supabase_storage_mylifegraph` volumes retain
+the same identities, creation times and mountpoints. Physical Storage files are
+retained in their volume, not claimed as part of the database dump. The four
+existing uncommitted VPS Dart changes remain untouched and are additionally
+preserved as a patch. The pinned CLI and SDKs remain available for reactivation.
+
+Free disk increased from 12,526,076 to 20,726,728 KiB (about 7.82 GiB reclaimed).
+Production API/Coach/Caddy process IDs remained unchanged; API liveness and
+readiness returned HTTP 200, and the laptop frontend returned HTTP 200.
+The maintainer check now advances past disk preflight but fails its strict
+`health_check.py` comparison: the unchanged RC4 manifest expects 69 migrations,
+whereas the ready database reports the previously applied additive 70th migration.
+The same mismatch was reproduced read-only; no production helper was changed.
+No backend release or main update was performed. The existing protected-main RC
+requirement still prevents publishing this branch directly as production.
+
+### Production Skillset database rollout — 2026-09-13
+
+Following renewed explicit production authorization, the single reviewed
+`20260913113853_optional_skillset_capture.sql` migration was applied to Pilot
+`oscrunlndfrecjilojja` with `--skip-vault`, without seeds or role configuration.
+Post-apply SQL confirmed 70 migrations, head `20260913113853`, the new Capture
+function body (`md5(prosrc) = c8be8c56ca1a70820c6c7d4b280c0dac`), unchanged
+`postgres` ownership, fixed search path and service-role-only execution.
+The previous body fingerprint was `294c9ac67008f2b04242f6db72f25436` and matches
+the immutable preceding Capture migration; no history was rewritten.
+The running VPS API returned HTTP 200/`ready` with the new full migration
+identity. This proves compatibility with its older release prefix, not a new
+API deployment or an authenticated new-field round trip.
+
+At the time of this migration, the VPS API remained unchanged and disk was below its installed
+15-GiB release reserve, and the concrete protected-main update still requires
+confirmation. The inspected personal pip/npm caches total less than 0.4 GiB,
+insufficient to close the gap; nothing was deleted. New Cloud capture controls
+remain capability-gated until the new backend is actually promoted. The subsequent
+development cleanup above resolves the disk shortfall without changing the API. This entry
+supersedes the earlier statement that no Cloud migration had been applied.
+
 ### Branch publication checks — 2026-09-13
 
 Final product candidate `553b8f4e9bfed5c1e3140762c0975691ff9ce013` passed

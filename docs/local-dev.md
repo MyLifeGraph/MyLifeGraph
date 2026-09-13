@@ -11,6 +11,14 @@ API port 8001 for local-stack/browser commands on the VPS. The editable checkout
 is `~/MyLifeGraph`; SDK prerequisites below still apply. Production uses its own
 runtime users and port 8000. Do not reuse production environment files for tests.
 
+The Matthias development stack can be parked while the laptop uses Cloud mode.
+Retain its named database/Storage volumes and a restore-verified backup; removed
+development images can be downloaded again with the same pinned CLI. Restarting
+the full stack consumes several GB again, so check the release disk reserve first.
+The current parking/backup evidence is in
+[Verification](verification.md#current-verified-baseline); production and the
+laptop Cloud launcher do not depend on this separate development stack.
+
 For a synthetic, real-Docker Coach image check without a model/provider login, use
 [analysis image verification](verification.md#analysis-image-verification-without-a-model).
 It reuses the existing opt-in test and source-bound image builder; it does not
