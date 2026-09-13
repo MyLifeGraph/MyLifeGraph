@@ -620,8 +620,15 @@ class _CoachOptionsSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Choose Coach', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
+          Semantics(
+            header: true,
+            child: Text('Choose Coach',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const Divider(height: AppSpacing.lg),
           CoachProviderSettingsCard(
             compact: true,
             directSelection: true,

@@ -648,23 +648,13 @@ class _OutlookExamRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(exam.title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '${_outlookDueLabel(exam)} · ${_minutes(exam.remainingMinutes)} remaining',
-            ),
-            if (exam.missedPreparationMinutes > 0)
-              Text(
-                '${_minutes(exam.missedPreparationMinutes)} missed and still uncredited',
-              ),
-            if (exam.pendingPreviewSleepOverlap)
-              const Text(
-                'The staged preview overlaps the saved sleep window. It remains unconfirmed.',
-              ),
-            const SizedBox(height: AppSpacing.sm),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Expanded(child: Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: Text(exam.title, style: Theme.of(context).textTheme.titleMedium),
+                )),
                 IconButton(
                   tooltip: 'Review plan',
                   onPressed: onReview,
@@ -677,6 +667,18 @@ class _OutlookExamRow extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '${_outlookDueLabel(exam)} · ${_minutes(exam.remainingMinutes)} remaining',
+            ),
+            if (exam.missedPreparationMinutes > 0)
+              Text(
+                '${_minutes(exam.missedPreparationMinutes)} missed and still uncredited',
+              ),
+            if (exam.pendingPreviewSleepOverlap)
+              const Text(
+                'The staged preview overlaps the saved sleep window. It remains unconfirmed.',
+              ),
           ],
         ),
       );
