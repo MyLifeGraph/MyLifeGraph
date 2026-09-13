@@ -50,6 +50,26 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ### Branch publication checks — 2026-09-13
 
+Final product candidate `553b8f4e9bfed5c1e3140762c0975691ff9ce013` passed
+the complete manual Linux CI run
+[`34761537435`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34761537435):
+Source/Docs/Visual, FastAPI (1,749 passed, two skipped), Flutter analysis and
+the complete Flutter suite including goldens, Android JVM/lint, debug Web,
+fresh migrations and pgTAP, and all eight independent browser journeys.
+The database gate includes pinned PG15/PG17 chains, 486 final-state assertions,
+and the PG17 owner/ACL-preserving full restore plus deletion replay. The five
+standalone Speech service tests also passed locally. This final evidence
+supersedes the intermediate failures described below; no production release,
+Cloud migration or installed-device smoke is claimed.
+
+Publication remains on `preview/morning-evening-check-in`; `main` is unchanged.
+Production rollout is held: the existing source-bundle guard requires a reviewed
+protected-main RC, and the VPS currently has about 12 GiB free below its 15 GiB
+deployment reserve. No guard was bypassed, existing server data pruned, or live
+database changed. The authorized Cloud dry-run contains only the additive
+Skillset migration. The older release prefix and current API readiness remain
+intact; apply the migration with the approved release, not as an isolated rollout.
+
 Linux CI for candidate `c2b31d3ca8889d06af324a452a6de21b20d963c6`, run
 `34760040337`, passed Source/Docs/Visual, full FastAPI, full Flutter (including
 goldens), and debug Web build. The database lane applied the full chain and
@@ -58,8 +78,8 @@ test. Updated full identity is independently derived from sorted repository
 migration filenames; the older release prefix and security assertions remain.
 Android JVM tests passed; lint found the recorder's missing `POST_NOTIFICATIONS`
 manifest declaration. The additive declaration changes no runtime prompt/grant.
-These two corrections require the subsequent full Linux run; no baseline or
-production security guard was relaxed.
+Those two corrections were covered by the subsequent full Linux run above;
+no baseline or production security guard was relaxed.
 
 Run `34761086793` passed all 486 isolated final-state pgTAP assertions. Its
 following PG17 restore precondition still expected the previous 69-migration
@@ -67,7 +87,7 @@ head; only that exact count/head expectation was updated. Restored/source
 equality, role safety and deletion replay remain required. Browser journey
 locators were aligned with the approved Today/Setup/Coach labels and the focused
 Replan route title; persisted-data and read-only assertions remain unchanged.
-The updated browser and complete restore gates still require a successful run.
+The updated browser and complete restore gates passed in the final run above.
 
 Publication target: `preview/morning-evening-check-in`; task base
 `002c968c3427c6b5a6c52fb56bc58bb143a8457f`. Includes the previously approved
