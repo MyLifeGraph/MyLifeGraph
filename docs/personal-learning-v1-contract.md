@@ -342,8 +342,10 @@ window yet` while explaining their distinct reason; disabled, loading, and
 route-error states are local to the card. Ready shows the three readable values
 `Sleep start`, `Wake time`, and `Duration`, plus the below-target warning when
 applicable. Mobile presents compact label/value rows, falling back to stacked
-text for narrow widths or large text; desktop retains three columns. Status,
-warnings and expandable evidence remain intact. The standalone wake-day caption
+text for narrow widths or large text; desktop retains three columns.
+Mobile values share a left-aligned start column with wrapping room for long
+duration ranges, including two-digit hours; minutes are never ellipsized.
+Status, warnings and expandable evidence remain intact. The standalone wake-day caption
 is omitted; parsed day offsets and clock-window labels remain unchanged.
 Flutter parses the raw median and confirmed target and rejects a V1
 response whose warning, status/reason, 90-day window, sample, or evidence bounds

@@ -58,6 +58,8 @@ heights. Fields, validation, review, and saved values remain unchanged.
 
 `Days` and `List` are available at every width. Days retains its selected date
 when switching views and supports arrows, weekday chips and horizontal swipe.
+The calendar keeps its view and selected day while scrolled offscreen and back;
+lazy page rendering must not reset it to Days.
 Desktop chips include dates; narrow/large-text chips scroll instead of squeezing.
 Days keeps its appointments inside a softly outlined, count-independent viewport
 for roughly three normal rows; overflow scrolls within it and an empty day retains

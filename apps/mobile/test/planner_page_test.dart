@@ -79,6 +79,15 @@ void main() {
       await tester.tap(find.byTooltip('List'));
       await tester.pumpAndSettle();
       expect(find.text('Monday, Jul 27'), findsOneWidget);
+      if (size.width == 390) {
+        final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+        scroll.jumpTo(scroll.maxScrollExtent);
+        await tester.pumpAndSettle();
+        scroll.jumpTo(0);
+        await tester.pumpAndSettle();
+        expect(tester.widget<IconButton>(find.byKey(
+            const ValueKey('planner-seven-days-list'))).isSelected, isTrue);
+      }
       await tester.ensureVisible(find.byTooltip('Days'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Days'));

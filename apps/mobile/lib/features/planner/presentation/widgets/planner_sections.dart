@@ -927,7 +927,11 @@ class PlannerSevenDaySection extends StatefulWidget {
   State<PlannerSevenDaySection> createState() => _PlannerSevenDaySectionState();
 }
 
-class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
+class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection>
+    with AutomaticKeepAliveClientMixin<PlannerSevenDaySection> {
+  @override
+  bool get wantKeepAlive => true;
+
   _SevenDayView _view = _SevenDayView.swipe;
   final _dayScrollController = ScrollController(keepScrollOffset: false);
   late int _page;
@@ -956,6 +960,7 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return LayoutBuilder(builder: (context, constraints) {
     final wide = constraints.maxWidth >= 600 &&
         MediaQuery.textScalerOf(context).scale(16) < 24;
@@ -981,7 +986,7 @@ class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection> {
                 key: const ValueKey('planner-import-calendar'),
                 tooltip: 'Import calendar (.ics)',
                 onPressed: widget.onImportCalendar,
-                icon: const Icon(AppIcons.uploadFileOutlined),
+                icon: const Icon(AppIcons.downloadOutlined),
               ),
             if (wide) ...[
               IconButton(tooltip: 'Previous day',

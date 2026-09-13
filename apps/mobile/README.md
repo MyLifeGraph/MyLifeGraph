@@ -741,6 +741,9 @@ directly below Personal Study Pattern and owns loading, disabled, collecting,
 unstable, ready, and route-error states without replacing the existing card.
 Sleep start, Wake time, and Duration use compact label/value rows on mobile,
 with stacked text at narrow widths or large text sizes and columns on desktop.
+Mobile values align to a common left edge and wrap long durations without
+truncating minutes. Planner retains Days/List and the selected day when its
+calendar scrolls offscreen; calendar-import actions use downward-arrow icons.
 The status, below-target warning, and expandable evidence
 remain available. Today due-task rows likewise use compact Habit-style spacing
 and a leading completion circle; Focus/restore and command guards are unchanged.

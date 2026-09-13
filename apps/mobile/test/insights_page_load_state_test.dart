@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:my_life_graph/composition/skillset_providers.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -480,11 +481,14 @@ void main() {
     'dark': AppTheme.dark,
     'space': AppTheme.space,
     'mobile': AppTheme.dark,
+    'mobile-long': AppTheme.dark,
+    'narrow-long': AppTheme.dark,
   }.entries) {
     testWidgets('ready sleep recommendation renders ${theme.key}',
         (tester) async {
       tester.view
-        ..physicalSize = Size(theme.key == 'mobile' ? 390 : 1280, 900)
+        ..physicalSize = Size(theme.key.startsWith('mobile') ? 390
+            : theme.key == 'narrow-long' ? 320 : 1280, 900)
         ..devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -508,6 +512,7 @@ void main() {
             sleepRecommendationProvider.overrideWith(
               (ref) async => _sleepRecommendation(
                 SleepRecommendationStatus.ready,
+                longWindow: theme.key.endsWith('long'),
               ),
             ),
           ],
@@ -526,11 +531,27 @@ void main() {
 
       expect(find.text('Best-supported sleep window'), findsOneWidget);
       expect(find.text('Sleep start'), findsOneWidget);
-      if (theme.key == 'mobile') {
-        final bedtime = _sleepRecommendation(SleepRecommendationStatus.ready)
-            .recommendation!.bedtime.label;
+      if (theme.key.startsWith('mobile') || theme.key == 'narrow-long') {
+        final recommendation = _sleepRecommendation(SleepRecommendationStatus.ready,
+            longWindow: theme.key.endsWith('long')).recommendation!;
+        final bedtime = recommendation.bedtime.label;
+        if (theme.key != 'narrow-long') {
         expect(tester.getTopLeft(find.text('Sleep start')).dy,
             tester.getTopLeft(find.text(bedtime)).dy);
+        }
+        final values = [bedtime, recommendation.wakeTime.label, recommendation.duration.label];
+        for (final text in values) {
+          final finder = find.text(text);
+          expect(tester.getTopLeft(finder).dx, tester.getTopLeft(find.text(bedtime)).dx);
+          final paragraph = tester.renderObject<RenderParagraph>(finder);
+          expect(paragraph.didExceedMaxLines, isFalse);
+          final boxes = paragraph.getBoxesForSelection(
+              TextSelection(baseOffset: 0, extentOffset: text.length));
+          expect(boxes, isNotEmpty);
+          expect(boxes.every((box) => box.left >= -0.1 &&
+              box.right <= paragraph.size.width + 0.1 &&
+              box.bottom <= paragraph.size.height + 0.1), isTrue);
+        }
       }
       expect(tester.takeException(), isNull);
     });
@@ -1566,6 +1587,7 @@ SkillsetProfile _skillsetProfile() => SkillsetProfile(
 SleepRecommendation _sleepRecommendation(
   SleepRecommendationStatus status, {
   int wakeDayOffset = 1,
+  bool longWindow = false,
 }) {
   final statusCode = status.name;
   final ready = status == SleepRecommendationStatus.ready;
@@ -1612,18 +1634,18 @@ SleepRecommendation _sleepRecommendation(
               'width_minutes': 30,
             },
             'wake_time': {
-              'start_local_time': '06:45',
-              'end_local_time': '07:15',
+              'start_local_time': longWindow ? '10:10' : '06:45',
+              'end_local_time': longWindow ? '11:10' : '07:15',
               'end_day_offset': 0,
-              'width_minutes': 30,
+              'width_minutes': longWindow ? 60 : 30,
             },
             'duration': {
-              'minimum_minutes': 465,
-              'maximum_minutes': 495,
+              'minimum_minutes': longWindow ? 610 : 465,
+              'maximum_minutes': longWindow ? 670 : 495,
             },
             'wake_day_offset': wakeDayOffset,
-            'raw_median_duration_minutes': 480,
-            'median_confirmed_sleep_target_minutes': 510,
+            'raw_median_duration_minutes': longWindow ? 640 : 480,
+            'median_confirmed_sleep_target_minutes': longWindow ? 660 : 510,
             'warning': 'below_confirmed_sleep_target',
             'evidence': {
               'candidate_days': 15,

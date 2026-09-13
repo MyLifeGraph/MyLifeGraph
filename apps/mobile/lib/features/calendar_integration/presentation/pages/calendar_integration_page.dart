@@ -392,7 +392,7 @@ class _ImportFileCard extends StatelessWidget {
                       dimension: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(AppIcons.uploadFileOutlined),
+                  : const Icon(AppIcons.downloadOutlined),
               label: Text(
                 state.operation == CalendarIntegrationOperation.importing
                     ? 'Importing…'

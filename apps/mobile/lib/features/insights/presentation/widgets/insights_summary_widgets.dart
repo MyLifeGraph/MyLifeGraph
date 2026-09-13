@@ -710,16 +710,16 @@ class _SleepWindowMetric extends StatelessWidget {
     final caption = Text(label, style: theme.textTheme.bodyMedium);
     final number = Text(
       value,
-      textAlign: inline ? TextAlign.end : TextAlign.start,
+      textAlign: TextAlign.start,
       style: theme.textTheme.titleMedium,
     );
     return inline
         ? Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: caption),
+              SizedBox(width: 100, child: caption),
               const SizedBox(width: AppSpacing.sm),
-              Flexible(child: number),
+              Expanded(child: number),
             ],
           )
         : Column(
