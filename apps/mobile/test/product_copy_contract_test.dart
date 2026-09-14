@@ -73,8 +73,14 @@ void main() {
     final coach = File(
       'lib/features/coach/presentation/pages/coach_page.dart',
     ).readAsStringSync();
-    expect(coach, contains('Coach answers using your read-only app data.'));
-    expect(coach, contains('but cannot change the app.'));
+    final coachModes = File(
+      'lib/composition/widgets/coach_provider_settings_card.dart',
+    ).readAsStringSync();
+    expect(coach, contains('CoachProviderSettingsCard('));
+    expect(coachModes, contains('Project Coach uses a temporary read-only snapshot on the VPS.'));
+    expect(coachModes, contains('Only your question and queried results reach the shared pilot'));
+    expect(coachModes, contains('Requests may cost money. Your question and relevant read-only'));
+    expect(coachModes, contains('No automatic provider fallback.'));
     expect(coach, contains('Local development-only agent'));
     expect(coach, contains('This is not a production service'));
 

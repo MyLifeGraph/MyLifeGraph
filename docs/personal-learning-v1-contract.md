@@ -207,6 +207,8 @@ The shared Advanced tab strip shows edge chevrons only where more tabs are
 offscreen. They scroll the strip on desktop or mobile without changing the
 selected pane or filters; touch scrolling remains available.
 Only visible chevrons reserve space; tabs use the full edge when its chevron is absent.
+The end chevron disappears as soon as its reclaimed width reveals the last tab,
+without requiring a second click just to uncover that tab.
 
 Both viewport layouts use Compare, Top patterns, Trend overlay, Skillset,
 Matrix, then Discovered tabs. Skillset remains selectable with sparse data.

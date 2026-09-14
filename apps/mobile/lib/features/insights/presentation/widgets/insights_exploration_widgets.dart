@@ -36,7 +36,10 @@ class _AdvancedPaneTabsState extends State<_AdvancedPaneTabs> {
     final overflows =
         position.maxScrollExtent + position.viewportDimension > fullWidth + 1;
     final before = overflows && position.extentBefore > 1;
-    final after = overflows && position.extentAfter > 1;
+    // Removing the end arrow returns its width to the last tab. Do not ask
+    // for another click when that reclaimed space already reveals the end.
+    final after =
+        overflows && position.extentAfter > (_hasAfter ? 48 : 0) + 1;
     if (before != _hasBefore || after != _hasAfter) {
       setState(() {
         _hasBefore = before;
@@ -105,6 +108,7 @@ class _AdvancedPaneTabsState extends State<_AdvancedPaneTabs> {
               ),
             ),
           Expanded(
+            key: const ValueKey('advanced-tabs-viewport'),
             child: NotificationListener<ScrollMetricsNotification>(
               onNotification: (_) {
                 WidgetsBinding.instance.addPostFrameCallback(

@@ -48,6 +48,29 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Branch publication and full regression follow-up — 2026-09-14
+
+- Candidate `caddc6c659cc2e32ecd407d4d4980a028cc4262a` was published on
+  `fix/check-in-inputs`, including the preceding check-in/UI work on that branch.
+  Full manual CI [34791118088](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34791118088)
+  passed Source/Docs/Visual, FastAPI, Web build and fresh migrations/pgTAP.
+- Flutter reported 1,145 passed and seven failed; Android JVM/lint was therefore
+  not reached. Browser E2E passed six of eight journeys. These were not green
+  release gates. Today tests still expected uncollapsed agenda rows, Morning
+  targeted the old clock heading, and Coach copy/E2E targeted the old composer.
+  Exam Outlook E2E needed its new disclosure opened before inspecting details.
+- Follow-up retains all data/security assertions while using the current UI
+  interactions. The Advanced strip keeps one keyed scroll viewport as arrows
+  change and removes the end arrow when its reclaimed width exposes the last tab.
+  Its new last-click regression failed before the correction; all 43 Insights
+  state tests and 27 Today/guest/copy tests then passed locally. Full candidate
+  CI must be repeated after these changes; no main update or new APK is claimed.
+- GitHub lists all four Android signing secrets in protected environment
+  `pilot-release`. The existing main-only workflow builds release-mode APKs,
+  verifies the expected certificate and checksums, and removes private signing
+  material before retaining artifacts. Its last successful main run remains
+  `34768303524`; physical-device acceptance is separate.
+
 ### Authorized Student Cloud data transfer — 2026-09-14
 
 - The preserved local Student snapshot was imported only into the explicitly

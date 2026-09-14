@@ -69,6 +69,28 @@ void main() {
           }
           expect(find.byTooltip('More tabs'), findsNothing);
           expect(tester.getTopRight(stripScroll).dx, tester.getTopRight(strip).dx - 4);
+          final scrollable = tester.state<ScrollableState>(
+            find.descendant(of: stripScroll, matching: find.byType(Scrollable)),
+          );
+          scrollable.position.jumpTo(0);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('More tabs'));
+          await tester.pumpAndSettle();
+          // One final click must reclaim the arrow's space, not require a
+          // second click just to expose the last few pixels of Discovered.
+          final position = tester.state<ScrollableState>(
+            find.descendant(of: stripScroll, matching: find.byType(Scrollable)),
+          ).position;
+          final step = (position.viewportDimension + 96) * .65;
+          position.jumpTo(position.maxScrollExtent - step - 24);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('More tabs'));
+          await tester.pumpAndSettle();
+          expect(find.byTooltip('More tabs'), findsNothing);
+          expect(
+            tester.getTopRight(find.byKey(const Key('insights-advanced-pane-discovered'))).dx,
+            lessThanOrEqualTo(tester.getTopRight(stripScroll).dx + 1),
+          );
         } else {
           expect(find.byTooltip('More tabs'), findsNothing);
           expect(find.byTooltip('Previous tabs'), findsNothing);
@@ -1437,6 +1459,8 @@ void main() {
             widget is Scrollable && widget.axisDirection == AxisDirection.right,
       ),
     );
+    await tester.ensureVisible(horizontalScroll);
+    await tester.pumpAndSettle();
     await tester.drag(horizontalScroll, const Offset(-480, 0));
     await tester.pumpAndSettle();
 

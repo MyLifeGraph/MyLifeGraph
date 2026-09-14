@@ -70,6 +70,10 @@ void main() {
       ),
     );
 
+    await _expandSchedule(tester);
+    await tester.ensureVisible(find.text('Completed (1)'));
+    await tester.tap(find.text('Completed (1)'));
+    await tester.pumpAndSettle();
     expect(find.text("Today's decision"), findsNothing);
     expect(find.text('Check-in streak'), findsOneWidget);
     expect(find.text('6 consecutive days'), findsOneWidget);
@@ -312,6 +316,8 @@ void main() {
     expect(find.text('Check-ins could not be loaded.'), findsOneWidget);
     expect(find.text('Tasks unavailable'), findsOneWidget);
     expect(find.text('Lecture'), findsOneWidget);
+    expect(find.text('Imported seminar'), findsNothing);
+    await _expandSchedule(tester);
     expect(find.text('Imported seminar'), findsOneWidget);
     expect(find.text('Edit Morning check-in'), findsOneWidget);
     expect(find.text('Edit Evening check-in'), findsOneWidget);
@@ -439,6 +445,7 @@ void main() {
       ),
     );
 
+    await _expandSchedule(tester);
     expect(find.text('Task'), findsNWidgets(2));
     expect(find.text('Habit'), findsOneWidget);
     expect(find.text('Fixed commitment'), findsNWidgets(2));
@@ -546,6 +553,13 @@ void main() {
     expect(find.text('Dashboard unavailable'), findsOneWidget);
     expect(find.text('Check-in streak'), findsNothing);
   });
+}
+
+Future<void> _expandSchedule(WidgetTester tester) async {
+  final showAll = find.text('Show all (4)');
+  await tester.ensureVisible(showAll);
+  await tester.tap(showAll);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _tapExpansion(WidgetTester tester, ValueKey<String> key) async {

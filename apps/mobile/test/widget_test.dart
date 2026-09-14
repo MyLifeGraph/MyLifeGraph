@@ -316,10 +316,10 @@ void main() {
     await tester.tap(find.text('Morning check-in'));
     await tester.pumpAndSettle();
     for (final clock in [
-      ('Sleep start', const TimeOfDay(hour: 0, minute: 0)),
-      ('Wake time', const TimeOfDay(hour: 5, minute: 30)),
+      ('estimated sleep start', const TimeOfDay(hour: 0, minute: 0)),
+      ('estimated wake time', const TimeOfDay(hour: 5, minute: 30)),
     ]) {
-      final choice = find.text(clock.$1);
+      final choice = find.bySemanticsLabel(clock.$1);
       await tester.ensureVisible(choice);
       await tester.tap(choice);
       await tester.pumpAndSettle();

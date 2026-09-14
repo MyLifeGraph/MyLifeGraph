@@ -740,6 +740,7 @@ non-completed entries show initially, with Show all/Show less for longer lists;
 Completed is separately collapsed without hiding its existing actions.
 The replan review keeps all saved values and warnings in shorter copy and value
 groups. Advanced tabs offer overflow-only edge chevrons alongside touch scrolling.
+The end chevron releases its width once that makes the final tab fully visible.
 Planner's
 Exam Outlook expands from its risk/summary into the existing details and
 icon-labelled Review/Replan actions. Coach puts its daily quota beside the
