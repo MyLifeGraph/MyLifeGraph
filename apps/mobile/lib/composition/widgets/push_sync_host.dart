@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/capabilities/app_surface_capabilities.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/platform/push_platform.dart';
+import '../../core/supabase/supabase_providers.dart';
 import '../auth_providers.dart';
 import '../push_providers.dart';
 
@@ -53,9 +54,12 @@ class _PushSyncHostState extends ConsumerState<PushSyncHost>
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
+    final session = ref.watch(supabaseClientProvider)?.auth.currentSession;
     final enabled =
         PushPlatform.supported &&
-        ref.watch(appSurfaceCapabilitiesProvider).canUseSyncedExecution;
+        ref.watch(appSurfaceCapabilitiesProvider).canUseSyncedExecution &&
+        session != null &&
+        session.user.id == auth.valueOrNull?.profile.id;
     final owner = enabled ? auth.valueOrNull?.profile.id : null;
     if (owner != null) {
       // Optional integration errors must not prevent the application from opening.

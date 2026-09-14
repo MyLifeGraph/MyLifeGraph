@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
@@ -24,210 +25,226 @@ void main() {
   late _SettingsCredentialStore credentialStore;
 
   setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.mylifegraph.app/push'),
+          (_) async => null,
+        );
     SharedPreferences.setMockInitialValues({});
     credentialStore = _SettingsCredentialStore();
   });
-
-  testWidgets(
-      'synced settings retries timezone, exports, and requires typed deletion',
-      (tester) async {
-    tester.view.physicalSize = const Size(320, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final authRepository = _SettingsAuthRepository();
-    final accountRepository = _FakeAccountSettingsRepository()
-      ..failNextTimezone = true;
-    final exportSaver = _FakeExportSaver();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authRepositoryProvider.overrideWithValue(authRepository),
-          coachCredentialStoreProvider.overrideWithValue(credentialStore),
-          appSurfaceCapabilitiesProvider.overrideWithValue(
-            const AppSurfaceCapabilities(
-              isLocalDemo: false,
-              canUseSyncedHabits: true,
-              canUseSyncedExecution: true,
-              canUseWeeklyReview: true,
-              canUseCalendarIntegration: true,
-              canAccessCoachBackend: true,
-              canShowCoachSurface: true,
-            ),
-          ),
-          accountSettingsRepositoryProvider.overrideWithValue(
-            accountRepository,
-          ),
-          accountExportSaverProvider.overrideWithValue(exportSaver),
-        ],
-        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Synced account'), findsOneWidget);
-    final container = ProviderScope.containerOf(
-      tester.element(find.text('Synced account')),
-    );
-    await tester.scrollUntilVisible(
-      find.text('In-app reminders'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('In-app reminders'), findsOneWidget);
-    expect(
-      find.text(
-        'Allow banners while the app is open and choose what may appear.',
-      ),
-      findsOneWidget,
-    );
-    tester
-        .state<ScrollableState>(find.byType(Scrollable).first)
-        .position
-        .jumpTo(0);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Change timezone'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Change timezone'));
-    await tester.pumpAndSettle();
-    expect(
-      find.textContaining('Existing preparation reservations keep'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('do not refresh automatically'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Europe/Berlin').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Europe/London').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save timezone'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Could not update the timezone. Try again.'),
-      findsOneWidget,
-    );
-    expect(find.text('Change timezone'), findsOneWidget);
-
-    await tester.tap(find.text('Change timezone'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Europe/Berlin').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Europe/London').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save timezone'));
-    await tester.pumpAndSettle();
-
-    expect(accountRepository.timezoneCalls, ['Europe/London', 'Europe/London']);
-    expect(find.text('Europe/London'), findsOneWidget);
-
-    accountRepository.timezoneError =
-        const AccountProfileUpdateOutcomeUnknownException('unknown');
-    await tester.tap(find.text('Change timezone'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Europe/London').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Europe/Paris').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save timezone'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text(
-        'Timezone update could not be confirmed. Select the same timezone again to retry safely, or sign in again to verify it before choosing another.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Europe/London'), findsOneWidget);
-
-    accountRepository.timezoneError =
-        const AccountTimezoneRejectedException('not recognized');
-    await tester.tap(find.text('Change timezone'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Europe/London').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Europe/Paris').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save timezone'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text(
-        'Timezone was not recognized. Choose another IANA timezone.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Europe/London'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('Export data'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.ensureVisible(find.text('Export data'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Export data'));
-    await tester.pump();
-    await tester.pump();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(accountRepository.exportCalls, 1);
-    expect(exportSaver.calls, 1);
-    expect(find.text('Account export saved.'), findsOneWidget);
-
-    accountRepository.exportError = const AccountExportTooLargeException(
-      'too large',
-    );
-    await tester.tap(find.text('Export data'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text(
-        'The current export cannot include this much data. Nothing was exported; remove data only if you already intended to, then try again.',
-      ),
-      findsOneWidget,
-    );
-
-    await tester.scrollUntilVisible(
-      find.text('Delete account'),
-      120,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.ensureVisible(find.text('Delete account'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete account'));
-    await tester.pumpAndSettle();
-
-    final confirmButton = find.widgetWithText(FilledButton, 'Delete account');
-    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Type DELETE to confirm'),
-      'delete',
-    );
-    await tester.pump();
-    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Type DELETE to confirm'),
-      'DELETE',
-    );
-    await tester.pump();
-    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
-    await tester.tap(confirmButton);
-    await tester.pumpAndSettle();
-
-    expect(accountRepository.deleteCalls, 1);
-    expect(authRepository.deletedAccountSignOutCalls, 1);
-    expect(
-      container.read(authNoticeProvider)?.message,
-      'Account and saved synced data deleted.',
-    );
-    expect(container.read(authNoticeProvider)?.isError, isFalse);
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.mylifegraph.app/push'),
+          null,
+        );
   });
 
-  testWidgets('custom IANA timezone path is available and validated',
-      (tester) async {
+  testWidgets(
+    'synced settings retries timezone, exports, and requires typed deletion',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final authRepository = _SettingsAuthRepository();
+      final accountRepository = _FakeAccountSettingsRepository()
+        ..failNextTimezone = true;
+      final exportSaver = _FakeExportSaver();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(authRepository),
+            coachCredentialStoreProvider.overrideWithValue(credentialStore),
+            appSurfaceCapabilitiesProvider.overrideWithValue(
+              const AppSurfaceCapabilities(
+                isLocalDemo: false,
+                canUseSyncedHabits: true,
+                canUseSyncedExecution: true,
+                canUseWeeklyReview: true,
+                canUseCalendarIntegration: true,
+                canAccessCoachBackend: true,
+                canShowCoachSurface: true,
+              ),
+            ),
+            accountSettingsRepositoryProvider.overrideWithValue(
+              accountRepository,
+            ),
+            accountExportSaverProvider.overrideWithValue(exportSaver),
+          ],
+          child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Synced account'), findsOneWidget);
+      final container = ProviderScope.containerOf(
+        tester.element(find.text('Synced account')),
+      );
+      await tester.scrollUntilVisible(
+        find.text('In-app reminders'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('In-app reminders'), findsOneWidget);
+      expect(
+        find.text(
+          'Allow banners while the app is open and choose what may appear.',
+        ),
+        findsOneWidget,
+      );
+      tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position
+          .jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Change timezone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change timezone'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Existing preparation reservations keep'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('do not refresh automatically'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Europe/Berlin').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Europe/London').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save timezone'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Could not update the timezone. Try again.'),
+        findsOneWidget,
+      );
+      expect(find.text('Change timezone'), findsOneWidget);
+
+      await tester.tap(find.text('Change timezone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Europe/Berlin').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Europe/London').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save timezone'));
+      await tester.pumpAndSettle();
+
+      expect(accountRepository.timezoneCalls, [
+        'Europe/London',
+        'Europe/London',
+      ]);
+      expect(find.text('Europe/London'), findsOneWidget);
+
+      accountRepository.timezoneError =
+          const AccountProfileUpdateOutcomeUnknownException('unknown');
+      await tester.tap(find.text('Change timezone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Europe/London').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Europe/Paris').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save timezone'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Timezone update could not be confirmed. Select the same timezone again to retry safely, or sign in again to verify it before choosing another.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Europe/London'), findsOneWidget);
+
+      accountRepository.timezoneError = const AccountTimezoneRejectedException(
+        'not recognized',
+      );
+      await tester.tap(find.text('Change timezone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Europe/London').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Europe/Paris').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save timezone'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Timezone was not recognized. Choose another IANA timezone.'),
+        findsOneWidget,
+      );
+      expect(find.text('Europe/London'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('Export data'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(find.text('Export data'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Export data'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(accountRepository.exportCalls, 1);
+      expect(exportSaver.calls, 1);
+      expect(find.text('Account export saved.'), findsOneWidget);
+
+      accountRepository.exportError = const AccountExportTooLargeException(
+        'too large',
+      );
+      await tester.tap(find.text('Export data'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'The current export cannot include this much data. Nothing was exported; remove data only if you already intended to, then try again.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Delete account'),
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(find.text('Delete account'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete account'));
+      await tester.pumpAndSettle();
+
+      final confirmButton = find.widgetWithText(FilledButton, 'Delete account');
+      expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Type DELETE to confirm'),
+        'delete',
+      );
+      await tester.pump();
+      expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Type DELETE to confirm'),
+        'DELETE',
+      );
+      await tester.pump();
+      expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+      await tester.tap(confirmButton);
+      await tester.pumpAndSettle();
+
+      expect(accountRepository.deleteCalls, 1);
+      expect(authRepository.deletedAccountSignOutCalls, 1);
+      expect(
+        container.read(authNoticeProvider)?.message,
+        'Account and saved synced data deleted.',
+      );
+      expect(container.read(authNoticeProvider)?.isError, isFalse);
+    },
+  );
+
+  testWidgets('custom IANA timezone path is available and validated', (
+    tester,
+  ) async {
     final authRepository = _SettingsAuthRepository();
     final accountRepository = _FakeAccountSettingsRepository();
     await tester.pumpWidget(
@@ -281,8 +298,9 @@ void main() {
     expect(accountRepository.timezoneCalls, ['Africa/Johannesburg']);
   });
 
-  testWidgets('daily preparation budget can be saved and removed explicitly',
-      (tester) async {
+  testWidgets('daily preparation budget can be saved and removed explicitly', (
+    tester,
+  ) async {
     final authRepository = _SettingsAuthRepository();
     final accountRepository = _FakeAccountSettingsRepository();
     await tester.pumpWidget(
@@ -359,8 +377,9 @@ void main() {
     );
   });
 
-  testWidgets('preparation budget dialog stays usable at 320px and 200% text',
-      (tester) async {
+  testWidgets('preparation budget dialog stays usable at 320px and 200% text', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -385,9 +404,9 @@ void main() {
         ],
         child: MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: SettingsPage()),
@@ -422,8 +441,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('pending account export does not hand off after navigation',
-      (tester) async {
+  testWidgets('pending account export does not hand off after navigation', (
+    tester,
+  ) async {
     final authRepository = _SettingsAuthRepository();
     final exportRequest = Completer<void>();
     final accountRepository = _FakeAccountSettingsRepository()
@@ -484,8 +504,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('account dialog results are ignored after Settings unmounts',
-      (tester) async {
+  testWidgets('account dialog results are ignored after Settings unmounts', (
+    tester,
+  ) async {
     final authRepository = _SettingsAuthRepository();
     final accountRepository = _FakeAccountSettingsRepository();
     final showSettings = ValueNotifier<bool>(true);
@@ -560,8 +581,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('recent-auth deletion rejection keeps the account signed in',
-      (tester) async {
+  testWidgets('recent-auth deletion rejection keeps the account signed in', (
+    tester,
+  ) async {
     final authRepository = _SettingsAuthRepository();
     final accountRepository = _FakeAccountSettingsRepository()
       ..deleteError = const AccountRecentAuthenticationRequiredException(
@@ -619,8 +641,9 @@ void main() {
     );
   });
 
-  testWidgets('ambiguous deletion enters stable recovery without signing out',
-      (tester) async {
+  testWidgets('ambiguous deletion enters stable recovery without signing out', (
+    tester,
+  ) async {
     final authRepository = _SettingsAuthRepository()
       ..deletionRecoveryAfterInitialLoad = true;
     final accountRepository = _FakeAccountSettingsRepository()
@@ -690,7 +713,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Deletion needs another retry'), findsOneWidget);
 
-    container.read(authControllerProvider.notifier).enterAccountDeletionRecovery(
+    container
+        .read(authControllerProvider.notifier)
+        .enterAccountDeletionRecovery(
           AccountDeletionResult(
             deletionId: 'a1000000-0000-4000-8000-000000000001',
             state: AccountDeletionState.deletionPending,
@@ -713,8 +738,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('delete finalization survives leaving Settings before commit',
-      (tester) async {
+  testWidgets('delete finalization survives leaving Settings before commit', (
+    tester,
+  ) async {
     final authRepository = _SettingsAuthRepository();
     final deletion = Completer<void>();
     final accountRepository = _FakeAccountSettingsRepository()
@@ -788,114 +814,109 @@ void main() {
   });
 
   testWidgets(
-      'account dialogs keep their lower actions reachable at 320 pixels with larger text',
-      (tester) async {
-    tester.view.physicalSize = const Size(320, 568);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    'account dialogs keep their lower actions reachable at 320 pixels with larger text',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final authRepository = _SettingsAuthRepository();
-    final accountRepository = _FakeAccountSettingsRepository();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authRepositoryProvider.overrideWithValue(authRepository),
-          coachCredentialStoreProvider.overrideWithValue(credentialStore),
-          appSurfaceCapabilitiesProvider.overrideWithValue(
-            const AppSurfaceCapabilities(
-              isLocalDemo: false,
-              canUseSyncedHabits: true,
-              canUseSyncedExecution: true,
+      final authRepository = _SettingsAuthRepository();
+      final accountRepository = _FakeAccountSettingsRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(authRepository),
+            coachCredentialStoreProvider.overrideWithValue(credentialStore),
+            appSurfaceCapabilitiesProvider.overrideWithValue(
+              const AppSurfaceCapabilities(
+                isLocalDemo: false,
+                canUseSyncedHabits: true,
+                canUseSyncedExecution: true,
+              ),
             ),
-          ),
-          accountSettingsRepositoryProvider.overrideWithValue(
-            accountRepository,
-          ),
-        ],
-        child: MaterialApp(
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(1.5),
+            accountSettingsRepositoryProvider.overrideWithValue(
+              accountRepository,
             ),
-            child: child!,
+          ],
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(1.5)),
+              child: child!,
+            ),
+            home: const Scaffold(body: SettingsPage()),
           ),
-          home: const Scaffold(body: SettingsPage()),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final changeTimezone = find.text('Change timezone');
-    await tester.dragUntilVisible(
-      changeTimezone,
-      find.byType(CustomScrollView),
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    expect(changeTimezone.hitTestable(), findsOneWidget);
-    await tester.tap(changeTimezone.hitTestable());
-    await tester.pumpAndSettle();
+      final changeTimezone = find.text('Change timezone');
+      await tester.dragUntilVisible(
+        changeTimezone,
+        find.byType(CustomScrollView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(changeTimezone.hitTestable(), findsOneWidget);
+      await tester.tap(changeTimezone.hitTestable());
+      await tester.pumpAndSettle();
 
-    var dialog = find.byType(AlertDialog);
-    expect(dialog, findsOneWidget);
-    expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
-    final saveTimezone = find.widgetWithText(
-      FilledButton,
-      'Save timezone',
-    );
-    await tester.ensureVisible(saveTimezone);
-    await tester.pumpAndSettle();
-    expect(saveTimezone.hitTestable(), findsOneWidget);
-    await tester.tap(saveTimezone.hitTestable());
-    await tester.pumpAndSettle();
-    expect(find.text('Account timezone'), findsNothing);
+      var dialog = find.byType(AlertDialog);
+      expect(dialog, findsOneWidget);
+      expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
+      final saveTimezone = find.widgetWithText(FilledButton, 'Save timezone');
+      await tester.ensureVisible(saveTimezone);
+      await tester.pumpAndSettle();
+      expect(saveTimezone.hitTestable(), findsOneWidget);
+      await tester.tap(saveTimezone.hitTestable());
+      await tester.pumpAndSettle();
+      expect(find.text('Account timezone'), findsNothing);
 
-    final deleteEntry = find.text('Delete account');
-    await tester.scrollUntilVisible(
-      deleteEntry,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.ensureVisible(deleteEntry);
-    await tester.pumpAndSettle();
-    await tester.tap(deleteEntry);
-    await tester.pumpAndSettle();
+      final deleteEntry = find.text('Delete account');
+      await tester.scrollUntilVisible(
+        deleteEntry,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(deleteEntry);
+      await tester.pumpAndSettle();
+      await tester.tap(deleteEntry);
+      await tester.pumpAndSettle();
 
-    dialog = find.byType(AlertDialog);
-    expect(dialog, findsOneWidget);
-    expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Type DELETE to confirm'),
-      'DELETE',
-    );
-    await tester.pump();
-    final confirmDelete = find.widgetWithText(
-      FilledButton,
-      'Delete account',
-    );
-    await tester.ensureVisible(confirmDelete);
-    await tester.pumpAndSettle();
-    expect(confirmDelete.hitTestable(), findsOneWidget);
-    await tester.tap(confirmDelete.hitTestable());
-    await tester.pumpAndSettle();
+      dialog = find.byType(AlertDialog);
+      expect(dialog, findsOneWidget);
+      expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Type DELETE to confirm'),
+        'DELETE',
+      );
+      await tester.pump();
+      final confirmDelete = find.widgetWithText(FilledButton, 'Delete account');
+      await tester.ensureVisible(confirmDelete);
+      await tester.pumpAndSettle();
+      expect(confirmDelete.hitTestable(), findsOneWidget);
+      await tester.tap(confirmDelete.hitTestable());
+      await tester.pumpAndSettle();
 
-    expect(accountRepository.deleteCalls, 1);
-    expect(authRepository.deletedAccountSignOutCalls, 1);
-    expect(tester.takeException(), isNull);
-  });
+      expect(accountRepository.deleteCalls, 1);
+      expect(authRepository.deletedAccountSignOutCalls, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _SettingsAuthRepository extends AuthRepository {
   _SettingsAuthRepository()
-      : super(
-          SupabaseClient(
-            'http://localhost:54321',
-            'test-anon-key',
-            authOptions: const AuthClientOptions(autoRefreshToken: false),
-          ),
-          useMockData: false,
-        );
+    : super(
+        SupabaseClient(
+          'http://localhost:54321',
+          'test-anon-key',
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+        ),
+        useMockData: false,
+      );
 
   final _session = AppSession.authenticated(
     const AppProfile(
@@ -1052,7 +1073,9 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
   }
 
   @override
-  Future<AccountDeletionResult> deleteAccount({required String expectedUserId}) async {
+  Future<AccountDeletionResult> deleteAccount({
+    required String expectedUserId,
+  }) async {
     expect(expectedUserId, 'account-id');
     deleteCalls += 1;
     final completer = deleteCompleter;

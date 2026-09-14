@@ -55,7 +55,9 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
               if (state.error != null)
                 Text(
                   state.error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
               if (cloud != null && !cloud.available)
                 const Text('Push is not activated on this server yet.'),

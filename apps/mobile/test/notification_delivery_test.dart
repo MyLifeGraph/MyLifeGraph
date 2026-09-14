@@ -23,24 +23,26 @@ final _updatedAt = DateTime.parse('2026-07-14T08:30:00Z');
 
 void main() {
   group('notification delivery contracts', () {
-    test('keeps reminder categories separate from explicit delivery consent',
-        () {
-      final settings = NotificationSettings.fromJson(
-        _settingsJson(enabled: false),
-      );
+    test(
+      'keeps reminder categories separate from explicit delivery consent',
+      () {
+        final settings = NotificationSettings.fromJson(
+          _settingsJson(enabled: false),
+        );
 
-      expect(settings.inAppDeliveryEnabled, isFalse);
-      expect(settings.consentVersion, isNull);
-      expect(settings.categories.focusPrompt, isTrue);
+        expect(settings.inAppDeliveryEnabled, isFalse);
+        expect(settings.consentVersion, isNull);
+        expect(settings.categories.focusPrompt, isTrue);
 
-      expect(
-        () => NotificationSettings.fromJson({
-          ..._settingsJson(enabled: false),
-          'in_app_delivery_enabled': true,
-        }),
-        throwsA(isA<NotificationLifecycleContractException>()),
-      );
-    });
+        expect(
+          () => NotificationSettings.fromJson({
+            ..._settingsJson(enabled: false),
+            'in_app_delivery_enabled': true,
+          }),
+          throwsA(isA<NotificationLifecycleContractException>()),
+        );
+      },
+    );
 
     test('settings update always sends the dedicated consent version', () {
       final request = NotificationSettingsUpdate(
@@ -52,10 +54,7 @@ void main() {
           recoveryPrompt: false,
           weeklySummary: true,
         ),
-        quietHours: NotificationQuietHours(
-          startsAt: '22:00',
-          endsAt: '07:00',
-        ),
+        quietHours: NotificationQuietHours(startsAt: '22:00', endsAt: '07:00'),
         dailyLimit: 2,
       );
 
@@ -82,81 +81,86 @@ void main() {
         weeklySummary: true,
       );
 
-      expect(
-        categories.enabledCategoryCodes,
-        ['recovery_prompt', 'weekly_summary'],
-      );
+      expect(categories.enabledCategoryCodes, [
+        'recovery_prompt',
+        'weekly_summary',
+      ]);
       expect(categories.allows('focus_prompt'), isFalse);
       expect(categories.allows('weekly_summary'), isTrue);
       expect(categories.allows('unknown'), isFalse);
     });
 
-    test('strictly maps current deterministic provenance and pending state',
-        () {
-      const mapper = NotificationsSupabaseRowMapper();
-      final notification = mapper.fromRow(_generatedRow());
+    test(
+      'strictly maps current deterministic provenance and pending state',
+      () {
+        const mapper = NotificationsSupabaseRowMapper();
+        final notification = mapper.fromRow(_generatedRow());
 
-      expect(notification.isDeterministicallyGenerated, isTrue);
-      expect(notification.generationCategory, 'recovery_prompt');
-      expect(notification.deliveryDate, '2026-07-14');
-      expect(notification.generationProvenance?.sourceKind, 'daily_state');
-      expect(notification.generationProvenance?.timezone, 'Europe/Berlin');
-      expect(
-        mapper
-            .pendingInAppFromRows(
-              [_generatedRow()],
-              now: DateTime.parse('2026-07-14T08:31:00Z'),
-            )
-            .single
-            .id,
-        _notificationId,
-      );
+        expect(notification.isDeterministicallyGenerated, isTrue);
+        expect(notification.generationCategory, 'recovery_prompt');
+        expect(notification.deliveryDate, '2026-07-14');
+        expect(notification.generationProvenance?.sourceKind, 'daily_state');
+        expect(notification.generationProvenance?.timezone, 'Europe/Berlin');
+        expect(
+          mapper
+              .pendingInAppFromRows([
+                _generatedRow(),
+              ], now: DateTime.parse('2026-07-14T08:31:00Z'))
+              .single
+              .id,
+          _notificationId,
+        );
 
-      expect(
-        () => mapper.fromRow(
-          _generatedRow()
-            ..['metadata'] = {
-              ...(_generatedRow()['metadata']! as Map<String, dynamic>),
-              'llm_used': true,
-            },
-        ),
-        throwsA(isA<NotificationLifecycleContractException>()),
-      );
+        expect(
+          () => mapper.fromRow(
+            _generatedRow()
+              ..['metadata'] = {
+                ...(_generatedRow()['metadata']! as Map<String, dynamic>),
+                'llm_used': true,
+              },
+          ),
+          throwsA(isA<NotificationLifecycleContractException>()),
+        );
 
-      expect(
-        () => mapper.fromRow(
-          _generatedRow()
-            ..['metadata'] = {
-              ...(_generatedRow()['metadata']! as Map<String, dynamic>),
-              'source_kind': 'daily_briefing',
-            },
-        ),
-        throwsA(isA<NotificationLifecycleContractException>()),
-      );
-    });
+        expect(
+          () => mapper.fromRow(
+            _generatedRow()
+              ..['metadata'] = {
+                ...(_generatedRow()['metadata']! as Map<String, dynamic>),
+                'source_kind': 'daily_briefing',
+              },
+          ),
+          throwsA(isA<NotificationLifecycleContractException>()),
+        );
+      },
+    );
   });
 
   group('delivery controllers', () {
-    test('consent-off poll performs no inbox query or acknowledgement',
-        () async {
-      final repository = _DeliveryRepository(
-        settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
-        pending: [_notification()],
-      );
-      final controller = InAppNotificationDeliveryController(
-        repository: repository,
-        enabled: true,
-        autoStart: false,
-      );
-      addTearDown(controller.dispose);
+    test(
+      'consent-off poll performs no inbox query or acknowledgement',
+      () async {
+        final repository = _DeliveryRepository(
+          settings: NotificationSettings.fromJson(
+            _settingsJson(enabled: false),
+          ),
+          pending: [_notification()],
+        );
+        final controller = InAppNotificationDeliveryController(
+          repository: repository,
+          enabled: true,
+          autoStart: false,
+        );
+        addTearDown(controller.dispose);
 
-      await controller.poll();
+        await controller.poll();
 
-      expect(repository.settingsCalls, 1);
-      expect(repository.pendingCalls, 0);
-      expect(repository.deliveryCalls, 0);
-      expect(controller.state.sequence, 0);
-    });
+        expect(repository.settingsCalls, 1);
+        expect(repository.pendingCalls, 0);
+        expect(repository.deliveryCalls, 0);
+        expect(controller.state.sequence, 0);
+      },
+    );
 
     test('acknowledges before emitting and never emits a replay', () async {
       final repository = _DeliveryRepository(
@@ -205,23 +209,26 @@ void main() {
 
       await controller.poll();
 
-      expect(
-        repository.lastPendingCategories?.enabledCategoryCodes,
-        ['weekly_summary'],
-      );
+      expect(repository.lastPendingCategories?.enabledCategoryCodes, [
+        'weekly_summary',
+      ]);
       expect(repository.deliveredIds, [weeklyId]);
       expect(controller.state.notification?.id, weeklyId);
     });
 
     test('ambiguous settings save retains the exact immutable retry', () async {
-      final repository = _DeliveryRepository(
-        settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
-      )..updateErrors.add(
-          const AppException(
-            'lost',
-            cause: ApiFailure(kind: ApiFailureKind.connection),
-          ),
-        );
+      final repository =
+          _DeliveryRepository(
+              settings: NotificationSettings.fromJson(
+                _settingsJson(enabled: false),
+              ),
+            )
+            ..updateErrors.add(
+              const AppException(
+                'lost',
+                cause: ApiFailure(kind: ApiFailureKind.connection),
+              ),
+            );
       final controller = NotificationSettingsController(
         repository: repository,
         autoLoad: false,
@@ -250,14 +257,18 @@ void main() {
     });
 
     test('failed reload after an ambiguous save stays locked', () async {
-      final repository = _DeliveryRepository(
-        settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
-      )..updateErrors.add(
-          const AppException(
-            'lost',
-            cause: ApiFailure(kind: ApiFailureKind.connection),
-          ),
-        );
+      final repository =
+          _DeliveryRepository(
+              settings: NotificationSettings.fromJson(
+                _settingsJson(enabled: false),
+              ),
+            )
+            ..updateErrors.add(
+              const AppException(
+                'lost',
+                cause: ApiFailure(kind: ApiFailureKind.connection),
+              ),
+            );
       final controller = NotificationSettingsController(
         repository: repository,
         autoLoad: false,
@@ -332,8 +343,9 @@ void main() {
     });
   });
 
-  testWidgets('settings requires a separate explicit consent confirmation',
-      (tester) async {
+  testWidgets('settings requires a separate explicit consent confirmation', (
+    tester,
+  ) async {
     final repository = _DeliveryRepository(
       settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
     );
@@ -359,16 +371,18 @@ void main() {
       find.byKey(const ValueKey('notification-category-recovery')),
       findsOneWidget,
     );
-    expect(find.textContaining('phone-system'), findsNothing);
+    expect(
+      find.textContaining('Android push is configured separately'),
+      findsNothing,
+    );
     await tester.tap(
-      find.byKey(
-        const ValueKey(
-          'notification-info-control-Delivery details',
-        ),
-      ),
+      find.byKey(const ValueKey('notification-info-control-Delivery details')),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('phone-system'), findsOneWidget);
+    expect(
+      find.textContaining('Android push is configured separately'),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('notification-delivery-consent')),
@@ -399,8 +413,9 @@ void main() {
     expect(repository.updates.single.inAppDeliveryEnabled, isTrue);
   });
 
-  testWidgets('reminder settings fit 320 pixels at 200 percent text',
-      (tester) async {
+  testWidgets('reminder settings fit 320 pixels at 200 percent text', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 760);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -417,9 +432,9 @@ void main() {
         ],
         child: MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: NotificationSettingsPage()),
@@ -436,12 +451,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(deliveryDetails);
     await tester.pumpAndSettle();
-    expect(find.textContaining('phone-system'), findsOneWidget);
+    expect(
+      find.textContaining('Android push is configured separately'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shell shows one acknowledged deterministic in-app banner',
-      (tester) async {
+  testWidgets('shell shows one acknowledged deterministic in-app banner', (
+    tester,
+  ) async {
     final repository = _DeliveryRepository(
       settings: NotificationSettings.fromJson(_settingsJson(enabled: true)),
       pending: [_notification()],
@@ -469,10 +488,7 @@ void main() {
           inAppNotificationDeliveryProvider.overrideWith((ref) => controller),
           notificationsRepositoryProvider.overrideWithValue(inboxRepository),
         ],
-        child: MaterialApp.router(
-          theme: AppTheme.dark,
-          routerConfig: router,
-        ),
+        child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();
@@ -489,9 +505,7 @@ void main() {
     );
     expect(
       find.descendant(
-        of: find.byKey(
-          const ValueKey('in-app-notification-$_notificationId'),
-        ),
+        of: find.byKey(const ValueKey('in-app-notification-$_notificationId')),
         matching: find.text('Rule-based reminder'),
       ),
       findsOneWidget,
@@ -502,9 +516,7 @@ void main() {
     expect(
       tester
           .widget<SnackBar>(
-            find.byKey(
-              const ValueKey('in-app-notification-$_notificationId'),
-            ),
+            find.byKey(const ValueKey('in-app-notification-$_notificationId')),
           )
           .width,
       560,
@@ -518,9 +530,7 @@ void main() {
 
     await tester.tap(
       find.byKey(
-        const ValueKey(
-          'in-app-notification-content-$_notificationId',
-        ),
+        const ValueKey('in-app-notification-content-$_notificationId'),
       ),
     );
     await tester.pumpAndSettle();
@@ -532,8 +542,9 @@ void main() {
     );
   });
 
-  testWidgets('Inbox Open Today action navigates to the Today destination',
-      (tester) async {
+  testWidgets('Inbox Open Today action navigates to the Today destination', (
+    tester,
+  ) async {
     tester.view
       ..physicalSize = const Size(1280, 960)
       ..devicePixelRatio = 1;
@@ -568,10 +579,7 @@ void main() {
           ),
           notificationsRepositoryProvider.overrideWithValue(inboxRepository),
         ],
-        child: MaterialApp.router(
-          theme: AppTheme.dark,
-          routerConfig: router,
-        ),
+        child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();
@@ -591,93 +599,92 @@ Map<String, dynamic> _settingsJson({
   bool focusPrompt = true,
   bool recoveryPrompt = true,
   bool weeklySummary = true,
-}) =>
-    {
-      'contract_version': 'notification-settings-v1',
-      'in_app_delivery_enabled': enabled,
-      'consent_version': enabled ? 'in-app-notification-consent-v1' : null,
-      'consented_at': enabled ? '2026-07-14T08:30:00Z' : null,
-      'disabled_at': null,
-      'categories': {
-        'focus_prompt': focusPrompt,
-        'recovery_prompt': recoveryPrompt,
-        'weekly_summary': weeklySummary,
-      },
-      'quiet_hours': null,
-      'daily_limit': 2,
-      'updated_at': '2026-07-14T08:30:00Z',
-      'replayed': false,
-    };
+}) => {
+  'contract_version': 'notification-settings-v1',
+  'in_app_delivery_enabled': enabled,
+  'consent_version': enabled ? 'in-app-notification-consent-v1' : null,
+  'consented_at': enabled ? '2026-07-14T08:30:00Z' : null,
+  'disabled_at': null,
+  'categories': {
+    'focus_prompt': focusPrompt,
+    'recovery_prompt': recoveryPrompt,
+    'weekly_summary': weeklySummary,
+  },
+  'quiet_hours': null,
+  'daily_limit': 2,
+  'updated_at': '2026-07-14T08:30:00Z',
+  'replayed': false,
+};
 
 Map<String, dynamic> _generatedRow() => {
-      'id': _notificationId,
-      'title': 'A gentler overview is ready',
-      'message': 'Open Today to review a manageable schedule and actions.',
-      'type': 'reminder',
-      'priority': 'medium',
-      'action_url': '/dashboard',
-      'created_at': '2026-07-14T08:30:00Z',
-      'updated_at': '2026-07-14T08:30:00Z',
-      'is_read': false,
-      'read_at': null,
-      'dismissed_at': null,
-      'due_at': '2026-07-14T08:30:00Z',
-      'metadata': {
-        'contract_version': 'notification-generation-v1',
-        'origin': 'deterministic_backend',
-        'category': 'recovery_prompt',
-        'reason_code': 'current_recovery_mode',
-        'delivery_date': '2026-07-14',
-        'timezone': 'Europe/Berlin',
-        'source_kind': 'daily_state',
-        'source_id': 'snapshot-1',
-        'source_generated_at': '2026-07-14T08:20:00Z',
-        'sensitive_copy_excluded': true,
-        'llm_used': false,
-      },
-      'generation_key': 'notification-generation-v1:recovery_prompt:2026-07-14',
-      'generation_category': 'recovery_prompt',
-      'delivery_date': '2026-07-14',
-      'in_app_delivered_at': null,
-    };
+  'id': _notificationId,
+  'title': 'A gentler overview is ready',
+  'message': 'Open Today to review a manageable schedule and actions.',
+  'type': 'reminder',
+  'priority': 'medium',
+  'action_url': '/dashboard',
+  'created_at': '2026-07-14T08:30:00Z',
+  'updated_at': '2026-07-14T08:30:00Z',
+  'is_read': false,
+  'read_at': null,
+  'dismissed_at': null,
+  'due_at': '2026-07-14T08:30:00Z',
+  'metadata': {
+    'contract_version': 'notification-generation-v1',
+    'origin': 'deterministic_backend',
+    'category': 'recovery_prompt',
+    'reason_code': 'current_recovery_mode',
+    'delivery_date': '2026-07-14',
+    'timezone': 'Europe/Berlin',
+    'source_kind': 'daily_state',
+    'source_id': 'snapshot-1',
+    'source_generated_at': '2026-07-14T08:20:00Z',
+    'sensitive_copy_excluded': true,
+    'llm_used': false,
+  },
+  'generation_key': 'notification-generation-v1:recovery_prompt:2026-07-14',
+  'generation_category': 'recovery_prompt',
+  'delivery_date': '2026-07-14',
+  'in_app_delivered_at': null,
+};
 
 AppNotification _notification({
   String id = _notificationId,
   String category = 'recovery_prompt',
-}) =>
-    AppNotification(
-      id: id,
-      title: category == 'weekly_summary'
-          ? 'Your weekly review is ready'
-          : category == 'focus_prompt'
-              ? "Today's overview is ready"
-              : 'A gentler overview is ready',
-      body: category == 'recovery_prompt'
-          ? 'Open Today to review a manageable schedule and actions.'
-          : 'Open Today to review your schedule and actions.',
-      type: 'reminder',
-      priority: 'medium',
-      actionUrl: '/dashboard',
-      createdAt: _updatedAt,
-      updatedAt: _updatedAt,
-      isRead: false,
-      readAt: null,
-      dismissedAt: null,
-      dueAt: _updatedAt,
-      generationKey: 'notification-generation-v1:$category:2026-07-14',
-      generationCategory: category,
-      deliveryDate: '2026-07-14',
-      generationProvenance: NotificationGenerationProvenance(
-        reasonCode: category == 'recovery_prompt'
-            ? 'current_recovery_mode'
-            : 'current_daily_briefing',
-        timezone: 'Europe/Berlin',
-        sourceKind:
-            category == 'recovery_prompt' ? 'daily_state' : 'daily_briefing',
-        sourceId: category == 'recovery_prompt' ? 'snapshot-1' : 'briefing-1',
-        sourceGeneratedAt: DateTime.parse('2026-07-14T08:20:00Z'),
-      ),
-    );
+}) => AppNotification(
+  id: id,
+  title: category == 'weekly_summary'
+      ? 'Your weekly review is ready'
+      : category == 'focus_prompt'
+      ? "Today's overview is ready"
+      : 'A gentler overview is ready',
+  body: category == 'recovery_prompt'
+      ? 'Open Today to review a manageable schedule and actions.'
+      : 'Open Today to review your schedule and actions.',
+  type: 'reminder',
+  priority: 'medium',
+  actionUrl: '/dashboard',
+  createdAt: _updatedAt,
+  updatedAt: _updatedAt,
+  isRead: false,
+  readAt: null,
+  dismissedAt: null,
+  dueAt: _updatedAt,
+  generationKey: 'notification-generation-v1:$category:2026-07-14',
+  generationCategory: category,
+  deliveryDate: '2026-07-14',
+  generationProvenance: NotificationGenerationProvenance(
+    reasonCode: category == 'recovery_prompt'
+        ? 'current_recovery_mode'
+        : 'current_daily_briefing',
+    timezone: 'Europe/Berlin',
+    sourceKind: category == 'recovery_prompt'
+        ? 'daily_state'
+        : 'daily_briefing',
+    sourceId: category == 'recovery_prompt' ? 'snapshot-1' : 'briefing-1',
+    sourceGeneratedAt: DateTime.parse('2026-07-14T08:20:00Z'),
+  ),
+);
 
 class _DeliveryRepository implements NotificationDeliveryRepository {
   _DeliveryRepository({required this.settings, this.pending = const []});
@@ -741,10 +748,7 @@ class _DeliveryRepository implements NotificationDeliveryRepository {
 AppException _httpFailure(int statusCode) {
   return AppException(
     'request failed',
-    cause: ApiFailure(
-      kind: ApiFailureKind.response,
-      statusCode: statusCode,
-    ),
+    cause: ApiFailure(kind: ApiFailureKind.response, statusCode: statusCode),
   );
 }
 
@@ -767,20 +771,17 @@ class _InboxRepository implements NotificationsRepository {
 }
 
 GoRouter _notificationRouter() => GoRouter(
-      initialLocation: '/alerts',
-      routes: [
-        GoRoute(
-          path: '/alerts',
-          builder: (context, state) => const MainShell(
-            currentPath: '/alerts',
-            child: NotificationsPage(),
-          ),
-        ),
-        GoRoute(
-          path: '/dashboard',
-          builder: (context, state) => const Scaffold(
-            body: Center(child: Text('Today destination')),
-          ),
-        ),
-      ],
-    );
+  initialLocation: '/alerts',
+  routes: [
+    GoRoute(
+      path: '/alerts',
+      builder: (context, state) =>
+          const MainShell(currentPath: '/alerts', child: NotificationsPage()),
+    ),
+    GoRoute(
+      path: '/dashboard',
+      builder: (context, state) =>
+          const Scaffold(body: Center(child: Text('Today destination'))),
+    ),
+  ],
+);

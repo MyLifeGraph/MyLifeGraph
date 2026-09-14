@@ -5,17 +5,17 @@ from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.supabase import get_supabase_client
 from app.clients.supabase import SupabaseConfigurationError
 from app.models.health_connect import HealthConnectCommand, HealthConnectState
-from app.repositories.health_connect_repository import HealthConnectRepository
+from app.services.health_connect_service import HealthConnectService
 
 
 router = APIRouter(prefix="/health-connect", tags=["health-connect"])
 
 
-def get_health_connect_repository(
+def get_health_connect_service(
     request: Request,
-) -> HealthConnectRepository:
+) -> HealthConnectService:
     try:
-        return HealthConnectRepository(get_supabase_client(request))
+        return HealthConnectService(get_supabase_client(request))
     except SupabaseConfigurationError as error:
         raise _problem(error) from error
 
@@ -40,11 +40,11 @@ def _problem(error: Exception) -> HTTPException:
 async def read_health_connect(
     response: Response,
     principal: Principal = Depends(get_current_principal),
-    repository: HealthConnectRepository = Depends(get_health_connect_repository),
+    service: HealthConnectService = Depends(get_health_connect_service),
 ):
     response.headers["Cache-Control"] = "no-store"
     try:
-        return await repository.read(principal.user_id)
+        return await service.read(principal.user_id)
     except (httpx.HTTPError, ValueError, SupabaseConfigurationError) as error:
         raise _problem(error) from error
 
@@ -54,10 +54,10 @@ async def command_health_connect(
     command: HealthConnectCommand,
     response: Response,
     principal: Principal = Depends(get_current_principal),
-    repository: HealthConnectRepository = Depends(get_health_connect_repository),
+    service: HealthConnectService = Depends(get_health_connect_service),
 ):
     response.headers["Cache-Control"] = "no-store"
     try:
-        return await repository.apply(principal.user_id, command)
+        return await service.apply(principal.user_id, command)
     except (httpx.HTTPError, ValueError, SupabaseConfigurationError) as error:
         raise _problem(error) from error

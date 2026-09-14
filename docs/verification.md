@@ -60,8 +60,19 @@ local unit/pgTAP evidence is not a claim about a hosted database.
   Ruff, documentation consistency and six Android release-config checks pass.
 - Own VM isolated PG17 run applies all 72 migrations and passes all 535 pgTAP
   assertions across 26 files plus existing real Coach concurrency tests. The
-  normal database is not migrated/reset. Restore verification is being rerun
-  after updating its exact expected head/count; no live Cloud migration claim.
+  PG17 full-database restore and deletion replay proof also passes. The normal
+  database is not migrated/reset; no live Cloud migration claim.
+- Full branch CI on `333ec72b993dc23af7a375dda37b44626d103d5d`
+  ([run 34850811224](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34850811224))
+  passes full browser E2E and the web build. Backend reports 1,809 passed,
+  one API layering failure and two skips; Flutter reports 1,166 passed and six
+  failures. The follow-up moves Health Connect orchestration to its service,
+  gates the optional push host on a matching real session, mocks the new native
+  logout seam in account tests and updates obsolete no-push copy expectations.
+  All 51 focused Flutter regressions now pass. A separate backend subset passes
+  58 tests including FCM credential isolation. Two new error labels now reuse
+  theme typography and pass the visual gate. The CI database image fetch was
+  rate-limited before testing; a complete green rerun is still required.
 - Laptop Java 21 is now available alongside Java 25, without replacing it.
   Native Gradle compilation remains blocked by repeated upstream TLS
   `bad_record_mac` downloads; no certificate validation was disabled. Linux CI

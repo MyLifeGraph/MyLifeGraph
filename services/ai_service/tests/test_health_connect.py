@@ -7,14 +7,14 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.deps.auth import Principal, get_token_verifier
-from app.api.routes.health_connect import get_health_connect_repository
+from app.api.routes.health_connect import get_health_connect_service
 from app.main import create_app
 from app.models.health_connect import (
     HealthConnectCommand,
     HealthConnectDay,
     HealthConnectState,
 )
-from app.repositories.health_connect_repository import HealthConnectRepository
+from app.services.health_connect_service import HealthConnectService
 from tests.api_test_dependencies import override_dependency
 
 
@@ -137,7 +137,7 @@ async def request(method="GET", body=None, token="valid", failure=None):
     app = create_app()
     repository = Repository(failure)
     override_dependency(app, get_token_verifier, Verifier())
-    override_dependency(app, get_health_connect_repository, repository)
+    override_dependency(app, get_health_connect_service, repository)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -190,7 +190,7 @@ def test_repository_scopes_read_and_writes_to_owner():
             assert "user_id" not in params["p_request"]
             return {"timezone": "Europe/Berlin", "health_connect_settings": {}}
 
-    repository = HealthConnectRepository(Client())
+    repository = HealthConnectService(Client())
     assert not asyncio.run(repository.read("owner")).enabled
     assert not asyncio.run(
         repository.apply("owner", HealthConnectCommand.model_validate(command()))

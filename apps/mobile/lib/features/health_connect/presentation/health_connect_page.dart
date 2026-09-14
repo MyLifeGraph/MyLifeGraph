@@ -62,7 +62,9 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
               if (view.error != null)
                 Text(
                   view.error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
               if (cloud != null) ...[
                 Text(cloud.enabled ? 'Cloud sharing on' : 'Cloud sharing off'),

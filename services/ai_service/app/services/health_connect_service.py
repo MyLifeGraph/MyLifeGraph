@@ -5,8 +5,8 @@ from app.clients.supabase import SupabaseRestClient
 from app.models.health_connect import HealthConnectCommand, HealthConnectState
 
 
-class HealthConnectRepository:
-    """Owner-scoped reads and one atomic, service-only command boundary."""
+class HealthConnectService:
+    """Owner-scoped commands and the current timezone-aware sharing projection."""
 
     def __init__(self, client: SupabaseRestClient):
         self._client = client

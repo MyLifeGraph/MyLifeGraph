@@ -1,5 +1,10 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+Optional Android push uses an API-only Firebase credential. `FCM_*` is forbidden
+in the separate executor environment, and the local development subprocess
+allowlist excludes it. No Coach provider, model, tool or execution behavior is
+changed by adding that secret-isolation guard.
+
 Optional Health Connect observations are readable through the existing owner-only
 `behavioral_events` snapshot source. Its catalog explicitly labels device-reported
 calendar-day totals and forbids adding them to overlapping manual check-ins.

@@ -21,6 +21,17 @@ from app.models.push import (
 from app.services.push_delivery import FcmSender, deliver_for_owner
 from tests.api_test_dependencies import override_dependency
 
+
+def test_sender_credentials_are_redacted_and_forbidden_in_executor(monkeypatch):
+    from app.coach_executor import _assert_secret_free_environment
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None, FCM_CREDENTIALS_JSON="private-sender-credential")
+    assert "private-sender-credential" not in repr(settings)
+    monkeypatch.setenv("FCM_CREDENTIALS_JSON", "private-sender-credential")
+    with pytest.raises(RuntimeError, match="forbidden application secrets"):
+        _assert_secret_free_environment()
+
 OWNER, SESSION = str(uuid4()), str(uuid4())
 
 
