@@ -48,6 +48,32 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Android Health Connect / push verified candidate — 2026-09-14
+
+- Code candidate `ab39e3214b3efe04fb80df40cb1134a8530eee4f` on
+  `feat/watch-and-ui-follow-up` passes the complete manually dispatched
+  [CI run 34852656350](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34852656350).
+  All seven jobs pass: source/docs/visual, Flutter/Android, backend, web build,
+  fresh migrations/pgTAP, full browser E2E and path classification.
+- Flutter: 1,172 tests passed and analysis clean. Android JVM tests and lint
+  complete successfully on the pinned SDK 36 / Java 21 Linux toolchain.
+  Backend: 1,811 passed, two skipped. Browser E2E: eight passed. Database:
+  all 72 migrations and 535 pgTAP assertions pass, including the compatibility
+  harnesses and PG17 full-database restore/deletion replay proof.
+- Firebase remains `mylifegraph-5d234`, billing disabled with no linked billing
+  account. One dedicated FCM-only sender credential is installed in the existing
+  VPS `/etc/mylifegraph/api.env` (`640`, `root:mylifegraph-api`). It was transferred
+  over SSH without a local private-key file; the temporary VPS key was removed.
+  `PUSH_DELIVERY_ENABLED=false`: no service restart or dispatch was performed.
+  The public Android configuration remains the protected `pilot-release`
+  environment secret `FIREBASE_ANDROID_CONFIG_BASE64`. Signing secrets are unchanged.
+- This supersedes the candidate failures and pending restore below. Production
+  main remains `0e6d378f8d5778a1f26099342eaabaefe03f459b`. Cloud migrations,
+  immutable API promotion, sender activation, a newly signed APK and physical
+  Health Connect/closed-app push acceptance are still outstanding. Repository
+  and CI evidence does not establish device delivery. The final documentation
+  follow-up does not alter the tested application code.
+
 ### Android Health Connect / push candidate — 2026-09-14
 
 - Task base `7daa68ba9e44b7ee7d7de6fa2a247f9f4ea8eb28`, branch
