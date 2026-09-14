@@ -909,7 +909,10 @@ Color _plannerExamHealthColor(
 
 enum _SevenDayView { swipe, list }
 
-class PlannerSevenDaySection extends StatefulWidget {
+// Only a display preference; no saved account data is retained here.
+final _calendarViewProvider = StateProvider<_SevenDayView>((_) => _SevenDayView.swipe);
+
+class PlannerSevenDaySection extends ConsumerStatefulWidget {
   const PlannerSevenDaySection({
     super.key,
     required this.days,
@@ -926,15 +929,16 @@ class PlannerSevenDaySection extends StatefulWidget {
   final bool enabled;
 
   @override
-  State<PlannerSevenDaySection> createState() => _PlannerSevenDaySectionState();
+  ConsumerState<PlannerSevenDaySection> createState() => _PlannerSevenDaySectionState();
 }
 
-class _PlannerSevenDaySectionState extends State<PlannerSevenDaySection>
+class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
     with AutomaticKeepAliveClientMixin<PlannerSevenDaySection> {
   @override
   bool get wantKeepAlive => true;
 
-  _SevenDayView _view = _SevenDayView.swipe;
+  _SevenDayView get _view => ref.watch(_calendarViewProvider);
+  set _view(_SevenDayView value) => ref.read(_calendarViewProvider.notifier).state = value;
   final _dayScrollController = ScrollController(keepScrollOffset: false);
   late int _page;
 

@@ -389,14 +389,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         ),
       ],
       children: desktop ? [
-        agenda,
         LayoutBuilder(builder: (context, constraints) => Row(
           key: const ValueKey('planner-desktop-columns'),
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: stack([
-              // Keep creation, preferences, warnings and retries below the
-              // calendar, with unchanged callbacks and authority.
+              agenda,
+              // Keep preferences, warnings and retries discoverable.
               ...children.where((child) => !isSummary(child) && child != agenda),
             ])),
             const SizedBox(width: AppSpacing.lg),

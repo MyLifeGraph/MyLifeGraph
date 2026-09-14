@@ -147,18 +147,17 @@ class InsightsSkillsetCard extends StatelessWidget {
     required this.isDemo,
     required this.selectedIds,
     required this.onToggle,
-    required this.onWindowChanged,
   });
 
   final CorrelationReport report;
   final bool isDemo;
   final Set<String> selectedIds;
   final ValueChanged<String> onToggle;
-  final ValueChanged<int> onWindowChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final labelScale = MediaQuery.textScalerOf(context).scale(12) / 12;
     final readings = _dimensions
         .where((d) => selectedIds.contains(d.id))
         .map((d) => d.read(report))
@@ -177,18 +176,6 @@ class InsightsSkillsetCard extends StatelessWidget {
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.xs,
-            children: [
-              for (final days in insightsWindowDayOptions)
-                ChoiceChip(
-                  label: Text('${days}d'),
-                  tooltip: 'Last $days days',
-                  selected: report.windowDays == days,
-                  onSelected: (_) => onWindowChanged(days),
-                ),
-            ],
-          ),
           ExpansionTile(
             key: const PageStorageKey('insights-skillset-dimensions'),
             tilePadding: EdgeInsets.zero,
@@ -213,9 +200,9 @@ class InsightsSkillsetCard extends StatelessWidget {
           if (available.length >= 3)
             Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 400),
+                constraints: const BoxConstraints(maxWidth: 440),
                 child: AspectRatio(
-                  aspectRatio: 1,
+                  aspectRatio: 1.12 / labelScale.clamp(1.0, 1.6),
                   child: CustomPaint(
                     key: const Key('skillset-radar'),
                     painter: _RadarPainter(
@@ -230,7 +217,7 @@ class InsightsSkillsetCard extends StatelessWidget {
                           )
                           .toList(),
                       color: theme.colorScheme.primary,
-                      gridColor: theme.colorScheme.outlineVariant,
+                      gridColor: theme.colorScheme.outline,
                       labelStyle: theme.textTheme.labelMedium!.copyWith(
                         color: theme.colorScheme.onSurface,
                       ),
@@ -327,7 +314,7 @@ class _RadarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final radius = math.min(size.width, size.height) * .28;
+    final radius = math.min(size.width, size.height) * .33;
     Offset point(int index, double fraction) {
       final angle = -math.pi / 2 + 2 * math.pi * index / values.length;
       return center +
@@ -346,6 +333,7 @@ class _RadarPainter extends CustomPainter {
 
     final grid = Paint()
       ..color = gridColor
+      ..strokeWidth = 1.15
       ..style = PaintingStyle.stroke;
     for (var ring = 1; ring <= 4; ring++) {
       canvas.drawPath(polygon(List.filled(values.length, ring / 4)), grid);
@@ -357,8 +345,8 @@ class _RadarPainter extends CustomPainter {
         textScaler: textScaler,
         textAlign: TextAlign.center,
         textDirection: TextDirection.ltr,
-      )..layout(maxWidth: size.width * .3);
-      final anchor = point(i, 1.48);
+      )..layout(maxWidth: size.width * .36);
+      final anchor = point(i, 1.35);
       label.paint(
         canvas,
         Offset(

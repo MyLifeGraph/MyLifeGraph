@@ -754,6 +754,12 @@ class _AgendaItem extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (item.kind == TodayTimelineKind.focusSession)
+                  IconButton(
+                    tooltip: item.state == 'active' ? 'Open Focus timer' : 'Review Focus session',
+                    onPressed: _rowAction(context),
+                    icon: const Icon(AppIcons.timerOutlined, size: 20),
+                  ),
                 if ((item.kind == TodayTimelineKind.preparation &&
                         item.planId != null) ||
                     (canExecute && item.kind == TodayTimelineKind.taskBlock))

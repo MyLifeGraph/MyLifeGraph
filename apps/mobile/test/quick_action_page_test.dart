@@ -8,6 +8,7 @@ import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/quick_action_page.dart';
 
@@ -85,12 +86,17 @@ void main() {
   });
 
   testWidgets('lists Morning check-in above Evening check-in', (tester) async {
-    await _pumpPage(tester, load: () async => null);
+    await _pumpPage(tester, load: () async => null, syncedHabits: true);
 
     expect(
       tester.getTopLeft(find.text(_morningTitle)).dy,
       lessThan(tester.getTopLeft(find.text(_eveningTitle)).dy),
     );
+    expect(tester.getTopLeft(find.text(_eveningTitle)).dy,
+        lessThan(tester.getTopLeft(find.text('Focus')).dy));
+    expect(tester.getTopLeft(find.text('Focus')).dy,
+        lessThan(tester.getTopLeft(find.text('Habit completion')).dy));
+    expect(tester.widget<AppPage>(find.byType(AppPage)).compactHeader, isTrue);
   });
 
   testWidgets('completed action remains an accessible edit entry',
@@ -203,6 +209,7 @@ Future<void> _pumpPage(
   Size viewSize = const Size(900, 1100),
   double textScale = 1,
   bool settle = true,
+  bool syncedHabits = false,
 }) async {
   final router = GoRouter(
     initialLocation: AppRoutes.quickAction,
@@ -238,9 +245,9 @@ Future<void> _pumpPage(
       key: UniqueKey(),
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(
-          const AppSurfaceCapabilities(
+          AppSurfaceCapabilities(
             isLocalDemo: true,
-            canUseSyncedHabits: false,
+            canUseSyncedHabits: syncedHabits,
           ),
         ),
         latestQuickCheckInProvider.overrideWith((_) => load()),

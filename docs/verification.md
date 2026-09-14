@@ -48,6 +48,28 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### UI follow-up candidate — 2026-09-14
+
+- Task base: `0e6d378f8d5778a1f26099342eaabaefe03f459b`; working branch
+  `feat/watch-and-ui-follow-up`. No backend, schema, Auth, or deployment change.
+- Initial focused Flutter run: 152 passing tests. Added regressions cover
+  route recreation, shared Skillset window placement, negative pattern color,
+  compact Habit semantics and desktop-only calendar columns.
+- Complete local Flutter analysis passes. The first full Windows test run
+  exposed four standalone Planner fixtures missing ProviderScope after the
+  session-view addition; fixtures now use the app's normal provider boundary.
+  Six unchanged component golden references differ under Windows; Linux CI
+  remains the authority, and no committed golden reference was replaced.
+- The captured-base affected gate selects Source, Flutter and Web but the
+  Windows Source lane cannot finish its Linux supervisor test without `setsid`.
+  Full Linux CI is required before claiming the complete candidate verified.
+- Read-only transport check: local frontend and public API health/readiness
+  return HTTP 200. A direct proxy probe without normal request credentials is
+  rejected (401), as intended; this is not a logged-in Coach acceptance test.
+- Smartwatch ingestion and learned-pattern notifications are not implemented
+  by this UI candidate. Existing source ownership, consent and delivery remain
+  unchanged; provider access and a separate wearable data contract are pending.
+
 ### Branch publication and full regression follow-up — 2026-09-14
 
 - Candidate `caddc6c659cc2e32ecd407d4d4980a028cc4262a` was published on

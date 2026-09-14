@@ -30,7 +30,7 @@ locked, initial loading, overview-error, current, and stale-after-mutation
 states. Settings is pushed so Back returns to Planner. `/preparation-plans` and `/habits` remain
 compatible and select Planner in the shell; `/alerts` remains a compatible
 Settings-owned route without selecting an unrelated shell destination. Quick
-actions contains Morning, Evening, Habit Completion, and Focus. Today is an
+actions contains Morning, Evening, Focus, and Habit completion. Today is an
 execution surface and no longer exposes generic Task creation or
 Habit-definition management.
 
@@ -44,9 +44,9 @@ proposal/confirmation APIs.
 Planner renders:
 
 The calendar is the first content section at every width. At normal desktop
-widths (1280px and above), it spans the content width; below it, creation and
-preferences occupy the main column and attention/preparation/habits/unscheduled/
-history occupy the compact right column. `Add new` stays below the calendar,
+widths (1280px and above), the calendar, creation and preferences occupy the
+main column; attention/preparation/habits/unscheduled/history start alongside
+the calendar in the compact right column. `Add new` stays below the calendar,
 not in the page header, with the same five creation actions. Warnings, retries and
 pending previews remain visible. Narrower/tablet and enlarged-text layouts
 stack the same sections without changing their source or callbacks.
@@ -60,6 +60,8 @@ heights. Fields, validation, review, and saved values remain unchanged.
 when switching views and supports arrows, weekday chips and horizontal swipe.
 The calendar keeps its view and selected day while scrolled offscreen and back;
 lazy page rendering must not reset it to Days.
+Days/List also survives leaving and returning through shell navigation within
+the app session. This display preference retains no account records.
 Desktop chips include dates; narrow/large-text chips scroll instead of squeezing.
 Days keeps its appointments inside a softly outlined, count-independent viewport
 for roughly three normal rows; overflow scrolls within it and an empty day retains

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/planner/domain/planner.dart';
@@ -41,7 +42,7 @@ void main() {
             }),
         ];
         await tester.pumpWidget(
-          MaterialApp(
+          ProviderScope(child: MaterialApp(
             theme: AppTheme.dark,
             home: MediaQuery(
               data: MediaQueryData(
@@ -70,7 +71,7 @@ void main() {
                 ),
               ),
             ),
-          ),
+          )),
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
@@ -27,9 +28,16 @@ Future<void> pumpCard(
   WidgetTester tester,
   CorrelationReport report, {
   double scale = 1,
-  ValueChanged<int>? onWindowChanged,
   Set<String> selectedIds = defaults,
 }) async {
+  if (const bool.fromEnvironment('SKILLSET_PREVIEW')) {
+    await (FontLoader('InstrumentSans')
+      ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Regular.ttf'))
+      ..addFont(rootBundle.load('assets/fonts/InstrumentSans-SemiBold.ttf'))
+      ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Bold.ttf'))).load();
+    await (FontLoader('packages/phosphor_flutter/PhosphorRegular')
+      ..addFont(rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor.ttf'))).load();
+  }
   final selected = {...selectedIds};
   await tester.pumpWidget(
     MaterialApp(
@@ -50,7 +58,6 @@ Future<void> pumpCard(
               onToggle: (id) => setState(() {
                 if (!selected.remove(id)) selected.add(id);
               }),
-              onWindowChanged: onWindowChanged ?? (_) {},
             ),
           ),
         ),
@@ -111,6 +118,10 @@ void main() {
           scale: width == 320 ? 2 : 1,
         );
         expect(find.byKey(const Key('skillset-radar')), findsOneWidget);
+        if (const bool.fromEnvironment('SKILLSET_PREVIEW')) {
+          await expectLater(find.byType(Scaffold),
+            matchesGoldenFile('../../../.tools/skillset-${width.toInt()}.png'));
+        }
         expect(find.textContaining('Sleep · 7.0/10 · 2 days'), findsNothing);
         final paint = tester.widget<CustomPaint>(
           find.byKey(const Key('skillset-radar')),
@@ -139,18 +150,15 @@ void main() {
   }
 
   testWidgets(
-    'Skillset empty state retains all dimensions and window controls',
+    'Skillset empty state retains all dimensions; window belongs to the page',
     (tester) async {
-      int? selectedWindow;
       await pumpCard(
         tester,
         report([]),
-        onWindowChanged: (days) => selectedWindow = days,
       );
       expect(find.byKey(const Key('skillset-radar')), findsNothing);
       expect(find.text('No ratings in this window yet.'), findsOneWidget);
-      await tester.tap(find.text('30d'));
-      expect(selectedWindow, 30);
+      expect(find.byType(ChoiceChip), findsNothing);
       await tester.tap(find.text('Dimensions (6)'));
       await tester.pumpAndSettle();
       expect(

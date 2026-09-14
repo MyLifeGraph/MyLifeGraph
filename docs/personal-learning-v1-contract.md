@@ -169,6 +169,8 @@ The default `Overview` tab groups Personal study pattern and Sleep recommendatio
 guest/demo retains its observation and example profile there. `Advanced` directly
 shows the existing correlation tools, or the sparse-signal explanation. Tab
 switching retains selected signals, comparison pair, window and disclosure state.
+Overview/Advanced and the Advanced subtab also survive route recreation during
+the running app session, without retaining account data or changing any query.
 Advanced correlations remain exploratory and use profile-timezone backend
 points; unsupported reconstructed Planner and Habit histories are excluded.
 Flutter presents target-based sleep as non-negative `Sleep shortfall` while
@@ -214,6 +216,11 @@ Both viewport layouts use Compare, Top patterns, Trend overlay, Skillset,
 Matrix, then Discovered tabs. Skillset remains selectable with sparse data.
 Compare, Top patterns, Trend overlay, Skillset and Matrix expose the shared
 7/14/30/90-day selection, including sparse states. Switching tabs retains it.
+Skillset uses the same selector above its card rather than separate in-card
+chips. Its slightly larger radar uses the theme outline for the grid; Details
+remains collapsed. Top patterns uses the error color for negative coefficients
+and their downward arrows; positive colors and statistical calculations remain
+unchanged. Color indicates sign, not whether a health relationship is beneficial.
 Discovered shows saved results independent of this window and has no selector.
 It is a read-only presentation of recorded observations in the selected window,
 not the legacy persisted Skillset profile or a personal-strength model.

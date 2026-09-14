@@ -137,6 +137,8 @@ entries are shown, with Show all/Show less for the rest. Completed/done entries
 remain accessible under a separately collapsed Completed section. Both groups
 preserve source order; elapsed Calendar and abandoned Focus are not relabelled
 as completed. This is display grouping only, with no changes to source state.
+Actual Focus rows also expose a compact timer/review icon invoking the exact
+same session destination as the row. They never start a replacement session.
 
 ## Task And Habit Selection
 

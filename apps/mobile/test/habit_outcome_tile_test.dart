@@ -63,7 +63,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('open habit actions wrap at 320 pixels with larger text',
+  testWidgets('open habit actions flank the title at 320 pixels with larger text',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 568));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -105,12 +105,6 @@ void main() {
     await tester.pump();
 
     expect(
-      find.byKey(
-        const ValueKey('habit-outcome-actions-habit-responsive'),
-      ),
-      findsOneWidget,
-    );
-    expect(
       find.bySemanticsLabel('Skip habit Take a restorative walk'),
       findsOneWidget,
     );
@@ -119,9 +113,12 @@ void main() {
       findsOneWidget,
     );
     expect(
-      tester.getTopLeft(find.text('Complete today')).dy,
-      greaterThan(tester.getTopLeft(find.text('Skip today')).dy),
+      tester.getCenter(find.byTooltip('Complete habit Take a restorative walk')).dy,
+      tester.getCenter(find.byTooltip('Skip habit Take a restorative walk')).dy,
     );
+    expect(tester.getCenter(find.byTooltip('Complete habit Take a restorative walk')).dx,
+      lessThan(tester.getCenter(find.text('Take a restorative walk')).dx));
+    expect(find.text('Complete today'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

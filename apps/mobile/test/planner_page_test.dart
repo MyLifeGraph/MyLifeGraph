@@ -46,9 +46,16 @@ void main() {
         textScale: size.width == 320 ? 2 : 1);
       expect(tester.takeException(), isNull);
       final page = tester.widget<AppPage>(find.byType(AppPage));
-      expect(page.children.first, isA<PlannerSevenDaySection>());
       if (size.width < 1280) {
+        expect(page.children.first, isA<PlannerSevenDaySection>());
         expect(page.children[1], isA<PlannerAddNewSection>());
+      } else {
+        final columns = find.byKey(const ValueKey('planner-desktop-columns'));
+        expect(columns, findsOneWidget);
+        final agendaRect = tester.getRect(find.byType(PlannerSevenDaySection));
+        final summaryRect = tester.getRect(find.byType(PlannerNeedsAttentionSection));
+        expect(agendaRect.right, lessThan(summaryRect.left));
+        expect(agendaRect.top, lessThanOrEqualTo(summaryRect.top));
       }
       final agenda = find.byKey(const ValueKey('planner-seven-days'));
       await _scrollPlannerUntilVisible(tester,agenda, 300,

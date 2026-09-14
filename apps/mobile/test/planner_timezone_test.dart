@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/planner/domain/planner.dart';
@@ -252,10 +253,10 @@ PlannerTaskDraft _taskDraft() {
 
 Future<void> _pumpContent(WidgetTester tester, Widget child) async {
   await tester.pumpWidget(
-    MaterialApp(
+    ProviderScope(child: MaterialApp(
       theme: AppTheme.light,
       home: Scaffold(body: SingleChildScrollView(child: child)),
-    ),
+    )),
   );
   await tester.pumpAndSettle();
 }

@@ -521,9 +521,14 @@ the unread result and Back; it is pushed so Back returns to the originating
 page. Inbox remains under Settings. A disabled Coach gate omits the fifth
 destination rather than restoring Settings; Settings-owned routes such as
 `/alerts` leave the shell destinations unselected.
-Today, Insights, Planner, and Coach align compact icon actions at the same
+Today, Insights, Quick actions, Planner, and Coach align compact icon actions at the same
 top-right inset; large text moves actions above the title. Other page headers
 retain their existing layout.
+Quick actions orders Morning, Evening, Focus, then Habit completion. Insights
+remembers Overview/Advanced and its subtab; Planner remembers Days/List across
+route recreation in the app session. Only display choices are retained, not
+account data. Desktop Planner places summaries alongside the calendar; mobile
+and tablet retain their existing stacked section order.
 
 - `/auth`
 - `/auth/recovery` (Supabase password-recovery event only)

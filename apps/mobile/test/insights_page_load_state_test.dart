@@ -8,12 +8,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/widgets/app_surface.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
 import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
 import 'package:my_life_graph/features/insights/domain/entities/personal_patterns.dart';
 import 'package:my_life_graph/features/insights/domain/entities/sleep_recommendation.dart';
 import 'package:my_life_graph/features/insights/presentation/pages/insights_page.dart';
+import 'package:my_life_graph/features/insights/presentation/widgets/insights_skillset_card.dart';
 import 'package:my_life_graph/features/insights/presentation/providers/insights_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
@@ -22,6 +24,31 @@ const _fingerprint =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 void main() {
+  testWidgets('Top patterns marks negative coefficients and arrows red', (tester) async {
+    await tester.pumpWidget(ProviderScope(overrides: [
+      _skillsetSelectionOverride(), _demoSurfaceOverride(),
+      insightsProvider.overrideWith((_) async => const []),
+      skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
+      correlationReportProvider.overrideWith((_) async => CorrelationReport(
+        windowDays: 30, metrics: correlationMetrics, points: const [],
+        results: const [CorrelationResult(metricAId: 'sleep_hours',
+          metricBId: 'energy_level', sampleSize: 20, coefficient: -.8,
+          summary: 'Descriptive association')],
+      )),
+    ], child: MaterialApp(theme: AppTheme.dark, home: const Scaffold(body: InsightsPage()))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Advanced'));
+    await tester.pumpAndSettle();
+    final tab = find.byKey(const Key('insights-advanced-pane-topPatterns'));
+    await tester.ensureVisible(tab);
+    await tester.pumpAndSettle();
+    await tester.tap(tab);
+    await tester.pumpAndSettle();
+    expect(find.text('Strong negative'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('-0.80')).style!.color, AppTheme.dark.colorScheme.error);
+    expect(tester.widget<Icon>(find.byIcon(AppIcons.trendingDown)).color, AppTheme.dark.colorScheme.error);
+    expect(tester.takeException(), isNull);
+  });
   for (final sparse in [false, true]) {
     for (final width in [390.0, 1280.0]) {
       testWidgets('Advanced windows are available across relevant tabs: sparse=$sparse width=$width', (tester) async {
@@ -29,6 +56,8 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
+        final showPage = ValueNotifier(true);
+        addTearDown(showPage.dispose);
         await tester.pumpWidget(ProviderScope(
           overrides: [
             _skillsetSelectionOverride(),
@@ -41,7 +70,12 @@ void main() {
               points: const [], results: const [],
             )),
           ],
-          child: MaterialApp(theme: AppTheme.dark, home: const Scaffold(body: InsightsPage())),
+          child: MaterialApp(theme: AppTheme.dark, home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showPage,
+              builder: (_, show, _) => show ? const InsightsPage() : const SizedBox(),
+            ),
+          )),
         ));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Advanced'));
@@ -106,6 +140,10 @@ void main() {
           for (final days in [7, 14, 30, 90]) {
             expect(find.text('${days}d'), findsOneWidget);
           }
+          if (pane == 'skillset') {
+            expect(tester.getBottomLeft(find.text('7d')).dy,
+              lessThan(tester.getTopLeft(find.byType(InsightsSkillsetCard)).dy));
+          }
           selected = selected == 30 ? 90 : 30;
           final choice = find.text('${selected}d');
           await tester.ensureVisible(choice);
@@ -120,6 +158,19 @@ void main() {
         await tester.tap(discovered);
         await tester.pumpAndSettle();
         expect(find.text('30d'), findsNothing);
+        final skillsetTab = find.byKey(const Key('insights-advanced-pane-skillset'));
+        await tester.ensureVisible(skillsetTab);
+        await tester.pumpAndSettle();
+        await tester.tap(skillsetTab);
+        await tester.pumpAndSettle();
+        showPage.value = false;
+        await tester.pumpAndSettle();
+        expect(find.byType(InsightsPage), findsNothing);
+        showPage.value = true;
+        await tester.pumpAndSettle();
+        // Route state was disposed, but both view choices survive.
+        expect(find.byType(InsightsSkillsetCard), findsOneWidget);
+        expect(container.read(insightsWindowDaysProvider), selected);
         expect(tester.takeException(), isNull);
       });
     }

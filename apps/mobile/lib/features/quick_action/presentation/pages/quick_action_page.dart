@@ -26,6 +26,7 @@ class QuickActionPage extends ConsumerWidget {
 
     return AppPage(
       title: 'Quick actions',
+      compactHeader: true,
       subtitle: 'Add a check-in or start something you planned',
       actions: const [AppHeaderActions()],
       children: [
@@ -54,16 +55,16 @@ class QuickActionPage extends ConsumerWidget {
         ),
         if (capabilities.canUseSyncedHabits) ...[
           _ActionTile(
-            icon: AppIcons.taskAltOutlined,
-            title: 'Habit completion',
-            subtitle: 'Track consistency signals',
-            onTap: () => context.push(AppRoutes.habitCompletion),
-          ),
-          _ActionTile(
             icon: AppIcons.timerOutlined,
             title: 'Focus',
             subtitle: 'Start a timed Focus session linked to a task or habit',
             onTap: () => context.push(AppRoutes.deepWork),
+          ),
+          _ActionTile(
+            icon: AppIcons.taskAltOutlined,
+            title: 'Habit completion',
+            subtitle: 'Track consistency signals',
+            onTap: () => context.push(AppRoutes.habitCompletion),
           ),
         ],
       ],

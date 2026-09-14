@@ -304,17 +304,31 @@ class HabitOutcomeTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  completed
-                      ? AppIcons.checkCircle
-                      : skipped
-                          ? AppIcons.fastForwardOutlined
+                if (isSaving)
+                  const SizedBox.square(
+                    dimension: 48,
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else
+                  _habitAction(
+                    label: completed
+                        ? 'Completed today'
+                        : skipped
+                            ? 'Skipped today'
+                            : 'Complete habit ${habit.title}',
+                    onPressed: outcome == null ? onComplete : null,
+                    icon: Icon(
+                      completed ? AppIcons.checkCircle
+                          : skipped ? AppIcons.fastForwardOutlined
                           : AppIcons.radioButtonUnchecked,
-                  color: outcome == null
-                      ? null
-                      : Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: AppSpacing.md),
+                      color: outcome == null
+                          ? null : Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,6 +354,13 @@ class HabitOutcomeTile extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+                _habitAction(
+                  label: outcome == null
+                      ? 'Skip habit ${habit.title}'
+                      : 'Undo habit ${habit.title}',
+                  onPressed: isSaving ? null : outcome == null ? onSkip : onUndo,
+                  icon: Icon(outcome == null ? AppIcons.fastForwardOutlined : AppIcons.undo),
                 ),
               ],
             ),
@@ -376,70 +397,22 @@ class HabitOutcomeTile extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (isSaving)
-              const Align(
-                alignment: Alignment.centerRight,
-                child: SizedBox.square(
-                  dimension: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else if (outcome != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Semantics(
-                  label: 'Undo habit ${habit.title}',
-                  button: true,
-                  onTap: onUndo,
-                  child: ExcludeSemantics(
-                    child: OutlinedButton.icon(
-                      onPressed: onUndo,
-                      icon: const Icon(AppIcons.undo),
-                      label: Text(
-                        skipped ? 'Undo skip' : 'Undo completion',
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            else
-              Wrap(
-                key: ValueKey('habit-outcome-actions-${habit.id}'),
-                alignment: WrapAlignment.end,
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  Semantics(
-                    label: 'Skip habit ${habit.title}',
-                    button: true,
-                    onTap: onSkip,
-                    child: ExcludeSemantics(
-                      child: TextButton(
-                        onPressed: onSkip,
-                        child: const Text('Skip today'),
-                      ),
-                    ),
-                  ),
-                  Semantics(
-                    label: 'Complete habit ${habit.title}',
-                    button: true,
-                    onTap: onComplete,
-                    child: ExcludeSemantics(
-                      child: FilledButton(
-                        onPressed: onComplete,
-                        child: const Text(
-                          'Complete today',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
           ],
         ),
       ),
     );
   }
 }
+
+Widget _habitAction({
+  required String label,
+  required VoidCallback? onPressed,
+  required Widget icon,
+}) => Semantics(
+  label: label,
+  button: true,
+  onTap: onPressed,
+  child: ExcludeSemantics(
+    child: IconButton(tooltip: label, onPressed: onPressed, icon: icon),
+  ),
+);

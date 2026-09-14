@@ -176,8 +176,7 @@ class _SparseInsightsHome extends StatelessWidget {
                           onSelected: onPaneSelected,
                         ),
                         const SizedBox(height: AppSpacing.md),
-                        if (advancedPane != _AdvancedPane.skillset &&
-                            advancedPane != _AdvancedPane.discovered) ...[
+                        if (advancedPane != _AdvancedPane.discovered) ...[
                           windowSelector,
                           const SizedBox(height: AppSpacing.md),
                         ],

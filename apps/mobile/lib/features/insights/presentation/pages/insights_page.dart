@@ -112,11 +112,18 @@ enum _AdvancedPane { compare, topPatterns, trend, skillset, matrix, discovered }
 
 enum _InsightsView { overview, advanced }
 
+// UI-only choices for this app session, like the shared Insights window.
+// No account data or authentication dependency belongs in these preferences.
+final _insightsViewProvider = StateProvider<_InsightsView>((_) => _InsightsView.overview);
+final _advancedPaneProvider = StateProvider<_AdvancedPane>((_) => _AdvancedPane.compare);
+
 class _InsightsHomeState extends ConsumerState<_InsightsHome> {
-  _InsightsView _view = _InsightsView.overview;
+  _InsightsView get _view => ref.watch(_insightsViewProvider);
+  set _view(_InsightsView value) => ref.read(_insightsViewProvider.notifier).state = value;
   String _metricAId = 'sleep_hours';
   String _metricBId = 'useful_progress';
-  _AdvancedPane _advancedPane = _AdvancedPane.compare;
+  _AdvancedPane get _advancedPane => ref.watch(_advancedPaneProvider);
+  set _advancedPane(_AdvancedPane value) => ref.read(_advancedPaneProvider.notifier).state = value;
   final Set<String> _trendMetricIds = {'sleep_hours', 'useful_progress'};
 
   @override
@@ -275,7 +282,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         onSelected: (pane) => setState(() => _advancedPane = pane),
       ),
       const SizedBox(height: AppSpacing.md),
-      if (const {_AdvancedPane.topPatterns, _AdvancedPane.trend, _AdvancedPane.matrix}
+      if (const {_AdvancedPane.topPatterns, _AdvancedPane.trend, _AdvancedPane.skillset, _AdvancedPane.matrix}
           .contains(_advancedPane)) ...[
         _windowSelector(isMobile: isMobile, windowDays: windowDays),
         const SizedBox(height: AppSpacing.md),
@@ -333,8 +340,6 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
       if (!next.remove(id)) next.add(id);
       ref.read(skillsetDimensionsProvider.notifier).state = next;
     },
-    onWindowChanged: (days) =>
-        ref.read(insightsWindowDaysProvider.notifier).state = days,
   );
 
   Widget _controlsPanel({required bool isMobile, required int windowDays}) {

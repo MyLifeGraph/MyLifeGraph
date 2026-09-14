@@ -946,7 +946,10 @@ class _TopPatternTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final metricA = report.metricById(result.metricAId);
     final metricB = report.metricById(result.metricBId);
-    final color = _resultColor(context, result, metricA, metricB);
+    // Sign is descriptive, not a judgment about either health signal.
+    final color = result.coefficient! < 0
+        ? Theme.of(context).colorScheme.error
+        : _resultColor(context, result, metricA, metricB);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(

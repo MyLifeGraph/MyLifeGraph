@@ -140,6 +140,9 @@ met weekly targets); an open, missed, or skipped required opportunity does not
 advance it.
 
 Setup-owned active habits remain available for completion, skip, and undo.
+The Habit completion page uses an actionable leading circle for completion and
+a right-hand Skip/Undo icon. Pending writes disable both, with a leading spinner;
+cadence, progress, missed/skipped counts and ownership remain visible.
 Their definition, pause, archive, and restore commands remain owned by Settings
 Setup and are excluded from generic Habit Management.
 
