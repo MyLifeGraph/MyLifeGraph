@@ -41,8 +41,9 @@ the service-only `apply_health_connect_v1` RPC and a partial daily-observation
 unique index. Optional source-tagged observations reuse `behavioral_events`;
 manual capture, existing tables' RLS and direct-DML grants remain unchanged.
 The named payload is `health-connect-v1`.
-See [Health Connect V1](health-connect-v1-contract.md). This migration has not
-been applied to Cloud by this task.
+See [Health Connect V1](health-connect-v1-contract.md). Live installation and
+access-control evidence for this migration and the following additions is in
+[Verification](verification.md#rc6-production-rollout-2026-09-14).
 
 The preceding migration is
 `20260913113853_optional_skillset_capture.sql`. It preserves the optional

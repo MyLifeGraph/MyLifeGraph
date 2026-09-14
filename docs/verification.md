@@ -48,6 +48,53 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### RC6 production rollout — 2026-09-14
+
+This supersedes the pending rollout statements in the earlier candidate entries.
+
+- Application commit `f6d0020fd01b715fb40340c294ef96a961f14dde` passed all seven
+  required jobs in [PR CI 34898730896](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34898730896).
+  PR #20 was integrated by protected fast-forward; no branch protection was
+  changed. The user explicitly waived the additional per-commit confirmation
+  for this rollout only. The normal AGENTS.md confirmation rule remains intact.
+- Pilot Cloud inspection confirms all 74 migrations, head
+  `20260914152145_capture_draft_operations.sql`, ordered identity
+  `02c7529e601d482fe6bab53a8513a429c1ff04e43b741bedfec7f4ae9a6f0bef`, and the
+  prepared-deletion guard. All 13 new public RPCs are service-role-only; all four
+  new private tables have forced RLS and no anon/authenticated SELECT. Existing
+  three Auth users/profiles and default-off consent are preserved. The four
+  migrations were already installed at the fresh post-main check; no duplicate
+  apply was run. Their applying actor/time is not established by migration
+  history. Advisors report only the existing leaked-password-protection warning.
+- The additional private pre-rollout dump passed a separate RAM-only PG17
+  restore. It is a point-in-time safety copy, not a supported production
+  recovery/reopening or external deletion-journal replay procedure.
+- Immutable VPS tag `v0.1.0-pilot.1-rc.6` is promoted. Public `/v1/health`
+  reports the exact application commit/tag and `/v1/ready` reports the expected
+  74-migration identity; the fixed project check confirms API and Coach ready.
+  The previous release is retained. The original dirty development checkout,
+  unrelated users/services, firewall, signing key and database data were preserved.
+- The existing FCM-only sender is enabled through `PUSH_DELIVERY_ENABLED=true`
+  in `/etc/mylifegraph/api.env`; API restart and readiness passed. Firebase
+  remains Spark without linked billing. Individual consent remains off until
+  the user opts in. Device delivery is not established by server readiness.
+- Vercel production deployment `dpl_D19c8KYpiFh4R4qcue2wZzCJmXky` is READY;
+  the served application at the production alias contains the exact
+  `main-f6d0020fd01b715fb40340c294ef96a961f14dde` release tag.
+- Automatic Main APK run `34900331003` and tagged APK run `34900388470` both
+  passed. [Published RC6](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.6)
+  contains the signed APK (versionCode `10000068`), SHA256SUMS, public signer/source
+  metadata and inspected source SBOM. APK SHA256 is
+  `6ac6f927a50e68263e228ee030ae482ae19d8bb5d56423f2a3a0cdd380fe7458`;
+  signer SHA256 is
+  `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+  Remote uploaded asset digests were verified before publication. Private signing
+  values remain in the protected GitHub `pilot-release` environment; backend
+  sender credentials remain exclusively in the protected VPS API environment.
+- Microphone, Google callback, Health Connect source availability, installed APK
+  update and closed-app push on the actual phone still require device acceptance.
+  This documentation-only follow-up does not change the deployed application.
+
 ### Release CI follow-up — 2026-09-14
 
 - Exact candidate `51aa008e17accef579a5ae9212e59f16fdb76fbc` passed all seven
