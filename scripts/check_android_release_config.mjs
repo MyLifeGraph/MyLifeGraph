@@ -235,6 +235,20 @@ export function checkAndroidReleaseConfig() {
   requireText(workflow, 'source_sbom_sha256', 'SBOM artifact identity');
   requireExactJavaVersion(ciWorkflow, '21', 'CI workflow');
   requireExactJavaVersion(workflow, '21', 'release workflow');
+  for (const [source, label] of [
+    [ciWorkflow, 'CI workflow'],
+    [workflow, 'release workflow'],
+    [stagingWorkflow, 'automatic signed APK workflow'],
+  ]) {
+    requireText(source, 'packages: platform-tools', label);
+  }
+  for (const source of [workflow, stagingWorkflow]) {
+    requireText(source,
+      'FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_CONFIG_BASE64 }}',
+      'signed APK Firebase configuration');
+    requireText(source, 'test -n "$FIREBASE_ANDROID_CONFIG_BASE64"',
+      'signed APK Firebase configuration guard');
+  }
   requireText(
     stagingWorkflow,
     'branches: [main]',

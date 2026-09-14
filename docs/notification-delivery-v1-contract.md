@@ -53,7 +53,8 @@ recalled after a remote settings change; local opt-out/account switch rejects it
 OS force-stop, offline state, token rotation while closed and platform delivery
 limits can prevent delivery. No browser/iOS push or unconditional delivery promise.
 
-The signed APK workflow injects public client configuration through the protected
+Both automatic Main and tagged signed APK workflows require and inject public
+client configuration through the protected
 `pilot-release` environment secret `FIREBASE_ANDROID_CONFIG_BASE64`. This is not a
 sender credential. Installed-device, migration and deployed-worker evidence must
 be recorded separately in `verification.md` before claiming live completion.

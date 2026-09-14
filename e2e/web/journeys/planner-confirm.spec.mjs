@@ -1,5 +1,6 @@
 import { assertHttpStatus } from '../support/api-client.mjs';
 import {
+  clickFlutterText,
   enableFlutterSemantics,
   expectFlutterText,
   openFlutterRoute,
@@ -85,6 +86,10 @@ test('@planner-confirm proposes and confirms one immutable Task plan', async ({
 
   await e2e.signInUi();
   await openFlutterRoute(page, e2e.appUrl, '/planner');
+  // The confirmed block can fall on a later day once today's windows are full.
+  // Inspect the whole agenda instead of assuming the default Today selection.
+  await clickFlutterText(page, 'List');
+  await scrollFlutterTextIntoView(page, title);
   await expectFlutterText(page, title);
   const cancelled = assertHttpStatus(
     await e2e.api.request(`/v1/planner/action-plans/${planId}/cancel`, {

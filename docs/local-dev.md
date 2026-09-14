@@ -1297,6 +1297,12 @@ the full first-parent commit count for the shared Android update sequence.
 Only verified APK/checksum/public-identity files become automatic artifacts;
 private signing material is removed in an always-run cleanup step.
 
+CI and both signed APK workflows install `platform-tools` explicitly, then the
+unchanged pinned SDK 36 platform/build tools; they do not request the obsolete
+`tools` package. Both signed workflows require the protected
+`FIREBASE_ANDROID_CONFIG_BASE64` public client configuration, so an automatic
+Main build cannot silently omit Android push configuration.
+
 ## Supabase
 
 The additive `exam-plan-health-v1` snapshot migration has a dedicated

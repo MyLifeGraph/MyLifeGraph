@@ -48,6 +48,28 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Release CI follow-up — 2026-09-14
+
+- Exact candidate `51aa008e17accef579a5ae9212e59f16fdb76fbc` passed all seven
+  jobs in manual run `34867662562`. Its additional protected-main PR #20 run
+  `34897217976` exposed two environment/time-dependent failures: Android setup
+  requests the unavailable legacy `tools` package (reproduced on a fresh rerun),
+  and Planner E2E assumes a new scheduled Task is visible in today's Days view
+  after the fixture's available time has already ended.
+- The follow-up explicitly requests `platform-tools` in all three Android
+  workflows, retaining SDK 36 / Java 21 / Flutter 3.44 and immutable signing
+  workflow Action pins. It also supplies the existing protected Firebase public
+  client configuration to automatic Main APKs, matching tagged APKs; both builds
+  fail if that configuration is missing.
+- Planner E2E selects the existing List view and scrolls to the confirmed Task;
+  all visibility, confirmation, Focus provenance, completion and reflection
+  assertions remain. Product UI and scheduling logic are unchanged.
+- Focused Android release checks (six) and E2E JavaScript syntax pass. Full
+  follow-up CI is pending. Main, VPS runtime and the Cloud schema are unchanged;
+  the reviewed four migrations have a successful dry-run and an additional
+  private safety copy restored in isolated PG17. This is not production
+  recovery/reopening authorization or external journal-replay evidence.
+
 ### Voice capture / Skillset verified candidate — 2026-09-14
 
 - Task base `28bf36bec3394507d0a16db7061450073ad045c6`, working branch
