@@ -37,7 +37,13 @@ void main() {
       expect(find.text('MORNING · SLEEP'), findsOneWidget);
       expect(find.text('How did you sleep?'), findsOneWidget);
       expect(find.text('Sleep start'), findsOneWidget);
-      expect(find.text('22:00'), findsNothing);
+      // Check the loaded sleep plan, not an unrelated wall-clock wake label.
+      expect(
+        tester
+            .widget<CaptureClockControl>(find.byType(CaptureClockControl).first)
+            .value,
+        store.sleepPlan.plannedSleepTime,
+      );
       expect(find.text('Choose a value to continue.'), findsNothing);
       expect(find.text('Sleep quality'), findsNothing);
       expect(find.text('Current energy'), findsNothing);

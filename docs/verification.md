@@ -93,7 +93,13 @@ This supersedes the pending rollout statements in the earlier candidate entries.
   sender credentials remain exclusively in the protected VPS API environment.
 - Microphone, Google callback, Health Connect source availability, installed APK
   update and closed-app push on the actual phone still require device acceptance.
-  This documentation-only follow-up does not change the deployed application.
+  This verification-only follow-up does not change the deployed application.
+- The documentation follow-up exposed a pre-existing time-dependent Morning
+  widget assertion at exactly 22:00 UTC: it prohibited that text anywhere even
+  when the correct current wake time was 22:00. The assertion now checks the
+  Sleep-start control against the loaded plan's value; duration, required fields
+  and final-save assertions remain unchanged. No runtime clock behavior changed.
+  All eight focused Morning widget tests and documentation consistency pass.
 
 ### Release CI follow-up — 2026-09-14
 
