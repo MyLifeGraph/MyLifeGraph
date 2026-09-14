@@ -1,6 +1,32 @@
 # Supabase Current State
 
 The latest repository migration is
+`20260914123644_android_push_delivery.sql`. It adds backend-owned
+`profiles.push_settings` (off by default) and private `push_devices`,
+`push_requests`, and `push_attempts` tables with forced RLS, service-only grants,
+owner foreign-key cascades, session binding, revision/replay guards and atomic
+rate/dedupe reservations. `android-push-v1` / `android-push-consent-v1` stay
+separate from foreground notifications. Public service-only RPCs are
+`get_push_state_v1`, `apply_push_command_v1`, `list_push_owners_v1`,
+`reserve_push_v1`, `check_push_reservation_v1`, and `finish_push_v1`.
+The narrow private `push_session_active_v1` definer checks Auth sessions; it gives
+no general Auth-table privilege to the API role. Device tokens and private
+dispatch metadata are not product exports or Coach inputs. Existing Auth,
+Capture, Planner and notification data semantics remain unchanged.
+See [Notification Delivery](notification-delivery-v1-contract.md). Repository
+presence is not evidence of Cloud application; see Verification for rollout.
+
+The preceding migration is
+`20260914110530_health_connect_observations.sql`. It adds backend-owned
+`profiles.health_connect_settings` plus a private latest-request replay field,
+the service-only `apply_health_connect_v1` RPC and a partial daily-observation
+unique index. Optional source-tagged observations reuse `behavioral_events`;
+manual capture, existing tables' RLS and direct-DML grants remain unchanged.
+The named payload is `health-connect-v1`.
+See [Health Connect V1](health-connect-v1-contract.md). This migration has not
+been applied to Cloud by this task.
+
+The preceding migration is
 `20260913113853_optional_skillset_capture.sql`. It preserves the optional
 `skillset-capture-v1` branch namespace when older clients omit it. It adds no
 tables, grants, projections or event types. Explicit new-client maps can clear
@@ -1651,7 +1677,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260913113853_optional_skillset_capture.sql
+20260914123644_android_push_delivery.sql
 ```
 
 Then configure `.env` with:

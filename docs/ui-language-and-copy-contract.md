@@ -1,5 +1,18 @@
 # UI Language And Copy Contract
 
+`Push reminders` is an optional Settings surface. Use `Important reminders`,
+`Before bedtime`, `Today's deadlines`, `Important patterns` and `Quiet hours`.
+The first opt-in explicitly names Google Firebase, device linkage and generic
+copy; never describe OS permission as Cloud consent. Keep opt-out, unavailable
+APK/server states and the two-per-24-hours / monthly-pattern limits clear.
+Do not promise delivery after force-stop or while offline.
+
+Health Connect uses `Connect`, `Sync now`, `Stop sharing` and `Delete imported data`.
+The consent dialog names Cloud storage and selected Coach-provider access; Android
+permission alone is not Cloud consent. Keep the seven-day foreground sync scope,
+missing-data behavior, deletion distinction and errors visible. Imported sleep is
+a calendar-day device observation, never a replacement for Morning check-in sleep.
+
 Coach dictation uses `Dictate`, `Discard recording`, `Stop and review`, and `Send`.
 The recording bar shows remaining seconds (`30s` down to `0s`) with the accessible
 label `Recording. N seconds remaining`, then `Please wait…` while processing.

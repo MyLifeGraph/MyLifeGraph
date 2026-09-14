@@ -186,6 +186,12 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 
 ## Account Export
 
+The additive Health Connect account preference is exported as
+`profiles.health_connect_settings`; its private latest-request replay payload
+is excluded. Source-tagged health observations are already in `behavioral_events`.
+The V6 table/envelope shape remains unchanged. Delete watch imports removes only
+that source; full account deletion still cascades the profile and observations.
+
 `GET /v1/account/export` is side-effect free and returns the strict
 `account-export-v6` JSON envelope. It removes Goals, generic Recommendations,
 and Decision Feedback from the former bounded
@@ -229,6 +235,13 @@ orchestration metadata rather than public owner-content tables and are omitted
 from `account-export-v6`. The actual affected Exam content is already present
 as Deadline plan/revision/block rows. Adding balance history would require a new
 export contract version; V6 is not widened with a second shape.
+
+`profiles.push_settings` is included with the existing profile export and its
+sanitized Coach profile projection. Private `push_devices`, `push_requests` and
+`push_attempts` contain delivery credentials/retry/dispatch metadata, not new
+product content; they are excluded from export and Coach access. All three
+cascade on owner deletion. Push dispatch rejects a pending deletion and inactive
+Auth session; native logout/deletion completion disables device receipt first.
 Study Setup exports the
 current owner projection only; transient preparation-checklist decisions and
 local recovery countdown state do not exist in the export. Personal Learning

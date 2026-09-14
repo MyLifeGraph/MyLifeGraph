@@ -1,5 +1,65 @@
 # Notification Delivery V1 Contract
 
+## Optional Android push V1
+
+This additive transport is independent of the existing foreground V1 contract.
+`android-push-v1` uses `GET/POST /v1/push`, verified bearer owner/session identity,
+and explicit `android-push-consent-v1` consent. Settings exposes **Push reminders**:
+master opt-in/out, sleep/deadline/pattern switches and quiet hours. Nothing enables
+push by default. Android permission is required separately. Web can disable the
+account setting but does not register a browser or native device.
+
+`important_reminder_rules.py` proposes a grouped 09:00 reminder for open Tasks
+(including confirmed preparation-plan managed tasks), a reminder 30 minutes before
+a fresh reliable learned bedtime, and a rare stable Focus-timing observation with
+stronger existing evidence. Draft plans do not count. Analysis failures skip that
+category, never invent data. No LLM runs, source facts change, or private free text
+leaves the API. Fifteen-minute windows expire without catch-up.
+
+`PUSH_DELIVERY_ENABLED=false` is the server default. Explicit activation starts a
+bounded, keyset-paged, five-minute worker inside the existing API lifespan. The
+existing VPS sends through FCM HTTP v1; no Firebase compute or public port is added.
+Keep Firebase on **Spark**, without billing linkage. `FCM_PROJECT_ID` and the
+backend-only `FCM_CREDENTIALS_JSON` identify the dedicated FCM-only sender account.
+The latter is a redacted `SecretStr` read from the API's existing protected
+environment file, not a new shared file or an executor environment variable.
+This identity must never reach Flutter, logs, Coach processes or source control.
+
+`profiles.push_settings` contains versioned consent/preferences. Private-schema
+device, request-fingerprint and attempt tables are backend-only, cascade with
+account deletion, and are excluded from product export/Coach snapshots. One active
+Android device is registered per account; registering another replaces it. Tokens
+are unique, never returned by GET and bound to the verified Supabase Auth session.
+A narrow service-only definer checks session existence/expiry without giving the
+API role general access to `auth.sessions`. Client profile updates cannot bypass
+the consent command. Revision conflicts require reload; ambiguous commands are not
+blindly retried. Old sessions cannot register, update or receive new sends.
+
+Owner-locked SQL reservations recheck consent/category, session, pending deletion,
+timezone/revision, quiet hours, owner-unique dedupe and a rolling **2 per 24 hours**
+cap. Pattern attempts additionally have a **30-day** cooldown. Attempts count even
+after send failure, opt-out or timezone changes. A final read rechecks the reserved
+attempt immediately before dispatch. Ambiguous/network-failed sends are never
+retried. FCM acceptance is not device-delivery evidence. Invalid tokens are removed
+only when they still match the owner's registered token.
+
+Android receives data-only messages with zero queue lifetime, short expiry and
+owner/session/registration identities. Native receipt rechecks all identities,
+local enablement, OS permission and duplicate attempt ID; only fixed generic text
+and allowlisted Planner/Insights routes are displayed. Logout first disables local
+receipt and removes this feature's notifications, then deletes the Firebase token.
+Foreground/resume refreshes registration. An already dispatched message cannot be
+recalled after a remote settings change; local opt-out/account switch rejects it.
+OS force-stop, offline state, token rotation while closed and platform delivery
+limits can prevent delivery. No browser/iOS push or unconditional delivery promise.
+
+The signed APK workflow injects public client configuration through the protected
+`pilot-release` environment secret `FIREBASE_ANDROID_CONFIG_BASE64`. This is not a
+sender credential. Installed-device, migration and deployed-worker evidence must
+be recorded separately in `verification.md` before claiming live completion.
+
+## Existing foreground V1 contract
+
 Notification Delivery V1 adds explicit consent, deterministic stored-item
 generation, and foreground in-app delivery to the existing Inbox lifecycle. It
 does not add browser, Android, email, push, or operating-system notifications.

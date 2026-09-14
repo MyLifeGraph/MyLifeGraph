@@ -1,5 +1,26 @@
 # MyLifeGraph AI Service
 
+Optional Android push uses authenticated `GET/POST /v1/push` with
+`android-push-v1` and explicit `android-push-consent-v1`. POST supports settings,
+register and unregister, deriving both owner and verified Auth session from the
+bearer. Device tokens never appear in responses or validation errors. Private
+service-role RPCs own consent revisions, session binding, dedupe and dispatch
+caps; the existing foreground notifications contract is unchanged.
+`PUSH_DELIVERY_ENABLED` defaults off. When explicitly enabled after migration,
+the existing API lifespan runs a bounded five-minute FCM sender using
+`FCM_PROJECT_ID` and backend-only `FCM_CREDENTIALS_JSON` (redacted in configuration
+representations, stored in the existing protected API environment). No LLM, Firebase compute
+or new public listener is introduced. See
+[Notification Delivery](../../docs/notification-delivery-v1-contract.md).
+
+Optional Health Connect uses authenticated `GET /v1/health-connect` (state only)
+and `POST /v1/health-connect` (explicit connect/sync/disconnect/delete command).
+The strict `health-connect-v1` boundary derives the owner from the bearer and
+uses one service-only, revision-checked RPC. See
+[Health Connect V1](../../docs/health-connect-v1-contract.md). The additive
+migration must precede API rollout; repository code does not prove Cloud/device
+availability. Existing manual Capture and notification routes are unchanged.
+
 Optional [speech dictation](../speech_service/README.md) is a separate sidecar;
 it does not add code to or replace this API process. Its admission check reuses
 the generation-free Coach history GET and accepts only successful account access.

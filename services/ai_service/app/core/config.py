@@ -5,7 +5,7 @@ import re
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,6 +49,13 @@ class Settings(BaseSettings):
         alias="APP_ENV",
     )
     api_prefix: str = Field(default="/v1", alias="API_PREFIX")
+    push_delivery_enabled: bool = Field(default=False, alias="PUSH_DELIVERY_ENABLED")
+    fcm_project_id: str = Field(
+        default="", alias="FCM_PROJECT_ID", pattern=r"^([a-z][a-z0-9-]{4,28}[a-z0-9])?$"
+    )
+    fcm_credentials_json: SecretStr = Field(
+        default=SecretStr(""), alias="FCM_CREDENTIALS_JSON"
+    )
     app_build_sha: str = Field(default="", alias="APP_BUILD_SHA")
     app_release_tag: str = Field(default="", alias="APP_RELEASE_TAG")
     app_migration_head: str = Field(default="", alias="APP_MIGRATION_HEAD")

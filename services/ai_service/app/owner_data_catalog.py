@@ -146,7 +146,7 @@ OWNER_DATA_CATALOG = (
         "timezone_revision,preparation_budget_revision,role,auth_provider,"
         "onboarding_completed_at,setup_revision,"
         "pilot_participation_notice_version,pilot_participation_accepted_at,"
-        "created_at,updated_at",
+        "health_connect_settings,push_settings,created_at,updated_at",
         owner_column="id",
         cursor_column="id",
     ),
@@ -174,7 +174,11 @@ OWNER_DATA_CATALOG = (
     ),
     _shared(
         "behavioral_events",
-        "Product behavioral observations retained for the owner.",
+        "Product behavioral observations retained for the owner. Optional source "
+        "health_connect contains device-reported calendar-day steps/sleep minutes, "
+        "with timezone, observed window and source packages in metadata. These are "
+        "separate from manual check-ins; never add overlapping sources together "
+        "or interpret an absent value as zero or as a previous-night estimate.",
     ),
     _shared(
         "lifestyle_entries",

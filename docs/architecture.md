@@ -1,5 +1,20 @@
 # Architecture
 
+Optional [Android push V1](notification-delivery-v1-contract.md) leaves Supabase
+as Auth/data authority. The existing API process evaluates deterministic bounded
+rules and reserves sends through private service-only SQL. FCM delivers generic
+data-only notifications; native Android gates receipt on session/device identity,
+permission and expiry. Explicit push consent is separate from foreground banners
+and Health Connect. Sender credentials stay backend-only; neither Coach executor
+nor Flutter receives them. No new public port, Firebase database or paid compute.
+
+Optional [Health Connect V1](health-connect-v1-contract.md) adds Android-only
+foreground reads of steps and sleep-session totals. Explicit account Cloud consent
+and an active device binding precede the owner-locked backend command. Imported
+`behavioral_events` stay source-tagged, never replace manual Capture, and are
+already available to owner export and the read-only Coach snapshot. No other
+analysis or delivery authority changes. See that owner for rollout limitations.
+
 Skillset is an additive Capture-to-Insights path: optional versioned branch JSON
 is validated by authenticated FastAPI and stored by the existing service-only
 Capture RPC. The owner lock and old-client preservation protect existing data.

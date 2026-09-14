@@ -19,7 +19,10 @@ select columns_are(
     'timezone_revision',
     'preparation_budget_revision',
     'pilot_participation_notice_version',
-    'pilot_participation_accepted_at'
+    'pilot_participation_accepted_at',
+    'health_connect_settings',
+    'health_connect_last_request',
+    'push_settings'
   ],
   'profiles contains only the current version/time participation fields'
 );

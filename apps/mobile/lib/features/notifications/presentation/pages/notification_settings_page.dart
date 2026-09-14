@@ -85,7 +85,7 @@ class _NotificationSettingsPageState
               const AppInfoSectionDisclosure(
                 heading: 'Delivery details',
                 description:
-                    'MyLifeGraph cannot send browser, phone-system, email, push, or background notifications. Reminder text follows fixed templates and never includes private check-in details.',
+                    'These banners appear only while the app is open. Android push is configured separately in Push reminders. Reminder text never includes private check-in details.',
                 keyPrefix: 'notification-info',
               ),
               if (settings.consentedAt != null) ...[

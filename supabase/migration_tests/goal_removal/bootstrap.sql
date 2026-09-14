@@ -59,6 +59,14 @@ create table if not exists auth.users (
   updated_at timestamptz
 );
 
+-- Minimal Auth-owned session substrate used by the optional push session gate.
+-- This fixture never runs against a normal or hosted Supabase database.
+create table if not exists auth.sessions (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  not_after timestamptz
+);
+
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 grant execute on function auth.role() to anon, authenticated, service_role;

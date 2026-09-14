@@ -16,11 +16,13 @@ from app.api.routes import (
     deadline_plans,
     focus,
     health,
+    health_connect,
     intake,
     insights,
     learning,
     notifications,
     planner,
+    push,
     scheduled,
     snapshots,
     today,
@@ -59,6 +61,17 @@ async def _lifespan(app: FastAPI):
             settings=settings,
         )
         await app.state.composition.coach_services.current.reconcile_startup()
+        push_task = None
+        if settings.push_delivery_enabled:
+            from app.services.push_delivery import FcmSender, run_push_scheduler
+
+            sender = FcmSender(
+                settings.fcm_project_id,
+                settings.fcm_credentials_json.get_secret_value(),
+            )
+            push_task = asyncio.create_task(
+                run_push_scheduler(supabase_client, app.state.composition, sender)
+            )
         deletion_reconcile_task = asyncio.create_task(
             _reconcile_account_deletions(app),
         )
@@ -66,6 +79,12 @@ async def _lifespan(app: FastAPI):
         try:
             yield
         finally:
+            if push_task is not None:
+                push_task.cancel()
+                try:
+                    await push_task
+                except asyncio.CancelledError:
+                    pass
             deletion_reconcile_task.cancel()
             try:
                 await deletion_reconcile_task
@@ -173,6 +192,8 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router, prefix=settings.api_prefix)
+    app.include_router(health_connect.router, prefix=settings.api_prefix)
+    app.include_router(push.router, prefix=settings.api_prefix)
     app.include_router(account.router, prefix=settings.api_prefix)
     app.include_router(daily_capture.router, prefix=settings.api_prefix)
     app.include_router(intake.router, prefix=settings.api_prefix)

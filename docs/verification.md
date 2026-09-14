@@ -48,6 +48,81 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Android Health Connect / push candidate — 2026-09-14
+
+- Task base `7daa68ba9e44b7ee7d7de6fa2a247f9f4ea8eb28`, branch
+  `feat/watch-and-ui-follow-up`. Additive Health Connect Cloud sync and separate
+  optional FCM settings/device/dispatch/native receipt are implemented locally.
+- Focused backend: 64 passed, including consent/session ownership, invalid-payload
+  redaction, no retry after ambiguous sends, generic data-only FCM payloads,
+  quiet hours, unavailable analysis, Health Connect and owner catalog.
+  Flutter: 18 targeted controller/host tests passed; analysis has no issues.
+  Ruff, documentation consistency and six Android release-config checks pass.
+- Own VM isolated PG17 run applies all 72 migrations and passes all 535 pgTAP
+  assertions across 26 files plus existing real Coach concurrency tests. The
+  normal database is not migrated/reset. Restore verification is being rerun
+  after updating its exact expected head/count; no live Cloud migration claim.
+- Laptop Java 21 is now available alongside Java 25, without replacing it.
+  Native Gradle compilation remains blocked by repeated upstream TLS
+  `bad_record_mac` downloads; no certificate validation was disabled. Linux CI
+  and installed-device receipt/Health Connect checks remain required.
+- Captured-base affected selector selects Full; the Windows run stops at the
+  existing Unix supervisor prerequisite `setsid`. No check was weakened.
+- Public Firebase Android config is stored in the existing `pilot-release`
+  environment as `FIREBASE_ANDROID_CONFIG_BASE64`; signing secrets/protections
+  are unchanged. An ignored local Android config is also generated. Sender
+  credentials, live API activation, migration and signed new APK are not yet
+  deployed. Main has not been changed.
+
+### Firebase no-cost setup — 2026-09-14
+
+- Authenticated CLI inspection identifies the user-created Firebase project
+  `mylifegraph-5d234` (number `76944636936`, display name MyLifeGraph).
+  Cloud Billing reports `billingEnabled=false` and no linked billing account,
+  both before and after setup. This is the requested Spark/no-cost boundary.
+- Android package `com.mylifegraph.app` registered as
+  `1:76944636936:android:3899180d908adc49e225bd`; generated client configuration
+  is retained only in the ignored local `.tools` directory for subsequent work.
+- FCM API is enabled. Dedicated identity
+  `mylifegraph-push-sender@mylifegraph-5d234.iam.gserviceaccount.com` has only the
+  project role `roles/firebasecloudmessaging.admin`. Existing IAM bindings were
+  preserved with the policy etag. No private service-account key was created.
+- No Analytics integration, Firebase database, hosting, billed compute, or
+  billing-account link was configured. No production API, Supabase, Vercel,
+  APK, application runtime, or GitHub release was changed by this setup.
+- Firebase registration is not a push delivery test. Client transport, device
+  registration/consent lifecycle, atomic dispatch, scheduler and VPS sender
+  authentication remain to be implemented and verified before activation.
+
+### Health Connect / important reminders in progress — 2026-09-14
+
+- Task base `7daa68ba9e44b7ee7d7de6fa2a247f9f4ea8eb28`, branch
+  `feat/watch-and-ui-follow-up`. No main, deployment, Cloud SQL or signing change.
+- First focused check: 22 passing Health Connect/backend owner-catalog tests;
+  eight passing Flutter state/controller tests including declined permission,
+  wrong device, Cloud failure and account disposal during a native read.
+- Final focused checks: 34 passing backend rules/Health Connect/catalog tests;
+  23 passing Flutter Health Connect/Settings tests, including automatic foreground
+  sync, resume throttling and guest zero-call behavior. Flutter analysis, Ruff
+  and documentation consistency pass. SQL plus PL/pgSQL syntax was parsed locally;
+  this is not a database execution or RLS/transaction acceptance result.
+- The two new native Health Connect classes compiled using the existing Kotlin
+  compiler and installed API 37 jar. Full Android build/SDK 36 remains a separate
+  gate; the ad-hoc all-native compile lacks AndroidX Lifecycle dependencies.
+- Expanded backend regression run: 232 passed, five failed in existing
+  Windows-incompatible checks (POSIX snapshot mode/cleanup, three VPS journal
+  `O_DIRECTORY` checks, and whitespace-sensitive zone lookup). No security
+  assertion was relaxed. The captured-base affected gate selected Full but
+  stopped at the existing Unix supervisor test because Windows lacks `setsid`.
+- Health Connect pgTAP cases are source only until an isolated database run.
+  Android native compilation and installed Garmin/Health Connect acceptance
+  remain required. No live import has been claimed.
+- Important reminder rules are separate preparation only. Real push remains
+  blocked on Firebase configuration and requires the remaining transport,
+  durable dispatch and opt-out work documented in the delivery contract.
+- Desktop todo was reread live at the end. Earlier UI items remain implemented;
+  watch-provider/device/Cloud acceptance and real push remain explicitly open.
+
 ### UI follow-up candidate — 2026-09-14
 
 - Code candidate `593ea2230f841968d8e66a5650587674cb99f594` is published on

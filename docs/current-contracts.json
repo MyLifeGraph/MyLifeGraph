@@ -81,6 +81,26 @@
     },
     {
       "coverage": "shared_named",
+      "key": "androidPush",
+      "version": "android-push-v1",
+      "sources": [
+        {"path": "apps/mobile/lib/features/notifications/domain/entities/push_settings.dart", "symbol": "pushContractVersion"},
+        {"path": "services/ai_service/app/models/push.py", "symbol": "PUSH_CONTRACT_VERSION"}
+      ],
+      "owners": ["docs/notification-delivery-v1-contract.md", "docs/supabase-current-state.md"]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "androidPushConsent",
+      "version": "android-push-consent-v1",
+      "sources": [
+        {"path": "apps/mobile/lib/features/notifications/domain/entities/push_settings.dart", "symbol": "pushConsentVersion"},
+        {"path": "services/ai_service/app/models/push.py", "symbol": "PUSH_CONSENT_VERSION"}
+      ],
+      "owners": ["docs/notification-delivery-v1-contract.md"]
+    },
+    {
+      "coverage": "shared_named",
       "key": "assignmentSeries",
       "version": "assignment-series-v1",
       "sources": [
@@ -422,6 +442,26 @@
         "docs/personal-learning-v1-contract.md",
         "docs/supabase-current-state.md"
       ]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "healthConnect",
+      "version": "health-connect-v1",
+      "sources": [
+        {"path": "apps/mobile/lib/features/health_connect/domain/health_connect_state.dart", "symbol": "healthConnectContractVersion"},
+        {"path": "services/ai_service/app/models/health_connect.py", "symbol": "HEALTH_CONNECT_CONTRACT_VERSION"}
+      ],
+      "owners": ["docs/health-connect-v1-contract.md", "docs/supabase-current-state.md"]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "healthConnectConsent",
+      "version": "health-connect-cloud-consent-v1",
+      "sources": [
+        {"path": "apps/mobile/lib/features/health_connect/domain/health_connect_state.dart", "symbol": "healthConnectConsentVersion"},
+        {"path": "services/ai_service/app/models/health_connect.py", "symbol": "HEALTH_CONNECT_CONSENT_VERSION"}
+      ],
+      "owners": ["docs/health-connect-v1-contract.md"]
     },
     {
       "coverage": "explicit",

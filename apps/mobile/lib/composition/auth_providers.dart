@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
+import '../core/platform/push_platform.dart';
 import '../core/contracts/account_deletion.dart';
 import '../core/network/api_client.dart';
 import '../core/supabase/supabase_providers.dart';
@@ -321,6 +322,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     final previous = state;
     state = const AsyncValue.loading();
     try {
+      await PushPlatform.clearForSignOut();
       await _clearCurrentCoachCredentials(previous.valueOrNull);
     } catch (_) {
       if (_canCommit(generation)) state = previous;
@@ -353,6 +355,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     final previous = state;
     state = const AsyncValue.loading();
     try {
+      await PushPlatform.clearForSignOut();
       if (!coachCredentialsAlreadyCleared) {
         await _clearCurrentCoachCredentials(previous.valueOrNull);
       }

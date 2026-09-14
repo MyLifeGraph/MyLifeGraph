@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/widgets/coach_provider_settings_card.dart';
+import '../../../../composition/widgets/health_connect_settings_entry.dart';
+import '../../../../composition/widgets/push_settings_entry.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -194,6 +196,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         const AppSectionHeader(
           title: 'Tools and connections',
         ),
+        if (syncedAccount) const HealthConnectSettingsEntry(),
+        if (syncedAccount) const PushSettingsEntry(),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(

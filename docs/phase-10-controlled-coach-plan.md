@@ -1,5 +1,11 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+Optional Health Connect observations are readable through the existing owner-only
+`behavioral_events` snapshot source. Its catalog explicitly labels device-reported
+calendar-day totals and forbids adding them to overlapping manual check-ins.
+Only the public account consent preference is included; latest mutation replay
+payloads are excluded. No provider authority, prompt version or tool changes.
+
 After authenticated profile initialization, the client preselects Project Coach
 (`Standard (provided)`); personal OpenAI/Gemini keys remain opt-in. Every request
 still names its provider explicitly, with unchanged server admission and no

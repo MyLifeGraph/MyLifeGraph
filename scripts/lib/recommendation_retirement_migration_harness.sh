@@ -189,7 +189,7 @@ run_recommendation_retirement_migration_harness() (
     # migration identity is a separate non-superuser CREATEROLE principal.
     docker exec "$database_container" psql \
       -U "$bootstrap_user" -d "$database_name" -X -v ON_ERROR_STOP=1 \
-      -c "create extension if not exists dblink with schema extensions; create role postgres login nosuperuser nocreatedb createrole inherit noreplication bypassrls connection limit -1; alter database ${database_name} owner to postgres; alter schema auth owner to postgres; alter table auth.users owner to postgres; alter function auth.uid() owner to postgres; alter function auth.role() owner to postgres; grant usage on schema extensions to postgres; grant anon, authenticated, service_role to postgres with admin option;" \
+      -c "create extension if not exists dblink with schema extensions; create role postgres login nosuperuser nocreatedb createrole inherit noreplication bypassrls connection limit -1; alter database ${database_name} owner to postgres; alter schema auth owner to postgres; alter table auth.users owner to postgres; alter table auth.sessions owner to postgres; alter function auth.uid() owner to postgres; alter function auth.role() owner to postgres; grant usage on schema extensions to postgres; grant anon, authenticated, service_role to postgres with admin option;" \
       >"$harness_root/pg17-migration-role.log" 2>&1
     container_ip="$(docker inspect \
       --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
@@ -505,7 +505,7 @@ SQL
       -U postgres -d "$database_name" -X -At -v ON_ERROR_STOP=1 \
       -c "select concat_ws('|',current_setting('server_version_num'),(select count(*) from supabase_migrations.schema_migrations),(select max(version) from supabase_migrations.schema_migrations),private.account_deletion_replayer_role_safe_v2(),(select count(*) from pg_auth_members as membership join pg_roles as role on role.rolname='mylifegraph_deletion_replayer' where membership.roleid=role.oid or membership.member=role.oid))")"
     [[ "$pg17_source_facts" == \
-      '170006|70|20260913113853|t|1' ]] || {
+      '170006|72|20260914123644|t|1' ]] || {
       printf 'PG17 source restore facts are unexpected: %s\n' \
         "$pg17_source_facts" >&2
       return 1

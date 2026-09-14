@@ -47,3 +47,4 @@ supabase/.temp/
 Thumbs.db
 
 .vercel/
+apps/mobile/android/app/google-services.json

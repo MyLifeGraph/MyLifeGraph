@@ -1,5 +1,27 @@
 # Local Development
 
+### Optional Android integrations
+
+Health Connect requires Android 14+ and source-app sharing enabled in Android;
+the web preview cannot read watch data. Cloud sharing is separately opt-in.
+Push likewise requires a configured Android APK, OS permission and explicit
+**Settings > Push reminders** consent. Browser settings can revoke push but do
+not register web notifications. See the Health Connect and Notification Delivery
+owners; local UI/source tests do not prove installed-device behavior.
+
+Firebase's public Android config comes from ignored
+`apps/mobile/android/app/google-services.json` or build-only
+`FIREBASE_ANDROID_CONFIG_BASE64`. CI supplies the latter through the existing
+protected `pilot-release` environment. Never use a service-account JSON in either.
+Server push defaults off (`PUSH_DELIVERY_ENABLED=false`); only after applying its
+migration and provisioning the FCM-only service identity set `FCM_PROJECT_ID` and
+`FCM_CREDENTIALS_JSON` in the existing protected API environment and activate
+delivery. Keep this credential API-only, outside releases and repositories;
+do not put it in the executor/Caddy environment. No new runtime file or expanded
+filesystem permission is needed.
+No sender credentials belong in the laptop Flutter environment. Spark/no billing
+linkage is mandatory; use existing VPS compute rather than Firebase Functions.
+
 For the existing VPS and Matthias's remaining domain/key steps, start with the
 [VPS handoff](vps-matthias-handoff.md). Its staged completion package is separate
 from workstation startup; do not repeat the initial host bootstraps below on

@@ -5,13 +5,42 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var healthConnectBridge: HealthConnectBridge? = null
+    private var pushBridge: PushBridge? = null
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        healthConnectBridge?.onPermissionResult(requestCode)
+        pushBridge?.onPermissionResult(requestCode)
+    }
+
+    override fun onDestroy() {
+        healthConnectBridge?.dispose()
+        healthConnectBridge = null
+        pushBridge?.dispose()
+        pushBridge = null
+        super.onDestroy()
+    }
     override fun onResume() {
         super.onResume()
         FocusBlockAccessibilityService.onAppResumed(applicationContext)
+        PushBridge.captureIntent(this, intent)
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        PushBridge.captureIntent(this, intent)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        pushBridge = PushBridge(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PushBridge.CHANNEL)
+            .setMethodCallHandler { call, result -> pushBridge?.handle(call, result) }
+        healthConnectBridge = HealthConnectBridge(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HealthConnectBridge.CHANNEL)
+            .setMethodCallHandler { call, result -> healthConnectBridge?.handle(call, result) }
         val manager = FocusProtectionManager(applicationContext)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,

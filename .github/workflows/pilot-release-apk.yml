@@ -129,15 +129,17 @@ jobs:
       - name: Build signed release APK
         working-directory: apps/mobile
         env:
+          FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_CONFIG_BASE64 }}
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/mylifegraph-upload.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: >-
-          flutter build apk --release
-          --build-name='${{ steps.identity.outputs.build_name }}'
-          --build-number='${{ steps.identity.outputs.build_number }}'
-          --dart-define-from-file="$RUNNER_TEMP/mylifegraph-pilot-defines.json"
+        run: |
+          test -n "$FIREBASE_ANDROID_CONFIG_BASE64"
+          flutter build apk --release \
+            --build-name='${{ steps.identity.outputs.build_name }}' \
+            --build-number='${{ steps.identity.outputs.build_number }}' \
+            --dart-define-from-file="$RUNNER_TEMP/mylifegraph-pilot-defines.json"
 
       - name: Verify signer and write artifact metadata
         env:

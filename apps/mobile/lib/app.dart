@@ -8,6 +8,8 @@ import 'core/widgets/app_backdrop.dart';
 import 'core/widgets/offline_status_banner.dart';
 import 'core/widgets/hosted_environment_banner.dart';
 import 'core/config/app_config.dart';
+import 'composition/widgets/health_connect_sync_host.dart';
+import 'composition/widgets/push_sync_host.dart';
 
 class PersonalOptimizationApp extends ConsumerWidget {
   const PersonalOptimizationApp({super.key});
@@ -27,8 +29,10 @@ class PersonalOptimizationApp extends ConsumerWidget {
         final content = AppBackdrop(
           child: HostedEnvironmentBanner(
             environment: config.environment,
-            child: OfflineStatusBanner(
-              child: child ?? const SizedBox.shrink(),
+            child: HealthConnectSyncHost(
+              child: OfflineStatusBanner(
+                child: PushSyncHost(child: child ?? const SizedBox.shrink()),
+              ),
             ),
           ),
         );

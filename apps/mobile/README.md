@@ -1,5 +1,28 @@
 # MyLifeGraph Mobile App
 
+Settings also includes optional **Push reminders** (`android-push-v1`). Android
+asks explicit Cloud/device-delivery consent and OS permission; sleep, deadline,
+pattern and quiet-hour preferences remain independently editable. Web can turn
+the account setting off, but does not register for browser push. Native data-only
+receipt checks the current owner/session/registration and expiry before showing
+fixed generic copy. Logout disables receipt before token cleanup; foreground
+resume refreshes registration. Force-stop/offline/OS restrictions can suppress
+delivery. The existing in-app Inbox remains a separate feature.
+Builds use the public Firebase client config via `FIREBASE_ANDROID_CONFIG_BASE64`
+or ignored `android/app/google-services.json`; no sender/service-account key is
+allowed in Flutter. The signed release workflow requires the matching protected
+`pilot-release` secret; the existing signing identity is unchanged.
+See [Notification Delivery](../../docs/notification-delivery-v1-contract.md).
+
+Settings includes optional [Health Connect](../../docs/health-connect-v1-contract.md).
+Android 14+ can explicitly allow steps/sleep reads and Cloud sharing, then sync
+the last seven calendar days. Existing consent permits a foreground refresh on
+Android app open/resume, throttled to one attempt per 15 minutes; it never opens
+a permission prompt automatically. Web/older Android can manage Cloud sharing and
+delete imports but cannot read Health Connect. No Garmin developer account is
+used. Permission, data availability, Cloud rollout and physical-device behavior
+must be verified separately; existing manual check-ins stay unchanged.
+
 Settings omits its own navigation cog while retaining Coach notices and Back;
 its compact header reduces the gap before Profile. The Focus target dropdown
 has a viewport-bounded scrollable menu so the final option remains reachable.
