@@ -24,7 +24,7 @@ final coachAccessTokenProvider = Provider<CoachAccessTokenProvider>(
   (ref) => () {
     final owner = ref.read(coachActiveProfileIdProvider);
     final session = ref.read(supabaseClientProvider)?.auth.currentSession;
-    // Supabase Auth can switch before the app finishes loading the new profile.
+    // The session can switch before the app finishes loading the new profile.
     // Never send the previous profile's draft/audio with the next account's token.
     if (owner == null || session == null || session.user.id != owner) {
       return null;
