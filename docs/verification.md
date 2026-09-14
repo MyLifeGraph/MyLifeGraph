@@ -50,6 +50,19 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ### UI follow-up candidate — 2026-09-14
 
+- Code candidate `593ea2230f841968d8e66a5650587674cb99f594` is published on
+  the working branch. Full manual CI
+  [34795213768](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34795213768)
+  passed all seven jobs: Source/Docs/Visual, complete Flutter/Android JVM/lint,
+  Backend (1,749 passed, two existing skips), Web, fresh migrations/pgTAP and
+  full browser E2E. This includes the six unchanged Linux component goldens.
+- Final targeted follow-up: 65 passing tests for Insights/Quick actions and
+  Planner retention/timezone/viewport behavior. Four radar fixture checks and
+  all four existing Planner viewport previews passed; mobile/desktop Planner
+  and enlarged-text radar fixture images were inspected locally.
+- Local Cloud launcher was restarted from this candidate and serves HTTP 200
+  at `http://127.0.0.1:7357`. No new main promotion, production web deployment,
+  or signed APK from this follow-up branch is claimed.
 - Task base: `0e6d378f8d5778a1f26099342eaabaefe03f459b`; working branch
   `feat/watch-and-ui-follow-up`. No backend, schema, Auth, or deployment change.
 - Initial focused Flutter run: 152 passing tests. Added regressions cover
@@ -62,7 +75,7 @@ local unit/pgTAP evidence is not a claim about a hosted database.
   remains the authority, and no committed golden reference was replaced.
 - The captured-base affected gate selects Source, Flutter and Web but the
   Windows Source lane cannot finish its Linux supervisor test without `setsid`.
-  Full Linux CI is required before claiming the complete candidate verified.
+  The full Linux CI above supplies the missing platform-specific verification.
 - Read-only transport check: local frontend and public API health/readiness
   return HTTP 200. A direct proxy probe without normal request credentials is
   rejected (401), as intended; this is not a logged-in Coach acceptance test.
@@ -86,12 +99,24 @@ local unit/pgTAP evidence is not a claim about a hosted database.
   change and removes the end arrow when its reclaimed width exposes the last tab.
   Its new last-click regression failed before the correction; all 43 Insights
   state tests and 27 Today/guest/copy tests then passed locally. Full candidate
-  CI must be repeated after these changes; no main update or new APK is claimed.
+  CI was repeated at `0e6d378f8d5778a1f26099342eaabaefe03f459b`: full manual
+  run [34791877721](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34791877721)
+  passed all seven jobs, including 1,152 Flutter tests, 1,749 Backend tests
+  (two existing skips), Android JVM/lint, fresh migrations/pgTAP and all eight
+  browser journeys. PR #19 checks also passed before the explicitly approved
+  protected fast-forward of main from `0462d0c` to `0e6d378`.
+- PR #19 is merged. Both production Vercel aliases were fetched successfully
+  and their served JavaScript contained the exact `main-0e6d378...` release tag.
+  Public API health/readiness returned HTTP 200; no backend/schema changes
+  required a VPS runtime or Cloud database modification for this release.
 - GitHub lists all four Android signing secrets in protected environment
   `pilot-release`. The existing main-only workflow builds release-mode APKs,
   verifies the expected certificate and checksums, and removes private signing
-  material before retaining artifacts. Its last successful main run remains
-  `34768303524`; physical-device acceptance is separate.
+  material before retaining artifacts. Main run
+  [34793306831](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34793306831)
+  succeeded, including APK signer/checksum verification and secret cleanup.
+  Its artifact is `MyLifeGraph-Pilot-Signed-0e6d378f8d57` (ID 10329550040).
+  Physical-device installation/acceptance is separate.
 
 ### Authorized Student Cloud data transfer — 2026-09-14
 
