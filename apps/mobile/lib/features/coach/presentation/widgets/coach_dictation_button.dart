@@ -22,6 +22,9 @@ class CoachDictationButton extends ConsumerStatefulWidget {
     required this.onBusyChanged,
     this.canSendDirect = false,
     this.idleBuilder,
+    this.consentTitle = 'Dictate your question',
+    this.consentEnding =
+        'Stop to review the text, or Send to ask your Coach directly.',
     super.key,
   });
 
@@ -30,6 +33,8 @@ class CoachDictationButton extends ConsumerStatefulWidget {
   final ValueChanged<bool> onBusyChanged;
   final bool canSendDirect;
   final Widget Function(Widget microphone)? idleBuilder;
+  final String consentTitle;
+  final String consentEnding;
 
   @override
   ConsumerState<CoachDictationButton> createState() =>
@@ -114,11 +119,11 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
         accepted = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Dictate your question'),
-            content: const Text(
+            title: Text(widget.consentTitle),
+            content: Text(
               'Record up to 30 seconds. Audio is sent to the '
               'MyLifeGraph server for transcription and is not saved. '
-              'Stop to review the text, or Send to ask your Coach directly.',
+              '${widget.consentEnding}',
             ),
             actions: [
               TextButton(

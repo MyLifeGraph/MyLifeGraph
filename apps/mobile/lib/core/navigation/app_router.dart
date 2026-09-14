@@ -27,6 +27,8 @@ import '../../features/planner/presentation/pages/planner_page.dart';
 import '../../features/quick_action/presentation/pages/habit_completion_page.dart';
 import '../../features/quick_action/presentation/pages/habit_management_page.dart';
 import '../../features/quick_action/presentation/pages/morning_calibration_page.dart';
+import '../../features/quick_action/domain/capture_draft_proposal.dart';
+import '../../features/quick_action/presentation/pages/ultra_quick_check_in_page.dart';
 import '../../features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import '../../features/quick_action/presentation/pages/quick_action_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -50,6 +52,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.plannerReplan,
   AppRoutes.insights,
   AppRoutes.quickAction,
+  AppRoutes.ultraQuickCheckIn,
   AppRoutes.quickMoodCheckIn,
   AppRoutes.morningCalibration,
   AppRoutes.habitCompletion,
@@ -115,8 +118,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       final participationRequired =
           ref.read(appConfigProvider).requiresPilotParticipation &&
-              session.isAuthenticated &&
-              !session.profile.hasCurrentPilotParticipation;
+          session.isAuthenticated &&
+          !session.profile.hasCurrentPilotParticipation;
       if (participationRequired) {
         return isPilotParticipationRoute ? null : AppRoutes.pilotParticipation;
       }
@@ -139,7 +142,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (isAuthRoute) {
-        final continuation = _postAuthContinuation(state.uri) ??
+        final continuation =
+            _postAuthContinuation(state.uri) ??
             pendingPostAuthLocation?.toString();
         pendingPostAuthLocation = null;
         return continuation ?? AppRoutes.dashboard;
@@ -154,10 +158,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/',
-        redirect: (context, state) => AppRoutes.dashboard,
-      ),
+      GoRoute(path: '/', redirect: (context, state) => AppRoutes.dashboard),
       GoRoute(
         path: AppRoutes.auth,
         builder: (context, state) => const AuthPage(),
@@ -187,17 +188,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.quickMoodCheckIn,
-        builder: (context, state) => const QuickMoodCheckInPage(),
+        builder: (context, state) => QuickMoodCheckInPage(
+          proposal: state.extra is CaptureDraftProposal
+              ? state.extra as CaptureDraftProposal
+              : null,
+        ),
       ),
       GoRoute(
         path: AppRoutes.morningCalibration,
-        builder: (context, state) => const MorningCalibrationPage(),
+        builder: (context, state) => MorningCalibrationPage(
+          proposal: state.extra is CaptureDraftProposal
+              ? state.extra as CaptureDraftProposal
+              : null,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.ultraQuickCheckIn,
+        builder: (context, state) => const UltraQuickCheckInPage(),
       ),
       ShellRoute(
-        builder: (context, state, child) => MainShell(
-          currentPath: state.uri.path,
-          child: child,
-        ),
+        builder: (context, state, child) =>
+            MainShell(currentPath: state.uri.path, child: child),
         routes: [
           GoRoute(
             path: AppRoutes.dashboard,
@@ -211,8 +222,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.notificationSettings,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
-                    ? null
-                    : AppRoutes.settings,
+                ? null
+                : AppRoutes.settings,
             builder: (context, state) => const NotificationSettingsPage(),
           ),
           GoRoute(
@@ -230,8 +241,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.personalLearning,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
-                    ? null
-                    : AppRoutes.settings,
+                ? null
+                : AppRoutes.settings,
             builder: (context, state) => const PersonalLearningPage(),
           ),
           GoRoute(
@@ -254,24 +265,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.habitCompletion,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedHabits
-                    ? null
-                    : AppRoutes.quickAction,
+                ? null
+                : AppRoutes.quickAction,
             builder: (context, state) => const HabitCompletionPage(),
           ),
           GoRoute(
             path: AppRoutes.habitManagement,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedHabits
-                    ? null
-                    : AppRoutes.planner,
+                ? null
+                : AppRoutes.planner,
             builder: (context, state) => const HabitManagementPage(),
           ),
           GoRoute(
             path: AppRoutes.weeklyReview,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseWeeklyReview
-                    ? null
-                    : AppRoutes.dashboard,
+                ? null
+                : AppRoutes.dashboard,
             builder: (context, state) => const WeeklyReviewPage(),
           ),
           GoRoute(
@@ -290,8 +301,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.deepWork,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
-                    ? null
-                    : AppRoutes.quickAction,
+                ? null
+                : AppRoutes.quickAction,
             builder: (context, state) => FocusSessionPage(
               initialTargetKind: FocusTargetKind.fromCode(
                 state.uri.queryParameters['target_kind'],
@@ -315,8 +326,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.coach,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canShowCoachSurface
-                    ? null
-                    : AppRoutes.settings,
+                ? null
+                : AppRoutes.settings,
             builder: (context, state) => const CoachPage(),
           ),
           GoRoute(

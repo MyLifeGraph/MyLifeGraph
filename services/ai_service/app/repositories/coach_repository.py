@@ -28,6 +28,9 @@ class CoachMemoryRows:
 
 
 class CoachRepository(Protocol):
+    def for_capture_draft(self) -> "CoachRepository":
+        pass
+
     async def probe_agent_terminal_replay(
         self,
         *,
@@ -189,8 +192,14 @@ class CoachRepository(Protocol):
 
 
 class SupabaseCoachRepository:
-    def __init__(self, client: SupabaseRestClient) -> None:
+    def __init__(self, client: SupabaseRestClient, *, purpose: str = "chat") -> None:
         self._client = client
+        if purpose not in {"chat", "daily_capture_draft"}:
+            raise ValueError("Unknown Coach operation purpose.")
+        self._purpose = purpose
+
+    def for_capture_draft(self) -> "SupabaseCoachRepository":
+        return SupabaseCoachRepository(self._client, purpose="daily_capture_draft")
 
     async def probe_agent_terminal_replay(
         self,
@@ -206,8 +215,9 @@ class SupabaseCoachRepository:
         provider_dispatch_required: bool,
     ) -> CoachClaimResult | None:
         result = await self._rpc(
-            "probe_coach_terminal_replay_v1",
+            "probe_coach_operation_v1",
             params={
+                "p_purpose": self._purpose,
                 "p_user_id": user_id,
                 "p_contract_version": contract_version,
                 "p_request_id": str(request_id),
@@ -256,7 +266,7 @@ class SupabaseCoachRepository:
         provider_dispatch_required: bool,
     ) -> CoachClaimResult:
         result = await self._rpc(
-            "claim_coach_request_v8",
+            "claim_coach_operation_v1",
             params={
                 "p_user_id": user_id,
                 "p_contract_version": contract_version,
@@ -271,6 +281,7 @@ class SupabaseCoachRepository:
                 "p_lease_expires_at": lease_expires_at.isoformat(),
                 "p_daily_limit": daily_limit,
                 "p_provider_dispatch_required": provider_dispatch_required,
+                "p_purpose": self._purpose,
             },
         )
         return _claim_result(result, request_id=request_id)
@@ -285,6 +296,22 @@ class SupabaseCoachRepository:
         usage: dict[str, Any],
         completed_at: datetime,
     ) -> CoachAgentResponse:
+        if self._purpose == "daily_capture_draft":
+            result = await self._rpc(
+                "complete_capture_draft_v1",
+                params={
+                    "p_user_id": user_id,
+                    "p_request_id": str(request_id),
+                    "p_response": response.model_dump(mode="json"),
+                    "p_usage": usage,
+                    "p_completed_at": completed_at.isoformat(),
+                },
+            )
+            return _completed_response(
+                result, request_id=request_id, response_type=CoachAgentResponse,
+                envelope_error="Capture draft completion returned an invalid envelope.",
+                request_error="Capture draft completion returned another request.",
+            )
         function = (
             "complete_coach_request_v3"
             if response.contract_version == "coach-response-v4"
@@ -454,6 +481,7 @@ class SupabaseCoachRepository:
                 "select": request_select,
                 "user_id": f"eq.{user_id}",
                 "state": "eq.completed",
+                "purpose": "eq.chat",
                 "order": "created_at.desc,request_id.asc",
                 "limit": str(limit),
             },

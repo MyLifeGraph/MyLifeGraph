@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_life_graph/composition/skillset_providers.dart';
 
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ const _fingerprint =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('Top patterns marks negative coefficients and arrows red', (tester) async {
     await tester.pumpWidget(ProviderScope(overrides: [
       _skillsetSelectionOverride(), _demoSurfaceOverride(),
@@ -1693,8 +1695,8 @@ void _expectMatrixLabelFits(
   );
 }
 
-Override _skillsetSelectionOverride() => skillsetDimensionsProvider.overrideWith(
-  (ref) => {'sleep', 'sport', 'energy', 'social', 'learning', 'concentration'},
+Override _skillsetSelectionOverride() => skillsetPreferenceScopeProvider.overrideWith(
+  (ref) => 'guest',
 );
 
 List<Override> _loadedOverrides({List<Insight> insights = const []}) => [

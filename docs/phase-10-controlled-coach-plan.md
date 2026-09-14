@@ -762,8 +762,27 @@ when `COACH_SURFACE_ENABLED=true`; route visibility does not make a provider
 ready. Development retains its documented explicit/debug defaults and unknown
 environment labels fail closed.
 
+The separate `daily-capture-draft-v1` operation reuses provider admission,
+reservations and durable per-user/global quotas, not the ordinary chat prompt.
+It supplies a minimal empty snapshot and an extraction-only prompt. The strict
+proposal is returned in memory for manual review; Capture remains read-only to
+the Coach. Claim/completion persist only purpose-bound hashes and metadata, no
+transcript, values, excerpts or chat messages. Draft bookkeeping is excluded
+from chat history and personal snapshots. Success consumes the shared Coach
+allowance. An exact completed request without its in-memory result returns
+`draft_expired`; only a new explicit user request may use a new identity.
+Existing chat replies, history compatibility and provider selection stay unchanged.
+Successful draft content is deliberately discarded into the existing deleted
+content state, with completed usage retained and operator dispatch finalized
+atomically. This leaves no message-less completed chat row for an older API to
+misread after rollback. It is not a failed request or a quota refund.
+
 Flutter Coach contract models and SSE envelopes reuse framework-neutral strict
-key, object, text, integer, UUID, and aware-timestamp primitives. Coach-specific
+key, object, text, integer, UUID, and aware-timestamp primitives. Answers use a
+compact Low/Medium/High uncertainty status pill with semantic color and an icon;
+the original reason remains visible before the read marker. High uncertainty
+means less certain. Colors/icons supplement text and never guarantee correctness.
+This presentation does not change response/history contracts. Coach-specific
 provenance, safety, trace, evidence, replay, and feature error rules remain in
 the Coach layer; V4 is synchronized by named constants while persisted V1-V3
 history stays readable.

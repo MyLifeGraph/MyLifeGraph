@@ -12,6 +12,15 @@ automatic plan movement.
 
 ## Daily Capture Write Authority
 
+The additive `daily-capture-draft-v1` voice proposal is not a write command.
+It supplies only explicit, evidence-backed suggestions to the existing form,
+bound to bearer owner, profile-local day and timezone. The current branch must
+load safely first; unmentioned saved values and expected-capture identity remain
+intact. Required-field checks and the single explicit final Save are unchanged.
+Guest/mock makes no authenticated draft request. Draft preparation and optional
+Quick Notes do not create captures, streak credit or numeric projections.
+
+
 The optional Skillset namespace is additive to V5 branch JSON. The current RPC
 preserves saved `skillset` when an older writer omits that key; a present map
 replaces it, with explicit null answers representing clears. There is no new

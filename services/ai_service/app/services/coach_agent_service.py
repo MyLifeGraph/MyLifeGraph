@@ -54,6 +54,7 @@ from app.providers.cloud_byok import CloudByokCoachProvider
 from app.repositories.coach_context_repository import CoachContextRepository
 from app.repositories.coach_repository import CoachRepository
 from app.services.coach_agent_prompt import build_coach_agent_prompt
+from app.services.capture_draft_operation import CaptureDraftOperation
 from app.services.coach_safety import (
     CoachSafetyDecision,
     post_provider_safety,
@@ -148,6 +149,7 @@ class CoachAgentService:
         operator_provider: ReservableCoachProvider | None = None,
         pre_admission_error: CoachServiceError | None = None,
         user_activity: _CoachUserActivity | None = None,
+        draft_operation: CaptureDraftOperation | None = None,
     ) -> None:
         self._settings = settings
         self._repository = repository
@@ -165,6 +167,29 @@ class CoachAgentService:
         self._operator_provider = operator_provider
         self._pre_admission_error = pre_admission_error
         self._user_activity = user_activity or _CoachUserActivity(set(), {})
+        self._draft_operation = draft_operation
+
+    async def capture_draft_profile(self, *, user_id: str) -> tuple[str, date]:
+        self._require_user_not_blocked(user_id)
+        profile = await self._lifecycle.eligible_profile(user_id=user_id)
+        return profile.timezone, self._lifecycle.local_date(profile.timezone)
+
+    def for_capture_draft(self, operation: CaptureDraftOperation) -> "CoachAgentService":
+        repository = self._repository.for_capture_draft()
+        return CoachAgentService(
+            settings=self._settings,
+            repository=repository,
+            context_repository=self._context_repository,
+            snapshot_service=self._snapshot_service,
+            provider=self._provider,
+            global_semaphore=self._global_semaphore,
+            now_provider=self._lifecycle.now,
+            identity_override=self._identity_override,
+            operator_provider=self._operator_provider,
+            pre_admission_error=self._pre_admission_error,
+            user_activity=self._user_activity,
+            draft_operation=operation,
+        )
 
     def with_request_provider(
         self,
@@ -185,6 +210,7 @@ class CoachAgentService:
             operator_provider=self._operator_provider,
             pre_admission_error=pre_admission_error,
             user_activity=self._user_activity,
+            draft_operation=self._draft_operation,
         )
 
     def for_operator_request(self) -> "CoachAgentService":
@@ -780,13 +806,17 @@ class CoachAgentService:
                     # SQLite creation, and model execution. Queued turns cannot
                     # fan out 50k-row exports while provider capacity is full.
                     failure_stage = "context"
-                    prompt = build_coach_agent_prompt(
+                    prompt = self._draft_operation.build_prompt() if self._draft_operation else build_coach_agent_prompt(
                         message=request.message,
                         allow_python=identity[0] not in {"openai", "gemini"},
                     )
                     if activity_callback is not None:
                         await activity_callback("Preparing a private data snapshot …")
-                    snapshot = await self._snapshot_service.create(user_id=user_id)
+                    snapshot = (
+                        await self._snapshot_service.create_empty()
+                        if self._draft_operation
+                        else await self._snapshot_service.create(user_id=user_id)
+                    )
                     snapshot_source_bytes = snapshot.source_bytes
                     trace_path = snapshot.working_directory / "agent-trace.jsonl"
                     failure_stage = "provider"
@@ -839,6 +869,15 @@ class CoachAgentService:
                             trace_path=trace_path,
                             activity_callback=activity_callback,
                         )
+                if self._draft_operation is not None:
+                    if _read_trace(trace_path).tool_call_count != 0:
+                        raise CoachProviderError(
+                            "invalid_output", "Check-in extraction must not use analysis tools.", retryable=True,
+                        )
+                    provider_result = type(provider_result)(
+                        output=self._draft_operation.accept_output(provider_result.output),
+                        model_reported=provider_result.model_reported,
+                    )
                 legacy = CoachModelOutput(
                     reply=provider_result.output.reply,
                     uncertainty=provider_result.output.uncertainty,
@@ -852,6 +891,8 @@ class CoachAgentService:
                 )
                 output = _agent_output(safety_result.output)
                 trace = _read_trace(trace_path)
+                if self._draft_operation is not None:
+                    trace = CoachAgentTrace(tool_call_count=0, steps=[], limitations=[])
                 evidence = _evidence(snapshot=snapshot, trace=trace_path)
                 source = (
                     "deterministic_safety"

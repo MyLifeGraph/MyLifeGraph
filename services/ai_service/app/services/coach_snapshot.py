@@ -187,6 +187,15 @@ class CoachSnapshotService:
 
     async def create(self, *, user_id: str) -> PreparedCoachSnapshot:
         rows_by_table = await self._collect_rows(user_id=user_id)
+        return await self._create_from_rows(rows_by_table)
+
+    async def create_empty(self) -> PreparedCoachSnapshot:
+        """Schema-only sandbox for explicit extraction; no owner data reads."""
+        return await self._create_from_rows({table.name: [] for table in COACH_SNAPSHOT_TABLES})
+
+    async def _create_from_rows(
+        self, rows_by_table: dict[str, list[dict[str, Any]]],
+    ) -> PreparedCoachSnapshot:
         try:
             source_bytes = len(
                 lossless_json_text(rows_by_table).encode("utf-8"),

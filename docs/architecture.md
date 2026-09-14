@@ -480,6 +480,22 @@ is not configured.
 
 ## Canonical Daily Capture
 
+Ultra Quick Check-in is an additive draft path, not a new Capture writer.
+`POST /v1/daily-capture/draft` reuses Coach provider transport, durable quotas
+and bounded admission with an extraction-only prompt/minimal empty snapshot.
+It returns evidence-backed explicit fields; only the original reviewed form
+and final Capture command can persist them. Transcript/proposal stay in memory,
+with only private redacted quota bookkeeping retained, not chat messages.
+Composition reuses the existing recorder without cross-feature private imports.
+
+Separately confirmed Quick Notes use service-only owner-scoped RPCs to write
+source-tagged `behavioral_events` with text but no numeric value. Their private
+retry/deletion identities prevent duplicate/recreated notes. Normal Snapshot
+loads exclude this source before the row bound and aggregation excludes it as
+defense in depth. Coach snapshots and Account Export retain optional note
+context; check-ins, streaks, learning and scheduling remain unchanged.
+
+
 `/quick-mood-check-in` is the Evening Shutdown implementation, and the legacy
 `/daily-check-in` route redirects to it. `/morning-calibration` is a separate,
 short Morning Calibration instead of another full daily form.

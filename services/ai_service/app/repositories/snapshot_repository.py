@@ -97,6 +97,7 @@ class SupabaseSnapshotRepository:
                 ),
                 ("user_id", f"eq.{user_id}"),
                 ("occurred_at", f"gte.{event_start_datetime.isoformat()}"),
+                ("source", "neq.quick_note"),
                 ("occurred_at", f"lt.{event_end_datetime.isoformat()}"),
                 ("order", "occurred_at.desc"),
                 ("limit", "200"),

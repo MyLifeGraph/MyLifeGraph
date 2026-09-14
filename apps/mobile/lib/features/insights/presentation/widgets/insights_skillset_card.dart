@@ -6,6 +6,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_surface.dart';
 import '../../domain/entities/correlation.dart';
+import '../../domain/entities/skillset_display_preferences.dart';
 
 // Recorded ratings and explicitly labelled window summaries; never invent
 // values for missing observations.
@@ -147,12 +148,16 @@ class InsightsSkillsetCard extends StatelessWidget {
     required this.isDemo,
     required this.selectedIds,
     required this.onToggle,
+    this.chartView = SkillsetChartView.radar,
+    this.onChartChanged,
   });
 
   final CorrelationReport report;
   final bool isDemo;
   final Set<String> selectedIds;
   final ValueChanged<String> onToggle;
+  final SkillsetChartView chartView;
+  final ValueChanged<SkillsetChartView>? onChartChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +174,33 @@ class InsightsSkillsetCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Skillset', style: theme.textTheme.titleLarge),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            children: [
+              Text('Skillset', style: theme.textTheme.titleLarge),
+              SegmentedButton<SkillsetChartView>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: SkillsetChartView.radar,
+                    icon: Icon(AppIcons.chartPolar),
+                    tooltip: 'Radar chart',
+                  ),
+                  ButtonSegment(
+                    value: SkillsetChartView.bars,
+                    icon: Icon(AppIcons.chartBarHorizontal),
+                    tooltip: 'Bar chart',
+                  ),
+                ],
+                selected: {chartView},
+                onSelectionChanged: onChartChanged == null
+                    ? null
+                    : (selection) => onChartChanged!(selection.single),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             '${isDemo ? 'Example data · ' : ''}Your signals · ${report.windowDays} days',
@@ -197,7 +228,52 @@ class InsightsSkillsetCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (available.length >= 3)
+          if (chartView == SkillsetChartView.bars && available.isNotEmpty)
+            Column(
+              key: const Key('skillset-bars'),
+              children: [
+                for (final reading in readings)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          spacing: AppSpacing.sm,
+                          children: [
+                            Text(
+                              reading.dimension.label,
+                              style: theme.textTheme.labelLarge,
+                            ),
+                            Text(
+                              reading.value == null
+                                  ? 'No data'
+                                  : '${reading.value!.toStringAsFixed(1)}/${reading.dimension.maximum.toInt()}',
+                              style: theme.textTheme.labelMedium,
+                            ),
+                          ],
+                        ),
+                        if (reading.value != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          LinearProgressIndicator(
+                            key: ValueKey(
+                              'skillset-bar-${reading.dimension.id}',
+                            ),
+                            value: reading.fraction,
+                            semanticsLabel:
+                                '${reading.dimension.label}, ${reading.label}',
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            )
+          else if (chartView == SkillsetChartView.radar &&
+              available.length >= 3)
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
@@ -284,7 +360,7 @@ class InsightsSkillsetCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Recorded ratings and activity summaries on their own scales. '
-                'Not an ability score; missing dimensions are omitted from the radar.',
+                'Not an ability score; missing values are not scored.',
                 style: theme.textTheme.bodySmall,
               ),
             ],

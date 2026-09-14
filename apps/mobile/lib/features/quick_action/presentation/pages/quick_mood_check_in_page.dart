@@ -5,12 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/capture_draft_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../../focus/domain/focus_session.dart';
 import '../../../focus/presentation/widgets/focus_reflection_sheet.dart';
 import '../../domain/quick_check_in.dart';
+import '../../domain/capture_draft_proposal.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
 import '../../../../composition/skillset_providers.dart';
@@ -18,7 +20,9 @@ import '../../domain/skillset_signals.dart';
 import '../widgets/optional_skillset_controls.dart';
 
 class QuickMoodCheckInPage extends ConsumerStatefulWidget {
-  const QuickMoodCheckInPage({super.key});
+  const QuickMoodCheckInPage({super.key, this.proposal});
+
+  final CaptureDraftProposal? proposal;
 
   @override
   ConsumerState<QuickMoodCheckInPage> createState() =>
@@ -34,6 +38,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   var _isLoading = true;
   var _safeCaptureLoaded = false;
   var _isSaving = false;
+  var _proposalApplied = false;
+  (String, DateTime)? _voiceBaseline;
+  var _revisingSavedCapture = false;
   String? _loadError;
   String? _saveError;
   List<FocusSession> _todayFocusSessions = const [];
@@ -81,26 +88,38 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
 
   @override
   Widget build(BuildContext context) {
+    final proposalOwnerMatches =
+        widget.proposal == null ||
+        ref.watch(captureDraftOwnerProvider) == widget.proposal!.ownerId;
     final step = _steps[_stepIndex];
     return CaptureFlowScaffold(
       eyebrow: step.eyebrow,
       title: step.title,
-      subtitle: step.subtitle,
+      subtitle: widget.proposal == null
+          ? step.subtitle
+          : _revisingSavedCapture
+          ? 'Review suggestions. Saving updates today\'s Evening check-in.'
+          : 'Review suggestions and fill any gaps before saving.',
       progress: (_stepIndex + 1) / _steps.length,
       canGoBack: _stepIndex > 0,
-      canContinue: _safeCaptureLoaded && _canContinue,
+      canContinue:
+          _safeCaptureLoaded && _canContinue && _proposalMatchesContext,
       isLastStep: _stepIndex == _steps.length - 1,
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save evening check-in',
       errorMessage: _saveError,
-      loadErrorMessage: _loadError,
+      loadErrorMessage: !_proposalMatchesContext
+          ? 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
+          : _loadError,
       onRetryLoad: _loadToday,
       onClose: () =>
           context.canPop() ? context.pop() : context.go(AppRoutes.quickAction),
       onBack: _previousStep,
       onNext: _nextStep,
-      child: _buildStep(step.kind),
+      child: proposalOwnerMatches
+          ? _buildStep(step.kind)
+          : const SizedBox.shrink(),
     );
   }
 
@@ -186,7 +205,10 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Widget _buildContextStep() {
-    final allowExtras = ref.watch(optionalSkillsetCaptureProvider);
+    final allowExtras =
+        ref.watch(optionalSkillsetCaptureProvider) ||
+        widget.proposal?.fields.containsKey('sport') == true ||
+        widget.proposal?.fields.containsKey('social') == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -371,7 +393,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _save() async {
-    if (_isSaving || !_safeCaptureLoaded) {
+    if (_isSaving || !_safeCaptureLoaded || !_proposalMatchesContext) {
       return;
     }
     final draft = _draft.copyWith(
@@ -424,6 +446,15 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       _isLoading = true;
       _loadError = null;
     });
+    if (!_proposalMatchesContext) {
+      setState(() {
+        _safeCaptureLoaded = false;
+        _isLoading = false;
+        _loadError =
+            'This voice draft belongs to a different account, day or timezone. Start a new check-in.';
+      });
+      return;
+    }
     try {
       final store = ref.read(quickCheckInStoreProvider);
       final targetDate = ref.read(profileLocalDateSourceProvider).today();
@@ -440,9 +471,25 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         dailyCaptureEntryDate(targetDate),
       );
       final saved = entry?.evening;
-      if (mounted) {
-        final source = saved?.forEditing() ?? _draft;
-        final next = source.copyWith(
+      if (mounted && _proposalMatchesContext) {
+        final baseline = saved == null
+            ? null
+            : (saved.captureId, saved.capturedAt);
+        if (_proposalApplied && baseline != _voiceBaseline) {
+          setState(() {
+            _safeCaptureLoaded = false;
+            _loadError =
+                'Today\'s check-in changed. Start a new voice check-in to review the latest values.';
+          });
+          return;
+        }
+        final source = _proposalApplied
+            ? _draft.copyWith(
+                reflectionNote: _reflectionController.text,
+                specificBlocker: _blockerController.text,
+              )
+            : saved?.forEditing() ?? _draft;
+        var next = source.copyWith(
           capturedAt: saved == null ? null : _draft.capturedAt,
           plannedSleepTime:
               source.plannedSleepTime ?? sleepPlan?.plannedSleepTime,
@@ -451,11 +498,17 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
               sleepPlan?.sleepTargetMinutes ??
               EveningShutdownDraft.defaultSleepTargetMinutes,
         );
+        if (!_proposalApplied && widget.proposal != null) {
+          next = widget.proposal!.applyToEvening(next, allowSkillset: true);
+          _voiceBaseline = baseline;
+          _proposalApplied = true;
+        }
         setState(() {
           _draft = next;
-          if (saved != null) {
-            _reflectionController.text = saved.reflectionNote;
-            _blockerController.text = saved.specificBlocker;
+          _revisingSavedCapture = saved != null;
+          if (saved != null || widget.proposal != null) {
+            _reflectionController.text = next.reflectionNote;
+            _blockerController.text = next.specificBlocker;
           }
           _todayFocusSessions = focusData?.sessions ?? const [];
           _todayFocusReflections = focusData?.reflections ?? const {};
@@ -476,6 +529,19 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  bool get _proposalMatchesContext {
+    final proposal = widget.proposal;
+    if (proposal == null) return true;
+    final dates = ref.read(profileLocalDateSourceProvider);
+    return proposal.matches(
+          ownerId: ref.read(captureDraftOwnerProvider),
+          entryDate: dates.todayKey(),
+          timezone: dates.timezoneName,
+          branch: 'evening',
+        ) &&
+        proposal.entryDate == _draft.entryDate;
   }
 
   Future<_TodayFocusReflectionData?> _loadTodayFocusReflections(

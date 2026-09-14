@@ -1,5 +1,19 @@
 # MyLifeGraph Mobile App
 
+Plus also offers **Ultra Quick Check-in** (`/ultra-quick-check-in`): Morning,
+Evening, or Quick note. The existing 30-second speech recorder produces editable
+text. Morning/Evening explicitly request `daily-capture-draft-v1`, using the
+chosen Coach and shared allowance, then open the original form for review and
+missing required values. No capture is written until the original final Save.
+Proposals are memory-only, owner/day/timezone-bound and applied only after a safe
+current branch read; manual form behavior is unchanged. Suggested clocks use the
+profile timezone and reject ambiguous DST instants for manual correction.
+`quick-notes-v1` saves only explicitly confirmed optional Coach context, not
+ratings or streaks. Saved notes can be read/deleted; retries retain identity.
+Guest/mock makes no authenticated calls. These endpoints require the matching
+additive Cloud/API release; code presence alone does not prove availability.
+
+
 Settings also includes optional **Push reminders** (`android-push-v1`). Android
 asks explicit Cloud/device-delivery consent and OS permission; sleep, deadline,
 pattern and quiet-hour preferences remain independently editable. Web can turn
@@ -751,8 +765,11 @@ sources and observation counts under collapsed Details. Short names accompany
 the numbered radar axes; the selected window stays visible. Unmeasured dimensions are
 labelled No data and omitted from the polygon; fewer than three measured axes
 show empty guidance. This does not load persisted Skillset profiles. Filters
-survive tab switches for the account session and affect only the Insights display,
-not the inputs available in check-ins.
+and the compact Radar/Bar view choice survive app restarts on this device,
+separately per account and guest. They are not cloud-synced and affect only the
+Insights display, not the inputs available in check-ins. Bars share the radar's
+data/window/scale, can show one measured dimension, and label missing values
+`No data`. The original radar still requires three measured dimensions.
 The shared 7/14/30/90-day choice is available in Compare, Top patterns, Trend
 overlay, Skillset and Matrix, including sparse data. Discovered is independent
 of that window and omits the control. Changing tabs preserves the selection.
@@ -880,7 +897,11 @@ or marking it read. Success is acknowledged only when the end of the newest
 reply and uncertainty is visible in the Coach viewport; failures are
 acknowledged at the error/retry end marker or when a subsequent retry starts.
 
-Each current `coach-response-v4` shows answer text and uncertainty. Flutter
+Each current `coach-response-v4` shows answer text and uncertainty. Current and
+historical answers use a compact Low/Medium/High uncertainty status pill with
+semantic color and an icon; the original reason stays visible. High means less
+certain, not more certain. The label remains understandable without color and
+never promises correctness. Read acknowledgement remains after the reason. Flutter
 validates
 the safety field and its consistency with provenance without rendering the raw
 classification. An expandable `Data and analysis details` section renders

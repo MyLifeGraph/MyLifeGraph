@@ -226,8 +226,13 @@ It is a read-only presentation of recorded observations in the selected window,
 not the legacy persisted Skillset profile or a personal-strength model.
 The default dimensions are Sleep, Sport, Energy, Social activity, Learning,
 and Concentration; Stress, Mood, Productivity, Motivation, and Discipline are
-optional. Selection filters only the Insights display for the current account
-session; it never hides Capture inputs or limits which values can be recorded.
+optional. Selection filters only the Insights display; it never hides Capture
+inputs or limits which values can be recorded. Dimensions and the compact
+Radar/Bar view choice persist on this device per account (guest separately),
+including across restarts. They are not cloud-synced. Writes are serialized;
+late restoration cannot overwrite a newer selection or another account.
+Both views use the same data, window and scale. Bars need one measured dimension;
+the unchanged radar needs three. Missing bar values say `No data`, not zero.
 
 Sleep uses sleep quality, Energy uses Morning energy (otherwise Evening), Concentration uses rated
 Focus quality, and Productivity uses rated useful progress. Stress and Mood

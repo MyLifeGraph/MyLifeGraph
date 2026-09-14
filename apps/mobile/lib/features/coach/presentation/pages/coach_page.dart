@@ -17,6 +17,7 @@ import '../../domain/coach.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/coach_providers.dart';
 import '../widgets/coach_dictation_button.dart';
+import '../widgets/coach_uncertainty_view.dart';
 
 class CoachPage extends ConsumerStatefulWidget {
   const CoachPage({super.key});
@@ -834,9 +835,7 @@ class _ConversationTurnCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(response.reply),
               const SizedBox(height: AppSpacing.md),
-              Text('Uncertainty', style: Theme.of(context).textTheme.labelLarge),
-              Text('${_humanize(response.uncertainty.level)} · '
-                  '${response.uncertainty.reason}'),
+              CoachUncertaintyView(uncertainty: response.uncertainty),
               if (readMarkerKey != null)
                 ExcludeSemantics(
                   child: SizedBox(key: readMarkerKey, height: 1,

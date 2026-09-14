@@ -1,6 +1,24 @@
 # Supabase Current State
 
 The latest repository migration is
+`20260914152145_capture_draft_operations.sql`. It adds a private purpose marker
+and guarded service-only claim/completion for `daily-capture-draft-v1`, retaining
+the existing Coach request and operator budgets. Completion stores only redacted
+bookkeeping and a private completion fingerprint, never transcript/proposal/chat
+messages or a persisted generic reply. Successful draft content uses the existing
+deleted-content tombstone while completed usage stays charged; operator dispatch
+finishes atomically, leaving older API history/reconciliation compatible. Current chat contracts and
+Capture write authority remain unchanged.
+
+The preceding migration `20260914151551_quick_notes.sql` adds `quick-notes-v1`:
+service-only confirmed note commands and private retry/deletion identities.
+Notes use `behavioral_events` with source `quick_note`, text metadata and no
+numeric value; normal Snapshot metrics exclude them, while Coach/export retains
+the optional context. Owner locks, pending-deletion guards, forced RLS and explicit
+grants protect commands. Notes can be deleted; old save retries cannot resurrect
+them. These new repository migrations do not establish live Cloud state.
+
+The preceding migration is
 `20260914123644_android_push_delivery.sql`. It adds backend-owned
 `profiles.push_settings` (off by default) and private `push_devices`,
 `push_requests`, and `push_attempts` tables with forced RLS, service-only grants,
@@ -1677,7 +1695,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260914123644_android_push_delivery.sql
+20260914152145_capture_draft_operations.sql
 ```
 
 Then configure `.env` with:

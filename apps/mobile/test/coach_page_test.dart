@@ -312,7 +312,8 @@ void main() {
         find.text('Your median Focus duration was 42 minutes.'),
         findsOneWidget,
       );
-      expect(find.text('Uncertainty'), findsOneWidget);
+      expect(find.text('Low uncertainty'), findsOneWidget);
+      expect(find.text('This describes recorded sessions only.'), findsOneWidget);
       expect(find.textContaining('suggestion'), findsNothing);
 
       final details = find.text('Data and analysis details').last;

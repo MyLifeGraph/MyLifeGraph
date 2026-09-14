@@ -48,6 +48,30 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Voice capture / Skillset working candidate — 2026-09-14
+
+- Task base `28bf36bec3394507d0a16db7061450073ad045c6`, working branch
+  `feat/watch-and-ui-follow-up`. Additive reviewed voice proposals, separate
+  Quick Notes, persistent Skillset Radar/Bars choices and clearer Coach
+  uncertainty are implemented. Production/main is unchanged.
+- Focused Flutter checks passed: Skillset 58, Capture forms/proposal 46,
+  uncertainty 39, Quick Capture API 5. Independent review additionally checks
+  proposal response identities/evidence, day/timezone retry binding and account
+  isolation in the shared recorder token and both review forms.
+- Full Windows Flutter run: 1,222 passed, six existing cross-platform reference
+  goldens differ; no golden was regenerated. The Linux CI run is required for
+  the canonical golden, Android and Unix-executor gates. Windows affected
+  selection correctly requires the full gate, but its local-stack harness cannot
+  complete without Unix `setsid`; no guard was weakened.
+- Physically isolated own-VM PostgreSQL 17 applies all 74 migrations and passes
+  all 597 assertions in the 28-file pgTAP suite plus full restore/deletion replay proof.
+  This includes the final rollback-compatible draft content tombstone and atomic
+  operator completion. The normal local database was neither reset nor migrated.
+- Full candidate CI, Cloud migration, immutable VPS promotion and signed APK
+  publication remain pending. Repository tests are not live-provider, Cloud,
+  microphone/device or background-push acceptance evidence.
+
+
 ### Android Health Connect / push verified candidate — 2026-09-14
 
 - Code candidate `ab39e3214b3efe04fb80df40cb1134a8530eee4f` on

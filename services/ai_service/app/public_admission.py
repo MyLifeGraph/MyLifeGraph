@@ -17,7 +17,7 @@ from app.core.config import Settings
 
 _MAX_TRACKED_RATE_KEYS = 8_192
 _MAX_ACTIVE_BODY_READERS_PER_IP = 2
-_COACH_PATHS = frozenset({"/coach/respond", "/coach/respond/stream"})
+_COACH_PATHS = frozenset({"/coach/respond", "/coach/respond/stream", "/daily-capture/draft"})
 _MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 

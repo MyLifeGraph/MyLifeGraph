@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/capture_draft_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/time/profile_timezone.dart';
 import '../../../../core/navigation/app_routes.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../domain/quick_check_in.dart';
+import '../../domain/capture_draft_proposal.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
 import '../../../../composition/skillset_providers.dart';
@@ -15,7 +18,9 @@ import '../../domain/skillset_signals.dart';
 import '../widgets/optional_skillset_controls.dart';
 
 class MorningCalibrationPage extends ConsumerStatefulWidget {
-  const MorningCalibrationPage({super.key});
+  const MorningCalibrationPage({super.key, this.proposal});
+
+  final CaptureDraftProposal? proposal;
 
   @override
   ConsumerState<MorningCalibrationPage> createState() =>
@@ -31,6 +36,9 @@ class _MorningCalibrationPageState
   var _eveningPlanUnavailable = false;
   var _continueWithoutEveningPlan = false;
   var _isSaving = false;
+  var _proposalApplied = false;
+  (String, DateTime)? _voiceBaseline;
+  var _revisingSavedCapture = false;
   String? _loadError;
   String? _saveError;
 
@@ -63,11 +71,18 @@ class _MorningCalibrationPageState
 
   @override
   Widget build(BuildContext context) {
+    final proposalOwnerMatches =
+        widget.proposal == null ||
+        ref.watch(captureDraftOwnerProvider) == widget.proposal!.ownerId;
     final step = _steps[_stepIndex];
     return CaptureFlowScaffold(
       eyebrow: step.eyebrow,
       title: step.title,
-      subtitle: step.subtitle,
+      subtitle: widget.proposal == null
+          ? step.subtitle
+          : _revisingSavedCapture
+          ? 'Review suggestions. Saving updates today\'s Morning check-in.'
+          : 'Review suggestions and fill any gaps before saving.',
       progress: (_stepIndex + 1) / _steps.length,
       canGoBack: _stepIndex > 0,
       canContinue: _canUseCurrentStep,
@@ -77,7 +92,9 @@ class _MorningCalibrationPageState
       saveLabel: 'Save morning check-in',
       errorMessage: _saveError,
       loadErrorMessage:
-          _loadError ??
+          (!_proposalMatchesContext
+              ? 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
+              : _loadError) ??
           (_eveningPlanUnavailable && !_continueWithoutEveningPlan
               ? 'The previous Evening sleep plan could not be loaded. Retry, or explicitly continue without that plan.'
               : null),
@@ -93,7 +110,9 @@ class _MorningCalibrationPageState
           context.canPop() ? context.pop() : context.go(AppRoutes.quickAction),
       onBack: _previousStep,
       onNext: _nextStep,
-      child: _buildStep(step.kind),
+      child: proposalOwnerMatches
+          ? _buildStep(step.kind)
+          : const SizedBox.shrink(),
     );
   }
 
@@ -120,7 +139,7 @@ class _MorningCalibrationPageState
           semanticLabel: 'estimated sleep start',
           value: _draft.estimatedSleepStartedAt == null
               ? null
-              : dailyCaptureClock(_draft.estimatedSleepStartedAt!),
+              : _clock(_draft.estimatedSleepStartedAt!),
           onChanged: _setEstimatedSleepStart,
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -128,9 +147,7 @@ class _MorningCalibrationPageState
           label: 'Wake time',
           quickAdjust: true,
           semanticLabel: 'estimated wake time',
-          value: _draft.wokeAt == null
-              ? null
-              : dailyCaptureClock(_draft.wokeAt!),
+          value: _draft.wokeAt == null ? null : _clock(_draft.wokeAt!),
           fallback: TimeOfDay.fromDateTime(DateTime.now()),
           onChanged: _setWakeTime,
         ),
@@ -171,7 +188,9 @@ class _MorningCalibrationPageState
   }
 
   Widget _buildCheckInStep() {
-    final allowExtras = ref.watch(optionalSkillsetCaptureProvider);
+    final allowExtras =
+        ref.watch(optionalSkillsetCaptureProvider) ||
+        widget.proposal?.fields.containsKey('motivation') == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -199,15 +218,15 @@ class _MorningCalibrationPageState
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.lg),
             child: OptionalSkillsetChoice(
-                  label: 'Study motivation (optional)',
-                  choices: const ['Low', 'Medium', 'High'],
-                  value: _draft.skillset?.values['motivation'],
-                  onChanged: (value) => setState(
-                    () => _draft = _draft.copyWith(
-                      skillset: (_draft.skillset ?? const SkillsetSignals({}))
-                          .withValue('motivation', value),
-                    ),
-                  ),
+              label: 'Study motivation (optional)',
+              choices: const ['Low', 'Medium', 'High'],
+              value: _draft.skillset?.values['motivation'],
+              onChanged: (value) => setState(
+                () => _draft = _draft.copyWith(
+                  skillset: (_draft.skillset ?? const SkillsetSignals({}))
+                      .withValue('motivation', value),
+                ),
+              ),
             ),
           ),
       ],
@@ -216,6 +235,7 @@ class _MorningCalibrationPageState
 
   bool get _canUseCurrentStep =>
       !_isLoading &&
+      _proposalMatchesContext &&
       _safeCaptureLoaded &&
       (!_eveningPlanUnavailable || _continueWithoutEveningPlan) &&
       _canContinue;
@@ -263,41 +283,61 @@ class _MorningCalibrationPageState
     _applySleepClocks(
       start: value,
       wake: _draft.wokeAt == null
-          ? dailyCaptureClock(DateTime.now())
-          : dailyCaptureClock(_draft.wokeAt!),
+          ? _clock(DateTime.now())
+          : _clock(_draft.wokeAt!),
     );
   }
 
   void _setWakeTime(String value) {
     final start = _draft.estimatedSleepStartedAt;
     if (start == null) {
-      setState(() {
-        _draft = _draft.copyWith(
-          wokeAt: _clockOnEntryDate(value),
-          estimatedSleepMinutes: null,
-          sleepHours: null,
+      try {
+        setState(() {
+          _draft = _draft.copyWith(
+            wokeAt: _clockOnEntryDate(value),
+            estimatedSleepMinutes: null,
+            sleepHours: null,
+          );
+        });
+      } on ProfileTimezoneException {
+        setState(
+          () => _saveError =
+              'That time is ambiguous or unavailable in your timezone. Choose another time.',
         );
-      });
+      }
       return;
     }
-    _applySleepClocks(start: dailyCaptureClock(start), wake: value);
+    _applySleepClocks(start: _clock(start), wake: value);
   }
 
   void _applySleepClocks({required String start, required String wake}) {
-    final interval = estimatedSleepIntervalForLocalClocks(
-      entryDate: _draft.entryDate,
-      estimatedSleepStartedAt: start,
-      wokeAt: wake,
-    );
-    setState(() {
-      _draft = _draft.withSleepInterval(
-        estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
-        wokeAt: interval.wokeAt,
+    try {
+      final interval =
+          widget.proposal?.sleepInterval(start: start, wake: wake) ??
+          estimatedSleepIntervalForLocalClocks(
+            entryDate: _draft.entryDate,
+            estimatedSleepStartedAt: start,
+            wokeAt: wake,
+          );
+      setState(() {
+        _saveError = null;
+        _draft = _draft.withSleepInterval(
+          estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
+          wokeAt: interval.wokeAt,
+        );
+      });
+    } on ProfileTimezoneException {
+      setState(
+        () => _saveError =
+            'That time is ambiguous or unavailable in your timezone. Choose another time.',
       );
-    });
+    }
   }
 
   DateTime _clockOnEntryDate(String value) {
+    if (widget.proposal != null) {
+      return widget.proposal!.clockOnEntryDate(value);
+    }
     final interval = estimatedSleepIntervalForLocalClocks(
       entryDate: _draft.entryDate,
       estimatedSleepStartedAt: '00:00',
@@ -306,10 +346,14 @@ class _MorningCalibrationPageState
     return interval.wokeAt;
   }
 
+  String _clock(DateTime instant) =>
+      widget.proposal?.clockForInstant(instant) ?? dailyCaptureClock(instant);
+
   Future<void> _save() async {
     if (_isSaving ||
         _stepIndex != _steps.length - 1 ||
         !_safeCaptureLoaded ||
+        !_proposalMatchesContext ||
         _eveningPlanUnavailable && !_continueWithoutEveningPlan ||
         !_draft.isComplete) {
       return;
@@ -363,6 +407,15 @@ class _MorningCalibrationPageState
       _eveningPlanUnavailable = false;
       _continueWithoutEveningPlan = false;
     });
+    if (!_proposalMatchesContext) {
+      setState(() {
+        _safeCaptureLoaded = false;
+        _isLoading = false;
+        _loadError =
+            'This voice draft belongs to a different account, day or timezone. Start a new check-in.';
+      });
+      return;
+    }
     try {
       final store = ref.read(quickCheckInStoreProvider);
       final entry = await store.loadToday(
@@ -376,29 +429,47 @@ class _MorningCalibrationPageState
         _eveningPlanUnavailable = true;
       }
       final saved = entry?.morning;
-      if (mounted) {
-        var next = (saved ?? _draft)
+      if (mounted && _proposalMatchesContext) {
+        final baseline = saved == null
+            ? null
+            : (saved.captureId, saved.capturedAt);
+        if (_proposalApplied && baseline != _voiceBaseline) {
+          setState(() {
+            _safeCaptureLoaded = false;
+            _loadError =
+                'Today\'s check-in changed. Start a new voice check-in to review the latest values.';
+          });
+          return;
+        }
+        var next = (_proposalApplied ? _draft : saved ?? _draft)
             .forEditing(sleepPlan: sleepPlan)
             .copyWith(capturedAt: saved == null ? null : _draft.capturedAt);
-        if (next.wokeAt == null) {
+        if (widget.proposal == null && next.wokeAt == null) {
           next = next.copyWith(
-            wokeAt: _clockOnEntryDate(dailyCaptureClock(DateTime.now())),
+            wokeAt: _clockOnEntryDate(_clock(DateTime.now())),
           );
         }
-        if (next.estimatedSleepStartedAt == null &&
+        if (widget.proposal == null &&
+            next.estimatedSleepStartedAt == null &&
             sleepPlan?.plannedSleepTime != null) {
           final interval = estimatedSleepIntervalForLocalClocks(
             entryDate: next.entryDate,
             estimatedSleepStartedAt: sleepPlan!.plannedSleepTime!,
-            wokeAt: dailyCaptureClock(next.wokeAt!),
+            wokeAt: _clock(next.wokeAt!),
           );
           next = next.withSleepInterval(
             estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
             wokeAt: interval.wokeAt,
           );
         }
+        if (!_proposalApplied && widget.proposal != null) {
+          next = widget.proposal!.applyToMorning(next, allowSkillset: true);
+          _voiceBaseline = baseline;
+          _proposalApplied = true;
+        }
         setState(() {
           _draft = next;
+          _revisingSavedCapture = saved != null;
           _safeCaptureLoaded = true;
           _loadError = null;
         });
@@ -416,6 +487,19 @@ class _MorningCalibrationPageState
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  bool get _proposalMatchesContext {
+    final proposal = widget.proposal;
+    if (proposal == null) return true;
+    final dates = ref.read(profileLocalDateSourceProvider);
+    return proposal.matches(
+          ownerId: ref.read(captureDraftOwnerProvider),
+          entryDate: dates.todayKey(),
+          timezone: dates.timezoneName,
+          branch: 'morning',
+        ) &&
+        proposal.entryDate == _draft.entryDate;
   }
 
   void _showMessage(String message) {

@@ -7,6 +7,17 @@ import 'package:flutter/widgets.dart';
 class AppIcons {
   const AppIcons._();
 
+  static const chartPolar = IconData(
+    0xeaa8,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+  static const chartBarHorizontal = IconData(
+    0xe152,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+
   static const moreHoriz = IconData(
     0xe1fe,
     fontFamily: 'PhosphorRegular',

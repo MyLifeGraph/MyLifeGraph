@@ -1,5 +1,16 @@
 # MyLifeGraph AI Service
 
+`POST /v1/daily-capture/draft` accepts `daily-capture-draft-v1`, UUID request id,
+Morning/Evening branch and bounded transcript. It derives owner/date/timezone,
+uses the selected Coach provider with unchanged shared quotas, and returns only
+explicit field proposals plus source excerpts. It writes no Capture/chat and
+stores no plaintext draft. Review and normal final Capture Save remain required.
+`GET/POST /v1/quick-notes` and `DELETE /v1/quick-notes/{note_id}` implement
+`quick-notes-v1`: confirmed optional text, bounded cursor reads and explicit
+deletion through owner-derived service-only RPCs. Notes are Coach/export context,
+not check-in or Snapshot metrics. Additive migrations must precede API activation.
+
+
 Optional Android push uses authenticated `GET/POST /v1/push` with
 `android-push-v1` and explicit `android-push-consent-v1`. POST supports settings,
 register and unregister, deriving both owner and verified Auth session from the

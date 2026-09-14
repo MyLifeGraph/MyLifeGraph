@@ -80,6 +80,23 @@ def test_public_coach_ip_rate_is_bounded_without_a_user_cap() -> None:
     asyncio.run(scenario())
 
 
+def test_capture_draft_shares_coach_admission_budget() -> None:
+    async def scenario() -> None:
+        controller = PublicAdmissionController(_settings(), clock=lambda: 0)
+        draft = controller.policy_for(method="POST", path="/v1/daily-capture/draft")
+        chat = controller.policy_for(method="POST", path="/v1/coach/respond")
+        assert draft is chat
+        app = PublicAdmissionMiddleware(_asgi_app(), controller=controller)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://api.example.test"
+        ) as client:
+            assert (await client.post("/v1/coach/respond", content=b"{}")).status_code == 200
+            assert (await client.post("/v1/daily-capture/draft", content=b"{}")).status_code == 200
+            assert (await client.post("/v1/daily-capture/draft", content=b"{}")).status_code == 429
+
+    asyncio.run(scenario())
+
+
 def test_public_coach_concurrency_rejects_instead_of_queueing() -> None:
     async def scenario() -> None:
         entered = asyncio.Event()

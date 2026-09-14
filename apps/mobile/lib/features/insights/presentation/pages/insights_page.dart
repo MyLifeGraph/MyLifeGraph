@@ -335,12 +335,24 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         : widget.report,
     isDemo: !widget.showPersonalPatterns,
     selectedIds: ref.watch(skillsetDimensionsProvider),
+    chartView: ref.watch(skillsetDisplayPreferencesProvider).chart,
+    onChartChanged: (chart) => _saveSkillsetDisplay(
+      ref.read(skillsetDisplayPreferencesProvider.notifier).selectChart(chart),
+    ),
     onToggle: (id) {
-      final next = {...ref.read(skillsetDimensionsProvider)};
-      if (!next.remove(id)) next.add(id);
-      ref.read(skillsetDimensionsProvider.notifier).state = next;
+      _saveSkillsetDisplay(
+        ref.read(skillsetDisplayPreferencesProvider.notifier).toggle(id),
+      );
     },
   );
+
+  Future<void> _saveSkillsetDisplay(Future<bool> save) async {
+    final saved = await save;
+    if (!mounted || saved) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Selection changed, but could not be saved on this device.'),
+    ));
+  }
 
   Widget _controlsPanel({required bool isMobile, required int windowDays}) {
     return _ControlsPanel(

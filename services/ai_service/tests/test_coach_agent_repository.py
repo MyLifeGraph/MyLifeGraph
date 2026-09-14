@@ -24,9 +24,9 @@ class Client:
 
     async def rpc(self, function, *, params):
         self.rpc_calls.append((function, params))
-        if function == "probe_coach_terminal_replay_v1":
+        if function == "probe_coach_operation_v1":
             return self.probe_response
-        if function == "claim_coach_request_v8":
+        if function == "claim_coach_operation_v1":
             return {
                 "state": "pending",
                 "remaining_requests": 19,
@@ -158,7 +158,7 @@ def test_v8_claim_binds_only_request_identity_message_and_backend_provenance() -
 
     assert result.state == "pending"
     function, params = client.rpc_calls[0]
-    assert function == "claim_coach_request_v8"
+    assert function == "claim_coach_operation_v1"
     assert set(params) == {
         "p_user_id",
         "p_contract_version",
@@ -173,8 +173,10 @@ def test_v8_claim_binds_only_request_identity_message_and_backend_provenance() -
         "p_lease_expires_at",
         "p_daily_limit",
         "p_provider_dispatch_required",
+        "p_purpose",
     }
     assert params["p_daily_limit"] == 20
+    assert params["p_purpose"] == "chat"
     assert not {
         "p_context_scope",
         "p_context_parameters",
@@ -238,10 +240,11 @@ def test_terminal_replay_probe_is_owner_and_full_identity_bound() -> None:
     assert replay.state == "completed"
     assert replay.response == client.response
     function, params = client.rpc_calls[0]
-    assert function == "probe_coach_terminal_replay_v1"
+    assert function == "probe_coach_operation_v1"
     assert params == {
         "p_user_id": USER_ID,
         "p_contract_version": "coach-request-v3",
+        "p_purpose": "chat",
         "p_request_id": str(REQUEST_ID),
         "p_message_fingerprint": "a" * 64,
         "p_provider": "local_codex_oauth",
@@ -403,6 +406,7 @@ def test_agent_history_reads_only_completed_owner_rows_and_user_messages() -> No
         "select": "request_id,response,created_at",
         "user_id": f"eq.{USER_ID}",
         "state": "eq.completed",
+        "purpose": "eq.chat",
         "order": "created_at.desc,request_id.asc",
         "limit": "50",
     }

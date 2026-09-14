@@ -11,6 +11,7 @@ from app.api.routes import (
     account,
     briefings,
     calendar_integrations,
+    capture_draft,
     coach,
     daily_capture,
     deadline_plans,
@@ -23,6 +24,7 @@ from app.api.routes import (
     notifications,
     planner,
     push,
+    quick_notes,
     scheduled,
     snapshots,
     today,
@@ -196,6 +198,8 @@ def create_app() -> FastAPI:
     app.include_router(push.router, prefix=settings.api_prefix)
     app.include_router(account.router, prefix=settings.api_prefix)
     app.include_router(daily_capture.router, prefix=settings.api_prefix)
+    app.include_router(capture_draft.router, prefix=settings.api_prefix)
+    app.include_router(quick_notes.router, prefix=settings.api_prefix)
     app.include_router(intake.router, prefix=settings.api_prefix)
     app.include_router(learning.router, prefix=settings.api_prefix)
     app.include_router(insights.router, prefix=settings.api_prefix)

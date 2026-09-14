@@ -296,7 +296,8 @@ def _filter_observed_inputs(
     return SnapshotInputRows(
         daily_logs=[row for row in inputs.daily_logs if visible(row)],
         behavioral_events=[
-            row for row in inputs.behavioral_events if visible(row)
+            row for row in inputs.behavioral_events
+            if row.get("source") != "quick_note" and visible(row)
         ],
         tasks=[row for row in inputs.tasks if visible(row)],
         habits=[row for row in inputs.habits if visible(row)],

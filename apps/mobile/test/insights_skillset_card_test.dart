@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
+import 'package:my_life_graph/features/insights/domain/entities/skillset_display_preferences.dart';
 import 'package:my_life_graph/features/insights/presentation/widgets/insights_skillset_card.dart';
 
 const defaults = {
@@ -32,13 +33,17 @@ Future<void> pumpCard(
 }) async {
   if (const bool.fromEnvironment('SKILLSET_PREVIEW')) {
     await (FontLoader('InstrumentSans')
-      ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Regular.ttf'))
-      ..addFont(rootBundle.load('assets/fonts/InstrumentSans-SemiBold.ttf'))
-      ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Bold.ttf'))).load();
-    await (FontLoader('packages/phosphor_flutter/PhosphorRegular')
-      ..addFont(rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor.ttf'))).load();
+          ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Regular.ttf'))
+          ..addFont(rootBundle.load('assets/fonts/InstrumentSans-SemiBold.ttf'))
+          ..addFont(rootBundle.load('assets/fonts/InstrumentSans-Bold.ttf')))
+        .load();
+    await (FontLoader('packages/phosphor_flutter/PhosphorRegular')..addFont(
+          rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor.ttf'),
+        ))
+        .load();
   }
   final selected = {...selectedIds};
+  var chart = SkillsetChartView.radar;
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.dark,
@@ -55,6 +60,8 @@ Future<void> pumpCard(
               report: report,
               isDemo: false,
               selectedIds: selected,
+              chartView: chart,
+              onChartChanged: (value) => setState(() => chart = value),
               onToggle: (id) => setState(() {
                 if (!selected.remove(id)) selected.add(id);
               }),
@@ -68,27 +75,127 @@ Future<void> pumpCard(
 }
 
 void main() {
-  testWidgets('every supported dimension renders from its own source, including zero', (tester) async {
-    await pumpCard(tester, report([{
-      'sleep_quality': 7, 'sport_activity': 0, 'energy_level': 4,
-      'social_activity': 1, 'learning_completion_rate': 50,
-      'focus_quality': 3, 'stress_level': 2, 'mood_score': 6,
-      'useful_progress': 4, 'study_motivation': 0, 'regularity': 75,
-    }]), selectedIds: {
-      ...defaults, 'stress', 'mood', 'productivity', 'motivation', 'discipline',
+  for (final width in [320.0, 1280.0]) {
+    testWidgets('bar toggle keeps ratings and dimensions at $width', (
+      tester,
+    ) async {
+      tester.view
+        ..physicalSize = Size(width, 960)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await pumpCard(
+        tester,
+        report([
+          {'sleep_quality': 6, 'sport_activity': 0, 'energy_level': 4},
+          {'sleep_quality': 8, 'sport_activity': 2, 'energy_level': 6},
+        ]),
+        scale: width == 320 ? 2 : 1,
+      );
+      final dynamic original = tester
+          .widget<CustomPaint>(find.byKey(const Key('skillset-radar')))
+          .painter;
+      await tester.tap(find.byTooltip('Bar chart'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('skillset-radar')), findsNothing);
+      expect(find.byKey(const Key('skillset-bars')), findsOneWidget);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const Key('skillset-bar-sleep')),
+            )
+            .value,
+        .7,
+      );
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const Key('skillset-bar-sport')),
+            )
+            .value,
+        .5,
+      );
+      expect(find.text('No data'), findsNWidgets(3));
+      await tester.ensureVisible(find.byTooltip('Radar chart'));
+      await tester.tap(find.byTooltip('Radar chart'));
+      await tester.pumpAndSettle();
+      final dynamic restored = tester
+          .widget<CustomPaint>(find.byKey(const Key('skillset-radar')))
+          .painter;
+      expect(restored.values, original.values);
+      expect(restored.labels, original.labels);
+      expect(find.text('Dimensions (6)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
-    final dynamic radar = tester.widget<CustomPaint>(find.byKey(const Key('skillset-radar'))).painter;
-    expect(radar.labels, hasLength(11));
-    await tester.ensureVisible(find.text('Details'));
-    await tester.tap(find.text('Details'));
+  }
+
+  testWidgets('bars support one observed axis without scoring missing values', (
+    tester,
+  ) async {
+    await pumpCard(
+      tester,
+      report([
+        {'sport_activity': 0},
+      ]),
+    );
+    expect(find.byKey(const Key('skillset-radar')), findsNothing);
+    await tester.tap(find.byTooltip('Bar chart'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Sport · 0.0/2'), findsOneWidget);
-    expect(find.textContaining('Motivation · 0.0/2'), findsOneWidget);
-    expect(find.textContaining('Discipline · 75%'), findsOneWidget);
-    expect(find.textContaining('Learning · 50%'), findsOneWidget);
-    expect(find.textContaining('No data'), findsNothing);
-    expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(
+            find.byKey(const Key('skillset-bar-sport')),
+          )
+          .value,
+      0,
+    );
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('No data'), findsNWidgets(5));
   });
+  testWidgets(
+    'every supported dimension renders from its own source, including zero',
+    (tester) async {
+      await pumpCard(
+        tester,
+        report([
+          {
+            'sleep_quality': 7,
+            'sport_activity': 0,
+            'energy_level': 4,
+            'social_activity': 1,
+            'learning_completion_rate': 50,
+            'focus_quality': 3,
+            'stress_level': 2,
+            'mood_score': 6,
+            'useful_progress': 4,
+            'study_motivation': 0,
+            'regularity': 75,
+          },
+        ]),
+        selectedIds: {
+          ...defaults,
+          'stress',
+          'mood',
+          'productivity',
+          'motivation',
+          'discipline',
+        },
+      );
+      final dynamic radar = tester
+          .widget<CustomPaint>(find.byKey(const Key('skillset-radar')))
+          .painter;
+      expect(radar.labels, hasLength(11));
+      await tester.ensureVisible(find.text('Details'));
+      await tester.tap(find.text('Details'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Sport · 0.0/2'), findsOneWidget);
+      expect(find.textContaining('Motivation · 0.0/2'), findsOneWidget);
+      expect(find.textContaining('Discipline · 75%'), findsOneWidget);
+      expect(find.textContaining('Learning · 50%'), findsOneWidget);
+      expect(find.textContaining('No data'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final width in [320.0, 1280.0]) {
     testWidgets(
@@ -119,8 +226,10 @@ void main() {
         );
         expect(find.byKey(const Key('skillset-radar')), findsOneWidget);
         if (const bool.fromEnvironment('SKILLSET_PREVIEW')) {
-          await expectLater(find.byType(Scaffold),
-            matchesGoldenFile('../../../.tools/skillset-${width.toInt()}.png'));
+          await expectLater(
+            find.byType(Scaffold),
+            matchesGoldenFile('../../../.tools/skillset-${width.toInt()}.png'),
+          );
         }
         expect(find.textContaining('Sleep · 7.0/10 · 2 days'), findsNothing);
         final paint = tester.widget<CustomPaint>(
@@ -152,10 +261,7 @@ void main() {
   testWidgets(
     'Skillset empty state retains all dimensions; window belongs to the page',
     (tester) async {
-      await pumpCard(
-        tester,
-        report([]),
-      );
+      await pumpCard(tester, report([]));
       expect(find.byKey(const Key('skillset-radar')), findsNothing);
       expect(find.text('No ratings in this window yet.'), findsOneWidget);
       expect(find.byType(ChoiceChip), findsNothing);

@@ -18,6 +18,7 @@ class AppRoutes {
   static const plannerReplan = '/planner/replan';
   static const insights = '/insights';
   static const quickAction = '/quick-action';
+  static const ultraQuickCheckIn = '/ultra-quick-check-in';
   static const quickMoodCheckIn = '/quick-mood-check-in';
   static const morningCalibration = '/morning-calibration';
   static const habitCompletion = '/habit-completion';

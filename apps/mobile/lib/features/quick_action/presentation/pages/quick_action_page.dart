@@ -53,6 +53,13 @@ class QuickActionPage extends ConsumerWidget {
             ),
           ],
         ),
+        if (capabilities.canUseSyncedExecution)
+          _ActionTile(
+            icon: AppIcons.microphone,
+            title: 'Ultra Quick Check-in',
+            subtitle: 'Speak, review, save',
+            onTap: () => context.push(AppRoutes.ultraQuickCheckIn),
+          ),
         if (capabilities.canUseSyncedHabits) ...[
           _ActionTile(
             icon: AppIcons.timerOutlined,

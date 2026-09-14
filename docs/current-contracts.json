@@ -84,20 +84,37 @@
       "key": "androidPush",
       "version": "android-push-v1",
       "sources": [
-        {"path": "apps/mobile/lib/features/notifications/domain/entities/push_settings.dart", "symbol": "pushContractVersion"},
-        {"path": "services/ai_service/app/models/push.py", "symbol": "PUSH_CONTRACT_VERSION"}
+        {
+          "path": "apps/mobile/lib/features/notifications/domain/entities/push_settings.dart",
+          "symbol": "pushContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/push.py",
+          "symbol": "PUSH_CONTRACT_VERSION"
+        }
       ],
-      "owners": ["docs/notification-delivery-v1-contract.md", "docs/supabase-current-state.md"]
+      "owners": [
+        "docs/notification-delivery-v1-contract.md",
+        "docs/supabase-current-state.md"
+      ]
     },
     {
       "coverage": "shared_named",
       "key": "androidPushConsent",
       "version": "android-push-consent-v1",
       "sources": [
-        {"path": "apps/mobile/lib/features/notifications/domain/entities/push_settings.dart", "symbol": "pushConsentVersion"},
-        {"path": "services/ai_service/app/models/push.py", "symbol": "PUSH_CONSENT_VERSION"}
+        {
+          "path": "apps/mobile/lib/features/notifications/domain/entities/push_settings.dart",
+          "symbol": "pushConsentVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/push.py",
+          "symbol": "PUSH_CONSENT_VERSION"
+        }
       ],
-      "owners": ["docs/notification-delivery-v1-contract.md"]
+      "owners": [
+        "docs/notification-delivery-v1-contract.md"
+      ]
     },
     {
       "coverage": "shared_named",
@@ -318,6 +335,26 @@
       ]
     },
     {
+      "coverage": "shared_named",
+      "key": "dailyCaptureDraft",
+      "version": "daily-capture-draft-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/quick_action/domain/capture_draft_proposal.dart",
+          "symbol": "dailyCaptureDraftVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/capture_draft.py",
+          "symbol": "CAPTURE_DRAFT_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/phase-10-controlled-coach-plan.md",
+        "docs/stabilization-consistency-contract.md"
+      ]
+    },
+    {
       "coverage": "explicit",
       "key": "dailyState",
       "version": "explainable-daily-state-v3",
@@ -448,20 +485,37 @@
       "key": "healthConnect",
       "version": "health-connect-v1",
       "sources": [
-        {"path": "apps/mobile/lib/features/health_connect/domain/health_connect_state.dart", "symbol": "healthConnectContractVersion"},
-        {"path": "services/ai_service/app/models/health_connect.py", "symbol": "HEALTH_CONNECT_CONTRACT_VERSION"}
+        {
+          "path": "apps/mobile/lib/features/health_connect/domain/health_connect_state.dart",
+          "symbol": "healthConnectContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/health_connect.py",
+          "symbol": "HEALTH_CONNECT_CONTRACT_VERSION"
+        }
       ],
-      "owners": ["docs/health-connect-v1-contract.md", "docs/supabase-current-state.md"]
+      "owners": [
+        "docs/health-connect-v1-contract.md",
+        "docs/supabase-current-state.md"
+      ]
     },
     {
       "coverage": "shared_named",
       "key": "healthConnectConsent",
       "version": "health-connect-cloud-consent-v1",
       "sources": [
-        {"path": "apps/mobile/lib/features/health_connect/domain/health_connect_state.dart", "symbol": "healthConnectConsentVersion"},
-        {"path": "services/ai_service/app/models/health_connect.py", "symbol": "HEALTH_CONNECT_CONSENT_VERSION"}
+        {
+          "path": "apps/mobile/lib/features/health_connect/domain/health_connect_state.dart",
+          "symbol": "healthConnectConsentVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/health_connect.py",
+          "symbol": "HEALTH_CONNECT_CONSENT_VERSION"
+        }
       ],
-      "owners": ["docs/health-connect-v1-contract.md"]
+      "owners": [
+        "docs/health-connect-v1-contract.md"
+      ]
     },
     {
       "coverage": "explicit",
@@ -759,23 +813,60 @@
     },
     {
       "coverage": "shared_named",
+      "key": "quickNotes",
+      "version": "quick-notes-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/quick_action/domain/quick_capture_api.dart",
+          "symbol": "quickNotesContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/quick_notes.py",
+          "symbol": "QUICK_NOTES_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/supabase-current-state.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
       "key": "skillsetCapture",
       "version": "skillset-capture-v1",
       "sources": [
-        {"path": "apps/mobile/lib/features/quick_action/domain/skillset_signals.dart", "symbol": "skillsetCaptureVersion"},
-        {"path": "services/ai_service/app/contracts/skillset_capture.py", "symbol": "SKILLSET_CAPTURE_VERSION"}
+        {
+          "path": "apps/mobile/lib/features/quick_action/domain/skillset_signals.dart",
+          "symbol": "skillsetCaptureVersion"
+        },
+        {
+          "path": "services/ai_service/app/contracts/skillset_capture.py",
+          "symbol": "SKILLSET_CAPTURE_VERSION"
+        }
       ],
-      "owners": ["docs/daily-briefing-implementation-plan.md", "docs/personal-learning-v1-contract.md", "docs/supabase-current-state.md"]
+      "owners": [
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/personal-learning-v1-contract.md",
+        "docs/supabase-current-state.md"
+      ]
     },
     {
       "coverage": "shared_named",
       "key": "skillsetObservations",
       "version": "skillset-observations-v1",
       "sources": [
-        {"path": "apps/mobile/lib/features/insights/domain/entities/skillset_observations.dart", "symbol": "skillsetViewVersion"},
-        {"path": "services/ai_service/app/models/personal_patterns.py", "symbol": "SKILLSET_VIEW_VERSION"}
+        {
+          "path": "apps/mobile/lib/features/insights/domain/entities/skillset_observations.dart",
+          "symbol": "skillsetViewVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/personal_patterns.py",
+          "symbol": "SKILLSET_VIEW_VERSION"
+        }
       ],
-      "owners": ["docs/personal-learning-v1-contract.md"]
+      "owners": [
+        "docs/personal-learning-v1-contract.md"
+      ]
     },
     {
       "coverage": "shared_named",

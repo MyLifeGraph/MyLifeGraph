@@ -62,6 +62,7 @@ const shellDestinations = <ShellDestinationDescriptor>[
     mobileSelectedIcon: AppIcons.add,
     activePathPrefixes: [
       AppRoutes.quickAction,
+      AppRoutes.ultraQuickCheckIn,
       AppRoutes.habitCompletion,
       AppRoutes.quickMoodCheckIn,
       AppRoutes.dailyCheckIn,

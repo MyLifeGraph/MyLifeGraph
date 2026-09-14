@@ -400,6 +400,32 @@ Every briefing, recommendation, insight, and coach answer should expose or carry
 
 ## Data Capture Cadence
 
+### Ultra Quick Check-in and optional notes
+
+The additional Plus action offers Morning, Evening and Quick note. Existing
+manual check-ins remain unchanged. Speech reuses the bounded 30-second recorder;
+the editable transcript is not itself a check-in. `daily-capture-draft-v1`
+uses the selected Coach provider and its existing shared budget to propose only
+explicitly supported fields with transcript excerpts. It uses no personal-data
+snapshot and writes no Capture. Missing or ambiguous values remain missing.
+
+The proposal opens the existing branch form for correction and completion.
+Only the normal final Save writes a complete check-in through the existing
+revision-aware command. Owner, local date, timezone, safe current read, conditional
+stress questions and retry identity remain authoritative. A saved branch keeps
+unmentioned values; a compact hint makes updating today's answers visible.
+No recording, transcription or proposal changes streaks or correlations.
+
+`quick-notes-v1` stores a separately confirmed text note (up to 2,000 characters)
+as a source-tagged Behavioral Event with no numeric value. Notes remain optional
+Coach/export context, are excluded from ordinary Snapshot counts/metrics, and
+never count as a check-in. Saved notes can be read and explicitly deleted here.
+Exact save retries reuse the same UUID; deletion prevents resurrection by retry.
+Guest/mock never calls these Cloud endpoints. Transcripts and extracted drafts
+are memory-only until confirmation; quota bookkeeping contains no transcript,
+field values or source excerpts and does not appear as Coach chat history.
+
+
 The strongest capture rhythm is evening-first with a short morning calibration.
 
 ### Evening Shutdown

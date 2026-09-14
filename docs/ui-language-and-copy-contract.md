@@ -423,6 +423,18 @@ the read-only radar: numbered short names label its axes; source labels, raw
 scales and day counts are retained under the initially collapsed `Details`.
 Missing dimensions say `No data`, never a low ability score. Unsupported concepts
 are not inferred from loosely related metrics. Stress says lower is calmer.
+The compact view icons have `Radar chart` and `Bar chart` tooltips. Both views
+retain the same data and Details. A failed local preference write is disclosed,
+not reported as saved. Coach uncertainty uses explicitly labelled
+`Low uncertainty`, `Medium uncertainty`, or `High uncertainty` with the original
+reason. Semantic color/icons supplement these words; high uncertainty means
+less confidence and no level guarantees correctness.
+Ultra Quick Check-in uses the compact choices `Morning`, `Evening`, `Quick note`.
+`Review fields` means an uncommitted proposal, followed by the existing required
+form and final save. `Save note` is separate optional context, not a check-in.
+Recording/transcription never claims completion. Errors retain the text and
+give a manual form alternative; note deletion requires confirmation.
+
 Evening shows its optional choices directly at the end of the context step;
 Morning shows its optional choice directly too. Choice copy is `Sport today` (None,
 Light, Intense), `Social contact` (Little, Some, Lots), and `Study motivation (optional)`
