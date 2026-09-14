@@ -48,28 +48,42 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
-### Voice capture / Skillset working candidate — 2026-09-14
+### Voice capture / Skillset verified candidate — 2026-09-14
 
 - Task base `28bf36bec3394507d0a16db7061450073ad045c6`, working branch
   `feat/watch-and-ui-follow-up`. Additive reviewed voice proposals, separate
   Quick Notes, persistent Skillset Radar/Bars choices and clearer Coach
   uncertainty are implemented. Production/main is unchanged.
+- Code candidate `118297c5c3fa87aad1fc11001c58ecd0ea3c6149` passes the complete
+  manually dispatched [CI run 34865948955](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34865948955).
+  All seven jobs pass: classification, source/docs/visual, Flutter/Android,
+  backend, web build, fresh migrations/pgTAP and full browser E2E.
+- Linux Flutter: 1,251 tests passed and analysis clean; Android JVM tests and
+  lint passed. Backend: 1,905 passed, two deliberate opt-in live checks skipped
+  (local Codex subscription and prepared real analysis image). Browser E2E:
+  eight passed. The earlier copy-gate failure was an internal comment, not
+  visible copy; the comment was corrected without weakening the test.
 - Focused Flutter checks passed: Skillset 58, Capture forms/proposal 46,
   uncertainty 39, Quick Capture API 5. Independent review additionally checks
   proposal response identities/evidence, day/timezone retry binding and account
-  isolation in the shared recorder token and both review forms.
+  isolation in the shared recorder token and both review forms. Final independent
+  read-only review of `118297c` found no remaining blocking defect.
 - Full Windows Flutter run: 1,222 passed, six existing cross-platform reference
-  goldens differ; no golden was regenerated. The Linux CI run is required for
-  the canonical golden, Android and Unix-executor gates. Windows affected
+  goldens differ; no golden was regenerated. The successful Linux CI provides
+  the canonical golden, Android and Unix-executor evidence. Windows affected
   selection correctly requires the full gate, but its local-stack harness cannot
   complete without Unix `setsid`; no guard was weakened.
 - Physically isolated own-VM PostgreSQL 17 applies all 74 migrations and passes
   all 597 assertions in the 28-file pgTAP suite plus full restore/deletion replay proof.
   This includes the final rollback-compatible draft content tombstone and atomic
-  operator completion. The normal local database was neither reset nor migrated.
-- Full candidate CI, Cloud migration, immutable VPS promotion and signed APK
-  publication remain pending. Repository tests are not live-provider, Cloud,
-  microphone/device or background-push acceptance evidence.
+  operator completion. The same migration/pgTAP and full restore/deletion replay
+  gates also pass in CI. The normal local database was neither reset nor migrated.
+- Cloud migration, immutable VPS promotion, push-sender activation and a newly
+  signed APK remain pending. Main is still
+  `0e6d378f8d5778a1f26099342eaabaefe03f459b`; promotion requires the exact final
+  candidate confirmation specified in AGENTS.md. This documentation follow-up
+  does not alter the tested application code. Repository tests are not
+  live-provider, Cloud, microphone/device or background-push acceptance evidence.
 
 
 ### Android Health Connect / push verified candidate — 2026-09-14
