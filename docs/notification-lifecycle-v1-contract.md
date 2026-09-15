@@ -62,6 +62,8 @@ allowlisted target without a lifecycle write; nested controls never activate
 the card, including when disabled. Cards without a target stay non-interactive.
 Tooltips and accessibility labels name each action; all original item fields
 and lifecycle/error/retry behavior remain available.
+The empty-list panel is an explicit live semantic container, so its status
+remains available to screen readers after dismissal and route reload.
 
 ## Lifecycle Endpoint
 

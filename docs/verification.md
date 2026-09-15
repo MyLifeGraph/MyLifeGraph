@@ -64,6 +64,11 @@ local unit/pgTAP evidence is not a claim about a hosted database.
   restore precondition still named the prior 74-migration head; its expected
   inventory is now 75 / `20260915105930`. Version, role safety, membership,
   owner/ACL-preserving restore and deletion-replay checks remain unchanged.
+- Run `34974249091` passed source/docs, Flutter/Android, backend, web and the
+  complete database gate. Seven browser journeys passed; the Inbox journey
+  proved all lifecycle writes and persistence, but its visible empty-state text
+  was absent from Web semantics after reload. The empty panel now has an
+  explicit live semantic container; the unchanged browser assertion is retained.
 - Windows full verification is not a passing release gate: the source wrapper
   lacks `setsid`; backend collection requires Unix sockets, and Windows runtime
   checks expose POSIX/timezone/dependency differences. Flutter golden images

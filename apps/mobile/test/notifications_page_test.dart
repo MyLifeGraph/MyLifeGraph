@@ -518,6 +518,7 @@ void main() {
 
   testWidgets('distinguishes account load failure from an empty list',
       (tester) async {
+    final semantics = tester.ensureSemantics();
     await _pumpPage(
       tester,
       useDemoData: false,
@@ -531,7 +532,12 @@ void main() {
     await _pumpPage(tester, items: const [], useDemoData: false);
 
     expect(find.text('Your inbox is empty.'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.text('Your inbox is empty.')),
+      matchesSemantics(label: 'Your inbox is empty.', isLiveRegion: true),
+    );
     expect(find.text('Could not load inbox.'), findsNothing);
+    semantics.dispose();
   });
 
   testWidgets('uses an overflow-free compact summary at 320 pixels',

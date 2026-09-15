@@ -414,9 +414,13 @@ class _EmptyNotifications extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _NotificationsPanel(
-      padding: EdgeInsets.all(AppSpacing.lg),
-      child: Text('Your inbox is empty.'),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: const _NotificationsPanel(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Text('Your inbox is empty.'),
+      ),
     );
   }
 }

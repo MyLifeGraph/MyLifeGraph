@@ -643,7 +643,7 @@ and tablet retain their existing stacked section order.
 - `/weekly-review` (authenticated, completed-week review)
 - `/alerts` (header-accessible stored Inbox with authenticated
   read/unread/dismiss lifecycle; notification generation/delivery contracts are
-  unchanged)
+  unchanged; empty status is exposed as a live semantic container after reload)
 - `/notifications` (compatibility redirect to `/alerts`)
 - `/daily-check-in` (redirects to Evening Shutdown)
 - `/deep-work` (real focus lifecycle for authenticated real accounts; local
