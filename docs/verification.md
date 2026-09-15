@@ -54,6 +54,12 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 - Full Dart analysis and Python Ruff pass; docs/visual checks pass. The English
   source guard now permits only the explicitly selected German speaking guide;
   the guest shell test follows Inbox's intentional move out of Settings.
+- Linux run `34972620552` completed the full Flutter tests before Android steps.
+  Its fresh chain applied all migrations; the database failures were the old
+  hosted-readiness fixture's head/count/digest. The fixture now expects the
+  independently derived 75-entry identity while retaining missing-history,
+  privilege, prefix and deletion-guard assertions. The first run's four Planner
+  failures were resolved by finding the toggle inside its responsive wrapper.
 - Windows full verification is not a passing release gate: the source wrapper
   lacks `setsid`; backend collection requires Unix sockets, and Windows runtime
   checks expose POSIX/timezone/dependency differences. Flutter golden images
