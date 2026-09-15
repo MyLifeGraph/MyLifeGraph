@@ -5,6 +5,9 @@ this document, including Today Overview V2, Planner V1, Study Setup V1,
 Personal Learning V1, Coach BYOK and shell navigation, Setup personalization
 retirement, Daily Capture V5, Daily State V3, learned Sleep Recommendation,
 Exam-Week Outlook V1, and the stabilized application-composition boundaries.
+The current service and feature index is [Development handoff](development-handoff.md),
+including reviewed voice capture, optional Android Health Connect, push delivery,
+on-device speech, combined Focus Protection rules and Insights period comparison.
 
 ## Objective
 
@@ -16,8 +19,8 @@ introduce model authority by default.
 
 When the review includes deployment, release readiness, public signup, hosted
 Coach behavior, Android handoff, or professor acceptance, also review
-`docs/vps-pilot-release-plan.md`. Its unchecked items are future requirements,
-not proof of the current product slice.
+`docs/vps-pilot-release-plan.md`. Recorded release evidence lives in Verification;
+runbook checkboxes and source files alone do not prove a live installation.
 
 ## Current Product Slice
 
@@ -49,12 +52,18 @@ The current checkout combines these implemented loops:
    Study rhythm adds recovery reservations without counting recovery as study.
 7. Insights independently exposes Personal Study Pattern and the 30-day-mature
    observational Sleep Recommendation; Weekly Review, Inbox lifecycle,
-   foreground-only notification delivery, optional `.ics` import, account
-   controls, and the bounded development Coach retain their separate contracts
+   foreground notification delivery and separately opted-in Android push,
+   optional `.ics` import, account controls, and the bounded Coach retain separate contracts
    and authority limits.
-8. With the development Coach gate enabled, Coach is the fifth shell
-   destination. Settings remains available from Today; a disabled gate does not
-   restore a redundant Settings shell item.
+8. With the Coach surface enabled, Today, Insights, Planner and Coach are the
+   root destinations around Quick actions. Settings and Inbox are header actions;
+   a disabled Coach gate does not restore a redundant Settings shell item.
+9. Ultra Quick creates reviewed Morning/Evening drafts, never partial completed
+   captures. Quick notes are separate optional context. EN/DE selection changes
+   guides and Coach language, not canonical data keys or validation.
+10. Optional Health Connect imports consented steps/sleep; Android speech models
+    and per-app Focus Protection rules stay device-local. Each feature has its
+    own opt-in, platform limits and account/privacy boundaries.
 
 ## Important Truth Boundaries
 
@@ -69,8 +78,9 @@ The current checkout combines these implemented loops:
   automation.
 - Imported calendar events are consented, read-only product copies. The app has
   no live provider OAuth, source-calendar write, hidden sync, or automatic move.
-- Notifications are stored Inbox rows and acknowledged foreground banners while
-  the app is open. They are not push, system, email, or background delivery.
+- Inbox rows and acknowledged foreground banners are distinct from the optional
+  Android FCM channel. Push needs separate consent, OS permission, device binding
+  and the configured API worker. No Web/iOS push or email delivery is implied.
 - Setup semester dates and Study rhythm invalidate or mark affected staged plans
   honestly; they never silently rewrite active reservations.
 - Setup edits never change Reminder consent/categories/quiet hours/daily cap.
@@ -79,7 +89,8 @@ The current checkout combines these implemented loops:
 - Exam-Week Outlook is a Planner-only read. It does not create a preview,
   change an active plan, add a Today item, or generate a Notification. Raw
   sleep instants remain in `daily_logs.metadata`.
-- English is the only supported V1 interface language.
+- The general interface remains English. Coach answers and Ultra Quick guides
+  additionally support saved English/German selection; this is not full-app localization.
 - The prepared five-student study has not been run. Synthetic personas and test
   automation are not participant or longitudinal evidence.
 
@@ -139,8 +150,9 @@ FLUTTER_BIN="${FLUTTER_BIN:-flutter}" scripts/verify.sh
 ```
 
 Follow `docs/verification.md` for local migration/advisor checks and browser
-E2E. A database reset is appropriate only for a deliberately disposable local
-test database. Do not infer permission to touch a remote database, deploy,
+E2E. Verification does not authorize a database reset; follow the guarded backup
+and fresh-confirmation workflow in `docs/local-database-safety.md` if separately
+requested. Do not infer permission to touch a remote database, deploy,
 push, or run a live model.
 
 ## Evidence Boundary

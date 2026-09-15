@@ -57,12 +57,14 @@ async def get_coach_capabilities(
         default=None, alias="X-MyLifeGraph-Coach-Provider"
     ),
     api_key: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Api-Key"),
+    model_name: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Model"),
 ) -> CoachAgentCapabilitiesResponse | CoachCapabilitiesResponse:
     try:
         service = _request_service(
             services.current,
             provider_name,
             api_key,
+            model_name=model_name,
             require_explicit=services.current.requires_explicit_provider,
         )
         return await service.capabilities(user_id=principal.user_id)
@@ -84,6 +86,7 @@ async def respond_to_coach(
         default=None, alias="X-MyLifeGraph-Coach-Provider"
     ),
     api_key: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Api-Key"),
+    model_name: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Model"),
 ) -> CoachAgentResponse | CoachResponse:
     raw = await _read_json_object(http_request)
     try:
@@ -93,6 +96,7 @@ async def respond_to_coach(
                 services.current,
                 provider_name,
                 api_key,
+                model_name=model_name,
                 require_explicit=request.contract_version == "coach-request-v4",
             )
             return await service.respond(
@@ -121,6 +125,7 @@ async def stream_coach_response(
         default=None, alias="X-MyLifeGraph-Coach-Provider"
     ),
     api_key: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Api-Key"),
+    model_name: str | None = Header(default=None, alias="X-MyLifeGraph-Coach-Model"),
 ) -> StreamingResponse:
     raw = await _read_json_object(http_request)
     try:
@@ -129,6 +134,7 @@ async def stream_coach_response(
             services.current,
             provider_name,
             api_key,
+            model_name=model_name,
             require_explicit=request.contract_version == "coach-request-v4",
         )
         prepared = await service.prepare_turn(
@@ -361,8 +367,9 @@ def _request_service(
     api_key: str | None,
     *,
     require_explicit: bool = False,
+    model_name: str | None = None,
 ) -> CoachAgentService:
-    if provider_name is None and api_key is None:
+    if provider_name is None and api_key is None and model_name is None:
         if require_explicit:
             raise CoachServiceError(
                 "provider_selection_required",
@@ -371,7 +378,7 @@ def _request_service(
                 status_code=422,
             )
         return service
-    if provider_name == "operator_codex_pilot" and api_key is None:
+    if provider_name == "operator_codex_pilot" and api_key is None and model_name is None:
         if not require_explicit:
             raise CoachServiceError(
                 "invalid_provider_credentials",
@@ -380,7 +387,7 @@ def _request_service(
                 status_code=422,
             )
         return service.for_operator_request()
-    return service.for_byok_request(provider_name=provider_name, api_key=api_key)
+    return service.for_byok_request(provider_name=provider_name, api_key=api_key, model_name=model_name)
 
 
 async def _read_json_object(http_request: Request) -> dict[str, object]:

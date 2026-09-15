@@ -1,5 +1,13 @@
 # Local Development
 
+For the current local changes and the full Cloud/service map, start with the
+[development handoff](development-handoff.md). The personal laptop Cloud
+workflow is [documented below](#personal-windows-browser-with-existing-cloud-accounts);
+it does not require Docker, a private VM Supabase stack or a second FastAPI.
+Do not restart retired VM development services or a failing migration-retry
+loop for this workflow. The normal full local stack remains a separate opt-in
+workflow with its own database-safety prerequisites.
+
 ### Optional Android integrations
 
 Health Connect requires Android 14+ and source-app sharing enabled in Android;
@@ -425,7 +433,10 @@ email/password flows. It does not weaken server-side CAPTCHA or change Auth sett
 A laptop-only API proxy listens on `127.0.0.1:8003`, accepts only the exact local
 web origins `http://127.0.0.1:7357` and `http://localhost:7357`, rejects foreign
 Host/Origin and non-API paths, and forwards the normal
-bearer plus allowed API headers to the fixed HTTPS Pilot API. It forwards no
+bearer plus allowed API headers to the fixed HTTPS Pilot API. The allowlist includes
+the exact Coach model-selection header; selecting a non-default Gemini model
+still requires the updated remote API. The proxy never changes the model itself.
+It forwards no
 cookies, does not mint or replace tokens, and preserves upstream errors, owner
 checks and Coach budgets. Speech uses the production transcription route with
 the same Cloud session. There are no public port/domain/CORS changes or SSH needs.
@@ -977,8 +988,9 @@ banner.
 Missing/stale Phase 7 preparation remains independent of consent, while a fully
 current profile is selected for a notification-only runner pass only with active
 in-app consent so consent-off current rows do not exhaust the bounded batch.
-Dashboard loads remain GET-only, and this repository still contains no deployed
-cron, push, browser, Android, email, or background-mobile delivery wiring.
+Dashboard loads remain GET-only. This local foreground runner is not deployed
+cron or OS delivery. Optional Android push uses its separate consent, private
+FCM credential and API-lifespan worker; see the Notification Delivery contract.
 
 Manage the separate foreground permission at Settings -> In-app reminders.
 Setup never reads or changes Reminder consent/preferences. A manual local one-shot

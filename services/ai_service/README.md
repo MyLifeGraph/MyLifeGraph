@@ -1,11 +1,19 @@
 # MyLifeGraph AI Service
 
+For the full service inventory and local-versus-published changes, see the
+[development handoff](../../docs/development-handoff.md). This API remains
+separate from the optional speech sidecar and Vercel/Android clients; FCM's
+optional sender runs in its existing lifespan. Recorded rollout evidence is
+centralized in [Verification](../../docs/verification.md#current-verified-baseline).
+
 The additive `coach-language-v1` request extension allows `response_language: de`
 with `language_contract: coach-language-v1` on `/v1/coach/respond` and its stream
 route using V4. Omission retains English and historical request hashes. German
 is bound into the existing fingerprint and changes trusted prompt/safety copy,
 not read-only permissions, quotas or response storage. Unsupported languages
-are rejected; no database migration is needed for this extension. Deploy this
+are rejected. The additive Coach language-completion migration is required to
+verify German fingerprints when saving answers; public RPC signatures and
+stored user text remain unchanged. Deploy this
 API before using German clients; older APIs reject the opt-in fields.
 Capture draft extraction remains a separate language-independent canonical-field
 proposal with verbatim source evidence and no Capture write before normal Save.
@@ -51,7 +59,9 @@ workflows.
 
 Personal Patterns adds `skillset_version`, `skillset_capture_version`, and
 `skillset_points` (bounded daily date/value maps), without changing its existing
-pattern/correlation fields. Valid check-ins and terminal Focus observations use
+pattern/correlation fields. The additive `sleep_hours` observation copies validated
+Morning duration, including days without Focus; it needs no schema migration.
+Valid check-ins and terminal Focus observations use
 the existing authenticated owner/window/analysis permission. V5 Capture accepts
 an optional `skillset` map: version plus Morning motivation or Evening sport/
 social, each null or integer 0–2. Existing RPC grants and projections are retained.
@@ -69,10 +79,15 @@ The current explicit-provider extension publishes `coach-request-v4`,
 `coach-capabilities-v5`, `coach-response-v4`, and `coach-history-v4` with
 `free-coach-agent-prompt-v5`. `X-MyLifeGraph-Coach-Provider` is required for
 hosted V4 capability/response routes; `X-MyLifeGraph-Coach-Api-Key` accompanies
-only OpenAI (`gpt-5.6-terra`) or Gemini (`gemini-3.8-flash`) BYOK. Keys are
+only OpenAI (`gpt-5.6-terra`) or Gemini BYOK. The Coach capability/respond routes
+accept optional `X-MyLifeGraph-Coach-Model`: exactly `gemini-3.6-flash`,
+`gemini-3.7-flash`, or `gemini-3.8-flash`, only with Gemini. Omission keeps 3.8.
+Selection is bound to claim/replay/provenance, not an arbitrary model URL.
+The additive model-selection migration and updated clients are required for 3.7.
+Keys are
 request-local and are never persisted, logged, traced, or returned. History and
 deletion never accept or need provider keys. V1-V3 rows remain compatible.
-Hosted CORS allowlists both request headers and exposes bounded `Retry-After`.
+Hosted CORS allowlists these request headers and exposes bounded `Retry-After`.
 The Gemini REST adapter pins `Api-Revision: 2026-05-20`, parses only the current
 `steps` schema, carries its exact returned steps through stateless function
 continuations, and uses the current text/JSON response-format shape. Mock

@@ -1,10 +1,24 @@
 # VPS-Abschluss für Matthias und Gregor
 
+## Aktueller Einstieg
+
+Der Pilot ist inzwischen eingerichtet und es gibt veröffentlichte Releases.
+Aktuelle lokale Änderungen und alle Zusatzdienste stehen in der
+[Entwicklungsübergabe](development-handoff.md), der zuletzt beobachtete
+Live-Stand in [Verification](verification.md#current-verified-baseline).
+Die folgenden RC4-Paket-/Erstaktivierungsschritte sind historische Bootstrap-
+Anweisungen für Wiederaufbau, **kein erneuter Arbeitsauftrag auf dem laufenden VPS**.
+API/Coach, Push im bestehenden API-Prozess und der unabhängige Speech-Sidecar
+werden über ihre jeweiligen Runbooks gepflegt. Nicht die alte Entwicklungs-
+Supabase oder einen VM-Stack als Voraussetzung für den Laptop-Cloudmodus starten.
+
 Diese Übergabe setzt die bereits geprüfte VPS-Einrichtung fort. Ziel:
 `openclaw-01`, `178.104.87.50`. Sie beschreibt den vorbereiteten Abschluss für
 API, Coach, HTTPS und Dienststart nach Neustart. Den zuletzt beobachteten Stand
 und die Release-Identität dokumentiert der
-[RC4-Prüfnachweis](verification.md#rc4-administrator-handoff-2026-09-07).
+[aktuellen Prüfnachweis](verification.md#current-verified-baseline); der
+[RC4-Prüfnachweis](verification.md#rc4-administrator-handoff-2026-09-07)
+beschreibt nur den damaligen Bootstrap.
 Vor Änderungen den tatsächlichen Serverzustand prüfen; ein späterer `git pull`
 beweist weder Dienststatus noch unveränderte Staging-Dateien.
 
@@ -49,8 +63,11 @@ auf GitHub, Supabase und Vercel sind laut Gregor bereits vorhanden.
 
 Matthias bereitet Domain und Key vor und führt den Abschluss selbst mit `sudo /usr/local/sbin/mylifegraph-project setup` aus. Danach folgen
 Vercel-Konfiguration und Browser-Abnahme. Aktuell sind weder AWS noch
-Backup-Einrichtung Teil dieses Auftrags. Für Supabase-Agentenarbeit ausschließlich
-den direkten Supabase-MCP verwenden, nicht das Supabase-Plugin. Zugangsdaten und
+Backup-Einrichtung Teil dieses historischen Bootstrap-Auftrags. Für aktuelle
+Supabase-Arbeit eine bereits angemeldete CLI oder einen autorisierten Connector
+verwenden; vor CLI-Kommandos deren installierte Hilfe lesen und das genaue
+Projekt prüfen. Keine neue Anmeldung verlangen, wenn ein vorhandener CLI-Zugang
+genügt. Zugangsdaten und
 Codex-OAuth-Dateien niemals auslesen oder in Chat/Repository übernehmen.
 
 ## Matthias’ SSH-Zugang testen

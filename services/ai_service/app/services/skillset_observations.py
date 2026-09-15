@@ -74,6 +74,7 @@ def skillset_observations(
                 }
                 if kind == "evening"
                 else {
+                    "sleep_hours": "sleep_hours",
                     "sleep_quality": "sleep_quality",
                     "current_energy": "energy_level",
                 }

@@ -40,7 +40,22 @@ void main() {
     expect(prefs.getKeys(), {'coach_provider_v1:profile-a'});
     expect(prefs.getString('coach_provider_v1:profile-a'), 'operatorCodexPilot');
   });
-  for (final model in ['gemini-3.6-flash', 'gemini-3.8-flash']) {
+  test('Gemini model selection persists without keys and stays account scoped', () async {
+    final controller = CoachCredentialsController(store: PlatformCoachCredentialStore(web: true),
+      api: _Api(), accessToken: () async => 'test-token');
+    addTearDown(controller.dispose);
+    await controller.setProfile('profile-a');
+    expect(controller.state.geminiModel, coachDefaultGeminiModel);
+    await controller.selectGeminiModel('gemini-3.6-flash');
+    await controller.setProfile(null);
+    await controller.setProfile('profile-a');
+    expect(controller.state.geminiModel, 'gemini-3.6-flash');
+    expect(controller.state.activeKey, isNull);
+    await controller.setProfile('profile-b');
+    expect(controller.state.geminiModel, coachDefaultGeminiModel);
+    expect(() => controller.selectGeminiModel('unapproved'), throwsArgumentError);
+  });
+  for (final model in coachGeminiModels.keys) {
     test('Gemini capabilities preserve exact model $model', () async {
       final api = _Api()..geminiModel = model;
       final capabilities = await api.getCapabilities(accessToken: 'test',
@@ -329,18 +344,19 @@ class _Api extends CoachApiDataSource {
     required String accessToken,
     CoachProviderName? provider,
     String? apiKey,
+    String? model,
   }) async {
     keys.add(apiKey!);
     await capabilityBarrier?.future;
-    final model = provider == CoachProviderName.openai
+    final effectiveModel = provider == CoachProviderName.openai
         ? 'gpt-5.6-terra'
-        : geminiModel;
+        : model ?? geminiModel;
     return CoachCapabilities.fromJson({
       'contract_version': coachCapabilitiesContractVersion,
       'state': ready ? 'ready' : 'unavailable',
       'provider': provider!.code,
       'provider_mode': 'user_supplied_key',
-      'model_requested': model,
+      'model_requested': effectiveModel,
       'model_source': 'explicit',
       'service_tier': 'not_applicable',
       'fast_mode': false,

@@ -189,6 +189,7 @@ def create_app() -> FastAPI:
             "Content-Type",
             "X-MyLifeGraph-Coach-Provider",
             "X-MyLifeGraph-Coach-Api-Key",
+            "X-MyLifeGraph-Coach-Model",
         ],
         expose_headers=["Content-Disposition", "Retry-After"],
     )

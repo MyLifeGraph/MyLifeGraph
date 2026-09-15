@@ -11,6 +11,47 @@ import 'package:my_life_graph/features/coach/presentation/providers/coach_provid
 import 'support/coach_fixtures.dart';
 
 void main() {
+  test('upstream quota copy never mislabels Gemini as Codex', () {
+    const error = CoachRemoteException(code: 'account_limit',
+      message: 'The local Codex account limit has been reached.',
+      retryable: false, statusCode: 429);
+    expect(coachErrorMessage(error), contains('selected AI provider'));
+    expect(coachErrorMessage(error), isNot(contains('Codex')));
+    expect(error.isRateLimited, isTrue);
+  });
+  test('provider change during refresh cannot retain the old exhausted budget', () async {
+    final gate = Completer<void>();
+    final repository = _FakeCoachRepository(refreshGate: gate,
+      remainingRequests: [0, 0, 20]);
+    final controller = CoachController(repository: repository);
+    addTearDown(controller.dispose);
+    await _settle();
+    final refresh = controller.load();
+    await _settle();
+    await controller.providerChanged();
+    expect(controller.state.capabilities, isNull);
+    gate.complete();
+    await refresh;
+    expect(repository.capabilityCalls, 3);
+    expect(controller.state.capabilities!.limits.remainingRequests, 20);
+    expect(controller.state.isRateLimited, isFalse);
+  });
+  test('model/provider change keeps draft but starts a new request identity', () async {
+    final repository = _FakeCoachRepository(error: const CoachRemoteException(
+      code: 'network_error', message: 'Lost response', retryable: true, statusCode: 503));
+    final controller = CoachController(repository: repository);
+    addTearDown(controller.dispose);
+    await _settle();
+    controller.updateDraft('Keep this question');
+    await controller.send();
+    final previous = controller.state.requestId;
+    expect(controller.state.exactRetryMessage, isNotNull);
+    await controller.providerChanged();
+    expect(controller.state.draft, 'Keep this question');
+    expect(controller.state.requestId, isNot(previous));
+    expect(controller.state.exactRetryMessage, isNull);
+    expect(controller.state.sendError, isNull);
+  });
   test('language load failure preserves draft and does not dispatch', () async {
     final repository = _FakeCoachRepository();
     final controller = CoachController(repository: repository,

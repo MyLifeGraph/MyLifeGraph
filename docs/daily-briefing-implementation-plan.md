@@ -1,5 +1,18 @@
 # Daily Briefing Implementation Plan
 
+Evening's Sport and Social choices use the same equal-width buttons as stress
+controllability, retaining optional deselection. A first tap selects the stress
+source and shows a chevron; tapping that selected row again toggles its optional
+detail without changing selection. New selections start collapsed. Specific blocker appears directly
+below the selected option inside the stress-source list, before the next option.
+The option and borderless input share one outline at the option width; the Info
+control stays outside, and only a separator divides the header and input. Reduced
+motion opens it immediately. Neutral hover and a keyboard-focus outline remain
+visually distinct from the selected source or filled rating.
+Without a selected source it stays hidden, including when stress is lowered;
+the existing shared text controller and save field retain its value. Changing
+source never clears it. Reflection/Optional notes remain unchanged.
+
 Optional Skillset collection adds the `skillset-capture-v1` namespace to V5
 branches only: Morning `motivation`, Evening `sport` and `social` are nullable
 integers 0–2. They do not replace mood, stress, energy, sleep or Focus ratings.
@@ -219,7 +232,7 @@ Phase 4's deterministic briefing service.
 | Coach | Explicitly gated authenticated free-question agent | The route is fail-closed in release/production; capability/history reads are generation-free, backend `ready` gates sending, and each real turn is read-only over a temporary owner-only snapshot |
 | Planner | Central authenticated planning home | Deterministic Task/Habit previews, Deadline Planner delegation, manual commitments, shared availability, conflict attention, explicit confirmation, and the read-only Exam-Week Outlook are implemented without hidden scheduling. |
 | Study Setup | Optional Setup projection | Focus/recovery rhythm, preparation checklist, current/next semester, recovery reservations, and course-selection attention are implemented under the revisioned Setup authority. |
-| Settings | Durable V1 controls | Profile, Setup and Study Setup review, account timezone, preparation budget, Inbox, reminders, bounded export, confirmed deletion, device-persisted theme, Calendar Import, and sign-out expose their actual persistence boundaries. Coach is a gated shell destination, not a Settings fallback. |
+| Settings | Durable V1 controls | Profile, Setup and Study Setup review, account timezone, preparation budget, reminders, optional Android integrations, bounded export, confirmed deletion, device-persisted theme, Calendar Import, and sign-out expose their actual persistence boundaries. Inbox is in the main-page header; Coach configuration stays in Coach. |
 
 ## Guiding Principles
 
@@ -399,6 +412,10 @@ Every briefing, recommendation, insight, and coach answer should expose or carry
 - Demo/mock provenance when applicable.
 
 ## Data Capture Cadence
+
+Manual capture headers retain the step label and main heading without a
+redundant explanatory subtitle. Voice-review guidance remains; fields,
+validation, final Save and persistence are unchanged.
 
 ### Ultra Quick Check-in and optional notes
 
@@ -975,7 +992,7 @@ The implemented short Morning Calibration surface supports:
   whole-number `1..10` estimated sleep-quality rating and current energy. There
   is no Day Shape field.
 - `Next` validates only the complete Sleep page, `Back` retains every answer,
-  and only `Save morning check-in` on the second page persists. Save failure
+  and only `Save` on the second page persists. Save failure
   retains the complete second-page draft for unchanged retry.
 - Initially closed, independently expandable measurement/source explanations
   for estimated duration, target, and quality. The same reusable Capture
@@ -1595,8 +1612,9 @@ Deliberately not claimed:
 
 - No deployed cron/job has been configured or inspected; the repository now
   provides the protected callable backend boundary only.
-- No deployed/background, push, browser, Android, email, or check-in reminder is
-  configured. The local runner and foreground in-app path cover explicit
+- This historical Daily Preparation slice does not configure OS reminders.
+  Optional Android push is separately owned by Notification Delivery V1 and
+  does not broaden this scheduler's authority. The local runner and foreground in-app path cover explicit
   consent, fixed copy, quiet hours, category flags, cap, dedupe, and allowlisted
   Today/Weekly Review links only. Snooze remains future work.
 

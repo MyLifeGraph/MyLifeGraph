@@ -38,6 +38,7 @@ code, tests, or documentation.
 | Trigger | Read before acting |
 | --- | --- |
 | General orientation in an unfamiliar checkout | `README.md` |
+| Returning maintainer, service inventory, or release handoff | `docs/development-handoff.md`; follow its feature-owner links and `docs/verification.md` for actual deployment evidence |
 | Broad or cross-product user-flow work | `docs/current-product-guide.md` |
 | VPS development, setup, deployment continuation, or Gregor/Matthias server handoff | `docs/vps-matthias-handoff.md`; `deploy/vps/README.md`; `deploy/vps/PROJECT_ADMIN.md` |
 | Tooling, startup, environment, local URLs, or configuration | `docs/local-dev.md` |
@@ -70,6 +71,8 @@ Route names refer to modules below `services/ai_service/app/api/routes/`.
 | Auth, Intake, Setup compatibility, and Account Settings | `auth`, relevant `settings`; `intake.py`, `account.py` | `docs/supabase-current-state.md`; `docs/setup-personalization-retirement-contract.md` or `docs/study-setup-v1-contract.md` for Intake/Setup; `docs/v1-account-controls-contract.md` for account controls |
 | Notification lifecycle and delivery | `notifications`; `notifications.py`, `push.py`, notification work in `scheduled.py` | `docs/notification-lifecycle-v1-contract.md` and/or `docs/notification-delivery-v1-contract.md` according to the changed authority |
 | Coach | `coach`, legacy empty `more`; `coach.py` | `docs/phase-10-controlled-coach-plan.md` |
+| Ultra Quick Check-in and reviewed voice drafts | `voice_capture`, `quick_action`, draft operations in `coach.py` | `docs/daily-briefing-implementation-plan.md`; `docs/phase-10-controlled-coach-plan.md`; add stabilization owner when Capture write authority changes |
+| Server and on-device speech | `speech`, Coach dictation, `services/speech_service` | `docs/phase-10-controlled-coach-plan.md`; `services/speech_service/README.md`; add VPS owners for installation/deployment |
 | Optional Android Health Connect | `health_connect`; `health_connect.py` | `docs/health-connect-v1-contract.md`; `docs/supabase-current-state.md`; `docs/v1-account-controls-contract.md` |
 | Weekly Review | `weekly_review`; `weekly_reviews.py` | `docs/phase-8-weekly-review-contract.md` |
 | Today, app shell, dashboard, copy, and presentation | `dashboard`, `shell`, cross-feature presentation in `settings`; `today.py` | `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md` where Planner facts appear, `docs/ui-language-and-copy-contract.md`, and `docs/frontend-visual-system-v2.md` |

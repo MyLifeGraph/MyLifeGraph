@@ -2,9 +2,9 @@
 
 ## Compact view and Task controls
 
-The presentation toggle separates `This week` (the existing Days/List calendar)
+On mobile/tablet the presentation toggle separates `This week` (the existing Days/List calendar)
 from `Planning` (attention, outlook, preparation, pending previews, Habits,
-unscheduled Tasks and history). Add new and mutation errors remain available
+unscheduled Tasks and history). Compact `+ Add` and mutation errors remain available
 in both. Existing calendar day/view retention and every command are preserved.
 The Planning badge indicates attention or pending previews; switching views
 does not mutate any plan, Task or schedule.
@@ -30,16 +30,16 @@ main page through the shared header action.
 
 ## Navigation And Surface
 
-The `Import calendar (.ics)` header icon beside `Next seven days` opens the
+The `Import calendar (.ics)` icon beside Refresh in the loaded page header opens the
 existing calendar-import screen, also available in Settings. It does not
 introduce Google synchronization or change import consent/data behavior.
 
-When the development Coach surface is enabled, the mobile and desktop
+When the configured Coach surface is enabled, the mobile and desktop
 destinations are, in order: `Today`, `Insights`, `Quick actions`, `Planner`, and
-`Coach`. Release builds, production, or an explicit disabled gate omit Coach
-and do not restore Settings as a fallback shell item. Settings is opened from
+`Coach`. Hosted/release builds require `COACH_SURFACE_ENABLED=true`; an explicit
+disabled gate omits Coach and does not restore Settings as a fallback shell item. Settings is opened from
 the shared top-right action on Today, Insights, Quick actions, Planner, Coach,
-and Settings. Planner orders its `Reload Planner` action before an optional
+but not Settings itself. Planner orders its `Reload Planner` action before an optional
 unread Coach result, Inbox and Settings; the same action group remains visible in
 locked, initial loading, overview-error, current, and stale-after-mutation
 states. Settings is pushed so Back returns to Planner. `/preparation-plans` and `/habits` remain
@@ -58,11 +58,23 @@ proposal/confirmation APIs.
 
 Planner renders:
 
-The view toggle comes first at every width. In `This week`, the calendar leads
-and `Add new` follows with the same five creation actions. In `Planning`, normal
-desktop widths (1280px and above) place creation and preferences beside compact
-attention/preparation/habits/unscheduled/history sections. Narrower/tablet and
-enlarged-text layouts stack that view's sections. Warnings and retries stay
+On mobile/tablet the unchanged-width view toggle comes first on its own row. This week's calendar
+heading has a compact outlined `+ Add` button beside Days/List.
+The pill-shaped Add shares the view controls' compact height with a small gap.
+Planning retains a compact Add button below the toggle.
+On phones below 600px, Planning's Add spans the content width.
+Add opens the same five creation actions. Only Planning shows the calendar-busy
+preference; availability warnings remain visible in either view when needed.
+A deliberate upward touch swipe starting on the bottom navigation opens the
+same menu while Planner is current and mutable. Page scrolling does not open it;
+loading, locked, in-flight and stale mutation guards are unchanged.
+Desktop (1280px and above, text scale below 150%) restores the pre-split layout
+from `593ea22`: calendar first in the main left column, then the existing five
+Add new actions, preferences, warnings/retries and pending/outlook sections.
+The right column contains attention/preparation/habits/unscheduled/history and
+retains its original 29% width clamped to 280–360px. Desktop has no This week /
+Planning toggle or duplicate calendar Plus. Narrower/tablet and enlarged-text
+layouts retain the two-view presentation unchanged. Warnings and retries stay
 visible; pending previews remain available in Planning with a toggle badge.
 The mobile `Add new` sheet scrolls when height or enlarged text would otherwise
 clip its five actions; their order, labels, and callbacks remain unchanged.
@@ -77,10 +89,10 @@ lazy page rendering must not reset it to Days.
 Days/List also survives leaving and returning through shell navigation within
 the app session. This display preference retains no account records.
 Desktop chips include dates; narrow/large-text chips scroll instead of squeezing.
-Days keeps its appointments inside a softly outlined, count-independent viewport
-for roughly three normal rows; overflow scrolls within it and an empty day retains
-the same height. Large text gets a taller viewport without truncating rows. Date
-navigation stays outside the viewport, and each day starts at its first item.
+Days keeps all appointments inside a softly outlined, content-height frame.
+There is no appointment limit or nested vertical scroller: the page scrolls
+the complete day, including four or more rows. Empty days retain a small honest
+empty state. Date navigation remains outside the frame.
 List retains its continuous vertical layout rather than seven nested scrollers.
 The date range remains the overview's seven profile-local dates. Appointment
 cards use an opt-in neutral surface with category-colored rail/icon and full

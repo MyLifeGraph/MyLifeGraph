@@ -417,11 +417,15 @@ class _CheckInButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = '${saved ? 'Edit' : 'Add'} $label';
+    final tokens = context.visualTokens;
+    final statusColor = saved ? tokens.success : tokens.attention;
     final style = ButtonStyle(
+      foregroundColor: WidgetStatePropertyAll(statusColor),
+      side: WidgetStatePropertyAll(
+        BorderSide(color: statusColor.withValues(alpha: 0.5)),
+      ),
       backgroundColor: WidgetStatePropertyAll(
-        saved
-            ? Colors.transparent
-            : context.visualTokens.brand.withValues(alpha: 0.12),
+        saved ? tokens.successSurface : tokens.attentionSurface,
       ),
     );
     return Semantics(
@@ -459,7 +463,11 @@ class _CheckInButton extends StatelessWidget {
           ),
           Text(
             saved ? 'Done' : 'To do',
-            style: textTheme.labelSmall,
+            style: textTheme.labelSmall?.copyWith(
+              color: saved
+                  ? context.visualTokens.success
+                  : context.visualTokens.attention,
+            ),
           ),
         ],
       ),

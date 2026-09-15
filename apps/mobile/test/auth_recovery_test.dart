@@ -90,10 +90,38 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Build your day-aware coach'), findsOneWidget);
+    expect(find.text('MyLifeGraph'), findsOneWidget);
     await tester.ensureVisible(find.text('Continue as guest'));
     await tester.pumpAndSettle();
     expect(find.text('Continue as guest'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mobile auth shows email directly and preserves all methods', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appConfigProvider.overrideWithValue(_testAppConfig),
+        authRepositoryProvider.overrideWithValue(null)],
+      child: MaterialApp(theme: AppTheme.dark, home: const AuthPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Make room for a better day.'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Email').hitTestable(), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Password').hitTestable(), findsOneWidget);
+    expect(find.byKey(const Key('auth-email-toggle')), findsNothing);
+    await tester.enterText(find.widgetWithText(TextField, 'Email'), 'person@example.test');
+    await tester.tap(find.text('Create account'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'Name optional'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'person@example.test'), findsOneWidget);
+    for (final label in ['Resend confirmation email', 'Continue as guest', 'Sign in with Google']) {
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      expect(find.text(label).hitTestable(), findsOneWidget);
+    }
     expect(tester.takeException(), isNull);
   });
 

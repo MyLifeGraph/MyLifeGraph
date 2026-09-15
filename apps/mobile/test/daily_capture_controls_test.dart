@@ -1,10 +1,114 @@
 import 'package:flutter/material.dart';
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
 
 void main() {
+  for (final (name, theme) in [
+    ('dark', AppTheme.dark),
+    ('light', AppTheme.light),
+    ('space', AppTheme.space),
+  ]) {
+    testWidgets('rating hover is neutral, selection and focus stay distinct: $name', (tester) async {
+      var value = 8;
+      await _pump(tester, StatefulBuilder(builder: (context, setState) =>
+        CaptureRatingControl(value: value, semanticPrefix: 'mood',
+          onChanged: (next) => setState(() => value = next))), theme: theme);
+      final nine = find.widgetWithText(OutlinedButton, '9');
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: tester.getCenter(nine));
+      await mouse.moveTo(tester.getCenter(nine));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(FilledButton, '8'), findsOneWidget);
+      expect(value, 8);
+      final style = tester.widget<OutlinedButton>(nine).style!;
+      final tokens = theme.extension<AppVisualTokens>()!;
+      for (final state in [WidgetState.hovered, WidgetState.focused]) {
+        expect(style.backgroundColor!.resolve({state}), Colors.transparent);
+        expect(style.overlayColor!.resolve({state})!.withValues(alpha: 1),
+          tokens.textPrimary.withValues(alpha: 1));
+      }
+      expect(style.side!.resolve({WidgetState.focused})!.width, 2);
+      await tester.tap(nine);
+      await tester.pumpAndSettle();
+      expect(value, 9);
+      expect(find.widgetWithText(FilledButton, '9'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, '8'), findsOneWidget);
+    });
+  }
+
+  for (final reducedMotion in [false, true]) {
+    testWidgets('stress detail expands inside selected card at 320px, reduced motion $reducedMotion', (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      String? selected;
+      await _pump(tester, MediaQuery(
+        data: MediaQueryData(textScaler: const TextScaler.linear(2), disableAnimations: reducedMotion),
+        child: StatefulBuilder(builder: (context, setState) => CaptureChoiceControl<String>(
+          value: selected,
+          choices: const [CaptureChoice(value: 'work', label: 'Workload', description: 'Workload help'),
+            CaptureChoice(value: 'recovery', label: 'Physical recovery')],
+          selectedDetail: TextField(controller: controller,
+            decoration: const InputDecoration(labelText: 'Specific blocker (optional)')),
+          onChanged: (next) => setState(() => selected = next),
+        )),
+      ), theme: AppTheme.dark);
+      expect(find.byType(TextField), findsNothing);
+      await tester.tap(find.text('Workload'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Workload')).selected, isTrue);
+      final tokens = AppTheme.dark.extension<AppVisualTokens>()!;
+      final selectedFill = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Workload'))
+        .color!.resolve({WidgetState.selected});
+      expect(selectedFill, Color.alphaBlend(tokens.brand.withValues(alpha: 0.14), tokens.surface));
+      expect(tester.widget<Icon>(find.byIcon(AppIcons.expandMore)).color, tokens.textPrimary);
+      await tester.tap(find.text('Workload'));
+      await tester.pumpAndSettle();
+      final card = find.byKey(const ValueKey('capture-choice-card-work'));
+      expect(find.descendant(of: card, matching: find.byType(TextField)), findsOneWidget);
+      final detailBox = tester.widget<DecoratedBox>(find.ancestor(
+        of: find.byType(TextField), matching: find.byType(DecoratedBox)).first);
+      expect((detailBox.decoration as BoxDecoration).color, tokens.surfaceSubtle);
+      expect((detailBox.decoration as BoxDecoration).color, isNot(selectedFill));
+      final header = find.widgetWithText(ChoiceChip, 'Workload');
+      expect(tester.getSize(card).width, tester.getSize(header).width);
+      expect(tester.getSize(find.byType(TextField)).width, tester.getSize(header).width);
+      expect(find.descendant(of: card, matching: find.byType(IconButton)), findsNothing);
+      await tester.enterText(find.byType(TextField), 'A long day');
+      final chip = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Physical recovery'));
+      expect(chip.color!.resolve({WidgetState.hovered}), Colors.transparent);
+      expect(chip.color!.resolve({WidgetState.focused}), Colors.transparent);
+      expect(WidgetStateProperty.resolveAs<BorderSide?>(chip.side, {WidgetState.focused})!.width, 2);
+      await tester.ensureVisible(find.text('Physical recovery'));
+      await tester.tap(find.text('Physical recovery'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      await tester.tap(find.text('Physical recovery'));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: card, matching: find.byType(TextField)), findsNothing);
+      expect(find.descendant(of: find.byKey(const ValueKey('capture-choice-card-recovery')),
+        matching: find.byType(TextField)), findsOneWidget);
+      expect(controller.text, 'A long day');
+      await tester.tap(find.text('Physical recovery'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(controller.text, 'A long day');
+      expect(selected, 'recovery');
+      expect(find.byType(AnimatedSize), reducedMotion ? findsNothing : findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('clock shortcuts wrap midnight and keep the picker', (tester) async {
     String? changed;
     await _pump(tester, CaptureClockControl(
@@ -205,9 +309,11 @@ Future<void> _pump(
   WidgetTester tester,
   Widget child, {
   bool disableAnimations = false,
+  ThemeData? theme,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       home: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(context).copyWith(

@@ -61,7 +61,8 @@ test('private proxy enforces host, origin, route and bearer without replacing up
   const reply = await fetchLocal('/v1/coach/capabilities', { headers: {
     Origin: localWebOrigin, Authorization: 'Bearer deliberately-invalid-test-token',
     Cookie: 'must-not-forward=yes', 'X-Forwarded-For': 'untrusted',
-    'X-MyLifeGraph-Coach-Provider': 'operator_codex_pilot',
+    'X-MyLifeGraph-Coach-Provider': 'gemini',
+    'X-MyLifeGraph-Coach-Model': 'gemini-3.6-flash',
   } });
   assert.equal(reply.status, 401);
   assert.equal(reply.headers.get('Retry-After'), '7');
@@ -70,7 +71,8 @@ test('private proxy enforces host, origin, route and bearer without replacing up
   assert.deepEqual(await reply.json(), { detail: 'Invalid bearer' });
   assert.equal(received.length, 1);
   assert.equal(received[0].headers.authorization, 'Bearer deliberately-invalid-test-token');
-  assert.equal(received[0].headers['x-mylifegraph-coach-provider'], 'operator_codex_pilot');
+  assert.equal(received[0].headers['x-mylifegraph-coach-provider'], 'gemini');
+  assert.equal(received[0].headers['x-mylifegraph-coach-model'], 'gemini-3.6-flash');
   assert.equal(received[0].headers.origin, undefined);
   assert.equal(received[0].headers.cookie, undefined);
   assert.equal(received[0].headers['x-forwarded-for'], undefined);

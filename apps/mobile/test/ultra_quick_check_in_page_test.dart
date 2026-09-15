@@ -55,6 +55,10 @@ void main() {
         contains(mode == 'Morning' ? 'Sleep quality: … / 10' : 'Mood: … / 10'),
       );
       expect(field.controller!.text, isEmpty);
+      expect(field.decoration!.labelText, isNull);
+      expect(find.text(guide).hitTestable(), findsOneWidget);
+      expect(tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
+          isFalse);
       await tester.enterText(find.byType(TextField), 'My own words');
       await tester.pumpAndSettle();
       expect(find.text(guide).hitTestable(), findsNothing);

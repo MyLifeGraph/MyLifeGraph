@@ -1,5 +1,26 @@
 # Frontend Visual System V2
 
+Mobile Auth shows a larger brand heading and one short encouraging sentence,
+with email fields directly visible. The page centers its content vertically
+when it fits and scrolls when needed for smaller screens, keyboard, enlarged
+text, errors or required privacy notices. Authentication actions are unchanged.
+
+Planner keeps its view toggle on its own row and uses an outlined `+ Add` in the
+calendar heading (compact Add below the toggle in Planning), without
+a separate creation card. Its existing modal retains all five creation choices.
+That split is mobile/tablet only. At the existing desktop breakpoint, the
+pre-split calendar-left/Add-new-below and compact-summary-right layout returns,
+including the original bounded summary width and visible five creation actions.
+Calendar import sits beside Refresh in the page header. Below 600px,
+Planning's Add spans the content width. Desktop keeps its creation section.
+Touch navigation supplements rather than replaces visible buttons: horizontal
+main-page swipes are deliberate and nested scrollers retain gesture priority.
+Root-page transitions enter from the right for a later destination and from the
+left for an earlier destination, consistently for buttons and swipes. Reduced
+motion removes the slide; auxiliary push/back navigation is unchanged.
+Planner's upward creation shortcut starts only on the bottom navigation;
+ordinary page scrolling must never open the menu.
+
 Coach and Ultra Quick show a compact, directly toggleable UK/German flag in
 their header actions, using existing icon-button targets and tooltips naming
 the current and next language. No language dialog, additional panel, translated
@@ -150,11 +171,10 @@ Exam and Assignment therefore share a color while retaining distinct labels
 and icons. Default agenda cards color the row with category tokens. The Planner
 reference layout instead uses neutral raised appointment surfaces, category
 rails and icon badges, primary titles and secondary details. This opt-in skin
-uses a rounded `outlineSoft` frame around Days appointments, with stable height
-at a given width/text scale, internal overflow scrolling, and a centered empty
-label. The date controls remain outside; List and Today stay unbounded by this
-Planner-only viewport. Approximately three normal rows fit without restricting
-long titles or enlarging the frame with the day's item count. This presentation
+uses a rounded `outlineSoft` frame around all Days appointments, growing with
+the day's content and using page scrolling rather than internal scrolling.
+The date controls remain outside; the empty label remains explicit. Four or more
+appointments are not capped or clipped. This presentation
 does not alter Today. Color never replaces the visible category
 label. Preparation status pills use Attention for Preview/Source changed,
 Success for Active/Completed, Danger for Cancelled, and Information for the
@@ -287,6 +307,10 @@ another labelled semantic primitive.
 
 ## Icons
 
+Today check-in buttons use muted attention/success surfaces and matching
+outlines for pending/saved states. Labels and existing saved-check icons remain;
+pending is not an error and does not use a red cross.
+
 `phosphor_flutter` is pinned exactly to `2.1.0`. `AppIcons` is the product
 vocabulary and the only student-facing icon source.
 
@@ -358,6 +382,17 @@ wrap rather than overflow at 320 logical pixels and 200-percent text. The
 accordion button and every actionable shared schedule row expose the same
 two-pixel `AppVisualTokens.focus` keyboard ring; static schedule facts remain
 outside keyboard traversal.
+
+Evening stress-source selection first highlights the row and reveals a chevron.
+The header uses a subtle brand tint; its chevron uses primary text contrast
+(near-white in dark themes). The expanded input uses the separate subtle surface.
+A second tap toggles the optional blocker; selection and typed text are retained.
+When expanded, the optional blocker remains inside the same
+outline at the choice width, with the Info action outside to its right. A subtle
+separator joins header and borderless input; no nested card frames. The expansion
+uses state motion, or no animated wrapper under reduced motion. Capture rating
+hover is neutral rather than brand-tinted; keyboard focus retains a two-pixel
+outline. Stress chips use explicit selected fills and no green hover/focus wash.
 
 Evening pressure-source help is a separate accessible info control: hover opens
 the tooltip on web, tap opens it on touch, and neither path changes the

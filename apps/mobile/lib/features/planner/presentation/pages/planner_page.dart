@@ -9,6 +9,7 @@ import '../../../../composition/today_command_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/navigation/planner_add_request.dart';
 import '../../../../core/time/profile_timezone.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -104,6 +105,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
   bool _continuedWithoutAvailability = false;
   final _sevenDayKey = GlobalKey();
   bool _showPlanning = false;
+  bool _addMenuOpen = false;
   final Set<String> _updatingTaskIds = {};
 
   @override
@@ -130,11 +132,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         MediaQuery.textScalerOf(context).scale(16) < 24;
     final availabilityIncomplete =
         overview != null && _availabilityIsIncomplete(overview);
-    final children = <Widget>[
-      PlannerAddNewSection(
-        showCreationActions: true,
+    final addSection = PlannerAddNewSection(
+        showCreationActions: desktop,
         busy: !state.canMutate,
-        calendarPreference: overview?.preferences,
+        calendarPreference: desktop || _showPlanning ? overview?.preferences : null,
         availabilityIncomplete: availabilityIncomplete,
         onTask: _createTask,
         onHabit: _createHabit,
@@ -153,7 +154,21 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                   _showFailure();
                 }
               },
-      ),
+      );
+    ref.listen(plannerAddRequestProvider, (previous, next) async {
+      if (previous == next || _addMenuOpen || !state.canMutate ||
+          overview == null || ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
+      _addMenuOpen = true;
+      try {
+        await addSection.openCreationMenu(context);
+      } finally {
+        _addMenuOpen = false;
+      }
+    });
+    final children = <Widget>[
+      if (desktop || availabilityIncomplete || (_showPlanning && overview != null)) addSection,
     ];
     if (state.projectionStatus == PlannerProjectionStatus.staleAfterMutation) {
       children.add(
@@ -314,7 +329,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         days: overview.days,
         timezone: overview.timezone,
         onItemTap: (item) => _openDayItem(item, overview),
-        onImportCalendar: () => context.push(AppRoutes.calendarIntegration),
+        onAdd: state.canMutate ? () => addSection.openCreationMenu(context) : null,
+        showAddButton: !desktop,
         enabled: state.canMutate,
       ),
     );
@@ -366,8 +382,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         child is PlannerHabitsSection ||
         child is PlannerUnscheduledTasksSection ||
         child is PlannerHistorySection ||
-        child is PlannerPendingPreviewsSection ||
-        child is PlannerExamWeekOutlookSection;
+        (!desktop && (child is PlannerPendingPreviewsSection ||
+            child is PlannerExamWeekOutlookSection));
     final visible = children
         .where(
           (child) => child == agenda
@@ -400,10 +416,32 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                   : () => _reloadPlannerFromHeader(state),
               icon: const Icon(AppIcons.refresh),
             ),
+            IconButton(
+              key: const ValueKey('planner-import-calendar'),
+              tooltip: 'Import calendar (.ics)',
+              onPressed: () => context.push(AppRoutes.calendarIntegration),
+              icon: const Icon(AppIcons.downloadOutlined),
+            ),
           ],
         ),
       ],
-      children: [
+      children: desktop ? [
+        LayoutBuilder(builder: (context, constraints) => Row(
+          key: const ValueKey('planner-desktop-columns'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: stack([
+              agenda,
+              ...children.where((child) => !isSummary(child) && child != agenda),
+            ])),
+            const SizedBox(width: AppSpacing.lg),
+            SizedBox(
+              width: (constraints.maxWidth * .29).clamp(280.0, 360.0),
+              child: stack(children.where(isSummary).toList()),
+            ),
+          ],
+        )),
+      ] : [
         Align(
           alignment: Alignment.centerLeft,
           child: ConstrainedBox(
@@ -438,22 +476,14 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
             ),
           ),
         ),
-        if (desktop && _showPlanning)
-          Row(
-            key: const ValueKey('planner-desktop-columns'),
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: stack(
-                  visible.where((child) => !isSummary(child)).toList(),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(child: stack(visible.where(isSummary).toList())),
-            ],
-          )
-        else
-          ...visible,
+        if (_showPlanning)
+          if (MediaQuery.sizeOf(context).width < 600)
+            SizedBox(width: double.infinity,
+              child: addSection.buildCreationButton(context))
+          else
+            Align(alignment: Alignment.centerRight,
+              child: addSection.buildCreationButton(context)),
+        ...visible,
         if (MediaQuery.sizeOf(context).width < 1100 &&
             MediaQuery.textScalerOf(context).scale(16) >= 24)
           SizedBox(height: MediaQuery.textScalerOf(context).scale(72)),

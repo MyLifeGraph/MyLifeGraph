@@ -1,9 +1,31 @@
 # Architecture
 
+For the complete service inventory and the local-versus-released change list,
+start with the [development handoff](development-handoff.md). This architecture
+describes supported repository boundaries. Last observed deployment identities
+belong in [Verification](verification.md#current-verified-baseline), not in
+undated claims that the packaged pilot is still uninstalled.
+
+Insights Past comparisons are read-only client projections of existing Personal
+Patterns evidence: adjacent date windows or weekday-aligned weeks. A validated
+Morning `sleep_hours` observation is additive to the existing value map; no
+schema, scheduling, correlation fingerprint, or write authority changes. Provider
+selection refreshes cannot restore an earlier Coach capability budget; the client
+also rejects capability/completion responses from a different explicit provider.
+
+Gemini Coach model selection uses an optional, exact-allowlisted request header;
+the selected 3.6/3.7/3.8 Flash identity flows through existing claim, replay and
+response provenance. Its preference is device-local and contains no key. The
+additive 3.7 SQL allowlist preserves existing authority and data. Standard Coach,
+OpenAI, and Ultra Quick's default-model extraction remain unchanged.
+
 Coach's additive `coach-language-v1` extension binds explicit German answer
 selection to the request fingerprint; omitted selection preserves English and
 historical replay hashes. Language changes trusted prompt/output-safety copy
-only, not tools, quotas, owner authority, stored messages or database schema.
+only, not tools, quotas, owner authority, stored messages or table schemas.
+The additive Coach language-completion migration aligns the existing locked
+completion fingerprint check with German V4 claims, preserving English and
+all owner/provenance/replay checks.
 Ultra Quick's separate saved language preference changes its speaking guide;
 both transcript languages use unchanged canonical Capture fields and final Save.
 
@@ -86,7 +108,12 @@ credentials, Coach provider changes, or audio persistence are introduced.
 Flutter app <-> Supabase Auth/Postgres
 Flutter app <-> FastAPI AI service
 Flutter app <-> local mock data and guest storage
+Android app <-> optional on-device speech / Health Connect / Focus Protection
 Hosted Flutter -> same-origin Turnstile challenge -> Supabase Auth CAPTCHA
+Supabase Auth <-> configured Google OAuth identity provider
+Vercel -> hosted Flutter build (separate from the signed Android binary)
+Flutter app -> Caddy HTTPS -> independent loopback speech sidecar
+FastAPI push worker -> Firebase FCM -> consented Android device
 FastAPI -> OpenAI/Gemini with one request-scoped user BYOK key
 FastAPI -> local Codex CLI/OAuth (explicit Phase 10 development adapter only)
 FastAPI -> peer-authenticated Unix socket -> dedicated pilot Coach executor
@@ -113,7 +140,11 @@ CLI/OAuth adapter remains development-only; the default-off hosted operator
 path uses the separate executor. None of these provider paths creates a new
 Flutter-to-Supabase authority.
 
-### VPS Pilot Shape (Repository-Packaged, Not Deployed)
+### VPS Pilot Shape
+
+The runtime below is packaged and has recorded pilot deployments. See the
+current Verification baseline for the last observed release; repository source
+alone does not prove its present status or that pending changes are installed.
 
 Project access is prepared separately through `deploy/vps/ACCESS.md`. Personal
 `mylifegraph-gregor` and `mylifegraph-matthias` logins and dedicated
@@ -326,13 +357,13 @@ Coach surface gate is enabled, the shell navigation maps to Today, Insights,
 central Quick actions, Planner, and Coach. Today, Insights, Quick actions,
 Planner, Coach, and Settings share one top action group: an optional
 page-specific action comes first, an unread local Coach result comes second,
-and Settings comes last. Settings is pushed from that control instead of
+then Inbox and Settings. Settings is pushed from that control instead of
 occupying a redundant shell destination, so Back returns to the originating
-main page. Its own Settings control remains visible, selected, and inert.
+main page. Settings omits its own redundant Settings control and retains Back.
 Settings-owned routes do not select an unrelated shell item. When the Coach
 surface gate is off, its destination is omitted rather than replaced by
-Settings. Stored Inbox is reached from Settings; `/alerts` remains a compatible
-Settings-owned route. Auth, Setup, Capture, and other sub-routes do not inherit
+Settings. Stored Inbox is reached from the shared main-page header;
+`/alerts` remains a compatible route. Auth, Setup, Capture, and other sub-routes do not inherit
 the main-page action group.
 One immutable Shell destination descriptor list owns each destination's label,
 path, active nested paths, desktop/mobile icon variants, emphasis, and Coach
@@ -1415,7 +1446,9 @@ retired recommendation scheduler fields.
 
 Snapshot and briefing preparation never call an LLM. This endpoint is not a
 Flutter or browser runtime endpoint, and normal Dashboard load remains GET-only.
-The repository contains no deployed cron manifest or production worker. The
+There is no deployed cron for this Daily Preparation endpoint. The separate
+opt-in Android push worker runs in the existing API lifespan and does not invoke
+this endpoint or grant it new authority. The
 local stack runner requests current-day deterministic notification generation
 every 15 minutes, and Flutter can acknowledge/show a foreground banner after
 separate consent. That local path must not be described as deployed scheduling,
@@ -1814,6 +1847,27 @@ independent Sleep Recommendation.
 
 ## Known Gaps
 
+### Concurrent-user capacity (source-level assessment)
+
+The packaged VPS profile has one API worker with 32 public-read slots, eight
+mutation slots and four public-Coach admission slots. Coach execution is more
+restrictive: the VPS example sets `LOCAL_CODEX_GLOBAL_CONCURRENCY=1` (application
+default two), shared by BYOK turn/snapshot work. Standard's executor is limited
+to one turn and 15 aggregate daily dispatches. Each owner can have only one
+pending turn. Saturation returns bounded busy/retry responses, not an unbounded
+job queue. Ten ordinary active app users are not equivalent to ten simultaneous
+Coach analyses; the latter are deliberately not admitted at once.
+
+The separate speech sidecar admits one transcription at a time, up to six starts
+per minute, and loads/frees its CPU model per recording. Its packaged caps are
+2 GiB and 150% CPU; API and executor templates cap memory at 1/2 GiB respectively.
+These are limits, not measured working-set requirements. Cloud Coach models do
+not require a VPS GPU. Increasing concurrent analysis/transcription would first
+require reviewed admission/provider budgets, then measured CPU/RAM and snapshot/
+database traffic. Simply buying a GPU or adding API workers would not remove
+the durable quotas and may bypass process-local capacity assumptions. This is a
+repository assessment, not a ten-user load test or live-host measurement.
+
 - Coach is now a typed FastAPI surface for authenticated real accounts, with
   `/more` as a compatibility alias. Its backend capability may still report
   disabled or unavailable; production hides the surface unless explicitly
@@ -1877,7 +1931,8 @@ independent Sleep Recommendation.
   endpoint, and daily capture plus task/habit/focus writes trigger daily refresh
   best-effort. The protected scheduled endpoint can prepare profile-local daily
   snapshots and briefings, but there is no deployed cron configuration or
-  production background worker in this repository.
+  background worker for that preparation endpoint. Android push has its own
+  consent-gated API-lifespan worker, described in the Notification Delivery owner.
 - Focused Flutter/FastAPI tests cover Phase 3 contracts, Habit parser parity, DST-safe
   calendar math, and focus local-day filtering. The browser smoke contains exact
   task/habit/focus rows; response-loss paths for habit/task create, habit

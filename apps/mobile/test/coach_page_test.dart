@@ -172,6 +172,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(credentials.state.provider, CoachProviderName.gemini);
       expect(find.byKey(const Key('coach-key-gemini')), findsOneWidget);
+      final modelField = find.byKey(const Key('coach-gemini-model-gemini-3.8-flash'));
+      await tester.ensureVisible(modelField);
+      await tester.tap(modelField);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Gemini 3.6 Flash').last);
+      await tester.pumpAndSettle();
+      expect(credentials.state.geminiModel, 'gemini-3.6-flash');
+      await tester.ensureVisible(find.text('Standard (provided)'));
       repository.capability = CoachCapabilities.fromJson(coachCapabilitiesJson());
       await tester.tap(find.text('Standard (provided)').hitTestable());
       await tester.pumpAndSettle();
@@ -180,7 +188,7 @@ void main() {
       expect(find.text('Coach unavailable'), findsNothing);
       expect(find.byType(BottomSheet), findsNothing);
       expect(find.textContaining('No automatic provider fallback'), findsNothing);
-      expect(repository.capabilityCalls, 4);
+      expect(repository.capabilityCalls, 5);
       expect(repository.messages, isEmpty);
       expect(tester.takeException(), isNull);
     },
@@ -201,6 +209,8 @@ void main() {
     expect(input.width, greaterThan(model.width));
     expect(model.right, lessThan(send.left));
     expect(find.descendant(of: find.byType(AppPageHeading),
+        matching: find.textContaining('left')), findsNothing);
+    expect(find.descendant(of: find.byKey(const Key('coach-model-button')),
         matching: find.textContaining('left')), findsOneWidget);
     expect(frame.bottom, greaterThan(input.bottom));
     final invitation = tester.getRect(find.byKey(const Key('coach-empty-chat')));

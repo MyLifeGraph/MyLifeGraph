@@ -1,5 +1,27 @@
 # MyLifeGraph VPS pilot operations
 
+## Current maintenance entry point
+
+Use the [development/service handoff](../../docs/development-handoff.md) for the
+current local change set and service map, and
+[Verification](../../docs/verification.md#current-verified-baseline) for the last
+recorded deployment. The bootstrap/first-install sections remain rebuild
+instructions, not permission to repeat installation on the existing host.
+
+Additional runtime boundaries already have separate owners:
+
+- Optional Firebase FCM sending runs inside the existing API process using its
+  private sender credential; no Firebase database, paid compute or new public port.
+  See [Android push](../../docs/notification-delivery-v1-contract.md).
+- The independent `mylifegraph-speech.service` serves Parakeet via one exact
+  Caddy HTTPS route to loopback 8002. Its installer/rollback must not replace the
+  API/Coach units. See [speech operations](../../services/speech_service/README.md).
+- Supabase Cloud remains the production database/Auth system. A personal local
+  Supabase development stack is not a production dependency; do not restart or
+  recreate a retired developer stack just to run the laptop Cloud frontend.
+- Vercel and signed APKs are separate clients of these services. New local Dart
+  code does not update either client; API and SQL changes have their own rollout.
+
 This directory is the versioned, secret-free deployment contract for the
 single-host pilot. It does not prove that a VPS, DNS record, certificate,
 Supabase project, Codex login, or public deployment currently exists.

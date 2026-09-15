@@ -23,6 +23,23 @@ import 'package:my_life_graph/features/planner/presentation/providers/planner_pr
 import 'support/planner_fixtures.dart';
 
 void main() {
+  testWidgets('bottom-navigation swipe opens existing Add menu without a mutation', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _PlannerBackend();
+    await _pumpPlanner(tester, backend: backend, preview: true);
+    final nav = find.byKey(const ValueKey('shell-bottom-swipe'));
+    await tester.dragFrom(tester.getTopLeft(nav) + const Offset(40, 25), const Offset(0, -140));
+    await tester.pumpAndSettle();
+    for (final type in ['task', 'habit', 'exam', 'assignment', 'commitment']) {
+      expect(find.byKey(ValueKey('planner-add-$type')).hitTestable(), findsOneWidget);
+    }
+    expect(backend.requests.where((request) => request.method != 'GET'), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final size in const [Size(390, 1000), Size(834, 1100), Size(1536, 1024), Size(320, 1000)]) {
     testWidgets('Planner reference layout ${size.width.toInt()}', (tester) async {
       tester.view.physicalSize = size;
@@ -48,6 +65,16 @@ void main() {
       expect(tester.takeException(), isNull);
       final page = tester.widget<AppPage>(find.byType(AppPage));
       expect(page.subtitle, isNull);
+      if (size.width >= 1280) {
+        expect(find.byType(SegmentedButton<bool>), findsNothing);
+        expect(find.byKey(const ValueKey('planner-desktop-columns')), findsOneWidget);
+        expect(find.byKey(const ValueKey('planner-calendar-consent')), findsOneWidget);
+        final calendar = find.byKey(const ValueKey('planner-seven-days'));
+        final add = find.byKey(const ValueKey('planner-add-new'));
+        final attention = find.byKey(const ValueKey('planner-needs-attention'));
+        expect(tester.getTopLeft(add).dy, greaterThan(tester.getBottomLeft(calendar).dy));
+        expect(tester.getTopLeft(attention).dx, greaterThan(tester.getTopRight(calendar).dx));
+      } else {
       final viewToggle = tester.widget<SegmentedButton<bool>>(
         find.descendant(
           of: find.byWidget(page.children.first),
@@ -58,8 +85,35 @@ void main() {
       expect(viewToggle.showSelectedIcon, isFalse);
       expect(viewToggle.segments.map((segment) => segment.value), [false, true]);
       expect(page.children[1], isA<PlannerSevenDaySection>());
-      expect(page.children[2], isA<PlannerAddNewSection>());
+      expect(find.byKey(const ValueKey('planner-add-new-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('planner-calendar-consent')), findsNothing);
       expect(find.byType(PlannerNeedsAttentionSection), findsNothing);
+      }
+      if (size.width == 390) {
+        final addControl = find.byKey(const ValueKey('planner-add-new-button'));
+        expect(tester.widget(addControl), isA<OutlinedButton>());
+        expect(find.descendant(of: addControl, matching: find.text('Add')), findsOneWidget);
+        final daysControl = find.byKey(const ValueKey('planner-seven-days-swipe'));
+        expect(tester.getTopLeft(daysControl).dx - tester.getTopRight(addControl).dx,
+          greaterThanOrEqualTo(8));
+        expect(tester.getCenter(addControl).dy, tester.getCenter(daysControl).dy);
+        expect(tester.getSize(addControl).height,
+          lessThanOrEqualTo(tester.getSize(daysControl).height));
+        expect(tester.widget<OutlinedButton>(addControl).style!.shape!.resolve({}),
+          isA<StadiumBorder>());
+        final importControl = find.byKey(const ValueKey('planner-import-calendar'));
+        expect(find.ancestor(of: importControl, matching: find.byType(PlannerSevenDaySection)), findsNothing);
+        expect(tester.getCenter(importControl).dy,
+          tester.getCenter(find.byTooltip('Reload Planner')).dy);
+        await tester.ensureVisible(find.text('Planning'));
+        await tester.tap(find.text('Planning'));
+        await tester.pumpAndSettle();
+        final add = find.byKey(const ValueKey('planner-add-new-button'));
+        expect(tester.getSize(add).width, size.width - 32);
+        await tester.ensureVisible(find.text('This week'));
+        await tester.tap(find.text('This week'));
+        await tester.pumpAndSettle();
+      }
       final agenda = find.byKey(const ValueKey('planner-seven-days'));
       await _scrollPlannerUntilVisible(tester,agenda, 300,
         scrollable: find.byType(Scrollable).first);
@@ -280,12 +334,7 @@ void main() {
     ]) {
       expect(find.byKey(ValueKey(key)), findsOneWidget);
     }
-    await tester.ensureVisible(find.text('This week'));
-    await tester.tap(find.text('This week'));
-    await tester.pumpAndSettle();
-    final viewToggle = find.ancestor(of: find.text('This week'), matching: find.byType(SegmentedButton<bool>));
-    expect(tester.widget<SegmentedButton<bool>>(viewToggle).showSelectedIcon, isFalse);
-    expect(tester.getSize(viewToggle).width, 480);
+    expect(find.byType(SegmentedButton<bool>), findsNothing);
     await tester.tap(find.byTooltip('List'));
     await tester.pumpAndSettle();
     expect(
@@ -310,9 +359,6 @@ void main() {
     for (var i = 1; i < 7; i++) {
       expect(tester.getSize(dayCards.at(i)).width, dayWidth);
     }
-    await tester.ensureVisible(find.text('Planning'));
-    await tester.tap(find.text('Planning'));
-    await tester.pumpAndSettle();
     expect(find.textContaining('2 h 30 min remaining · next'), findsOneWidget);
     expect(find.text('2 active · 2 unplanned'), findsOneWidget);
     expect(find.text('Managed in Setup'), findsNothing);
@@ -607,11 +653,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Planner changed'), findsOneWidget);
-    final addHabitButton = find.descendant(
-      of: find.byKey(const ValueKey('planner-add-habit')),
-      matching: find.byType(OutlinedButton),
-    );
-    expect(tester.widget<OutlinedButton>(addHabitButton).onPressed, isNull);
+    final addButton = find.byKey(const ValueKey('planner-add-new-button'));
+    expect(tester.widget<FilledButton>(addButton).onPressed, isNull);
     var staleHabitRow = find.ancestor(
       of: find.text('Read'),
       matching: find.byType(ListTile),
@@ -642,7 +685,7 @@ void main() {
     expect(controller.state.operationError, isNotNull);
     expect(controller.state.reloadSuggested, isTrue);
     expect(controller.state.canMutate, isFalse);
-    expect(tester.widget<OutlinedButton>(addHabitButton).onPressed, isNull);
+    expect(tester.widget<FilledButton>(addButton).onPressed, isNull);
     expect(
       tester
           .widget<ListTile>(
@@ -678,7 +721,7 @@ void main() {
     await tester.ensureVisible(find.text('Planning'));
     await tester.tap(find.text('Planning'));
     await tester.pumpAndSettle();
-    expect(tester.widget<OutlinedButton>(addHabitButton).onPressed, isNotNull);
+    expect(tester.widget<FilledButton>(addButton).onPressed, isNotNull);
     expect(
       tester
           .widget<ListTile>(
@@ -849,11 +892,8 @@ void main() {
       backend.requests.where((request) => request.path.endsWith('/confirm')),
       hasLength(confirmsBeforeReload),
     );
-    final addHabitButton = find.descendant(
-      of: find.byKey(const ValueKey('planner-add-habit')),
-      matching: find.byType(OutlinedButton),
-    );
-    expect(tester.widget<OutlinedButton>(addHabitButton).onPressed, isNotNull);
+    final addButton = find.byKey(const ValueKey('planner-add-new-button'));
+    expect(tester.widget<FilledButton>(addButton).onPressed, isNotNull);
   });
 
   testWidgets(
@@ -2172,7 +2212,7 @@ void main() {
       find.textContaining('Calendar import stays optional.'),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('planner-add-exam')));
+    await _invokeAddNew(tester, 'planner-add-exam');
     await tester.pumpAndSettle();
 
     expect(find.text('Review your availability'), findsOneWidget);
@@ -2195,7 +2235,7 @@ void main() {
     final backend = _PlannerBackend();
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -2291,7 +2331,7 @@ void main() {
     final backend = _PlannerBackend();
     final controller = await _pumpPlanner(tester, backend: backend);
 
-    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -2348,7 +2388,7 @@ void main() {
     final backend = _PlannerBackend(learnedTiming: true);
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -2379,7 +2419,7 @@ void main() {
     );
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -2405,7 +2445,7 @@ void main() {
     final backend = _PlannerBackend(failNextProposal: true);
 
     await _pumpPlanner(tester, backend: backend);
-    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('planner-task-title')),
@@ -2420,7 +2460,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await _invokeAddNew(tester, 'planner-add-task');
     await tester.pumpAndSettle();
     final title = tester.widget<TextField>(
       find.byKey(const ValueKey('planner-task-title')),
@@ -2802,7 +2842,7 @@ void main() {
       expect(tester.widget<ListTile>(choice).onTap, isNotNull);
     }
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byKey(const ValueKey('planner-add-commitment')));
+    await _invokeAddNew(tester, 'planner-add-commitment');
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('planner-commitment-review')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -2984,11 +3024,11 @@ Future<void> _scrollPlannerUntilVisible(
 }
 
 Future<void> _invokeAddNew(WidgetTester tester, String key) async {
-  await _scrollPlannerUntilVisible(
-    tester, find.byKey(const ValueKey('planner-add-new')), -400,
-  );
   final button = find.byKey(ValueKey(key));
   if (button.evaluate().isEmpty) {
+    await _scrollPlannerUntilVisible(
+      tester, find.byKey(const ValueKey('planner-add-new-button')), -400,
+    );
     await tester.tap(find.byKey(const ValueKey('planner-add-new-button')));
     await tester.pumpAndSettle();
   }

@@ -5,17 +5,18 @@ Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap. Die
 verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
 
-Die beschlossene Zielsequenz für einen öffentlich registrierbaren, auf dem
-Handy nutzbaren ersten VPS-Piloten steht getrennt im
-[VPS Pilot Release Plan](vps-pilot-release-plan.md). Sie ändert den hier
-beschriebenen Repository-Ist-Zustand: Der gleiche-User-Codex-OAuth-Provider
-bleibt development-only; der getrennte `operator_codex_pilot`-Executor ist
-lokal implementiert und standardmäßig aus, aber noch nicht auf dem VPS
-installiert, live abgenommen oder öffentlich deployt.
+Die [Entwicklungsübergabe](development-handoff.md) fasst offene lokale Änderungen,
+Dienste und Deployment-Abhängigkeiten zusammen. Der Pilot wurde bereits ausgerollt;
+der zuletzt beobachtete Release- und Migrationsstand steht ausschließlich in
+[Verification](verification.md#current-verified-baseline). Lokaler Code ist nicht
+automatisch auf Vercel, VPS oder in einer installierten APK. Der
+[VPS Pilot Release Plan](vps-pilot-release-plan.md) bleibt der Freigabe-Runbook.
+Der gleiche-User-Codex-Provider bleibt development-only; der getrennte
+`operator_codex_pilot` ist der ausdrücklich aktivierbare gehostete Standardcoach.
 
-Die Oberfläche ist in V1 vollständig englisch. Deshalb stehen die sichtbaren
-englischen Namen in diesem Dokument in Klammern. Eine deutsche Lokalisierung ist
-aktuell nicht implementiert.
+Die allgemeine Oberfläche bleibt englisch. Coach-Antworten und die Sprechvorlagen
+im Ultra Quick Check-in unterstützen zusätzlich eine gespeicherte deutsche
+Sprachauswahl; das ist keine vollständige App-Lokalisierung.
 
 ## Die Kurzfassung
 
@@ -41,13 +42,13 @@ ehrlichen Tagesüberblick und vorsichtige regelbasierte Unterstützung übersetz
    Today-Darstellung.
 8. **Insights und Weekly Review** machen Muster und Entwicklungen sichtbar,
    verändern aber weder Briefing-Ranking noch Produktdaten.
-9. Der **Coach** beantwortet freie Fragen auf Englisch, untersucht bei Bedarf den gesamten
+9. Der **Coach** beantwortet freie Fragen auf Englisch oder ausgewähltem Deutsch, untersucht bei Bedarf den gesamten
    verfügbaren persönlichen Datenzeitraum read-only und kann Annahmen prüfen
    oder fehlende Daten benennen. Er darf keine Produktdaten ändern.
 
 Der Großteil des Produkts ist bewusst regelbasiert und verwendet **kein LLM**.
-Der Coach ist die einzige Oberfläche, die ein echtes Sprachmodell aufrufen
-kann: mit einem expliziten nutzereigenen OpenAI-/Gemini-Key, nur in lokaler
+Nur ausdrücklich ausgelöste Coach-Fragen und Ultra-Quick-Formularentwürfe können
+ein echtes Sprachmodell aufrufen: mit einem expliziten nutzereigenen OpenAI-/Gemini-Key, nur in lokaler
 Entwicklung über den angemeldeten gleichen Codex-CLI-Nutzer oder im
 standardmäßig ausgeschalteten Pilotmodus über den getrennten Projekt-Executor.
 
@@ -96,16 +97,17 @@ Quelle verwendet werden. Es gibt keinen Live-Sync und keinen Calendar-Write.
 | Coach mit `fake` provider | Wie ein synced account, aber Coach-Antworten sind feste Testantworten | Freie Frage, Stream, History, Evidence/Trace, Limits und UI lassen sich testen | Das ist kein aktives LLM und führt keine Analyse aus |
 | Coach mit OpenAI-/Gemini-BYOK | Synced account; Android speichert den Key verschlüsselt und Web nur im aktuellen Tab | Ein nutzerfinanzierter Provider-Turn mit Read-only Snapshot, Inspection und SQL nach separatem Live-Gate | CORS und das aktuelle Gemini-`steps`-Schema sind implementiert, aber Browser-/Provider-/Public-Release-Abnahme bleibt offen; ein Fehler fällt nie auf einen anderen Provider zurück |
 | Coach mit `local_codex_oauth` | Synced account plus explizit aktivierter Codex-CLI-Zugang und lokales Analyse-Image | Ein echter `gpt-5.5`-Fast-Turn mit drei Read-only-Werkzeugen | Nur lokale Entwicklung; nicht in Release/Produktion verfügbar |
-| `Project Coach` / `operator_codex_pilot` | Synced account; FastAPI besitzt weder Key noch OAuth, der getrennte Executor besitzt den Pilot-Login | Expliziter `gpt-5.5`-Fast-Turn mit Inspect, SQL und isoliertem Python | Default-off Repository-Implementierung; 5 Turns je lokalem Nutzertag, 15 Dispatches je UTC-Tag global, keine Warteschlange oder Ausweichroute; VPS-/Terms-/Live-Gates offen |
+| `Project Coach` / `operator_codex_pilot` | Synced account; FastAPI besitzt weder Key noch OAuth, der getrennte Executor besitzt den Pilot-Login | Expliziter `gpt-5.5`-Fast-Turn mit Inspect, SQL und isoliertem Python | Explizite Betreiberaktivierung; 5 Dispatches pro Nutzer und 15 global je UTC-Tag, keine Warteschlange oder Ausweichroute; letzter Rollout-Nachweis in Verification |
 
 Ein neu registrierter echter Account erhält seine Auth-Identität und sein
-kanonisches Profil in Supabase. In exaktem `staging` oder `pilot` zeigt die App
+kanonisches Profil in Supabase. Bei erforderlicher Pilot-Teilnahme in exaktem
+`staging` oder `pilot` zeigt die App
 vor der Kontoerstellung beziehungsweise Google-Anmeldung den
 `pilot-participation-notice-v1`-Hinweis des
 `pilot-participation-v1`-Vertrags mit expliziter Bestätigung „I confirm
 that I am 18 or older“. Nach Authentifizierung schreibt ausschließlich der
 bearer-abgeleitete Backend-Befehl Version und Backend-Zeit in das Profil; eine
-fehlende oder alte Bestätigung sperrt Setup und Produkt, aber nicht Abmeldung,
+fehlende oder alte Bestätigung sperrt bei aktivierter Pflicht Setup und Produkt, aber nicht Abmeldung,
 Export oder Löschung. Es wird kein Geburtsdatum gespeichert und editierbare
 Auth-Metadaten zählen nicht als Nachweis. Staging zeigt dauerhaft
 `Staging · Test data`; gehostete Builds bieten keinen Gastzugang. Danach
@@ -126,8 +128,8 @@ Eingaben befüllt.
 
 ## Navigation: Was befindet sich wo?
 
-Mit aktiviertem Coach hat die Hauptnavigation genau fünf Ziele. In `staging`,
-`pilot` und `production` erscheint Coach nur bei exakt
+Mit aktiviertem Coach hat die Hauptnavigation genau fünf Ziele. In `staging`
+und `pilot` erscheint Coach nur bei exakt
 `COACH_SURFACE_ENABLED=true`; ohne dieses Gate entfällt `Coach` vollständig.
 `Settings` wird nicht als redundanter Ersatz eingeblendet.
 
@@ -135,24 +137,27 @@ Mit aktiviertem Coach hat die Hauptnavigation genau fünf Ziele. In `staging`,
 | --- | --- | --- |
 | **Today** | Den gespeicherten Tag überblicken und Tagesaktionen ausführen | Check-in-Streak, transparenter Fortschritt, vertikale Setup/Task/Habit/Fixed commitment/Preparation/Calendar/Focus-Agenda, heutige Tasks und Habits sowie eingeklappte unterstützende Details |
 | **Insights** | Entwicklungen untersuchen | Für echte Accounts die unabhängigen Backend-Karten `Personal study pattern` und `Sleep recommendation` mit Stichprobe und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung und keine erfundene Schlafempfehlung. |
-| **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Morning check-in, Evening check-in, Habit completion und Focus |
+| **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Morning check-in, Evening check-in, Ultra Quick Check-in, Focus und Habit completion |
 | **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, endliche wöchentliche Assignment-Serie und Fixed commitment anlegen; Exam/Assignment bleiben nach dem gewählten Add-new-Button fest; Vorschauen bestätigen; sieben Tage, quellengenaue Konflikte, alle aktiven Habits, ausschließlich unplatzierte offene Tasks und laufende Preparation verwalten (`planner-overview-v2`) |
-| **Coach** | Eine freie Frage zu den eigenen Daten stellen | Explizite Wahl zwischen Project Coach und eigenem OpenAI-/Gemini-Key, frischer persönlicher Snapshot, Read-only-Analyse, sichtbare Evidence/Provenance und validierte englische Textantwort; kein Provider-Fallback |
+| **Coach** | Eine freie Frage zu den eigenen Daten stellen | Standardcoach oder eigener OpenAI-/Gemini-Key, frischer persönlicher Snapshot, Read-only-Analyse, Evidence/Provenance und Antwort in der gewählten Sprache; kein Provider-Fallback |
 
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
-- `Settings` ist über den Button oben rechts auf `Today` erreichbar und enthält
-  Profil/Zeitzone, Setup, Personal learning, Preparation Budget, Inbox, In-app
-  reminders, Calendar import, Export, Löschung, Theme und Sign-out.
+- `Settings` ist über den Button oben rechts auf den Hauptseiten erreichbar und
+  enthält Profil/Zeitzone, Setup, Personal learning, Preparation Budget, In-app
+  reminders, Push reminders, Health Connect, Android Focus Protection, Calendar
+  import, Export, Löschung, Theme und Sign-out; Plattformgrenzen bleiben sichtbar.
 - `Weekly review` gehört logisch zu `Today`.
 - `Today habits` und `Focus` gehören zur Ausführung unter `Quick actions`.
 - `Habit management` und `Preparation plans` gehören logisch zu `Planner`;
   die bisherigen Routen bleiben kompatibel.
-- `Inbox` gehört zu `Settings`; `/alerts` bleibt ein kompatibler Link.
+- `Inbox` ist über das Symbol neben Settings in den Hauptseiten erreichbar;
+  `/alerts` bleibt ein kompatibler Link. Karten öffnen ihr erlaubtes Ziel;
+  Read/Dismiss bleiben eigene Aktionen.
 - `Calendar import` und `In-app reminders` gehören zu `Settings`. Der
   `Coach` hat bei aktiviertem Surface-Gate den rechten
-  Hauptnavigationseintrag; der Settings-Eintrag bleibt als sekundärer Zugang
-  erhalten.
+  Hauptnavigationseintrag. Coach- und Speech-Konfiguration liegen im Composer,
+  nicht zusätzlich in Settings.
 - Goals sind vollständig entfernt: Es gibt weder Tabelle, Export-Eintrag,
   Setup-Feld, Oberfläche noch aktive Auswertung. Außerdem gibt es keine separate
   Tasks-, Schedule- oder Memories-Hauptseite.
@@ -244,8 +249,8 @@ geeigneten lokalen Tagen zeigt sie den Fortschritt `N/30`; ohne belastbaren
 Vergleich zeigt sie ehrlich `No stable window yet`. Ein geeigneter Tag verbindet
 einen gültigen Morning-Check-in ausschließlich mit danach begonnenen,
 beendeten und bewerteten Focus-Sessions. Bei `Ready` werden Schlafbeginn,
-Aufstehen und Dauer als robuste Zeitfenster gezeigt; `Same local day` und
-`Following local day` machen den lokalen Aufsteh-Tag explizit. Die Formulierung
+Aufstehen und Dauer als kompakte robuste Zeitfenster gezeigt. Die lokale
+Tageszuordnung bleibt intern unverändert; redundante Day-Zusätze entfallen. Die Formulierung
 bleibt
 `best-supported sleep window` und `associated with`; ein Ergebnis wird weder
 übernommen noch automatisch in Schlafziel, Evening-Plan oder Planner geschrieben.
@@ -256,13 +261,19 @@ Nur der klar beschriftete lokale Demo-Modus behält eine vorsichtige lokal
 berechnete Beispielbeobachtung. Diese Demo-Ausgabe verändert keine Daten oder
 Pläne.
 
-Der ausklappbare Bereich `Advanced correlation exploration` enthält:
+Der Umschalter `Overview` / `Advanced` trennt die Empfehlungen von der Exploration.
+Advanced enthält Compare, Top patterns, Trend overlay, Skillset, Past, Matrix
+und Discovered. Die kompakte, horizontal scrollbare Tab-Leiste zeigt bei Bedarf
+Richtungspfeile. Enthalten sind:
 
 - Zeitfenster von 7, 14, 30 oder 90 Tagen;
 - wählbare Signalpaare;
 - normalisierte Trendlinien;
 - Pearson-Korrelation und gemeinsame Beobachtungszahl;
 - stärkste verfügbare Muster;
+- Skillset als Radar/Balken mit gerätelokal pro Account gespeicherter Auswahl;
+- Past: zwei angrenzende 7/14/30-Tage-Intervalle oder Montag–heute gegen die
+  vollständige Vorwoche; Signalwahl, Datumsbereiche und echte Lücken;
 - eine Korrelationsmatrix;
 - unter `Discovered patterns` gespeicherte `ai_insights`-Notizen.
 
@@ -290,9 +301,13 @@ Preview weich bevorzugen.
 Der technisch benannte Datentyp `ai_insights` ist aktuell kein Beweis für einen
 laufenden AI-Insight-Generator. Beim `student`-Testuser sind solche Zeilen
 gezielt als Seed-Daten vorhanden. Für einen neuen echten Account kann der
-Bereich leer sein. Das `Skillset profile` wird nur in ausdrücklich lokalem
-Demo-Modus als Beispiel gezeigt und bei echten Accounts ausgeblendet, weil
-aktuell kein belastbarer Produzent dafür existiert.
+Bereich leer sein. Das alte gespeicherte `skillset_profiles` ist kein Produzent
+des neuen Skillset-Diagramms. Dieses verwendet bei echten Accounts separate,
+versionierte tägliche Beobachtungen aus Check-ins/Focus. Fehlende Werte bleiben
+fehlend; Learning und Discipline sind erklärte Aktivitäts-/Regelmäßigkeitswerte,
+keine Persönlichkeitsbewertung. Die Auswahl steuert ausschließlich die Anzeige.
+Die detaillierten Quellen und Mindeststichproben stehen im
+[Personal-Learning-Vertrag](personal-learning-v1-contract.md#advanced-skillset-display).
 
 ### Review- und Planungsflächen mit Dashboard-Charakter
 
@@ -347,12 +362,45 @@ Budget-, Calendar-, Plan- oder Belegungsdaten muss neu geprüft werden.
 | **Insights** | `personal-patterns-v1` liefert die persönliche Musterkarte und Korrelationen; `sleep-recommendation-v1` liefert unabhängig Fortschritt, Unstable-Grund oder drei robuste Ready-Fenster; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung und ruft die Schlafroute nicht auf | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; für Schlafempfehlung mindestens 30 geeignete Tage; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage, kein Apply und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Focus-Previews |
 | **Inbox lifecycle** | fällige gespeicherte Hinweise lesen, unread/read setzen oder dismissen | owner-scoped `notifications` | Lifecycle-Zeitstempel plus Retry-Ledger; kein LLM |
 | **In-app reminders** | nach separater Einwilligung werden höchstens zwei Kandidaten mit fixer Copy regelbasiert erzeugt und bei offener App höchstens einmal als Banner gezeigt | aktueller Recovery-/Briefing-Zustand oder aktuelles Weekly Review, Kategorien, Quiet Hours und Tageslimit | `notification_preferences`, `notifications` und Delivery-Provenance; kein Push, kein Background und kein LLM |
-| **Coach** | freie Frage mit expliziter Wahl: Project Coach oder eigener OpenAI-/Gemini-Key; Read-only-Inspektion/SQL und bei Codex-Modi zusätzlich isoliertes Python, Safety-Prüfung und validierte englische Textantwort | frischer owner-only SQLite-Snapshot über den verfügbaren relevanten Produktzeitraum, inklusive Detailtexten und Datenkatalog | `coach_requests`, `coach_messages`, Usage und beim Project Coach append-only Dispatch-Budget sowie backend-erzeugte Evidence/Trace/Provider-Provenance; klar deutsche Provider-Ausgabe wird vor Assistant-Persistenz verworfen; kein Plot, Provider-Fallback oder Produktmutation; nur dieser Pfad kann ein LLM verwenden |
+| **Coach** | Standardcoach oder eigener OpenAI-/Gemini-Key; Read-only-Inspektion/SQL und bei Codex zusätzlich isoliertes Python, validierte Antwort auf Englisch oder ausgewähltem Deutsch | frischer owner-only SQLite-Snapshot mit relevanten Produktdaten | `coach_requests`, `coach_messages`, Usage, Dispatch-Budget und echte Evidence/Trace/Provenance; kein Provider-Fallback oder Produktmutation |
 | **Account controls** | Zeitzone, JSON-Export, Passwort-Recovery und permanente Löschung | Profil und owner-scoped Produktdaten | kontrollierte FastAPI/RPC-Operationen; kein LLM |
 
 Ein einzelnes Abgabeto-do ohne eigenen Vorbereitungsplan wird als Task erfasst.
 Assignment bezeichnet hier bewusst die endliche wöchentliche Folge von
 Abgaben, für die jedes Vorkommen einen eigenen Preparation Plan erhalten soll.
+
+### Ergänzende implementierte Funktionen
+
+- **Ultra Quick Check-in:** Morning/Evening per Text oder 30-Sekunden-Diktat;
+  ein expliziter Modellaufruf erstellt nur einen Formularentwurf. Fehlende
+  Pflichtwerte werden manuell ergänzt, erst das normale Save schreibt den
+  vollständigen Check-in. **Quick note** speichert nach Bestätigung separaten
+  optionalen Kontext, zählt nicht als Check-in und erzeugt keine Ratings.
+- **Skillset-Erfassung:** Study motivation im Morning; Sport und Social contact
+  im Evening, jeweils optional. Insights-Auswahl blendet diese Fragen nie aus.
+  Learning und Discipline verwenden vorhandene Focus-/Aktivitätsfakten.
+- **Speech:** Server-Parakeet oder Android On-device mit herunterladbaren
+  Whisper Tiny/Base multilingual und Parakeet V3. Auswahl/Downloadstatus bleiben
+  erhalten. Abbrechen verwirft Audio; Stop übernimmt Text; Send sendet nach
+  Transkription ausdrücklich. Kein automatischer Wechsel zum Server.
+- **Android Focus Protection:** Apps per Focus, Wochenzeiten, dauerhaft oder
+  vorübergehend blockieren, pro App kombinierbar. App-Liste einklappbar,
+  Alles-abwählen und Social-Preset; Notfallfreigabe bleibt erhalten. DND bleibt
+  Focus-gebunden, Daten und Regeln bleiben lokal.
+- **Health Connect:** optionale Android-Schritt-/Schlafdaten nach Geräte- und
+  Cloud-Einwilligung. Garmin schreibt zunächst nach Health Connect; MyLifeGraph
+  nutzt keinen direkten Garmin-Login. Imports ersetzen keine manuellen Ratings.
+- **Android Push:** separater Opt-in für wichtige Deadlines, belastbare
+  Schlafempfehlung und seltene stabile Focus-Muster. Firebase/FCM transportiert,
+  die vorhandene VPS-API entscheidet regelbasiert. Quiet Hours, Kategorien und
+  harte Spam-Grenzen; kein Web-Push und keine Zustellgarantie bei Force-stop/offline.
+- **Kompakte Navigation:** Inbox neben Settings, Coach-/Speech-Modelle direkt
+  im Chat, mobile Planner-Aufteilung und separater Desktop-Zweispaltenaufbau.
+  Days/List bleibt erhalten; eindeutige Swipes wechseln Hauptseiten mit
+  passender Richtung, nicht beim normalen Scrollen oder Texteingeben.
+
+Die [Dienste- und Änderungsübersicht](development-handoff.md) trennt diese
+Repository-Funktionen von der tatsächlich veröffentlichten Version.
 
 ## Die zentralen Begriffe
 
@@ -635,7 +683,9 @@ kann sie nicht ausführen.
 
 ### Sichtbarkeit und Provider
 
-Der Screen heißt `Coach` und beginnt mit `Ask anything`.
+Der Screen heißt `Coach`; das leere Chatfeld zeigt `Ask your coach anything`.
+Der Standardcoach ist zunächst ausgewählt, eine spätere explizite Wahl bleibt
+pro Account gespeichert. Die Modellauswahl ist direkt im Composer erreichbar.
 
 - In `staging` und `pilot` ist er nur bei exakt
   `COACH_SURFACE_ENABLED=true` sichtbar; die sichtbare Route beweist noch keine
@@ -656,11 +706,11 @@ Der Screen heißt `Coach` und beginnt mit `Ask anything`.
   reserviert vor Streambeginn genau einen Slot im getrennten
   `mylifegraph-coach`; nur dieser UID besitzt den Codex-Login und rootless Docker.
   Busy liefert `Retry-After` und erfordert manuellen Retry. 5 Turns pro
-  Profil-Lokaltag und 15 Dispatches pro UTC-Tag sind sichtbar begrenzt.
+  Nutzer und UTC-Tag sowie 15 Dispatches global pro UTC-Tag sind sichtbar begrenzt.
 - Fehlen Modell, Fast-Unterstützung, Login, Docker oder Analyse-Image, ist der
   lokale Provider ehrlich nicht verfügbar. Es gibt keinen Modell-/Tier- oder
-  providerübergreifenden Fallback. Der Betreiberpfad ist implementiert, aber
-  vor VPS-, Terms- und Live-Abnahme nicht freigegeben.
+  providerübergreifenden Fallback. Betreiberaktivierung und Live-Nachweise sind
+  vom Repository-Default getrennt und in Verification dokumentiert.
 
 ### Was er lesen darf
 
@@ -714,6 +764,8 @@ vertrauenswürdige Inhalte und niemals als Anweisung.
 ### Was er ausgeben darf
 
 - eine Antwort von höchstens 4.000 Zeichen;
+- Englisch als Standard oder ausdrücklich gewähltes Deutsch; die Sprachwahl
+  bleibt pro Account erhalten und ist an Request/Retry gebunden;
 - explizite Unsicherheit `low`, `medium` oder `high` samt Grund;
 - Safety-Klassifikation;
 - mehrere begründete Vorschläge im normalen Text, aber keine strukturierte
@@ -744,7 +796,9 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 
 - Nachricht: höchstens 2.000 Unicode-Codepoints;
 - Antwort: höchstens 4.000 Codepoints;
-- Standardbudget: 20 gestartete Fragen pro lokalem Tag und Nutzer;
+- Nicht-Operator-Budget: 20 gestartete Fragen pro lokalem Tag und Nutzer,
+  accountweit, nicht zusätzlich je BYOK-Modell; Standardcoach hat getrennte
+  5-pro-Nutzer-/15-global-UTC-Dispatchgrenzen;
 - höchstens ein gleichzeitig aktiver Turn pro Nutzer plus globales
   Parallelitätslimit;
 - höchstens zwölf Tool-Aufrufe und 180 Sekunden pro Turn;
@@ -776,8 +830,9 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 | Zentrale Planung | `planner_preferences`, Action Plans/Revisionen, Task Blocks, Habit Slots, Planner Commitments und technische Request-Identitäten | Planner, Today V2 und gemeinsame Availability |
 | Hinweise | `notifications`, `notification_preferences`, Action-Request-Ledger | Inbox und foreground banners |
 | Coach | `coach_requests`, `coach_usage_events`, `coach_messages`, backend-only `coach_operator_daily_budgets` und `coach_operator_dispatches`; `coach_memory_selections` nur Legacy-Kompatibilität | Availability, V4 Evidence/Trace/Fast-Provenance, gemischte History sowie lokale/globale Budgets |
-| Weitere Projektionen | `ai_insights`, `skillset_profiles` | gespeicherte Notes und erhaltene Skillset-Zeilen für Export/Coach; die lokale Demo-Skillset-Anzeige liest keine Tabellenzeilen |
-| Gerätelokal | Guest-Check-ins und Theme-Präferenz | Gastmodus bzw. Appearance |
+| Weitere Projektionen | `ai_insights`, legacy `skillset_profiles` | gespeicherte Notes und Legacy-Zeilen für Export/Coach; neues Skillset/Past liest versionierte tägliche Personal-Patterns-Beobachtungen |
+| Gerätelokal | Guest-Daten, Theme, Sprach-/Provider-/Skillset-Auswahl, Android-Speechmodelle und Blocking-Regeln; Schlüssel gemäß Plattformgrenze | Darstellung, lokale Erkennung und Android-Schutz; kein Ersatz für kanonische Cloud-Daten |
+| Optionale Integrationen | source-tagged Health-Connect-`behavioral_events`, private Push-Geräte-/Versanddaten | Health-Kontext für Coach/Export; private Push-Tokens bleiben aus Coach/Export ausgeschlossen |
 
 Technische Request- und Usage-Ledger sind keine sichtbaren Features. Sie sorgen
 dafür, dass ein Retry dieselbe Operation nicht doppelt ausführt und dass
@@ -817,8 +872,8 @@ absichtlich weiterhin sichtbar:
    Korrelationen sind live und regelbasiert; `ai_insights` kann dagegen nur
    Seed- oder anderweitig gespeicherte Zeilen enthalten. Der technische Name
    suggeriert mehr aktive AI-Erzeugung, als heute existiert.
-8. **Die Oberfläche ist nur englisch.** Für eine deutschsprachige Nutzung
-   erhöht das zusätzlich die begriffliche Reibung.
+8. **Die allgemeine Oberfläche bleibt englisch.** Coach-Antworten und die
+   Ultra-Quick-Sprechvorlagen können separat auf Deutsch umgestellt werden.
 
 ## Empfohlenes einfaches Denkmodell für die jetzige UI
 
@@ -835,7 +890,7 @@ Bis zu einer späteren Informationsarchitektur kann man die App so lesen:
 | Was ist einmalig oder jede Woche fest belegt? | `Planner → Fixed commitment`; Setup-owned Commitments bleiben unter `Settings → Setup` |
 | Was passierte letzte Woche? | `Today → Weekly review` |
 | Welche Zusammenhänge sehe ich über mehrere Tage? | `Insights` |
-| Welche Hinweise warten auf mich? | `Settings → Inbox` |
+| Welche Hinweise warten auf mich? | Inbox-Symbol neben Settings auf den Hauptseiten |
 | Kann mir ein Modell den Zustand erklären? | `Coach` in der Hauptnavigation bei explizitem Surface-Gate; Project Coach oder eigener OpenAI-/Gemini-Key, ohne Fallback; lokaler gleicher-User-Codex bleibt Development-only |
 
 Setup-owned Habit-/Commitment-Definitionen bleiben bewusst unter Settings
@@ -912,7 +967,7 @@ dabei lediglich lesbar.
    Task-Preview anfordern. Ein freies passendes Ergebnis zeigt
    `Learned timing applied · 36 rated sessions`; belegte Zeit darf weiterhin
    einen sichtbaren Setup-Fallback auslösen.
-9. Unter `Settings → Inbox` unread/read/dismiss und erlaubte `Open`-Ziele
+9. Über das Inbox-Symbol im Hauptseiten-Header unread/read/dismiss und erlaubte `Open`-Ziele
    testen.
 10. Unter `Settings` Preparation Budget und Reminder-Consent prüfen. `Coach`
    über die Hauptnavigation öffnen, eine freie Frage stellen und `Data and
@@ -926,24 +981,28 @@ Es ist kein Befehl für eine Remote-Datenbank.
 
 ## Bewusst nicht implementiert
 
-- deutsche Lokalisierung;
+- vollständige deutsche App-Lokalisierung (Coach und Sprechvorlagen unterstützen Deutsch);
 - Goals in Schema, Export, Setup, Oberfläche oder Auswertung sowie eine
   allgemeine Memory-Verwaltungsseite;
-- abgenommener/deployter gehosteter Betreiber-Provider und vollständige
-  öffentliche BYOK-Releasefreigabe; die default-off Implementierung allein ist
-  kein Live-Nachweis;
+- automatische Verfügbarkeit beliebiger BYOK-Modelle oder Schlüssel; der
+  konfigurierte Katalog allein beweist keinen erfolgreichen Provider-Turn;
 - ein persönliches trainiertes Modell oder Vector Memory;
 - autonomer Hintergrund-Coach, zusätzliche Tools oder model-gesteuerte
   Schreibaktionen;
 - Live-Calendar-OAuth, URL-Fetch, Zwei-Wege-Sync oder Provider-Write;
-- Browser-, System-, Push-, E-Mail- oder Background-Notifications;
-- deployter Cron/Scheduler;
+- Browser-/iOS-Push und E-Mail-Benachrichtigungen; Android-Push ist separat implementiert;
 - automatische Prüfungsaufwandsschätzung oder Calendar-Titel-Inferenz;
 - automatische Plan-, Task- oder Habit-Änderungen;
-- belastbarer Skillset-Score für echte Accounts.
+- trainierter persönlicher Fähigkeits-Score; vorhandene Skillset-/Past-Ansichten
+  sind beobachtende Darstellungen, keine Persönlichkeitsdiagnosen.
 
 ## Vertiefende technische Dokumente
 
+- [Entwicklungs- und Diensteübergabe](development-handoff.md): Änderungen,
+  lokale/live Grenzen, externe Dienste und Secret-Zuständigkeiten.
+- [Health Connect](health-connect-v1-contract.md): optionale Android-Importe.
+- [Focus Protection](android-focus-protection-v1-contract.md): kombinierbare lokale Regeln.
+- [Speech-Sidecar](../services/speech_service/README.md): Transkription und separater Betrieb.
 - `docs/vps-pilot-release-plan.md`: zentrale, teilweise lokal implementierte
   Liefer- und Freigabesequenz für öffentliche Registrierung, VPS/HTTPS,
   Coach-Provider, `main`, Vercel, Android und Abgabe.

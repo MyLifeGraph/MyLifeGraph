@@ -202,7 +202,7 @@ void main() {
       final tabs = find.byKey(const Key('insights-advanced-pane-tabs'));
       expect(tester.widgetList<Text>(find.descendant(of: tabs, matching: find.byType(Text)))
           .map((text) => text.data),
-        ['Compare', 'Top patterns', 'Trend overlay', 'Skillset', 'Matrix', 'Discovered']);
+        ['Compare', 'Top patterns', 'Trend overlay', 'Skillset', 'Past', 'Matrix', 'Discovered']);
       final skillsetTab = find.byKey(const Key('insights-advanced-pane-skillset'));
       await tester.ensureVisible(skillsetTab);
       await tester.pumpAndSettle();

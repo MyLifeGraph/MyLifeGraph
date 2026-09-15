@@ -192,6 +192,23 @@ class _CoachProviderSettingsCardState
         ),
       ] else if (isByok) ...[
         const SizedBox(height: AppSpacing.sm),
+        if (selected == CoachProviderName.gemini) ...[
+          DropdownButtonFormField<String>(
+            key: ValueKey('coach-gemini-model-${credentials.geminiModel}'),
+            initialValue: credentials.geminiModel,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Model', isDense: true),
+            items: [for (final model in coachGeminiModels.entries)
+              DropdownMenuItem(value: model.key, child: Text(model.value)),
+            ],
+            onChanged: credentials.busy || !widget.enabled ? null : (value) async {
+              if (value == null) return;
+              await ref.read(coachCredentialsProvider.notifier).selectGeminiModel(value);
+              if (mounted) widget.onChanged?.call();
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         TextField(
           key: ValueKey('coach-key-${selected!.code}'),
           controller: input,

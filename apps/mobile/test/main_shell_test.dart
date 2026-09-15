@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
+import 'package:my_life_graph/core/navigation/planner_add_request.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/theme/app_theme_effects.dart';
 import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
@@ -13,6 +14,90 @@ import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 import 'package:my_life_graph/features/shell/presentation/shell_destination_descriptor.dart';
 
 void main() {
+  testWidgets('focused text editing prevents root-page swipe navigation', (tester) async {
+    final router = _router(initialLocation: AppRoutes.coach, body: Column(
+      children: [const TextField(), Expanded(child: Container(
+        key: const Key('blank-chat'), color: Colors.transparent))],
+    ));
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appSurfaceCapabilitiesProvider.overrideWithValue(
+        const AppSurfaceCapabilities(isLocalDemo: false,
+          canUseSyncedHabits: true, canUseSyncedExecution: true,
+          canShowCoachSurface: true),
+      )],
+      child: MaterialApp.router(routerConfig: router),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('blank-chat')), const Offset(180, 0));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.coach);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('blank-chat')), const Offset(180, 0));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.planner);
+  });
+
+  testWidgets('root swipes follow visible tabs, skip Plus and ignore subpages', (tester) async {
+    final router = _router(initialLocation: AppRoutes.dashboard);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appSurfaceCapabilitiesProvider.overrideWithValue(
+        const AppSurfaceCapabilities(isLocalDemo: false,
+          canUseSyncedHabits: true, canUseSyncedExecution: true),
+      )],
+      child: MaterialApp.router(routerConfig: router),
+    ));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('Home destination'), const Offset(20, -180));
+    await tester.pumpAndSettle();
+    expect(find.text('Home destination'), findsOneWidget);
+    await tester.drag(find.text('Home destination'), const Offset(-180, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Insights destination'), findsOneWidget);
+    await tester.drag(find.text('Insights destination'), const Offset(-180, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Planner destination'), findsOneWidget);
+    await tester.drag(find.text('Planner destination'), const Offset(-180, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Planner destination'), findsOneWidget); // Coach gated off.
+    router.go(AppRoutes.deepWork);
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('Focus destination'), const Offset(-180, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Focus destination'), findsOneWidget);
+  });
+
+  testWidgets('Planner Add intent comes only from upward bottom-navigation swipe', (tester) async {
+    final router = _router(initialLocation: AppRoutes.planner);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appSurfaceCapabilitiesProvider.overrideWithValue(
+        const AppSurfaceCapabilities(isLocalDemo: false,
+          canUseSyncedHabits: true, canUseSyncedExecution: true),
+      )],
+      child: MaterialApp.router(routerConfig: router),
+    ));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(MainShell)));
+    await tester.drag(find.text('Planner destination'), const Offset(0, -180));
+    expect(container.read(plannerAddRequestProvider), 0);
+    final nav = find.byKey(const ValueKey('shell-bottom-swipe'));
+    await tester.dragFrom(tester.getTopLeft(nav) + const Offset(40, 25), const Offset(0, -140));
+    await tester.pumpAndSettle();
+    expect(container.read(plannerAddRequestProvider), 1);
+    await tester.drag(find.byKey(const ValueKey('shell-plus-swipe')), const Offset(0, -140));
+    await tester.pumpAndSettle();
+    expect(container.read(plannerAddRequestProvider), 2);
+    router.go(AppRoutes.dashboard);
+    await tester.pumpAndSettle();
+    await tester.dragFrom(tester.getTopLeft(nav) + const Offset(40, 25), const Offset(0, -140));
+    expect(container.read(plannerAddRequestProvider), 2);
+  });
+
   group('shell destination descriptors', () {
     test('own one unique route and presentation definition per destination',
         () {
@@ -899,10 +984,10 @@ bool _containsPrimaryFocus(WidgetTester tester, Finder control) {
   return containsFocus;
 }
 
-GoRouter _router({String initialLocation = AppRoutes.deepWork}) {
+GoRouter _router({String initialLocation = AppRoutes.deepWork, Widget? body}) {
   Widget shell(String path, String label) => MainShell(
         currentPath: path,
-        child: Center(child: Text(label)),
+        child: body ?? Center(child: Text(label)),
       );
 
   return GoRouter(

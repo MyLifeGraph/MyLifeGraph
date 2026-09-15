@@ -67,13 +67,14 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 960;
               final horizontalPadding = wide ? 56.0 : AppSpacing.md;
-              final verticalPadding = wide ? 48.0 : AppSpacing.lg;
+              final verticalPadding = wide ? 48.0 : AppSpacing.md;
               final intro = _AuthIntro(
                 compact: !wide,
                 syncedOnly: config.isHostedEnvironment,
               );
               final access = _AuthPanel(
                 child: _buildAccessPanel(
+                  compact: constraints.maxWidth < 600,
                   authHasError: authState.hasError,
                   authNotice: authNotice,
                   authErrorMessage: authErrorMessage,
@@ -106,10 +107,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         : ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 560),
                             child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 intro,
-                                const SizedBox(height: AppSpacing.xl),
+                                const SizedBox(height: AppSpacing.md),
                                 access,
                               ],
                             ),
@@ -125,6 +127,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Widget _buildAccessPanel({
+    required bool compact,
     required bool authHasError,
     required AuthNotice? authNotice,
     required String authErrorMessage,
@@ -154,7 +157,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             ),
           ),
         ],
-        const SizedBox(height: AppSpacing.lg),
+        SizedBox(height: compact ? AppSpacing.sm : AppSpacing.lg),
         SizedBox(
           width: double.infinity,
           child: _ModeTabs(
@@ -190,8 +193,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                 : () => context.push(AppRoutes.pilotPrivacyNotice),
             child: const Text('Read pilot privacy notice'),
           ),
-        const SizedBox(height: AppSpacing.lg),
+        SizedBox(height: compact ? AppSpacing.sm : AppSpacing.lg),
         _AuthForm(
+          compact: compact,
           registrationMode: _registrationMode,
           nameController: _nameController,
           emailController: _emailController,
@@ -232,7 +236,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             isError: _accountHelpFailed,
           ),
         ],
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
         Row(
           children: [
             const Expanded(child: Divider()),
@@ -246,7 +250,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             const Expanded(child: Divider()),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
         if (!config.isHostedEnvironment) ...[
           _AuthActionTile(
             icon: AppIcons.personOutlineRounded,
@@ -495,6 +499,17 @@ class _AuthIntro extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (compact) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const _IconHero(compact: true),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: Text('MyLifeGraph', style: theme.textTheme.headlineSmall)),
+        ]),
+        const SizedBox(height: AppSpacing.sm),
+        Text('Make room for a better day.', style: theme.textTheme.bodyLarge),
+      ]);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -540,7 +555,8 @@ class _AuthPanel extends StatelessWidget {
     return AppSurface(
       variant: AppSurfaceVariant.raised,
       radius: AppRadii.xl,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600
+          ? AppSpacing.md : AppSpacing.lg),
       child: child,
     );
   }
@@ -608,8 +624,8 @@ class _IconHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      width: compact ? 64 : 76,
-      height: compact ? 64 : 76,
+      width: compact ? 48 : 76,
+      height: compact ? 48 : 76,
       decoration: BoxDecoration(
         color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(AppRadii.xl),
@@ -618,7 +634,7 @@ class _IconHero extends StatelessWidget {
       child: AppBrandMark(
         semanticLabel: 'MyLifeGraph',
         color: colors.onPrimaryContainer,
-        size: compact ? 34 : 40,
+        size: compact ? 28 : 40,
       ),
     );
   }
@@ -648,6 +664,7 @@ class _ModeTabs extends StatelessWidget {
 
 class _AuthForm extends StatelessWidget {
   const _AuthForm({
+    required this.compact,
     required this.registrationMode,
     required this.nameController,
     required this.emailController,
@@ -656,6 +673,7 @@ class _AuthForm extends StatelessWidget {
   });
 
   final bool registrationMode;
+  final bool compact;
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController passwordController;
@@ -669,24 +687,24 @@ class _AuthForm extends StatelessWidget {
           TextField(
             controller: nameController,
             textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(labelText: 'Name optional'),
+            decoration: InputDecoration(labelText: 'Name optional', isDense: compact),
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
         ],
         TextField(
           controller: emailController,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(labelText: 'Email'),
+          decoration: InputDecoration(labelText: 'Email', isDense: compact),
         ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
         TextField(
           controller: passwordController,
           obscureText: true,
           onSubmitted: (_) => onSubmit?.call(),
-          decoration: const InputDecoration(labelText: 'Password'),
+          decoration: InputDecoration(labelText: 'Password', isDense: compact),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(

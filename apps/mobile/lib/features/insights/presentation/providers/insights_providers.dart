@@ -11,6 +11,7 @@ import '../../data/repositories/insights_repository_impl.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/entities/personal_patterns.dart';
+import '../../domain/entities/period_comparison.dart';
 import '../../domain/entities/sleep_recommendation.dart';
 import '../../domain/repositories/insights_repository.dart';
 import '../../domain/services/correlation_analyzer.dart';
@@ -19,18 +20,17 @@ final insightsMockDataSourceProvider = Provider<InsightsMockDataSource>(
   (_) => const InsightsMockDataSource(),
 );
 
-final insightsRepositoryProvider = Provider<InsightsRepository>(
-  (ref) {
-    final client = ref.watch(supabaseClientProvider);
-    final allowMockData = ref.watch(appSurfaceCapabilitiesProvider).isLocalDemo;
-    return InsightsRepositoryImpl(
-      mockDataSource: ref.watch(insightsMockDataSourceProvider),
-      supabaseDataSource:
-          client == null ? null : InsightsSupabaseDataSource(client),
-      allowMockData: allowMockData,
-    );
-  },
-);
+final insightsRepositoryProvider = Provider<InsightsRepository>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  final allowMockData = ref.watch(appSurfaceCapabilitiesProvider).isLocalDemo;
+  return InsightsRepositoryImpl(
+    mockDataSource: ref.watch(insightsMockDataSourceProvider),
+    supabaseDataSource: client == null
+        ? null
+        : InsightsSupabaseDataSource(client),
+    allowMockData: allowMockData,
+  );
+});
 
 final insightsProvider = FutureProvider<List<Insight>>(
   (ref) => ref.watch(insightsRepositoryProvider).getInsights(),
@@ -38,33 +38,40 @@ final insightsProvider = FutureProvider<List<Insight>>(
 
 final personalPatternsApiDataSourceProvider =
     Provider<PersonalPatternsApiDataSource>(
-  (ref) => PersonalPatternsApiDataSource(ref.watch(apiClientProvider)),
-);
+      (ref) => PersonalPatternsApiDataSource(ref.watch(apiClientProvider)),
+    );
 
 final personalPatternsProvider = FutureProvider<PersonalPatterns?>((ref) async {
   final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
   if (capabilities.isLocalDemo) return null;
-  final token =
-      ref.watch(supabaseClientProvider)?.auth.currentSession?.accessToken;
+  final token = ref
+      .watch(supabaseClientProvider)
+      ?.auth
+      .currentSession
+      ?.accessToken;
   if (token == null || token.isEmpty) {
     throw StateError('Personal patterns require an authenticated account.');
   }
-  return ref.watch(personalPatternsApiDataSourceProvider).getPersonalPatterns(
-        accessToken: token,
-      );
+  return ref
+      .watch(personalPatternsApiDataSourceProvider)
+      .getPersonalPatterns(accessToken: token);
 });
 
 final sleepRecommendationApiDataSourceProvider =
     Provider<SleepRecommendationApiDataSource>(
-  (ref) => SleepRecommendationApiDataSource(ref.watch(apiClientProvider)),
-);
+      (ref) => SleepRecommendationApiDataSource(ref.watch(apiClientProvider)),
+    );
 
-final sleepRecommendationProvider =
-    FutureProvider<SleepRecommendation?>((ref) async {
+final sleepRecommendationProvider = FutureProvider<SleepRecommendation?>((
+  ref,
+) async {
   final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
   if (capabilities.isLocalDemo) return null;
-  final token =
-      ref.watch(supabaseClientProvider)?.auth.currentSession?.accessToken;
+  final token = ref
+      .watch(supabaseClientProvider)
+      ?.auth
+      .currentSession
+      ?.accessToken;
   if (token == null || token.isEmpty) {
     throw StateError('Sleep recommendations require an authenticated account.');
   }
@@ -75,27 +82,63 @@ final sleepRecommendationProvider =
 
 final insightsWindowDaysProvider = StateProvider<int>((_) => 14);
 
+// Independent display window; never narrows the existing correlation report.
+final periodComparisonDataProvider = FutureProvider<PeriodComparisonData>((
+  ref,
+) async {
+  final demo = ref.watch(appSurfaceCapabilitiesProvider).isLocalDemo;
+  if (demo) {
+    final points = await ref
+        .watch(insightsRepositoryProvider)
+        .getCorrelationDataPoints(windowDays: 90);
+    return PeriodComparisonData(
+      points: points,
+      today: DateTime.now(),
+      timezone: 'Device time',
+      isDemo: true,
+    );
+  }
+  final patterns = await ref.watch(personalPatternsProvider.future);
+  if (patterns == null) throw StateError('Personal patterns unavailable.');
+  final byDay = <DateTime, Map<String, double>>{};
+  for (final point in [
+    ...patterns.correlationDataPoints(windowDays: 90),
+    ...patterns.skillsetPoints,
+  ]) {
+    byDay.putIfAbsent(comparisonDay(point.date), () => {}).addAll(point.values);
+  }
+  return PeriodComparisonData(
+    points: [
+      for (final entry in byDay.entries)
+        CorrelationDataPoint(date: entry.key, values: entry.value),
+    ],
+    today: patterns.window.localEndsOn,
+    timezone: patterns.timezone,
+    enabled: patterns.status != PersonalPatternsStatus.disabled,
+  );
+});
+
 final correlationAnalyzerProvider = Provider<CorrelationAnalyzer>(
   (_) => const CorrelationAnalyzer(),
 );
 
-final correlationReportProvider =
-    FutureProvider<CorrelationReport>((ref) async {
+final correlationReportProvider = FutureProvider<CorrelationReport>((
+  ref,
+) async {
   final windowDays = normalizeInsightsWindowDays(
     ref.watch(insightsWindowDaysProvider),
   );
   final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
   final points = capabilities.isLocalDemo
       ? await ref
-          .watch(insightsRepositoryProvider)
-          .getCorrelationDataPoints(windowDays: windowDays)
+            .watch(insightsRepositoryProvider)
+            .getCorrelationDataPoints(windowDays: windowDays)
       : ref
-              .watch(personalPatternsProvider)
-              .valueOrNull
-              ?.correlationDataPoints(windowDays: windowDays) ??
-          const <CorrelationDataPoint>[];
-  return ref.watch(correlationAnalyzerProvider).analyze(
-        windowDays: windowDays,
-        points: points,
-      );
+                .watch(personalPatternsProvider)
+                .valueOrNull
+                ?.correlationDataPoints(windowDays: windowDays) ??
+            const <CorrelationDataPoint>[];
+  return ref
+      .watch(correlationAnalyzerProvider)
+      .analyze(windowDays: windowDays, points: points);
 });

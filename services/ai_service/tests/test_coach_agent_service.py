@@ -455,6 +455,73 @@ def test_capabilities_publish_fixed_agent_limits_and_fast_configuration() -> Non
     assert result.limits.snapshot_max_bytes == 8 * 1024 * 1024
 
 
+def test_gemini_is_independent_of_exhausted_codex_provider_budget(monkeypatch):
+    from app.providers.cloud_byok import CloudByokCoachProvider
+
+    async def ready(provider):
+        return provider._capability("ready", "ready")
+
+    monkeypatch.setattr(CloudByokCoachProvider, "capability", ready)
+    repository = AgentRepository()
+    repository.operator_usage_count = 5
+    repository.operator_dispatch_count = 15
+    repository.usage_count = 5  # Account-wide total remains deliberate.
+    operator = OperatorProvider()
+    service = _service(repository=repository, snapshot=SnapshotService(),
+        provider=AgentProvider(), operator_provider=operator,
+        settings=Settings(_env_file=None, APP_ENV="staging",
+            OPERATOR_CODEX_PILOT_ENABLED=True, COACH_BYOK_PROVIDERS="gemini"))
+    gemini = service.for_byok_request(provider_name="gemini", api_key="test-key")
+    result = asyncio.run(gemini.capabilities(user_id="owner-1"))
+    assert result.provider == "gemini"
+    assert result.state == "ready"
+    assert result.limits.requests_per_local_day == 20
+    assert result.limits.remaining_requests == 15
+    assert result.limits.global_remaining_requests is None
+    assert operator.capability_calls == 0
+    assert operator.calls == 0
+    assert "Codex" not in coach_agent_service_module._provider_error_message("account_limit")
+
+
+@pytest.mark.parametrize("enabled,key,reason", [
+    (False, "test-key", "provider_disabled"),
+    (True, None, "invalid_provider_credentials"),
+])
+def test_rejected_gemini_capability_never_probes_base_codex(enabled, key, reason):
+    provider = AgentProvider()
+    provider.capability_error = CoachProviderError(
+        "account_limit", "Codex quota exhausted", retryable=False,
+    )
+    service = _service(repository=AgentRepository(), snapshot=SnapshotService(),
+        provider=provider, settings=Settings(_env_file=None, APP_ENV="staging",
+            COACH_BYOK_PROVIDERS="gemini" if enabled else ""))
+    selected = service.for_byok_request(provider_name="gemini", api_key=key)
+    result = asyncio.run(selected.capabilities(user_id="owner-1"))
+    assert result.provider == "gemini"
+    assert result.state == "unavailable"
+    assert result.reason_code == reason
+    assert provider.capability_calls == 0
+    assert provider.calls == 0
+
+
+@pytest.mark.parametrize('model', ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'])
+def test_byok_selection_binds_provider_and_claim_identity(model):
+    service = _service(repository=AgentRepository(), snapshot=SnapshotService(), provider=AgentProvider(),
+        settings=Settings(_env_file=None, APP_ENV='staging', COACH_BYOK_PROVIDERS='gemini'))
+    selected = service.for_byok_request(provider_name='gemini', api_key='test-key', model_name=model)
+    assert selected._identity() == ('gemini', 'user_supplied_key', model, 'explicit')
+    assert selected._provider.model == model
+    assert service._identity()[0] != 'gemini'
+
+
+@pytest.mark.parametrize('provider,model', [('gemini', 'unknown'), ('openai', 'gemini-3.6-flash'), (None, 'gemini-3.6-flash')])
+def test_byok_selection_rejects_unapproved_model_without_dispatch(provider, model):
+    service = _service(repository=AgentRepository(), snapshot=SnapshotService(), provider=AgentProvider())
+    with pytest.raises(CoachServiceError) as caught:
+        service.for_byok_request(provider_name=provider, api_key='test-key', model_name=model)
+    assert caught.value.status_code == 422
+
+
 def test_account_deletion_cancels_active_turn_and_blocks_new_turns() -> None:
     async def scenario() -> None:
         repository = AgentRepository()

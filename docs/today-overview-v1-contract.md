@@ -1,5 +1,11 @@
 # Today Overview V1 Contract
 
+Root Today participates in the shared deliberate horizontal touch navigation
+between Today, Insights, Planner and visible Coach. The shortcut uses the same
+routes as the navigation buttons; it does not mutate data or apply to subpages.
+Root-page motion follows destination order, including reverse navigation by
+either button or swipe. Auxiliary push/back routes keep platform transitions.
+
 All tasks has compact `Dated` / `Undated` filters, both selected initially.
 They filter the existing Task deadline field, not reservation existence;
 the due-today list and durable Task states are unchanged. Completed/cancelled
@@ -61,6 +67,10 @@ the affected section, and the timeline lists any source errors beside the
 remaining entries. Empty current data and unavailable data are distinct.
 
 ## Check-In Streak
+
+Check-in buttons distinguish pending capture with an attention-tinted surface
+and saved capture with a success-tinted surface/check icon at all widths.
+Existing labels, edit/add actions and completion semantics are unchanged.
 
 A completed streak day requires both one valid Morning and one valid Evening
 Daily Capture V2/V3/V4 branch for the same `entry_date`. Both may be entered at

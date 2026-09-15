@@ -150,7 +150,10 @@ test('@exam-week-outlook renders a read-only Planner outlook and replan entry', 
   await expect(page.getByText('Exam week', { exact: true })).toHaveCount(0);
 
   await openFlutterRoute(page, e2e.appUrl, '/planner');
-  await clickFlutterText(page, 'Planning');
+  // The fixed 1280px E2E viewport uses the restored desktop columns. The
+  // This week / Planning split belongs only to the mobile/tablet layout.
+  await expect(page.getByRole('button', { name: 'Planning', exact: true }))
+    .toHaveCount(0);
   await expectFlutterText(page, 'Exam week');
   await clickFlutterText(page, 'Exam week');
   await scrollFlutterTextIntoView(page, exam.title, { maxSteps: 20 });

@@ -1,8 +1,10 @@
 # VPS Pilot Release Plan
 
-Status: local implementation in progress. This plan was consolidated on
-2026-08-19; checked items are repository work only and never imply remote
-deployment or live-project state.
+Status: operational release runbook, originally consolidated on 2026-08-19.
+The pilot has recorded releases; see [current evidence](verification.md#current-verified-baseline)
+and the [maintainer service map](development-handoff.md). First-install checklists
+below retain their original scope and are not instructions to rebuild the live
+host. Every subsequent release still needs its own checks and target verification.
 
 This document is the delivery and release authority for turning the current
 checkout into the first assessable, phone-usable MyLifeGraph pilot. It owns the

@@ -26,6 +26,7 @@ from app.models.coach import (
     COACH_AGENT_TIMEOUT_SECONDS,
     COACH_CAPABILITIES_V5_CONTRACT_VERSION,
     COACH_GEMINI_MODEL,
+    COACH_GEMINI_COMPATIBLE_MODELS,
     COACH_HISTORY_V4_CONTRACT_VERSION,
     COACH_OPERATOR_REQUESTS_PER_LOCAL_DAY,
     COACH_OPERATOR_REQUESTS_PER_UTC_DAY,
@@ -293,8 +294,9 @@ class CoachAgentService:
         *,
         provider_name: str | None,
         api_key: str | None,
+        model_name: str | None = None,
     ) -> "CoachAgentService":
-        if provider_name is None and api_key is None:
+        if provider_name is None and api_key is None and model_name is None:
             return self
         if provider_name not in {"openai", "gemini"}:
             raise CoachServiceError(
@@ -304,6 +306,13 @@ class CoachAgentService:
                 status_code=422,
             )
         model = "gpt-5.6-terra" if provider_name == "openai" else COACH_GEMINI_MODEL
+        if model_name is not None:
+            if provider_name != "gemini" or model_name not in COACH_GEMINI_COMPATIBLE_MODELS:
+                raise CoachServiceError(
+                    "invalid_provider_credentials", "Choose a supported Gemini model.",
+                    retryable=False, status_code=422,
+                )
+            model = model_name
         pre_admission_error: CoachServiceError | None = None
         provider: CoachProvider = self._provider
         if not api_key or not api_key.strip():
@@ -325,6 +334,7 @@ class CoachAgentService:
                 provider=provider_name,
                 api_key=api_key,
                 settings=self._settings,
+                model=model_name,
             )
         return self.with_request_provider(
             provider=provider,
@@ -346,6 +356,14 @@ class CoachAgentService:
                 remaining=0,
             )
         self._lifecycle.require_authenticated_account(profile)
+        # A rejected BYOK selection still carries the base provider internally.
+        # Never probe Codex (or expose its limits/errors) for that selection.
+        if self._pre_admission_error is not None:
+            return self._capabilities(
+                state="unavailable",
+                reason_code=self._pre_admission_error.detail.code,
+                remaining=0,
+            )
         try:
             if self._identity()[0] == "operator_codex_pilot":
                 utc_date = self._lifecycle.now().date()
@@ -1414,6 +1432,7 @@ def _provider_error_code(code: str) -> str:
         "unavailable_model": "unavailable_model",
         "fast_mode_unavailable": "fast_mode_unavailable",
         "timeout": "provider_timeout",
+        "provider_timeout": "provider_timeout",
         "account_limit": "account_limit",
         "context_too_large": "snapshot_too_large",
         "tool_limit": "tool_limit",
@@ -1424,14 +1443,16 @@ def _provider_error_code(code: str) -> str:
 def _provider_error_message(code: str) -> str:
     return {
         "not_logged_in": "The local Codex CLI is not authenticated.",
-        "unavailable_model": "The required gpt-5.5 model is unavailable.",
+        "unavailable_model": "The selected Coach model is unavailable.",
+        "invalid_api_key": "The provider rejected your API key. Check or replace it in Coach settings.",
+        "provider_timeout": "The Coach provider timed out. Try again.",
         "fast_mode_unavailable": "The required Codex Fast mode is unavailable.",
         "timeout": "Coach analysis exceeded its 180-second turn limit.",
-        "account_limit": "The local Codex account limit has been reached.",
+        "account_limit": "The selected Coach provider's account limit has been reached.",
         "context_too_large": "Personal data exceeds the Coach snapshot limit.",
         "tool_limit": "Coach analysis exceeded the 12-call tool limit.",
         "invalid_output": "The Coach provider returned invalid output.",
-    }.get(code, "The local Coach provider failed.")
+    }.get(code, "The selected Coach provider failed. Try again or choose another model.")
 
 
 def _status_for_code(code: str) -> int:

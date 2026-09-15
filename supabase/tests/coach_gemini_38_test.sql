@@ -1,9 +1,11 @@
 begin;
-select plan(6);
+select plan(10);
 
 with cases(requested, reported, valid) as (
   values
     ('gemini-3.6-flash', 'gemini-3.6-flash', true),
+    ('gemini-3.7-flash', 'gemini-3.7-flash', true),
+    ('gemini-3.7-flash', 'gemini-3.8-flash', false),
     ('gemini-3.8-flash', 'gemini-3.8-flash', true),
     ('gemini-unknown', 'gemini-unknown', false),
     ('gemini-3.8-flash', 'gemini-3.6-flash', false)
@@ -38,5 +40,11 @@ select ok(position('gemini-3.8-flash' in pg_get_functiondef(
   'public.claim_coach_request_v8_local_date_legacy(uuid,text,uuid,text,date,text,text,text,text,timestamptz,timestamptz,integer,boolean)'::regprocedure
 )) > 0, 'V8 legacy delegate admits 3.8 without changing budget wrapper');
 
+select ok(position('gemini-3.7-flash' in pg_get_functiondef(
+  'public.claim_coach_request_v7(uuid,uuid,text,date,text,text,text,text,timestamptz,timestamptz,integer)'::regprocedure
+)) > 0, 'internal V7 claim admits exactly 3.7 as an additional choice');
+select ok(position('gemini-3.7-flash' in pg_get_functiondef(
+  'public.claim_coach_request_v8_local_date_legacy(uuid,text,uuid,text,date,text,text,text,text,timestamptz,timestamptz,integer,boolean)'::regprocedure
+)) > 0, 'V8 delegate admits 3.7 with existing identity checks');
 select * from finish();
 rollback;

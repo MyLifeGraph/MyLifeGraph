@@ -82,6 +82,7 @@ class _AdvancedPaneTabsState extends State<_AdvancedPaneTabs> {
       (_AdvancedPane.topPatterns, 'Top patterns', AppIcons.autoGraphOutlined),
       (_AdvancedPane.trend, 'Trend overlay', AppIcons.viewTimelineOutlined),
       (_AdvancedPane.skillset, 'Skillset', AppIcons.insightsOutlined),
+      (_AdvancedPane.past, 'Past', AppIcons.history),
       (_AdvancedPane.matrix, 'Matrix', AppIcons.calendarViewWeekOutlined),
       (_AdvancedPane.discovered, 'Discovered', AppIcons.psychologyOutlined),
     ];

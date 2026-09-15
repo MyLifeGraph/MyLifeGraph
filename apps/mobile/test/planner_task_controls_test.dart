@@ -19,7 +19,7 @@ void main() {
     );
     await tester.pumpWidget(MaterialApp(theme: AppTheme.dark,
       home: Scaffold(body: Builder(builder: section.buildCreationButton))));
-    await tester.tap(find.text('Add new'));
+    await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
     for (final key in ['task', 'habit', 'exam', 'assignment', 'commitment']) {
       final option = find.byKey(ValueKey('planner-add-$key'));
