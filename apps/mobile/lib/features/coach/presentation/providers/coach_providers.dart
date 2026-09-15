@@ -129,12 +129,16 @@ final coachDictationConsentProvider = StateProvider<bool>((ref) {
 });
 
 // Dictation can be tested without a hosted Project Coach on the dev stack.
-// Hosted clients and guest/mock sessions retain their existing availability gate.
+// A downloaded on-device model can also fill a signed-in draft while Coach is
+// unavailable. This does not enable sending, guest access, or server uploads.
 final coachLocalDictationProvider = Provider<bool>((ref) {
   try {
     final config = ref.watch(appConfigProvider);
-    return config.environment == 'development' && !config.useMockData &&
-        ref.watch(coachActiveProfileIdProvider) != null;
+    if (config.useMockData || ref.watch(coachActiveProfileIdProvider) == null) return false;
+    final speech = ref.watch(speechSettingsProvider);
+    final localReady = !speech.loading && !speech.initializationFailed &&
+        speech.supported && speech.source != 'server' && speech.installed.contains(speech.source);
+    return config.environment == 'development' || localReady;
   } on StateError {
     return false;
   }

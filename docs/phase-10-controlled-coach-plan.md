@@ -767,9 +767,11 @@ guarded send flow; Shift+Enter remains multiline editing. Active IME composition
 does not trigger hardware-key submission. Recording Stop remains draft-only;
 recording Send requests transcription followed by the same guarded send flow.
 
-Only authenticated non-mock `development` sessions may use dictation and edit
-the draft independently of Coach availability. Hosted and guest/mock gates are
-unchanged, and unavailable Coach responses remain blocked in every environment.
+Authenticated non-mock `development` sessions and authenticated Android sessions
+with a selected, installed on-device model may dictate/edit a draft independently
+of Coach availability. Hosted Server-source and guest/mock gates are unchanged;
+unavailable Coach responses remain blocked in every environment. Local speech
+does not imply an offline Coach or bypass account/session requirements.
 
 Coach remains the fifth development-gated shell destination. Today, Insights,
 Quick actions, Planner, Coach, and Settings share the same top action group:

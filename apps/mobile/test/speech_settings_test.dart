@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/features/coach/presentation/providers/coach_providers.dart';
 import 'package:my_life_graph/features/coach/application/speech_settings.dart';
 import 'package:my_life_graph/features/coach/data/local_speech.dart';
 import 'package:my_life_graph/features/coach/domain/speech_models.dart';
@@ -9,6 +12,26 @@ import 'package:my_life_graph/features/coach/domain/speech_models.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('installed local speech permits a signed-in draft, never guest or server fallback', () async {
+    final speech = SpeechSettings(_Store());
+    await speech.ready;
+    await speech.download(speechModels.first);
+    await speech.select('whisper-tiny');
+    final profile = StateProvider<String?>((ref) => 'signed-in');
+    final container = ProviderContainer(overrides: [
+      speechSettingsProvider.overrideWith((ref) => speech),
+      appConfigProvider.overrideWithValue(AppConfig(environment: 'pilot', supabaseUrl: '', aiServiceBaseUrl: '', useMockData: false)),
+      coachActiveProfileIdProvider.overrideWith((ref) => ref.watch(profile)),
+    ]);
+    addTearDown(container.dispose);
+    expect(container.read(coachLocalDictationProvider), isTrue);
+    await speech.select('server');
+    expect(container.read(coachLocalDictationProvider), isFalse);
+    await speech.select('whisper-tiny');
+    container.read(profile.notifier).state = null;
+    expect(container.read(coachLocalDictationProvider), isFalse);
+  });
 
   test('catalog is pinned, multilingual and includes all three models', () {
     expect(speechModels.map((m) => m.id), [
