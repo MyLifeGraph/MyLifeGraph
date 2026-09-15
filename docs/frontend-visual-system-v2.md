@@ -450,7 +450,9 @@ and desktop; responsive positioning and layout may differ. Today uses one
 
 Planner uses the supplied mobile/desktop references through existing tokens:
 mobile weekday underlines, desktop date chips, wide event rows, compact icon-led
-summary cards and a desktop agenda/summary split. Days/List is always available.
+summary cards. `This week` shows the calendar and Days/List; `Planning` shows
+supporting sections, with a desktop creation/summary split. Both use the existing
+segmented-control vocabulary and preserve the calendar's selected date/view.
 Existing shell navigation/FAB remains authoritative; large mobile text gets
 additional bottom clearance and full-width stacked appointment text.
 

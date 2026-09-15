@@ -17,6 +17,7 @@ import '../../domain/coach.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/coach_providers.dart';
 import '../widgets/coach_dictation_button.dart';
+import '../../../../composition/widgets/speech_settings_sheet.dart';
 import '../widgets/coach_uncertainty_view.dart';
 
 class CoachPage extends ConsumerStatefulWidget {
@@ -540,6 +541,7 @@ class _ComposerCardState extends State<_ComposerCard> {
                   }),
                   style: TextButton.styleFrom(alignment: Alignment.centerLeft),
                 ))),
+                SpeechSourceButton(enabled: !state.isSending && !state.isLoading),
                 microphone,
                 if (state.isSending)
                   IconButton.outlined(

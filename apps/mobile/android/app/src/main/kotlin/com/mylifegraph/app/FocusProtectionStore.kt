@@ -1,6 +1,7 @@
 package com.mylifegraph.app
 
 import android.content.Context
+import org.json.JSONObject
 
 data class LocalFocusConfiguration(
     val enabled: Boolean,
@@ -9,6 +10,7 @@ data class LocalFocusConfiguration(
     val selectedPackages: Set<String>,
     val consentVersions: Map<String, Int>,
     val blockingSchedule: AppBlockingSchedule = AppBlockingSchedule(),
+    val appRules: Map<String, AppBlockingRule> = emptyMap(),
 )
 
 class FocusProtectionStore(context: Context) {
@@ -29,7 +31,21 @@ class FocusProtectionStore(context: Context) {
             if (value > 0) kind to value else null
         }.toMap(),
         blockingSchedule = readBlockingSchedule(),
+        appRules = readAppRules(),
     )
+
+    private fun readAppRules(): Map<String, AppBlockingRule> = runCatching {
+        val json = JSONObject(preferences.getString("app_rules", "{}") ?: "{}")
+        json.keys().asSequence().associateWith { key ->
+            val rule = json.getJSONObject(key)
+            val days = rule.getJSONArray("weekdays")
+            AppBlockingRule.fromMap(mapOf("focus" to rule.getBoolean("focus"),
+                "weekly" to rule.getBoolean("weekly"), "always" to rule.getBoolean("always"),
+                "weekdays" to (0 until days.length()).map { days.getInt(it) },
+                "startMinute" to rule.getInt("startMinute"), "endMinute" to rule.getInt("endMinute"),
+                "untilEpochMs" to rule.getLong("untilEpochMs")))
+        }
+    }.getOrDefault(emptyMap())
 
     private fun readBlockingSchedule(): AppBlockingSchedule = runCatching {
         AppBlockingSchedule(
@@ -51,6 +67,7 @@ class FocusProtectionStore(context: Context) {
             .putStringSet("blocking_weekdays", configuration.blockingSchedule.weekdays.map { it.toString() }.toSet())
             .putInt("blocking_start_minute", configuration.blockingSchedule.startMinute)
             .putInt("blocking_end_minute", configuration.blockingSchedule.endMinute)
+            .putString("app_rules", JSONObject(configuration.appRules.mapValues { JSONObject(it.value.toMap()) }).toString())
         CONSENT_KEYS.forEach { kind ->
             val value = configuration.consentVersions[kind] ?: 0
             if (value > 0) {

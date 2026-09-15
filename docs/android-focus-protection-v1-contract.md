@@ -31,11 +31,29 @@ The native configuration and lease use the private SharedPreferences file
 without a Flutter engine. Configuration is locked while an unexpired active
 protection lease exists.
 
-### App-blocking modes
+### Combinable app-blocking rules
 
-The additive local configuration fields are `blockingMode` (`focus`, `weekly`,
+The editor saves additive `appRules`, keyed by selected Android package.
+Each rule combines `focus`, `weekly`, `always`, and optional `untilEpochMs`
+with OR, not exclusive modes. Weekly days/times use the existing semantics
+below. Temporary 15-minute, 1-hour and 2-hour shortcuts expire exclusively at
+the saved instant; they create no Focus session. A selected app's tune button
+edits only that app; `Rules for selected apps` explicitly applies one reviewed
+rule to all selected apps. Cancelling writes nothing. Clear timer removes only
+the temporary rule, not overlapping weekly/Focus/always rules.
+
+Rules remain private device configuration. Essential packages, permission and
+master switches still gate every decision. An overlay checks the foreground
+app's own rule expiry even when another app remains blocked. The existing held
+emergency release disables combined app blocking until explicitly re-enabled;
+it does not alter the Focus lease or its independent DND behavior.
+
+### Legacy configuration compatibility
+
+Retained local configuration fields are `blockingMode` (`focus`, `weekly`,
 `always`), `weekdays` (Monday=1 through Sunday=7), and `startMinute`/`endMinute`
-(0..1439). Old configuration defaults to Focus. A weekly editor confirms the
+(0..1439). Apps without an explicit `appRules` entry inherit these fields;
+old configuration defaults to Focus. A weekly editor confirms the
 days and times together; cancelling writes nothing. Empty days, equal times,
 out-of-range values and unknown modes are rejected. Earlier end times mean the
 following day, attributed to the selected start weekday. End is exclusive.

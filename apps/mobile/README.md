@@ -1,5 +1,21 @@
 # MyLifeGraph Mobile App
 
+Planner now separates `This week` and `Planning` without changing scheduling.
+Unscheduled Tasks support completion and confirmed removal (restorable in
+Today → All tasks). All tasks includes Dated/Undated filters, initially both.
+The shared refresh coordinator also refreshes retained Today command views.
+
+Settings → Speech to text and the Coach composer's speech-source icon select
+Server (default) or a downloaded multilingual model on 64-bit Android:
+Whisper Tiny (~104 MB), Whisper Base (~161 MB), Parakeet V3 (~670 MB).
+Downloads are explicit, cancellable and SHA256-verified; on-device inference
+keeps audio local and never silently falls back to Server. Web retains Server.
+See the [Coach contract](../../docs/phase-10-controlled-coach-plan.md#flutter-contract).
+
+Android app blocking uses per-app, combinable Focus/weekly/always/temporary
+rules, with a reviewed bulk editor and unchanged permission/emergency gates.
+Legacy configurations remain compatible; no Cloud schema or API is changed.
+
 Plus also offers **Ultra Quick Check-in** (`/ultra-quick-check-in`): Morning,
 Evening, or Quick note. The existing 30-second speech recorder produces editable
 text. Morning/Evening explicitly request `daily-capture-draft-v1`, using the

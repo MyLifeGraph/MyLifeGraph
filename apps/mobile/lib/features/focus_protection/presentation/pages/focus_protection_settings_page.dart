@@ -29,7 +29,6 @@ class _FocusProtectionSettingsPageState
   bool _busy = true;
   String? _error;
   int _operationGeneration = 0;
-  int _modeRevision = 0;
   static const _weekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
   static const _dayNames = [
     'Monday',
@@ -44,10 +43,22 @@ class _FocusProtectionSettingsPageState
   String _clock(int minute) =>
       TimeOfDay(hour: minute ~/ 60, minute: minute % 60).format(context);
 
-  Future<void> _editSchedule(FocusProtectionConfiguration configuration) async {
-    final days = configuration.weekdays.toSet();
-    var start = configuration.startMinute;
-    var end = configuration.endMinute;
+  String _ruleSummary(AppBlockingRule rule) => [
+    if (rule.focus) 'Focus', if (rule.always) 'Always',
+    if (rule.weekly) '${(rule.weekdays.toList()..sort()).map((d) => _weekdays[d - 1]).join(' ')} · ${_clock(rule.startMinute)}–${_clock(rule.endMinute)}',
+    if (rule.untilEpochMs > DateTime.now().millisecondsSinceEpoch) 'Timer active',
+    if (!rule.focus && !rule.always && !rule.weekly && rule.untilEpochMs <= DateTime.now().millisecondsSinceEpoch) 'No active rules',
+  ].join(' · ');
+
+  Future<void> _editSchedule(FocusProtectionConfiguration configuration, {String? package, String? label}) async {
+    final rule = configuration.ruleFor(package ?? configuration.selectedPackages.first);
+    final days = rule.weekdays.toSet();
+    var start = rule.startMinute;
+    var end = rule.endMinute;
+    var focus = rule.focus;
+    var weekly = rule.weekly;
+    var always = rule.always;
+    var until = rule.untilEpochMs;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -80,10 +91,15 @@ class _FocusProtectionSettingsPageState
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Weekly schedule',
+                      label ?? 'Rules for selected apps',
                       style: Theme.of(sheetContext).textTheme.titleLarge,
                     ),
                     const SizedBox(height: AppSpacing.md),
+                    Text(package == null ? 'Applies to all selected apps. Rules can overlap.' : 'Block when any selected rule is active.'),
+                    CheckboxListTile(contentPadding: EdgeInsets.zero, title: const Text('During Focus'), value: focus, onChanged: (v) => update(() => focus = v!)),
+                    CheckboxListTile(contentPadding: EdgeInsets.zero, title: const Text('Always'), value: always, onChanged: (v) => update(() => always = v!)),
+                    CheckboxListTile(contentPadding: EdgeInsets.zero, title: const Text('Weekly schedule'), value: weekly, onChanged: (v) => update(() => weekly = v!)),
+                    if (weekly) ...[
                     LayoutBuilder(
                       builder: (context, constraints) => SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -196,12 +212,22 @@ class _FocusProtectionSettingsPageState
                           : 'Device time',
                       style: Theme.of(sheetContext).textTheme.bodySmall,
                     ),
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    Text('Block now', style: Theme.of(sheetContext).textTheme.titleSmall),
+                    Wrap(spacing: AppSpacing.xs, children: [
+                      for (final minutes in [15, 60, 120]) ActionChip(
+                        label: Text(minutes < 60 ? '${minutes}m' : '${minutes ~/ 60}h'),
+                        onPressed: () => update(() => until = DateTime.now().add(Duration(minutes: minutes)).millisecondsSinceEpoch)),
+                      if (until > DateTime.now().millisecondsSinceEpoch) ActionChip(label: const Text('Clear timer'), onPressed: () => update(() => until = 0)),
+                    ]),
+                    if (until > DateTime.now().millisecondsSinceEpoch) Text('Until ${TimeOfDay.fromDateTime(DateTime.fromMillisecondsSinceEpoch(until)).format(sheetContext)}', style: Theme.of(sheetContext).textTheme.bodySmall),
                     const SizedBox(height: AppSpacing.md),
                     FilledButton(
-                      onPressed: days.isEmpty || start == end
+                      onPressed: weekly && (days.isEmpty || start == end)
                           ? null
                           : () => Navigator.pop(sheetContext, true),
-                      child: const Text('Save schedule'),
+                      child: const Text('Save rules'),
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(sheetContext, false),
@@ -218,10 +244,10 @@ class _FocusProtectionSettingsPageState
     if (mounted && confirmed == true && _status != null) {
       await _save(
         _status!.configuration.copyWith(
-          blockingMode: AppBlockingMode.weekly,
-          weekdays: days,
-          startMinute: start,
-          endMinute: end,
+          appRules: {..._status!.configuration.appRules,
+            for (final target in package == null ? configuration.selectedPackages : {package})
+              target: AppBlockingRule(focus: focus, weekly: weekly, always: always, weekdays: days.isEmpty ? rule.weekdays : days,
+                startMinute: start, endMinute: start == end ? (end + 1) % 1440 : end, untilEpochMs: until)},
         ),
       );
     }
@@ -330,7 +356,7 @@ class _FocusProtectionSettingsPageState
               secondary: const Icon(AppIcons.lockOutline),
               title: const Text('Enable protection'),
               subtitle: const Text(
-                'Use your app-blocking mode and Focus preferences.',
+                'Use your app rules and Focus preferences.',
               ),
             ),
           ),
@@ -350,59 +376,12 @@ class _FocusProtectionSettingsPageState
                 ),
                 if (configuration.blockSelectedApps) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  DropdownButtonFormField<AppBlockingMode>(
-                    key: ValueKey(
-                      'blocking-mode-${configuration.blockingMode.name}-$_modeRevision',
-                    ),
-                    initialValue: configuration.blockingMode,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'When to block',
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: AppBlockingMode.focus,
-                        child: Text('Focus sessions'),
-                      ),
-                      DropdownMenuItem(
-                        value: AppBlockingMode.weekly,
-                        child: Text('Weekly schedule'),
-                      ),
-                      DropdownMenuItem(
-                        value: AppBlockingMode.always,
-                        child: Text('Always block'),
-                      ),
-                    ],
-                    onChanged: controlsEnabled && enabled
-                        ? (mode) async {
-                            if (mode == null) return;
-                            if (mode == AppBlockingMode.weekly) {
-                              await _editSchedule(configuration);
-                            } else {
-                              await _save(
-                                configuration.copyWith(blockingMode: mode),
-                              );
-                            }
-                            if (mounted) setState(() => _modeRevision++);
-                          }
-                        : null,
+                  OutlinedButton.icon(
+                    icon: const Icon(AppIcons.tuneOutlined),
+                    label: const Text('Rules for selected apps'),
+                    onPressed: controlsEnabled && enabled && configuration.selectedPackages.isNotEmpty
+                        ? () => _editSchedule(configuration) : null,
                   ),
-                  if (configuration.blockingMode == AppBlockingMode.weekly)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        (configuration.weekdays.toList()..sort())
-                            .map((day) => _weekdays[day - 1])
-                            .join(' · '),
-                      ),
-                      subtitle: Text(
-                        '${_clock(configuration.startMinute)} – ${_clock(configuration.endMinute)}${configuration.endMinute < configuration.startMinute ? ' (+1 day)' : ''} · Device time',
-                      ),
-                      trailing: const Icon(AppIcons.editOutlined),
-                      onTap: controlsEnabled && enabled
-                          ? () => _editSchedule(configuration)
-                          : null,
-                    ),
                   const SizedBox(height: AppSpacing.md),
                 ],
                 const Divider(height: 1),
@@ -534,6 +513,11 @@ class _FocusProtectionSettingsPageState
                           message: app.packageName,
                           child: Text(app.label),
                         ),
+                        subtitle: configuration.selectedPackages.contains(app.packageName)
+                            ? Text(_ruleSummary(configuration.ruleFor(app.packageName))) : null,
+                        secondary: configuration.selectedPackages.contains(app.packageName)
+                            ? IconButton(tooltip: 'Rules for ${app.label}', icon: const Icon(AppIcons.tuneOutlined),
+                                onPressed: controlsEnabled && enabled ? () => _editSchedule(configuration, package: app.packageName, label: app.label) : null) : null,
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
                   TextButton.icon(

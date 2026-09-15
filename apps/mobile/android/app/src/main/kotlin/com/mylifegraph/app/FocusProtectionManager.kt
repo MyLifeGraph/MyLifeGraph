@@ -41,7 +41,7 @@ class FocusProtectionManager(private val context: Context) {
         if (configuration.enabled && configuration.blockSelectedApps) {
             if (!accessibilityEnabled) warnings += "accessibility_disabled"
             if (!hasSelectableConfiguredApp) warnings += "no_apps_selected"
-            if (configuration.blockingSchedule.active(System.currentTimeMillis(), activeLease) &&
+            if (appBlockingActive() &&
                 accessibilityEnabled && hasSelectableConfiguredApp
             ) {
                 activeMechanisms += "app_blocking"
@@ -157,6 +157,10 @@ class FocusProtectionManager(private val context: Context) {
                     it
                 } ?: 1020,
             ),
+            appRules = (arguments["appRules"] as? Map<*, *> ?: emptyMap<Any, Any>()).entries.associate { (key, value) ->
+                require(key is String && key.isNotBlank() && value is Map<*, *>)
+                key to AppBlockingRule.fromMap(value)
+            }.filterKeys { it in selectedPackages && it !in essentialPackages() },
         )
         check(store.saveConfiguration(configuration)) {
             "Could not persist Focus protection configuration."
@@ -335,6 +339,10 @@ class FocusProtectionManager(private val context: Context) {
 
     fun shouldBlock(packageName: String?): Boolean {
         val configuration = store.readConfiguration()
+        val lease = activeLease()
+        val now = System.currentTimeMillis()
+        val rule = configuration.appRules[packageName]
+        if (rule != null && !rule.active(now, lease?.isActive(now) == true)) return false
         return FocusProtectionDecision.shouldBlockPackage(
             protectionEnabled = configuration.enabled,
             blockingEnabled = configuration.blockSelectedApps,
@@ -342,19 +350,22 @@ class FocusProtectionManager(private val context: Context) {
             selectedPackages = configuration.selectedPackages,
             essentialPackages = essentialPackages(),
             foregroundPackage = packageName,
-            lease = activeLease(),
-            nowEpochMs = System.currentTimeMillis(),
-            schedule = configuration.blockingSchedule,
+            lease = lease,
+            nowEpochMs = now,
+            schedule = if (rule != null) AppBlockingSchedule(mode = "always") else configuration.blockingSchedule,
         )
     }
 
-    fun blockingMode(): String = store.readConfiguration().blockingSchedule.mode
+    fun blockingMode(): String = store.readConfiguration().let { if (it.appRules.isEmpty()) it.blockingSchedule.mode else "rules" }
 
-    fun appBlockingActive(): Boolean {
+    fun appBlockingActive(packageName: String? = null): Boolean {
         val configuration = store.readConfiguration()
         val now = System.currentTimeMillis()
         return configuration.enabled && configuration.blockSelectedApps &&
-            configuration.blockingSchedule.active(now, store.readLease()?.isActive(now) == true)
+            configuration.selectedPackages.filter { packageName == null || it == packageName }.any { package ->
+                configuration.appRules[package]?.active(now, store.readLease()?.isActive(now) == true)
+                    ?: configuration.blockingSchedule.active(now, store.readLease()?.isActive(now) == true)
+            }
     }
 
     fun releaseAppBlocking() {
@@ -369,6 +380,7 @@ class FocusProtectionManager(private val context: Context) {
     fun blockingSummary(): String = when (blockingMode()) {
         "always" -> "Always blocked"
         "weekly" -> "Scheduled app block"
+        "rules" -> "App blocking active"
         else -> "Focus time remaining"
     }
 
@@ -498,6 +510,7 @@ class FocusProtectionManager(private val context: Context) {
         "weekdays" to blockingSchedule.weekdays.sorted(),
         "startMinute" to blockingSchedule.startMinute,
         "endMinute" to blockingSchedule.endMinute,
+        "appRules" to appRules.mapValues { it.value.toMap() },
     )
 
     private fun LocalFocusLease.toChannelMap(): Map<String, Any> = mapOf(

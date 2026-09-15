@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../quick_action/domain/habit_v1.dart';
@@ -135,29 +136,23 @@ class TodayCommandResult<T> {
   });
 
   const TodayCommandResult.ignored()
-      : this._(
-          accepted: false,
-          committed: false,
-          projectionCurrent: false,
-        );
+    : this._(accepted: false, committed: false, projectionCurrent: false);
 
   TodayCommandResult.failed(Object error)
-      : this._(
-          accepted: true,
-          committed: false,
-          projectionCurrent: false,
-          error: error,
-        );
+    : this._(
+        accepted: true,
+        committed: false,
+        projectionCurrent: false,
+        error: error,
+      );
 
-  TodayCommandResult.saved({
-    required bool projectionCurrent,
-    T? value,
-  }) : this._(
-          accepted: true,
-          committed: true,
-          projectionCurrent: projectionCurrent,
-          value: value,
-        );
+  TodayCommandResult.saved({required bool projectionCurrent, T? value})
+    : this._(
+        accepted: true,
+        committed: true,
+        projectionCurrent: projectionCurrent,
+        value: value,
+      );
 
   final bool accepted;
   final bool committed;
@@ -188,6 +183,30 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
   final TodayProjectionRefresh _refreshAfterTask;
   final TodayProjectionRefresh _refreshAfterHabit;
   final void Function() _onTodayReloaded;
+  bool _externalRefreshPending = false;
+
+  void externalProjectionChanged() {
+    if (!mounted) return;
+    if (state.displayedSnapshot == null &&
+        state.updatingTaskIds.isEmpty && state.updatingHabitIds.isEmpty &&
+        state.projectionStatus != TodayProjectionStatus.refreshingAfterMutation) {
+      return;
+    }
+    _externalRefreshPending = true;
+    _drainExternalRefresh();
+  }
+
+  void _drainExternalRefresh() {
+    if (!mounted ||
+        !_externalRefreshPending ||
+        state.updatingTaskIds.isNotEmpty ||
+        state.updatingHabitIds.isNotEmpty ||
+        state.projectionStatus == TodayProjectionStatus.refreshingAfterMutation) {
+      return;
+    }
+    _externalRefreshPending = false;
+    unawaited(reloadToday());
+  }
 
   Future<TodayCommandResult<void>> setHabitOutcome({
     required String habitId,
@@ -214,10 +233,8 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
       habitId: habitId,
       targetDate: targetDate,
       optimisticOutcome: null,
-      mutation: (commands) => commands.undoOutcome(
-        habitId: habitId,
-        targetDate: targetDate,
-      ),
+      mutation: (commands) =>
+          commands.undoOutcome(habitId: habitId, targetDate: targetDate),
     );
   }
 
@@ -229,10 +246,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
     return _runTask(
       taskId: taskId,
       targetDate: targetDate,
-      mutation: (commands) => commands.createTask(
-        taskId: taskId,
-        draft: draft,
-      ),
+      mutation: (commands) => commands.createTask(taskId: taskId, draft: draft),
     );
   }
 
@@ -244,10 +258,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
     return _runTask(
       taskId: taskId,
       targetDate: targetDate,
-      mutation: (commands) => commands.editTask(
-        taskId: taskId,
-        draft: draft,
-      ),
+      mutation: (commands) => commands.editTask(taskId: taskId, draft: draft),
     );
   }
 
@@ -284,10 +295,8 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
       taskId: taskId,
       targetDate: targetDate,
       optimisticStatus: ExecutableTaskStatus.todo.code,
-      mutation: (commands) => commands.postponeTask(
-        taskId: taskId,
-        newDeadline: newDeadline,
-      ),
+      mutation: (commands) =>
+          commands.postponeTask(taskId: taskId, newDeadline: newDeadline),
     );
   }
 
@@ -342,15 +351,12 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
     try {
       final commands = _habitCommands;
       if (commands == null) {
-        throw const TodayHabitCommandFailure(
-          'Synced habits are unavailable.',
-        );
+        throw const TodayHabitCommandFailure('Synced habits are unavailable.');
       }
       await mutation(commands);
       if (mounted) {
-        final overrides = Map<String, String?>.from(
-          state.habitOutcomeOverrides,
-        )..[habitId] = optimisticOutcome;
+        final overrides = Map<String, String?>.from(state.habitOutcomeOverrides)
+          ..[habitId] = optimisticOutcome;
         state = state.copyWith(
           projectionStatus: TodayProjectionStatus.refreshingAfterMutation,
           habitOutcomeOverrides: overrides,
@@ -360,9 +366,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         targetDate: targetDate,
         refreshProjection: _refreshAfterHabit,
       );
-      return TodayCommandResult.saved(
-        projectionCurrent: projectionCurrent,
-      );
+      return TodayCommandResult.saved(projectionCurrent: projectionCurrent);
     } catch (error) {
       return TodayCommandResult.failed(error);
     } finally {
@@ -431,6 +435,9 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
   }
 
   Future<bool> _loadFreshProjection() async {
+    // This read includes all invalidations already observed. Only an event
+    // arriving during the read needs another load, not our own write's signal.
+    _externalRefreshPending = false;
     try {
       final fresh = await _dashboardRepository.getSnapshot();
       if (fresh.origin != DashboardOrigin.account || fresh.localDate == null) {
@@ -448,6 +455,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         habitOutcomeOverrides: const {},
       );
       _onTodayReloaded();
+      _drainExternalRefresh();
       return true;
     } catch (_) {
       if (mounted) {
@@ -467,6 +475,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
       values.remove(taskId);
     }
     state = state.copyWith(updatingTaskIds: values);
+    if (!updating) _drainExternalRefresh();
   }
 
   void _setHabitUpdating(String habitId, bool updating) {
@@ -477,6 +486,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
       values.remove(habitId);
     }
     state = state.copyWith(updatingHabitIds: values);
+    if (!updating) _drainExternalRefresh();
   }
 
   void _applyLocalTaskStatus(String taskId, String status) {

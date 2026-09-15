@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/features/coach/domain/coach_dictation_request.dart';
 import 'package:my_life_graph/features/coach/presentation/providers/coach_providers.dart';
 import 'package:my_life_graph/features/coach/presentation/widgets/coach_dictation_button.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
     'dictation consent resets on logout and account changes without a route listener',
     () async {
@@ -47,6 +49,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           coachActiveProfileIdProvider.overrideWithValue('profile-a'),
+          coachDictationRequestFactoryProvider.overrideWithValue(() => _PendingDictation()),
         ],
       );
       addTearDown(container.dispose);
@@ -301,6 +304,7 @@ void main() {
         ProviderScope(
           overrides: [
             coachActiveProfileIdProvider.overrideWithValue('profile-a'),
+            coachDictationRequestFactoryProvider.overrideWithValue(() => _PendingDictation()),
           ],
           child: MaterialApp(
             home: Scaffold(

@@ -7,6 +7,28 @@ const focusProtectionConsentVersion = 1;
 
 enum AppBlockingMode { focus, weekly, always }
 
+@immutable
+class AppBlockingRule {
+  AppBlockingRule({this.focus = true, this.weekly = false, this.always = false,
+    Iterable<int> weekdays = const [1, 2, 3, 4, 5], this.startMinute = 1320,
+    this.endMinute = 420, this.untilEpochMs = 0}) : weekdays = Set.unmodifiable(weekdays) {
+    if (this.weekdays.isEmpty || this.weekdays.any((d) => d < 1 || d > 7) ||
+        startMinute < 0 || startMinute > 1439 || endMinute < 0 || endMinute > 1439 ||
+        startMinute == endMinute || untilEpochMs < 0) {
+      throw const FormatException('Invalid blocking rule.');
+    }
+  }
+  final bool focus, weekly, always;
+  final Set<int> weekdays;
+  final int startMinute, endMinute, untilEpochMs;
+  factory AppBlockingRule.fromMap(Map<Object?, Object?> map) => AppBlockingRule(
+    focus: map['focus'] as bool, weekly: map['weekly'] as bool, always: map['always'] as bool,
+    weekdays: (map['weekdays'] as List).cast<int>(), startMinute: map['startMinute'] as int,
+    endMinute: map['endMinute'] as int, untilEpochMs: map['untilEpochMs'] as int);
+  Map<String, Object> toMap() => {'focus': focus, 'weekly': weekly, 'always': always,
+    'weekdays': weekdays.toList()..sort(), 'startMinute': startMinute, 'endMinute': endMinute, 'untilEpochMs': untilEpochMs};
+}
+
 class InstalledLaunchableApp {
   const InstalledLaunchableApp({
     required this.packageName,
@@ -44,11 +66,13 @@ class FocusProtectionConfiguration {
     Iterable<int> weekdays = const [1, 2, 3, 4, 5],
     this.startMinute = 9 * 60,
     this.endMinute = 17 * 60,
+    Map<String, AppBlockingRule> appRules = const {},
   }) : selectedPackages = Set.unmodifiable(
          selectedPackages
              .map((value) => value.trim())
              .where((value) => value.isNotEmpty),
        ),
+       appRules = Map.unmodifiable(appRules),
        weekdays = Set.unmodifiable(weekdays),
        consentVersions = Map.unmodifiable(consentVersions) {
     if (this.weekdays.isEmpty ||
@@ -101,6 +125,7 @@ class FocusProtectionConfiguration {
           (map['weekdays'] as List?)?.cast<int>() ?? const [1, 2, 3, 4, 5],
       startMinute: map['startMinute'] as int? ?? 9 * 60,
       endMinute: map['endMinute'] as int? ?? 17 * 60,
+      appRules: (map['appRules'] as Map? ?? const {}).map((key, value) => MapEntry(key as String, AppBlockingRule.fromMap(value as Map))),
     );
   }
 
@@ -120,6 +145,11 @@ class FocusProtectionConfiguration {
   final Set<int> weekdays;
   final int startMinute;
   final int endMinute;
+  final Map<String, AppBlockingRule> appRules;
+
+  AppBlockingRule ruleFor(String package) => appRules[package] ?? AppBlockingRule(
+    focus: blockingMode == AppBlockingMode.focus, weekly: blockingMode == AppBlockingMode.weekly,
+    always: blockingMode == AppBlockingMode.always, weekdays: weekdays, startMinute: startMinute, endMinute: endMinute);
 
   bool hasConsent(String kind) =>
       (consentVersions[kind] ?? 0) >= focusProtectionConsentVersion;
@@ -134,6 +164,7 @@ class FocusProtectionConfiguration {
     Iterable<int>? weekdays,
     int? startMinute,
     int? endMinute,
+    Map<String, AppBlockingRule>? appRules,
   }) {
     return FocusProtectionConfiguration(
       enabled: enabled ?? this.enabled,
@@ -145,6 +176,7 @@ class FocusProtectionConfiguration {
       weekdays: weekdays ?? this.weekdays,
       startMinute: startMinute ?? this.startMinute,
       endMinute: endMinute ?? this.endMinute,
+      appRules: appRules ?? this.appRules,
     );
   }
 
@@ -158,6 +190,7 @@ class FocusProtectionConfiguration {
     'weekdays': weekdays.toList()..sort(),
     'startMinute': startMinute,
     'endMinute': endMinute,
+    'appRules': appRules.map((key, value) => MapEntry(key, value.toMap())),
   };
 }
 

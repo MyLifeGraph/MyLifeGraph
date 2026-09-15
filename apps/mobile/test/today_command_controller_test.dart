@@ -12,6 +12,24 @@ void main() {
   const taskId = '10000000-0000-4000-8000-000000000001';
   final targetDate = DateTime(2026, 7, 21);
 
+  test('external Planner changes refresh a retained Today command snapshot', () async {
+    final first = _snapshot(targetDate);
+    final second = _snapshot(targetDate.add(const Duration(days: 1)));
+    final repository = _SequenceDashboardRepository([first, second]);
+    final controller = TodayCommandController(
+      taskCommands: _FakeTaskCommands(), habitCommands: _FakeHabitCommands(),
+      dashboardRepository: repository, refreshAfterTask: (_) async {},
+      refreshAfterHabit: (_) async {}, onTodayReloaded: () {},
+    );
+    addTearDown(controller.dispose);
+    await controller.completeTask(taskId: taskId, targetDate: targetDate);
+    expect(controller.state.displayedSnapshot, same(first));
+    controller.externalProjectionChanged();
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.state.displayedSnapshot, same(second));
+    expect(repository.calls, 2);
+  });
+
   test('durable task write becomes stale and reload never repeats the command',
       () async {
     final tasks = _FakeTaskCommands();

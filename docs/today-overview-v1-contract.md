@@ -1,5 +1,13 @@
 # Today Overview V1 Contract
 
+All tasks has compact `Dated` / `Undated` filters, both selected initially.
+They filter the existing Task deadline field, not reservation existence;
+the due-today list and durable Task states are unchanged. Completed/cancelled
+expansions use the same filter without removing restore or Focus actions.
+External Planner invalidations also refresh a retained Today command snapshot;
+changes arriving during a Today write/reload are coalesced after that operation.
+A failed reload remains an honest stale/error state, never demo data.
+
 Status: implemented through the additive Today Overview V2 Planner projection,
 the simplified supporting dashboard, and Daily Capture V5/V4 compatibility as
 of 2026-08-05. The V1 endpoint remains available and unchanged.

@@ -48,6 +48,24 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Planner / local speech / combined blocking candidate — 2026-09-15
+
+- Task base: `3b19ec1b9c75486f2c2b506fbf5a07d6d93fd390`, working branch
+  `fix/ultra-quick-check-in-guidance`; no main update or production deployment.
+- Local focused Flutter run: 121 tests passed across Planner page, Today page
+  and command refresh, dictation, speech settings and Focus protection.
+- Dart analysis of `lib` passed. Documentation consistency and visual contract
+  checks passed. Existing UI tests were updated to navigate the new Planner
+  views and combined rule editor; command, stale/retry and permission assertions
+  remain in place.
+- Full source wrapper cannot complete on Windows Git Bash (`setsid` unavailable
+  in its existing local-stack tests). Linux CI remains the canonical source,
+  Android JVM/lint and web build gate for this candidate.
+- Native model catalog/source selection, cancellation and persistence are tested
+  without device inference. Physical Android download/inference, memory usage,
+  recognition quality and live accessibility behavior still require device
+  acceptance; no on-device performance or server rollout is claimed here.
+
 ### App-blocking modes release candidate - 2026-09-15
 
 - Application candidate `e293e176431727a2b1397d4449db0251c4c9309c` on

@@ -13,35 +13,46 @@ import 'projection_refresh_providers.dart';
 
 export '../features/dashboard/application/today_command_controller.dart';
 
-final todayCommandControllerProvider = StateNotifierProvider.autoDispose<
-    TodayCommandController, TodayCommandState>(
-  (ref) {
-    final client = ref.watch(supabaseClientProvider);
-    final taskCommands = client == null
-        ? null
-        : _SupabaseTodayTaskCommands(TaskSupabaseDataSource(client));
-    final habitCommands = client == null
-        ? null
-        : _SupabaseTodayHabitCommands(
-            HabitCompletionSupabaseDataSource(
-              client,
-              todayProvider: ref.watch(profileLocalDateSourceProvider).today,
-            ),
-          );
-    final projectionRefreshCoordinator =
-        ref.watch(projectionRefreshCoordinatorProvider);
-    return TodayCommandController(
-      taskCommands: taskCommands,
-      habitCommands: habitCommands,
-      dashboardRepository: ref.watch(dashboardRepositoryProvider),
-      refreshAfterTask: (targetDate) => projectionRefreshCoordinator
-          .todayTaskChanged(targetDate: localDateKey(targetDate)),
-      refreshAfterHabit: (targetDate) => projectionRefreshCoordinator
-          .todayHabitOutcomeChanged(targetDate: habitDateKey(targetDate)),
-      onTodayReloaded: () {},
-    );
-  },
-);
+final taskCommandPortProvider = Provider<TodayTaskCommandPort?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return client == null
+      ? null
+      : _SupabaseTodayTaskCommands(TaskSupabaseDataSource(client));
+});
+
+final todayCommandControllerProvider =
+    StateNotifierProvider.autoDispose<
+      TodayCommandController,
+      TodayCommandState
+    >((ref) {
+      final client = ref.watch(supabaseClientProvider);
+      final taskCommands = ref.watch(taskCommandPortProvider);
+      final habitCommands = client == null
+          ? null
+          : _SupabaseTodayHabitCommands(
+              HabitCompletionSupabaseDataSource(
+                client,
+                todayProvider: ref.watch(profileLocalDateSourceProvider).today,
+              ),
+            );
+      final projectionRefreshCoordinator = ref.watch(
+        projectionRefreshCoordinatorProvider,
+      );
+      final controller = TodayCommandController(
+        taskCommands: taskCommands,
+        habitCommands: habitCommands,
+        dashboardRepository: ref.watch(dashboardRepositoryProvider),
+        refreshAfterTask: (targetDate) => projectionRefreshCoordinator
+            .todayTaskChanged(targetDate: localDateKey(targetDate)),
+        refreshAfterHabit: (targetDate) => projectionRefreshCoordinator
+            .todayHabitOutcomeChanged(targetDate: habitDateKey(targetDate)),
+        onTodayReloaded: () {},
+      );
+      ref.listen(todayExternalRefreshRevisionProvider, (_, __) {
+        controller.externalProjectionChanged();
+      });
+      return controller;
+    });
 
 class _SupabaseTodayTaskCommands implements TodayTaskCommandPort {
   const _SupabaseTodayTaskCommands(this._source);
@@ -112,10 +123,7 @@ class _SupabaseTodayHabitCommands implements TodayHabitCommandPort {
     required DateTime targetDate,
   }) async {
     try {
-      await _source.undoTodayOutcome(
-        habitId: habitId,
-        targetDate: targetDate,
-      );
+      await _source.undoTodayOutcome(habitId: habitId, targetDate: targetDate);
     } on HabitCommandException catch (error) {
       throw TodayHabitCommandFailure(error.message);
     }

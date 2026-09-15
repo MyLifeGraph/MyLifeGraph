@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/today_command_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -94,14 +95,16 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
   final Map<String, PlannerHabitDraft> _retainedHabitDraftsByTarget = {};
   final Map<String, PlannerHabitDraft> _retainedSetupHabitDrafts = {};
   final Map<String, _RetainedTaskReplacementDraft>
-      _retainedTaskReplacementDrafts = {};
+  _retainedTaskReplacementDrafts = {};
   final Map<String, _RetainedHabitReplacementDraft>
-      _retainedHabitReplacementDrafts = {};
+  _retainedHabitReplacementDrafts = {};
   final Map<String, _ProposalAttemptBinding> _proposalAttemptsByRequest = {};
   final Map<String, _ProposalPreviewBinding> _proposalBindingsByPreview = {};
   PlannerCommitmentDraft? _retainedCommitmentDraft;
   bool _continuedWithoutAvailability = false;
   final _sevenDayKey = GlobalKey();
+  bool _showPlanning = false;
+  final Set<String> _updatingTaskIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -114,9 +117,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         backFallback: AppRoutes.dashboard,
         showBackForFallback: false,
         actions: const [AppHeaderActions()],
-        children: const [
-          PlannerLockedCard(),
-        ],
+        children: const [PlannerLockedCard()],
       );
     }
 
@@ -270,9 +271,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     if (overview == null) {
       children.add(
         state.operation == PlannerOperation.loading
-            ? const AppCard(
-                child: Center(child: CircularProgressIndicator()),
-              )
+            ? const AppCard(child: Center(child: CircularProgressIndicator()))
             : PlannerLoadError(onRetry: controller.load),
       );
       return AppPage(
@@ -302,9 +301,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         items: overview.needsAttention,
         examPlanHealth: examPlanHealth,
         onOpen: (item) => _openAttention(item, overview),
-        onOpenExamHealth: (planId) => context.push(
-          '${AppRoutes.preparationPlans}?plan_id=$planId',
-        ),
+        onOpenExamHealth: (planId) =>
+            context.push('${AppRoutes.preparationPlans}?plan_id=$planId'),
         onRetryExamHealth: () => ref.invalidate(examPlanHealthProvider),
         enabled: state.canMutate,
       ),
@@ -354,25 +352,42 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         items: overview.unscheduledTasks,
         onAdd: _createTask,
         onOpen: (item) => _openUnscheduledTask(item, overview),
+        onComplete: (item) => _finishUnscheduledTask(item, remove: false),
+        onRemove: (item) => _finishUnscheduledTask(item, remove: true),
+        updatingIds: _updatingTaskIds,
         enabled: state.canMutate,
       ),
     );
     children.add(PlannerHistorySection(items: overview.history));
     final agenda = children.whereType<PlannerSevenDaySection>().single;
-    bool isSummary(Widget child) => child is PlannerNeedsAttentionSection ||
-        child is PlannerPreparationSection || child is PlannerHabitsSection ||
-        child is PlannerUnscheduledTasksSection || child is PlannerHistorySection;
+    bool isSummary(Widget child) =>
+        child is PlannerNeedsAttentionSection ||
+        child is PlannerPreparationSection ||
+        child is PlannerHabitsSection ||
+        child is PlannerUnscheduledTasksSection ||
+        child is PlannerHistorySection ||
+        child is PlannerPendingPreviewsSection ||
+        child is PlannerExamWeekOutlookSection;
+    final visible = children
+        .where(
+          (child) => child == agenda
+              ? !_showPlanning
+              : !isSummary(child) || _showPlanning,
+        )
+        .toList();
     Widget stack(List<Widget> items) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [for (var i = 0; i < items.length; i++) ...[
-        if (i > 0) const SizedBox(height: AppSpacing.md),
-        items[i],
-      ]],
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.md),
+          items[i],
+        ],
+      ],
     );
     return AppPage(
       title: 'Planner',
       maxWidth: 1440,
-        compactHeader: true,
+      compactHeader: true,
       subtitle: 'Preview first. Times are reserved only after confirmation.',
       backFallback: AppRoutes.dashboard,
       showBackForFallback: false,
@@ -381,32 +396,53 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
           pageActions: [
             IconButton(
               tooltip: 'Reload Planner',
-              onPressed:
-                  state.isBusy ? null : () => _reloadPlannerFromHeader(state),
+              onPressed: state.isBusy
+                  ? null
+                  : () => _reloadPlannerFromHeader(state),
               icon: const Icon(AppIcons.refresh),
             ),
           ],
         ),
       ],
-      children: desktop ? [
-        LayoutBuilder(builder: (context, constraints) => Row(
-          key: const ValueKey('planner-desktop-columns'),
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: stack([
-              agenda,
-              // Keep preferences, warnings and retries discoverable.
-              ...children.where((child) => !isSummary(child) && child != agenda),
-            ])),
-            const SizedBox(width: AppSpacing.lg),
-            SizedBox(
-              width: (constraints.maxWidth * .29).clamp(280.0, 360.0),
-              child: stack(children.where(isSummary).toList()),
+      children: [
+        SegmentedButton<bool>(
+          segments: [
+            const ButtonSegment(
+              value: false,
+              icon: Icon(AppIcons.calendarViewWeekOutlined),
+              label: Text('This week'),
+            ),
+            ButtonSegment(
+              value: true,
+              icon: Badge(
+                isLabelVisible:
+                    overview.needsAttention.isNotEmpty ||
+                    pendingPlans.isNotEmpty,
+                child: const Icon(AppIcons.tuneOutlined),
+              ),
+              label: const Text('Planning'),
             ),
           ],
-        )),
-      ] : [
-        ...children,
+          selected: {_showPlanning},
+          onSelectionChanged: (values) =>
+              setState(() => _showPlanning = values.single),
+        ),
+        if (desktop && _showPlanning)
+          Row(
+            key: const ValueKey('planner-desktop-columns'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: stack(
+                  visible.where((child) => !isSummary(child)).toList(),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(child: stack(visible.where(isSummary).toList())),
+            ],
+          )
+        else
+          ...visible,
         if (MediaQuery.sizeOf(context).width < 1100 &&
             MediaQuery.textScalerOf(context).scale(16) >= 24)
           SizedBox(height: MediaQuery.textScalerOf(context).scale(72)),
@@ -426,6 +462,76 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       return;
     }
     await controller.load();
+  }
+
+  Future<void> _finishUnscheduledTask(
+    PlannerUnscheduledTask task, {
+    required bool remove,
+  }) async {
+    final state = ref.read(plannerControllerProvider);
+    final commands = ref.read(taskCommandPortProvider);
+    if (!state.canMutate ||
+        state.overview == null ||
+        commands == null ||
+        _updatingTaskIds.contains(task.id)) {
+      return;
+    }
+    if (remove) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Remove task?'),
+          content: Text(task.title),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true || !mounted) return;
+    }
+    final refresh = ref.read(projectionRefreshCoordinatorProvider);
+    final controller = ref.read(plannerControllerProvider.notifier);
+    setState(() => _updatingTaskIds.add(task.id));
+    bool saved = false;
+    try {
+      if (remove) {
+        await commands.cancelTask(task.id);
+      } else {
+        await commands.completeTask(task.id);
+      }
+      saved = true;
+      try {
+        await refresh.plannerChanged(
+          targetDate: localDateKey(state.overview!.localDate),
+        );
+      } finally {
+        if (mounted) await controller.load();
+      }
+      if (mounted) {
+        _showMessage(
+          remove
+              ? 'Task removed. Restore it in Today → All tasks.'
+              : 'Task completed.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          saved
+              ? 'Task saved. Reload Planner to refresh.'
+              : 'Could not update task. Reload and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingTaskIds.remove(task.id));
+    }
   }
 
   Future<void> _discardPendingAndReload() async {
@@ -662,10 +768,11 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     }
     final setupTargetId =
         attempt.retainedOwner == _RetainedDraftOwner.setupTarget
-            ? attempt.retainedKey
-            : null;
-    _proposalBindingsByPreview[_previewDraftKey(plan)] =
-        _ProposalPreviewBinding(
+        ? attempt.retainedKey
+        : null;
+    _proposalBindingsByPreview[_previewDraftKey(
+      plan,
+    )] = _ProposalPreviewBinding(
       sourceReplacementKey: attempt.sourceReplacementKey,
       setupTargetId: setupTargetId,
       taskDraft: attempt.taskDraft,
@@ -720,9 +827,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
 
   void _handleProposalExactRetryFailure(PlannerExactRetryResult result) {
     if (result.disposition == PlannerExactRetryDisposition.ambiguous) return;
-    final attempt = _proposalAttemptsByRequest.remove(
-      result.pending.requestId,
-    );
+    final attempt = _proposalAttemptsByRequest.remove(result.pending.requestId);
     if (attempt == null ||
         result.disposition != PlannerExactRetryDisposition.conflict) {
       return;
@@ -1035,14 +1140,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       );
       final draft = await showDialog<PlannerTaskDraft>(
         context: context,
-        builder: (_) => PlannerTaskDialog(
-          initial: initial,
-          timezone: overview.timezone,
-        ),
+        builder: (_) =>
+            PlannerTaskDialog(initial: initial, timezone: overview.timezone),
       );
       if (!mounted || draft == null) return false;
-      _retainedTaskReplacementDrafts[_previewDraftKey(stalePlan)] =
-          _RetainedTaskReplacementDraft(
+      _retainedTaskReplacementDrafts[_previewDraftKey(
+        stalePlan,
+      )] = _RetainedTaskReplacementDraft(
         sourceTargetId: stalePlan.targetId,
         draft: draft,
       );
@@ -1097,8 +1201,9 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         ),
       );
       if (!mounted || draft == null) return false;
-      _retainedHabitReplacementDrafts[_previewDraftKey(stalePlan)] =
-          _RetainedHabitReplacementDraft(
+      _retainedHabitReplacementDrafts[_previewDraftKey(
+        stalePlan,
+      )] = _RetainedHabitReplacementDraft(
         sourceTargetId: stalePlan.targetId,
         draft: draft,
       );

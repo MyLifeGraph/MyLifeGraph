@@ -1,5 +1,13 @@
 # Architecture
 
+Presentation additions retain existing authorities: Planner Task completion
+and cancellation reuse the owner-scoped Task command port; projection
+invalidation refreshes retained Today command snapshots after in-flight writes.
+Android per-app blocking rules and downloaded speech models remain device-local.
+Local speech runs in a worker isolate without API credentials or network upload;
+the explicit Server source keeps the existing authenticated speech sidecar.
+No Supabase schema, FastAPI route or scheduling authority changes are involved.
+
 Optional [Android push V1](notification-delivery-v1-contract.md) leaves Supabase
 as Auth/data authority. The existing API process evaluates deterministic bounded
 rules and reserves sends through private service-only SQL. FCM delivers generic

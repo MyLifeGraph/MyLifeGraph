@@ -10,6 +10,22 @@ import java.util.Calendar
 import java.util.TimeZone
 
 class FocusProtectionCoreTest {
+    @Test
+    fun combinedRulesUseOrAndRoundtripWithoutChangingOtherApps() {
+        val zone = TimeZone.getTimeZone("UTC")
+        val night = AppBlockingRule(true, true, false, AppBlockingSchedule("weekly", setOf(1), 1320, 420))
+        val onlyTimer = AppBlockingRule(false, false, false, AppBlockingSchedule(), instant(15, 13, 0))
+        assertTrue(night.active(instant(14, 23, 0), false, zone))
+        assertTrue(night.active(instant(15, 6, 59), false, zone))
+        assertFalse(night.active(instant(15, 7, 0), false, zone))
+        assertTrue(night.active(instant(15, 12, 0), true, zone))
+        assertFalse(night.active(instant(15, 12, 0), false, zone))
+        assertTrue(onlyTimer.active(instant(15, 12, 59), false, zone))
+        assertFalse(onlyTimer.active(instant(15, 13, 0), true, zone))
+        assertTrue(night.copy(always = true).active(instant(15, 12, 0), false, zone))
+        assertEquals(night, AppBlockingRule.fromMap(night.toMap()))
+    }
+
     private fun instant(day: Int, hour: Int, minute: Int, zone: String = "UTC"): Long =
         Calendar.getInstance(TimeZone.getTimeZone(zone)).apply {
             clear()

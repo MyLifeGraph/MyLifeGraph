@@ -8,6 +8,8 @@ import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/composition/coach_credentials_providers.dart';
 import 'package:my_life_graph/composition/coach_response_cancellation.dart';
 import '../../application/coach_controller.dart';
+import '../../application/speech_settings.dart';
+import '../../domain/speech_models.dart';
 import '../../application/coach_turn_notice.dart';
 import '../../data/coach_api_data_source.dart';
 import '../../data/coach_dictation_request_impl.dart';
@@ -36,6 +38,11 @@ final coachAccessTokenProvider = Provider<CoachAccessTokenProvider>(
 final coachDictationRequestFactoryProvider =
     Provider<CoachDictationRequest Function()>((ref) {
   return () {
+    final speech = ref.read(speechSettingsProvider);
+    if (speech.loading || speech.initializationFailed) throw StateError('Speech settings unavailable');
+    if (speech.source != 'server') {
+      return OnDeviceDictationRequest(speech.store, speechModel(speech.source));
+    }
     const override = String.fromEnvironment('SPEECH_SERVICE_BASE_URL');
     return CoachDictationRequestImpl(
       baseUrl: override.isEmpty
@@ -141,4 +148,9 @@ final coachControllerProvider =
     profileId: profileId,
     turnNoticeController: ref.read(coachTurnNoticeProvider.notifier),
   );
+});
+
+final coachOnDeviceDictationConsentProvider = StateProvider<bool>((ref) {
+  ref.watch(coachActiveProfileIdProvider);
+  return false;
 });

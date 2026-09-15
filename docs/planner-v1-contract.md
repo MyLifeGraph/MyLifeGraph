@@ -1,5 +1,20 @@
 # Planner V1 Mutation And Overview V2 Contract
 
+## Compact view and Task controls
+
+The presentation toggle separates `This week` (the existing Days/List calendar)
+from `Planning` (attention, outlook, preparation, pending previews, Habits,
+unscheduled Tasks and history). Add new and mutation errors remain available
+in both. Existing calendar day/view retention and every command are preserved.
+The Planning badge indicates attention or pending previews; switching views
+does not mutate any plan, Task or schedule.
+
+An unscheduled Task's leading circle completes it through the existing
+owner-scoped Task command. Its menu retains Plan task and adds Remove task;
+long press opens the same removal confirmation. Removal cancels the Task,
+not a hard delete, and it can be restored in Today → All tasks. Pending Tasks
+disable duplicate row actions. Saved changes refresh both Planner and Today.
+
 Status: implemented, including `planner-overview-v2`, the unchanged
 `planner-v1` mutations, Study Setup, shell-navigation, read-only
 Exam-Week Outlook, optional Personal Learning timing, and focused Replanning
@@ -43,13 +58,12 @@ proposal/confirmation APIs.
 
 Planner renders:
 
-The calendar is the first content section at every width. At normal desktop
-widths (1280px and above), the calendar, creation and preferences occupy the
-main column; attention/preparation/habits/unscheduled/history start alongside
-the calendar in the compact right column. `Add new` stays below the calendar,
-not in the page header, with the same five creation actions. Warnings, retries and
-pending previews remain visible. Narrower/tablet and enlarged-text layouts
-stack the same sections without changing their source or callbacks.
+The view toggle comes first at every width. In `This week`, the calendar leads
+and `Add new` follows with the same five creation actions. In `Planning`, normal
+desktop widths (1280px and above) place creation and preferences beside compact
+attention/preparation/habits/unscheduled/history sections. Narrower/tablet and
+enlarged-text layouts stack that view's sections. Warnings and retries stay
+visible; pending previews remain available in Planning with a toggle badge.
 The mobile `Add new` sheet scrolls when height or enlarged text would otherwise
 clip its five actions; their order, labels, and callbacks remain unchanged.
 The Fixed commitment dialog includes its title in constrained-height scrolling;

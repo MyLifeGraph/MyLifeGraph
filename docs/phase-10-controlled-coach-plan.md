@@ -710,6 +710,28 @@ an ambiguous API/executor crash and always continues to consume global budget.
 
 ## Flutter Contract
 
+Settings → Speech to text and the discreet composer source icon share one
+device-persisted selection: Server (default), or a downloaded on-device model.
+On-device inference is supported in the 64-bit Android app, not Flutter web.
+The fixed multilingual catalog contains Whisper Tiny, Whisper Base and
+Parakeet TDT 0.6B V3, INT8 ONNX via pinned `sherpa_onnx` 1.13.8.
+Model files download only on explicit request from fixed Hugging Face revisions;
+each file is size-bounded and SHA256-verified before activation. Model weights
+are private app files, not bundled in the APK. Downloads can be cancelled and
+unused models removed. Parakeet's approximately 670 MB download needs more
+memory; installation alone does not prove acceptable latency on a given phone.
+
+The selected source is captured before recording. Server and on-device audio
+disclosures have separate memory-only acknowledgements for the signed-in
+session. Local inference runs outside the UI isolate, accepts the same bounded
+PCM, and sends neither bearer token nor audio to a server. Recognized text is
+shared only through the existing deliberate submission flow. Missing local
+files, errors and cancellation never silently fall back to Server. Removing
+the active model requires explicitly choosing another source first. Cancelling
+discards a late native result; an already-running native decode finishes and
+frees its model before another decode is admitted. No background recording,
+Coach-provider change, account-schema change or server deployment is added.
+
 Optional [dictation](../services/speech_service/README.md) adds a microphone
 immediately before Send. Recording requires an explicit audio-data notice and
 microphone permission, is capped at 30 seconds, and inserts recognized text into
@@ -718,7 +740,7 @@ rejected without truncation.
 Android declares audio and the recorder service's optional notification
 capability. The latter declaration does not request/grant permission or enable
 OS notification delivery; the existing foreground-only recording flow remains.
-The audio-data notice is acknowledged once per signed-in app session, in memory
+The source-specific audio-data notice is acknowledged once per signed-in app session, in memory
 only; route revisits retain it, while sign-out/profile change or a full app
 reload resets it. Declining never records consent. OS/browser microphone
 permission remains independent. A seconds-remaining label and PCM-level bars

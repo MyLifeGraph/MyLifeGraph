@@ -1489,42 +1489,85 @@ class PlannerUnscheduledTasksSection extends StatelessWidget {
     required this.onOpen,
     this.enabled = true,
     this.onAdd,
+    this.onComplete,
+    this.onRemove,
+    this.updatingIds = const {},
   });
 
   final List<PlannerUnscheduledTask> items;
   final ValueChanged<PlannerUnscheduledTask> onOpen;
   final bool enabled;
   final VoidCallback? onAdd;
+  final ValueChanged<PlannerUnscheduledTask>? onComplete;
+  final ValueChanged<PlannerUnscheduledTask>? onRemove;
+  final Set<String> updatingIds;
 
   @override
   Widget build(BuildContext context) => AppCard(
-        key: const ValueKey('planner-unscheduled-tasks'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _PlannerSectionHeading(title: 'Unscheduled Tasks',
-              icon: AppIcons.taskOutlined, color: context.visualTokens.brand,
-              count: items.length,
-              action: onAdd == null ? null : IconButton(
-                tooltip: 'Add task', onPressed: enabled ? onAdd : null,
-                icon: const Icon(AppIcons.add),
-              )),
-            const SizedBox(height: AppSpacing.sm),
-            if (items.isEmpty)
-              const Text('No open Tasks are waiting for a plan.')
-            else
-              for (final item in items)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(AppIcons.taskOutlined),
-                  title: Text(item.title),
-                  subtitle: Text(_reason(item.reason)),
-                  trailing: const Icon(AppIcons.chevronRight),
-                  onTap: enabled ? () => onOpen(item) : null,
+    key: const ValueKey('planner-unscheduled-tasks'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PlannerSectionHeading(
+          title: 'Unscheduled Tasks',
+          icon: AppIcons.taskOutlined,
+          color: context.visualTokens.brand,
+          count: items.length,
+          action: onAdd == null
+              ? null
+              : IconButton(
+                  tooltip: 'Add task',
+                  onPressed: enabled ? onAdd : null,
+                  icon: const Icon(AppIcons.add),
                 ),
-          ],
         ),
-      );
+        const SizedBox(height: AppSpacing.sm),
+        if (items.isEmpty)
+          const Text('No open Tasks are waiting for a plan.')
+        else
+          for (final item in items)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: updatingIds.contains(item.id)
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      tooltip: 'Complete task',
+                      icon: const Icon(AppIcons.radioButtonUnchecked),
+                      onPressed: enabled && onComplete != null
+                          ? () => onComplete!(item)
+                          : null,
+                    ),
+              title: Text(item.title),
+              subtitle: Text(_reason(item.reason)),
+              trailing: PopupMenuButton<String>(
+                tooltip: 'Task actions',
+                enabled: enabled && !updatingIds.contains(item.id),
+                onSelected: (value) =>
+                    value == 'remove' ? onRemove?.call(item) : onOpen(item),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'plan', child: Text('Plan task')),
+                  if (onRemove != null)
+                    const PopupMenuItem(
+                      value: 'remove',
+                      child: Text('Remove task'),
+                    ),
+                ],
+              ),
+              onTap: enabled && !updatingIds.contains(item.id)
+                  ? () => onOpen(item)
+                  : null,
+              onLongPress:
+                  enabled && !updatingIds.contains(item.id) && onRemove != null
+                  ? () => onRemove!(item)
+                  : null,
+            ),
+      ],
+    ),
+  );
 }
 
 class PlannerHistorySection extends StatelessWidget {

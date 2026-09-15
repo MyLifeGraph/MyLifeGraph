@@ -229,7 +229,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun updateRemainingTime() {
-        if (!manager.appBlockingActive()) {
+        if (!manager.appBlockingActive(lastForegroundPackage)) {
             hideOverlay()
             return
         }
@@ -272,7 +272,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     // No wake lock, exact alarm or new service: one check per wall-clock minute.
     private val scheduleTick = object : Runnable {
         override fun run() {
-            if (manager.blockingMode() == "weekly") refreshOverlay()
+            if (manager.blockingMode() != "focus") refreshOverlay()
             handler.postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
         }
     }

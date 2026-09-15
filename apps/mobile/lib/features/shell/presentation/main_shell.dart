@@ -986,7 +986,7 @@ class _FloatingNavItemState extends State<_FloatingNavItem> {
                   curve: context.motionTokens.curve,
                   height: widget.height,
                   padding: EdgeInsets.symmetric(
-                    horizontal: widget.showLabel ? 6 : 0,
+                    horizontal: widget.showLabel ? 2 : 0,
                   ),
                   decoration: BoxDecoration(
                     color: widget.isSelected

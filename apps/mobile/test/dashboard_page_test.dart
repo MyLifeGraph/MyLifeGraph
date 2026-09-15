@@ -18,6 +18,25 @@ import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 import 'support/dashboard_full_week_fixture.dart';
 
 void main() {
+  testWidgets('All tasks filters dated and undated without changing saved tasks', (tester) async {
+    final dated = PlanItem(id: 'dated', title: 'Dated task', priority: 'low', isCompleted: false, status: 'todo', source: 'manual',
+      deadline: DateTime(2026, 8, 1));
+    const undated = PlanItem(id: 'undated', title: 'Undated task', priority: 'low', isCompleted: false, status: 'todo', source: 'manual');
+    await _pumpDashboard(tester, snapshot: _todaySnapshot(allTasks: [dated, undated]));
+    await _tapExpansion(tester, const ValueKey('today-all-tasks'));
+    expect(find.text('Dated task'), findsOneWidget);
+    expect(find.text('Undated task'), findsOneWidget);
+    await tester.ensureVisible(find.widgetWithText(FilterChip, 'Dated'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Dated'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dated task'), findsNothing);
+    expect(find.text('Undated task'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilterChip, 'Dated'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Undated'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dated task'), findsOneWidget);
+    expect(find.text('Undated task'), findsNothing);
+  });
   testWidgets('desktop Today supporting cards share the main content width',
       (tester) async {
     await _pumpDashboard(tester, size: const Size(1800, 2200),

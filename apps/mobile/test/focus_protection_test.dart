@@ -8,6 +8,20 @@ import 'package:my_life_graph/features/focus_protection/domain/focus_protection.
 import 'package:my_life_graph/features/focus_protection/presentation/pages/focus_protection_settings_page.dart';
 
 void main() {
+  test('per-app combined rules preserve legacy modes and roundtrip', () {
+    final original = FocusProtectionConfiguration.disabled().copyWith(
+      blockingMode: AppBlockingMode.weekly, weekdays: {1, 7},
+      appRules: {'video.app': AppBlockingRule(focus: true, weekly: true,
+        weekdays: {1, 2}, untilEpochMs: 2000000000000)},
+    );
+    final restored = FocusProtectionConfiguration.fromMap(original.toMap());
+    expect(restored.ruleFor('video.app').focus, isTrue);
+    expect(restored.ruleFor('video.app').weekly, isTrue);
+    expect(restored.ruleFor('video.app').weekdays, {1, 2});
+    expect(restored.ruleFor('video.app').untilEpochMs, 2000000000000);
+    expect(restored.ruleFor('another.app').focus, isFalse);
+    expect(restored.ruleFor('another.app').weekdays, {1, 7});
+  });
   test(
     'blocking configuration roundtrips and old installs default to Focus',
     () {
@@ -49,9 +63,9 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
-        final gateway = _FakeGateway(_status());
+        final gateway = _FakeGateway(_status(selectedPackages: {'video.app'}));
         await _pumpSettings(tester, gateway, scale: scale);
-        final mode = find.byType(DropdownButtonFormField<AppBlockingMode>);
+        final mode = find.text('Rules for selected apps');
         await tester.scrollUntilVisible(
           mode,
           180,
@@ -65,24 +79,27 @@ void main() {
         await tester.pumpAndSettle();
         expect(gateway.savedConfigurations, isEmpty);
         await tester.tap(find.byKey(const ValueKey('blocking-weekday-1')));
-        await tester.ensureVisible(find.text('Save schedule'));
-        await tester.tap(find.text('Save schedule'));
+        await tester.ensureVisible(find.text('Save rules'));
+        await tester.tap(find.text('Save rules'));
         await tester.pumpAndSettle();
         expect(
-          gateway.status.configuration.blockingMode,
-          AppBlockingMode.weekly,
+          gateway.status.configuration.ruleFor('video.app').weekly,
+          isTrue,
         );
-        expect(gateway.status.configuration.weekdays, {2, 3, 4, 5});
+        expect(gateway.status.configuration.ruleFor('video.app').weekdays, {2, 3, 4, 5});
+        expect(gateway.status.configuration.ruleFor('video.app').focus, isTrue);
         expect(gateway.status.configuration.silenceNotifications, isTrue);
         await tester.ensureVisible(mode);
         await tester.pumpAndSettle();
         await tester.tap(mode);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Always block').last);
+        await tester.tap(find.text('Always').last);
+        await tester.ensureVisible(find.text('Save rules'));
+        await tester.tap(find.text('Save rules'));
         await tester.pumpAndSettle();
         expect(
-          gateway.status.configuration.blockingMode,
-          AppBlockingMode.always,
+          gateway.status.configuration.ruleFor('video.app').always,
+          isTrue,
         );
         expect(tester.takeException(), isNull);
       },
@@ -336,7 +353,7 @@ Future<void> _pumpSettings(
   await tester.pumpAndSettle();
 }
 
-FocusProtectionStatus _status({FocusProtectionLease? lease}) {
+FocusProtectionStatus _status({FocusProtectionLease? lease, Set<String> selectedPackages = const {}}) {
   return FocusProtectionStatus(
     platformSupported: true,
     accessibilityEnabled: false,
@@ -345,6 +362,7 @@ FocusProtectionStatus _status({FocusProtectionLease? lease}) {
       enabled: true,
       blockSelectedApps: true,
       silenceNotifications: true,
+      selectedPackages: selectedPackages,
     ),
     lease: lease,
     warnings: const [

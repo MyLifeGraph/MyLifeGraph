@@ -43,10 +43,7 @@ class TodayTaskActions {
 }
 
 class TodayHabitActions {
-  const TodayHabitActions({
-    required this.onSetOutcome,
-    required this.onUndo,
-  });
+  const TodayHabitActions({required this.onSetOutcome, required this.onUndo});
 
   final void Function(TodayHabit habit, HabitOutcome outcome) onSetOutcome;
   final ValueChanged<TodayHabit> onUndo;
@@ -55,7 +52,7 @@ class TodayHabitActions {
 /// Owns the complete Today Task projection, including the optional history
 /// expansion. The immutable state and action objects keep its parent boundary
 /// small without hiding command execution in the widget.
-class TodayTaskSections extends StatelessWidget {
+class TodayTaskSections extends StatefulWidget {
   const TodayTaskSections({
     super.key,
     required this.snapshot,
@@ -72,12 +69,27 @@ class TodayTaskSections extends StatelessWidget {
   final TodayTaskActions actions;
 
   @override
+  State<TodayTaskSections> createState() => _TodayTaskSectionsState();
+}
+
+class _TodayTaskSectionsState extends State<TodayTaskSections> {
+  bool _dated = true;
+  bool _undated = true;
+  DashboardSnapshot get snapshot => widget.snapshot;
+  TodayCommandState get commands => widget.commands;
+  bool get canExecute => widget.canExecute;
+  TodayTaskVisibility get visibility => widget.visibility;
+  TodayTaskActions get actions => widget.actions;
+
+  @override
   Widget build(BuildContext context) {
     final allTasks = snapshot.allTasks;
     final activeTasks = allTasks.where((item) {
-      final completed = commands.completedTaskIds.contains(item.id) ||
+      final completed =
+          commands.completedTaskIds.contains(item.id) ||
           (item.isCompleted && !commands.restoredTaskIds.contains(item.id));
-      final cancelled = commands.deletedTaskIds.contains(item.id) ||
+      final cancelled =
+          commands.deletedTaskIds.contains(item.id) ||
           (item.status == 'cancelled' &&
               !commands.restoredTaskIds.contains(item.id));
       return !completed && !cancelled;
@@ -121,24 +133,53 @@ class TodayTaskSections extends StatelessWidget {
               : null,
           expanded: visibility.showAll,
           onToggle: actions.onToggleAll,
-          child: _TasksSection(
-            activeTasks: activeTasks,
-            completedTasks: completedTasks,
-            cancelledTasks: cancelledTasks,
-            canExecute: canExecute,
-            updatingTaskIds: commands.updatingTaskIds,
-            showCompletedTasks: visibility.showCompleted,
-            showCancelledTasks: visibility.showCancelled,
-            onComplete: actions.onComplete,
-            onRestore: actions.onRestore,
-            onStartFocus: actions.onStartFocus,
-            onToggleCompleted: actions.onToggleCompleted,
-            onToggleCancelled: actions.onToggleCancelled,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: AppSpacing.xs,
+                children: [
+                  FilterChip(
+                    label: const Text('Dated'),
+                    avatar: const Icon(
+                      AppIcons.calendarMonthOutlined,
+                      size: 18,
+                    ),
+                    selected: _dated,
+                    onSelected: (value) => setState(() => _dated = value),
+                  ),
+                  FilterChip(
+                    label: const Text('Undated'),
+                    avatar: const Icon(AppIcons.taskOutlined, size: 18),
+                    selected: _undated,
+                    onSelected: (value) => setState(() => _undated = value),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _TasksSection(
+                activeTasks: activeTasks.where(_matchesFilter).toList(),
+                completedTasks: completedTasks.where(_matchesFilter).toList(),
+                cancelledTasks: cancelledTasks.where(_matchesFilter).toList(),
+                canExecute: canExecute,
+                updatingTaskIds: commands.updatingTaskIds,
+                showCompletedTasks: visibility.showCompleted,
+                showCancelledTasks: visibility.showCancelled,
+                onComplete: actions.onComplete,
+                onRestore: actions.onRestore,
+                onStartFocus: actions.onStartFocus,
+                onToggleCompleted: actions.onToggleCompleted,
+                onToggleCancelled: actions.onToggleCancelled,
+              ),
+            ],
           ),
         ),
       ],
     );
   }
+
+  bool _matchesFilter(PlanItem task) =>
+      task.deadline != null ? _dated : _undated;
 }
 
 class TodayHabitSection extends StatelessWidget {
@@ -469,9 +510,7 @@ class _HabitCard extends StatelessWidget {
               onPressed: open
                   ? () => onSetOutcome(habit, HabitOutcome.skipped)
                   : () => onUndo(habit),
-              icon: Icon(
-                open ? AppIcons.skipNextOutlined : AppIcons.undo,
-              ),
+              icon: Icon(open ? AppIcons.skipNextOutlined : AppIcons.undo),
             ),
         ],
       ),

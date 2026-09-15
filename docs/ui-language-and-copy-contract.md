@@ -1,5 +1,12 @@
 # UI Language And Copy Contract
 
+Planner's compact view labels are `This week` and `Planning`. Task filtering
+uses `Dated` / `Undated` because it reflects deadlines, not reservations.
+Speech source labels are `Server` / `On-device`; Whisper Tiny and Base are
+multilingual, not English-only variants. App-blocking rules use short labels
+`During Focus`, `Weekly schedule`, `Always`, and `Block now`, with an explicit
+overlap explanation in the editor. Actions retain accessible tooltips.
+
 `Push reminders` is an optional Settings surface. Use `Important reminders`,
 `Before bedtime`, `Today's deadlines`, `Important patterns` and `Quiet hours`.
 The first opt-in explicitly names Google Firebase, device linkage and generic

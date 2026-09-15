@@ -12,6 +12,7 @@ import '../../../../core/network/api_failure.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../domain/coach_dictation_request.dart';
+import '../../application/speech_settings.dart';
 import '../providers/coach_providers.dart';
 
 /// Recording belongs to this route, never to the persistent Coach conversation.
@@ -110,7 +111,24 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
     if (_busy || _askingConsent || !widget.enabled) return;
     _profile = ref.read(coachActiveProfileIdProvider);
     if (_profile == null) return;
-    final consent = ref.read(coachDictationConsentProvider.notifier);
+    final speech = ref.read(speechSettingsProvider);
+    if (speech.loading) {
+      _askingConsent = true;
+      try { await speech.ready; } finally { _askingConsent = false; }
+      if (!mounted || !widget.enabled || ref.read(coachActiveProfileIdProvider) != _profile) return;
+    }
+    final source = speech.source;
+    if (speech.initializationFailed) {
+      _message('Choose a speech source in Settings before recording.');
+      return;
+    }
+    if (source != 'server' && !speech.installed.contains(source)) {
+      _message('Download the selected model in Settings → Speech to text.');
+      return;
+    }
+    final consentProvider = source == 'server'
+        ? coachDictationConsentProvider : coachOnDeviceDictationConsentProvider;
+    final consent = ref.read(consentProvider.notifier);
     final int consentGeneration = _generation;
     bool? accepted = consent.state;
     if (!accepted) {
@@ -121,6 +139,8 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
           builder: (context) => AlertDialog(
             title: Text(widget.consentTitle),
             content: Text(
+              source != 'server' ? 'Record up to 30 seconds. Audio stays on this device. '
+              'Recognized text is shared only when you submit it. ${widget.consentEnding}' :
               'Record up to 30 seconds. Audio is sent to the '
               'MyLifeGraph server for transcription and is not saved. '
               '${widget.consentEnding}',
@@ -146,13 +166,16 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
         consentGeneration != _generation ||
         !widget.enabled ||
         ref.read(coachActiveProfileIdProvider) != _profile ||
-        !identical(consent, ref.read(coachDictationConsentProvider.notifier))) {
+        source != ref.read(speechSettingsProvider).source ||
+        !identical(consent, ref.read(consentProvider.notifier))) {
       return;
     }
     consent.state = true;
     final generation = ++_generation;
     _setBusy(true);
     try {
+      // Capture the consented destination before recording, not at upload time.
+      _request = ref.read(coachDictationRequestFactoryProvider)();
       final recorder = _recorder ??= AudioRecorder();
       if (!await recorder.hasPermission()) {
         _message('Allow microphone access to dictate.');
@@ -249,8 +272,7 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
           ref.read(coachActiveProfileIdProvider) != _profile) {
         return;
       }
-      final request = ref.read(coachDictationRequestFactoryProvider)();
-      _request = request;
+      final request = _request!;
       final text = await request.transcribe(pcm, accessToken: token);
       if (!mounted ||
           generation != _generation ||
@@ -287,6 +309,7 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(speechSettingsProvider);
     final profile = ref.watch(coachActiveProfileIdProvider);
     ref.listen(coachActiveProfileIdProvider, (previous, next) {
       if (previous != next && _busy) unawaited(_cancel());

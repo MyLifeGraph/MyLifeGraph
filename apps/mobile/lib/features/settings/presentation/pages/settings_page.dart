@@ -8,6 +8,7 @@ import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/widgets/coach_provider_settings_card.dart';
 import '../../../../composition/widgets/health_connect_settings_entry.dart';
 import '../../../../composition/widgets/push_settings_entry.dart';
+import '../../../../composition/widgets/speech_settings_sheet.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -142,7 +143,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               leading: const Icon(AppIcons.lockOutline),
               title: const Text('Focus protection'),
               subtitle: const Text(
-                'Optionally block selected apps and silence normal notifications during synced Focus sessions.',
+                'App rules, schedules and Focus protection on this device.',
               ),
               trailing: const Icon(AppIcons.chevronRight),
               onTap: () => context.push(AppRoutes.focusProtection),
@@ -228,6 +229,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         if (capabilities.canShowCoachSurface) const CoachProviderSettingsCard(),
+        if (syncedAccount) const SpeechSettingsEntry(),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(

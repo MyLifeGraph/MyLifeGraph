@@ -31,6 +31,37 @@ data class AppBlockingSchedule(
     }
 }
 
+data class AppBlockingRule(
+    val focus: Boolean,
+    val weekly: Boolean,
+    val always: Boolean,
+    val schedule: AppBlockingSchedule,
+    val untilEpochMs: Long = 0,
+) {
+    init { require(untilEpochMs >= 0) }
+    fun active(now: Long, focusActive: Boolean, zone: TimeZone = TimeZone.getDefault()): Boolean =
+        always || (focus && focusActive) || now < untilEpochMs ||
+            (weekly && schedule.copy(mode = "weekly").active(now, false, zone))
+
+    fun toMap(): Map<String, Any> = mapOf("focus" to focus, "weekly" to weekly,
+        "always" to always, "weekdays" to schedule.weekdays.sorted(),
+        "startMinute" to schedule.startMinute, "endMinute" to schedule.endMinute,
+        "untilEpochMs" to untilEpochMs)
+
+    companion object {
+        fun fromMap(map: Map<*, *>): AppBlockingRule {
+            require(map["focus"] is Boolean && map["weekly"] is Boolean && map["always"] is Boolean)
+            val days = map["weekdays"] as? List<*> ?: throw IllegalArgumentException("Missing days")
+            require(days.all { it is Int })
+            val until = map["untilEpochMs"]
+            require(until is Int || until is Long)
+            return AppBlockingRule(map["focus"] as Boolean, map["weekly"] as Boolean, map["always"] as Boolean,
+                AppBlockingSchedule("weekly", days.map { it as Int }.toSet(),
+                    map["startMinute"] as Int, map["endMinute"] as Int), (until as Number).toLong())
+        }
+    }
+}
+
 data class LocalFocusLease(
     val sessionId: String,
     val startedAtEpochMs: Long,

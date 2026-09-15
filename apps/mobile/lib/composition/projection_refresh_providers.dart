@@ -9,31 +9,35 @@ import 'projection_refresh_coordinator.dart';
 
 export 'projection_refresh_coordinator.dart';
 
+// Explicit foreign mutations also refresh Today's retained post-write snapshot.
+final todayExternalRefreshRevisionProvider = StateProvider<int>((ref) => 0);
+
 final projectionRefreshCoordinatorProvider =
     Provider<ProjectionRefreshCoordinator>((ref) {
-  return ProjectionRefreshCoordinator(
-    refreshDailySnapshot: (targetDate) => ref
-        .read(snapshotRefreshServiceProvider)
-        .refreshDailyAfterUserSignal(targetDate: targetDate),
-    invalidateProjection: (projection) {
-      switch (projection) {
-        case ProductProjection.latestDailyCapture:
-          ref.invalidate(latestQuickCheckInProvider);
-        case ProductProjection.today:
-          ref.invalidate(dashboardSnapshotProvider);
-        case ProductProjection.todayLatestCheckIn:
-          ref.invalidate(dashboardLatestCheckInProvider);
-        case ProductProjection.todayFullWeek:
-          ref.invalidate(dashboardFullWeekProvider);
-        case ProductProjection.planner:
-          ref.invalidate(plannerControllerProvider);
-        case ProductProjection.preparationWorkload:
-          ref.invalidate(preparationWorkloadProvider);
-        case ProductProjection.examWeekOutlook:
-          ref.invalidate(examWeekOutlookProvider);
-        case ProductProjection.examPlanHealth:
-          ref.invalidate(examPlanHealthProvider);
-      }
-    },
-  );
-});
+      return ProjectionRefreshCoordinator(
+        refreshDailySnapshot: (targetDate) => ref
+            .read(snapshotRefreshServiceProvider)
+            .refreshDailyAfterUserSignal(targetDate: targetDate),
+        invalidateProjection: (projection) {
+          switch (projection) {
+            case ProductProjection.latestDailyCapture:
+              ref.invalidate(latestQuickCheckInProvider);
+            case ProductProjection.today:
+              ref.read(todayExternalRefreshRevisionProvider.notifier).state++;
+              ref.invalidate(dashboardSnapshotProvider);
+            case ProductProjection.todayLatestCheckIn:
+              ref.invalidate(dashboardLatestCheckInProvider);
+            case ProductProjection.todayFullWeek:
+              ref.invalidate(dashboardFullWeekProvider);
+            case ProductProjection.planner:
+              ref.invalidate(plannerControllerProvider);
+            case ProductProjection.preparationWorkload:
+              ref.invalidate(preparationWorkloadProvider);
+            case ProductProjection.examWeekOutlook:
+              ref.invalidate(examWeekOutlookProvider);
+            case ProductProjection.examPlanHealth:
+              ref.invalidate(examPlanHealthProvider);
+          }
+        },
+      );
+    });

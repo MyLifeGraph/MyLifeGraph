@@ -46,17 +46,10 @@ void main() {
         textScale: size.width == 320 ? 2 : 1);
       expect(tester.takeException(), isNull);
       final page = tester.widget<AppPage>(find.byType(AppPage));
-      if (size.width < 1280) {
-        expect(page.children.first, isA<PlannerSevenDaySection>());
-        expect(page.children[1], isA<PlannerAddNewSection>());
-      } else {
-        final columns = find.byKey(const ValueKey('planner-desktop-columns'));
-        expect(columns, findsOneWidget);
-        final agendaRect = tester.getRect(find.byType(PlannerSevenDaySection));
-        final summaryRect = tester.getRect(find.byType(PlannerNeedsAttentionSection));
-        expect(agendaRect.right, lessThan(summaryRect.left));
-        expect(agendaRect.top, lessThanOrEqualTo(summaryRect.top));
-      }
+      expect(page.children.first, isA<SegmentedButton<bool>>());
+      expect(page.children[1], isA<PlannerSevenDaySection>());
+      expect(page.children[2], isA<PlannerAddNewSection>());
+      expect(find.byType(PlannerNeedsAttentionSection), findsNothing);
       final agenda = find.byKey(const ValueKey('planner-seven-days'));
       await _scrollPlannerUntilVisible(tester,agenda, 300,
         scrollable: find.byType(Scrollable).first);
@@ -266,7 +259,7 @@ void main() {
         tester.getTopLeft(find.byKey(ValueKey(key))).dy,
     ];
     expect(sectionTops, orderedEquals(sectionTops.toList()..sort()));
-    expect(tester.getTopLeft(find.byKey(const ValueKey('planner-seven-days'))).dx,
+    expect(tester.getTopLeft(find.byKey(const ValueKey('planner-add-new'))).dx,
       lessThan(tester.getTopLeft(find.byKey(const ValueKey('planner-needs-attention'))).dx));
     for (final key in const [
       'planner-add-task',
@@ -277,6 +270,9 @@ void main() {
     ]) {
       expect(find.byKey(ValueKey(key)), findsOneWidget);
     }
+    await tester.ensureVisible(find.text('This week'));
+    await tester.tap(find.text('This week'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('List'));
     await tester.pumpAndSettle();
     expect(
@@ -295,6 +291,9 @@ void main() {
     }
     expect(find.text('Tuesday, Jul 21'), findsOneWidget);
     expect(find.text('Monday, Jul 27'), findsOneWidget);
+    await tester.ensureVisible(find.text('Planning'));
+    await tester.tap(find.text('Planning'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('2 h 30 min remaining · next'), findsOneWidget);
     expect(find.text('2 active · 2 unplanned'), findsOneWidget);
     expect(find.text('Managed in Setup'), findsNothing);
@@ -640,6 +639,7 @@ void main() {
       of: find.byKey(const ValueKey('planner-seven-days')),
       matching: find.text('Write report'),
     );
+    await _scrollPlannerUntilVisible(tester, staleScheduleItem, 300);
     expect(staleScheduleItem, findsOneWidget);
     await tester.tap(staleScheduleItem);
     await tester.pumpAndSettle();
@@ -656,6 +656,9 @@ void main() {
       backend.requests.where((request) => request.path.endsWith('/proposals')),
       hasLength(proposalsBeforeReload),
     );
+    await tester.ensureVisible(find.text('Planning'));
+    await tester.tap(find.text('Planning'));
+    await tester.pumpAndSettle();
     expect(tester.widget<OutlinedButton>(addHabitButton).onPressed, isNotNull);
     expect(
       tester
@@ -2941,6 +2944,20 @@ Future<void> _scrollPlannerUntilVisible(
       Offset(0, -delta.abs()),
     );
     await tester.pump();
+    // Planner sections now live in two explicit views. Test the same public
+    // navigation a user needs, without weakening the target assertion.
+    if (attempt == 12 && target.evaluate().isEmpty) {
+      tester.state<ScrollableState>(viewport).position.jumpTo(0);
+      await tester.pump();
+      final toggle = find.byType(SegmentedButton<bool>);
+      if (toggle.evaluate().isNotEmpty) {
+        final selected = tester.widget<SegmentedButton<bool>>(toggle).selected.single;
+        await tester.ensureVisible(toggle);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(selected ? 'This week' : 'Planning'));
+        await tester.pump();
+      }
+    }
   }
   expect(target, findsOneWidget);
   await tester.ensureVisible(target);
@@ -3366,6 +3383,12 @@ Future<PlannerController> _pumpPlanner(
     await tester.pumpAndSettle();
   } else {
     await tester.pump();
+  }
+  // Existing command/outlook cases exercise the Planning view; the reference
+  // cases above separately check the default calendar view and its retention.
+  if (!preview && find.text('Planning').evaluate().isNotEmpty) {
+    await tester.tap(find.text('Planning'));
+    if (settle) { await tester.pumpAndSettle(); } else { await tester.pump(); }
   }
   return controller;
 }
