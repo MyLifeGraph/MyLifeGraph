@@ -47,7 +47,15 @@ void main() {
         textScale: size.width == 320 ? 2 : 1);
       expect(tester.takeException(), isNull);
       final page = tester.widget<AppPage>(find.byType(AppPage));
-      expect(page.children.first, isA<SegmentedButton<bool>>());
+      final viewToggle = tester.widget<SegmentedButton<bool>>(
+        find.descendant(
+          of: find.byWidget(page.children.first),
+          matching: find.byType(SegmentedButton<bool>),
+        ),
+      );
+      expect(viewToggle.selected, {false});
+      expect(viewToggle.showSelectedIcon, isFalse);
+      expect(viewToggle.segments.map((segment) => segment.value), [false, true]);
       expect(page.children[1], isA<PlannerSevenDaySection>());
       expect(page.children[2], isA<PlannerAddNewSection>());
       expect(find.byType(PlannerNeedsAttentionSection), findsNothing);
