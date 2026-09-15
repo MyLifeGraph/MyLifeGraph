@@ -50,20 +50,16 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     _EveningStep(
       eyebrow: 'EVENING · CHECK-IN',
       title: 'Close today in under a minute',
-      subtitle: 'Three quick ratings are enough for today\'s state.',
       kind: _EveningStepKind.checkIn,
     ),
     _EveningStep(
       eyebrow: 'EVENING · SLEEP PLAN',
       title: 'When do you plan to sleep?',
-      subtitle:
-          'Set tonight\'s intended start and your personal duration target.',
       kind: _EveningStepKind.sleepPlan,
     ),
     _EveningStep(
       eyebrow: 'EVENING · CONTEXT',
       title: 'What should tomorrow know?',
-      subtitle: 'Add pressure context or optional notes only when useful.',
       kind: _EveningStepKind.context,
     ),
   ];
@@ -96,7 +92,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       eyebrow: step.eyebrow,
       title: step.title,
       subtitle: widget.proposal == null
-          ? step.subtitle
+          ? null
           : _revisingSavedCapture
           ? 'Review suggestions. Saving updates today\'s Evening check-in.'
           : 'Review suggestions and fill any gaps before saving.',
@@ -107,7 +103,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       isLastStep: _stepIndex == _steps.length - 1,
       isLoading: _isLoading,
       isSaving: _isSaving,
-      saveLabel: 'Save evening check-in',
+      saveLabel: 'Save',
       errorMessage: _saveError,
       loadErrorMessage: !_proposalMatchesContext
           ? 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
@@ -220,6 +216,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           const SizedBox(height: AppSpacing.sm),
           CaptureChoiceControl<StressSource>(
             value: _draft.stressSource,
+            selectedDetail: _blockerField(),
             choices: StressSource.values
                 .map(
                   (value) => CaptureChoice(
@@ -266,14 +263,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           label: 'Reflection (optional)',
           hint: 'How did the day feel?',
         ),
-        const SizedBox(height: AppSpacing.md),
-        _optionalNoteField(
-          controller: _blockerController,
-          maxLength: 240,
-          maxLines: 3,
-          label: 'Specific blocker (optional)',
-          hint: 'One concrete thing that got in the way',
-        ),
         if (_todayFocusSessions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
           const Divider(),
@@ -297,6 +286,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           const SizedBox(height: AppSpacing.md),
           OptionalSkillsetChoice(
             label: 'Sport today',
+            equalWidthRow: true,
             choices: const ['None', 'Light', 'Intense'],
             value: _draft.skillset?.values['sport'],
             onChanged: (value) => setState(
@@ -308,6 +298,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           ),
           OptionalSkillsetChoice(
             label: 'Social contact',
+            equalWidthRow: true,
             choices: const ['Little', 'Some', 'Lots'],
             value: _draft.skillset?.values['social'],
             onChanged: (value) => setState(
@@ -322,12 +313,22 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     );
   }
 
+  Widget _blockerField() => _optionalNoteField(
+    controller: _blockerController,
+    maxLength: 240,
+    maxLines: 3,
+    label: 'Specific blocker (optional)',
+    hint: 'What made this stressful?',
+    connected: true,
+  );
+
   Widget _optionalNoteField({
     required TextEditingController controller,
     required int maxLength,
     required int maxLines,
     required String label,
     required String hint,
+    bool connected = false,
   }) {
     final countStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -340,6 +341,10 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           maxLines: maxLines,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
+            border: connected ? InputBorder.none : null,
+            enabledBorder: connected ? InputBorder.none : null,
+            focusedBorder: connected ? InputBorder.none : null,
+            filled: connected ? false : null,
             labelText: label,
             hintText: hint,
             alignLabelWithHint: true,
@@ -713,12 +718,10 @@ class _EveningStep {
   const _EveningStep({
     required this.eyebrow,
     required this.title,
-    required this.subtitle,
     required this.kind,
   });
 
   final String eyebrow;
   final String title;
-  final String subtitle;
   final _EveningStepKind kind;
 }

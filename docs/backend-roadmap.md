@@ -29,8 +29,9 @@ configuration foundation is implemented: current Supabase client/backend key
 names, exact staging/pilot ref binding, pilot current-key enforcement, and
 crossover denial. The authorized 2026-08-26 assignment names
 `oscrunlndfrecjilojja` as the real-data pilot candidate and
-`kvdunemnuqcvbhrlfnsh` as staging. Staging bootstrap, hosted key rotation, and
-the deployed operator-provider path remain open.
+`kvdunemnuqcvbhrlfnsh` as staging. Staging configuration and key rotation require
+separate operator verification. The deployed operator-provider evidence belongs
+in `docs/verification.md#current-verified-baseline`, not in roadmap checkboxes.
 
 The next local pilot foundation is also implemented in repository source:
 `pilot-participation-v1` / `pilot-participation-notice-v1` stores a
@@ -1022,8 +1023,9 @@ production provider or autonomous agent platform by default.
   independently of delivery. Notification Delivery V1 later adds separate
   fail-closed foreground consent, deterministic recovery and exact-week
   generation, a local runner, and acknowledged in-app banners. The redundant
-  generic current-briefing banner is retired; there is still no push/system or
-  deployed delivery channel.
+  generic current-briefing banner is retired. Optional Android push is a separate
+  later delivery boundary with its own consent, worker and FCM transport; see
+  `docs/notification-delivery-v1-contract.md` for its implemented contract.
 - Verified with mapper, repository, provider, widget, route-capability,
   notification-target, and browser smoke coverage.
 

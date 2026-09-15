@@ -33,6 +33,38 @@ void main() {
     useMockData: false,
   );
 
+  test('Gemini model reaches capability and send headers; old servers fail closed', () async {
+    final json = coachCapabilitiesJson();
+    json.addAll({'provider': 'gemini', 'provider_mode': 'user_supplied_key',
+      'model_requested': 'gemini-3.8-flash', 'model_source': 'explicit',
+      'service_tier': 'not_applicable', 'fast_mode': false,
+      'tools': ['inspect_data', 'query_data']});
+    final client = _TrackingApiClient(getResponses: {'/v1/coach/capabilities': json});
+    final repository = _repository(client, config: pilotConfig,
+      credentials: const CoachProviderCredentials(provider: CoachProviderName.gemini,
+        apiKey: 'test-key', model: 'gemini-3.6-flash'));
+    await expectLater(repository.getCapabilities(), throwsA(isA<CoachInputException>()));
+    expect(client.lastGetHeaders?['X-MyLifeGraph-Coach-Model'], 'gemini-3.6-flash');
+    json['model_requested'] = 'gemini-3.6-flash';
+    expect((await repository.getCapabilities()).modelRequested, 'gemini-3.6-flash');
+    // An empty stream fails validation after forwarding the selected model.
+    await expectLater(repository.respond(requestId: coachRequestId, message: 'Hello'),
+      emitsError(isA<CoachContractException>()));
+    expect(client.streamHeaders?['X-MyLifeGraph-Coach-Model'], 'gemini-3.6-flash');
+    expect(client.requestBody, isNot(contains('model')));
+  });
+
+  test('Gemini cannot use another provider capability or budget', () async {
+    final client = _TrackingApiClient(getResponses: {
+      '/v1/coach/capabilities': coachCapabilitiesJson(remainingRequests: 0),
+    });
+    final repository = _repository(client, config: pilotConfig,
+      credentials: const CoachProviderCredentials(provider: CoachProviderName.gemini,
+        apiKey: 'test-key'));
+    await expectLater(repository.getCapabilities(), throwsA(isA<CoachContractException>()));
+    expect(client.lastGetHeaders?['X-MyLifeGraph-Coach-Provider'], 'gemini');
+  });
+
   test('old API rejection explains German rollout without fallback', () async {
     final client = _TrackingApiClient(requestError: const AppException(
       'Rejected', cause: ApiFailure(kind: ApiFailureKind.response, statusCode: 422,
@@ -349,6 +381,20 @@ void main() {
       },
       responseSse: _successfulSse(
         requestContractVersion: 'coach-request-v4',
+        response: {
+          ...coachResponseJson(),
+          'provenance': {
+            ...(coachResponseJson()['provenance'] as Map<String, dynamic>),
+            'provider': 'operator_codex_pilot',
+            'provider_mode': 'operator_subscription_pilot',
+            'model_requested': 'gpt-5.5',
+            'model_reported': 'gpt-5.5',
+            'model_source': 'explicit',
+            'service_tier': 'fast',
+            'service_tier_status': 'configured',
+            'fast_mode': true,
+          },
+        },
       ),
     );
     final credentials = Completer<CoachProviderCredentials?>();
@@ -427,6 +473,7 @@ CoachRepositoryImpl _repository(
     );
 
 String _successfulSse({
+  Map<String, dynamic>? response,
   String responseRequestId = coachRequestId,
   String requestContractVersion = 'coach-request-v3',
 }) =>
@@ -444,7 +491,7 @@ String _successfulSse({
       ),
       (
         'completed',
-        {'response': coachResponseJson(requestId: responseRequestId)},
+        {'response': response ?? coachResponseJson(requestId: responseRequestId)},
       ),
     ]);
 

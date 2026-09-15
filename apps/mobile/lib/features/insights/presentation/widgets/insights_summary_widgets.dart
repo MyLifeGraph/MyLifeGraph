@@ -176,12 +176,15 @@ class _SparseInsightsHome extends StatelessWidget {
                           onSelected: onPaneSelected,
                         ),
                         const SizedBox(height: AppSpacing.md),
-                        if (advancedPane != _AdvancedPane.discovered) ...[
+                        if (advancedPane != _AdvancedPane.discovered &&
+                            advancedPane != _AdvancedPane.past) ...[
                           windowSelector,
                           const SizedBox(height: AppSpacing.md),
                         ],
                         if (advancedPane == _AdvancedPane.skillset)
                           skillsetCard
+                        else if (advancedPane == _AdvancedPane.past)
+                          const PeriodComparisonCard()
                         else
                           _InsightsPanel(
                             child: Column(

@@ -16,6 +16,12 @@ const coachAgentContextVersion = 'personal-snapshot-v3';
 const coachMessageCodepoints = 2000;
 const coachLanguageContractVersion = 'coach-language-v1';
 const coachReplyCodepoints = 4000;
+const coachDefaultGeminiModel = 'gemini-3.8-flash';
+const coachGeminiModels = {
+  'gemini-3.6-flash': 'Gemini 3.6 Flash',
+  'gemini-3.7-flash': 'Gemini 3.7 Flash',
+  'gemini-3.8-flash': 'Gemini 3.8 Flash',
+};
 
 enum CoachCapabilityState {
   disabled('disabled'),
@@ -257,7 +263,7 @@ class CoachCapabilities {
       case CoachProviderName.gemini:
         final expectedModels = provider == CoachProviderName.openai
             ? const {'gpt-5.6-terra'}
-            : const {'gemini-3.6-flash', 'gemini-3.8-flash'};
+            : coachGeminiModels.keys.toSet();
         if (result.providerMode != 'user_supplied_key' ||
             !expectedModels.contains(result.modelRequested) ||
             result.modelSource != 'explicit' ||
@@ -659,7 +665,7 @@ class CoachProvenance {
       case CoachProviderName.gemini:
         final expectedModels = provider == CoachProviderName.openai
             ? const {'gpt-5.6-terra'}
-            : const {'gemini-3.6-flash', 'gemini-3.8-flash'};
+            : coachGeminiModels.keys.toSet();
         if (result.providerMode != 'user_supplied_key' ||
             !expectedModels.contains(result.modelRequested) ||
             result.modelReported != null &&

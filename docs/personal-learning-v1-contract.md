@@ -203,6 +203,32 @@ reduce scrolling. Trend signals live in a collapsed multi-select disclosure,
 preserving metric order, per-series colors, pair exclusions, and the final
 selected signal. Normalization and evidence-timing explanations remain visible.
 
+### Past period comparison
+
+Advanced adds `Past` between Skillset and Matrix. This read-only display uses
+the existing owner-scoped 90-day Personal Patterns response and its analysis
+permission, never a new query, stored score, or correlation calculation.
+Rolling compares the latest 7/14/30 calendar days (including today) against the
+immediately preceding equal period. Weekdays aligns this Monday–Sunday against
+last Monday–Sunday; the current curve ends at the profile-local current day.
+The current legend also ends today; the previous legend covers the full week.
+Rolling labels name both N-day periods, with today in the latest period and
+no shared boundary date between them.
+Date-only arithmetic is DST-safe. Actual dates, timezone, units and both curves
+remain visible; the previous curve is lighter and dashed. Missing, non-finite,
+out-of-range and future values stay gaps, not zeros. Details exposes exact values.
+
+The signal selector covers existing daily Sleep duration/quality, Sport, Energy,
+Social contact, Concentration, Stress, Mood, Productivity, Motivation and Focus time.
+Additive `sleep_hours` in `skillset_points` copies the
+validated Morning duration so non-Focus days are included; previous correlation
+fields and fingerprints are unchanged. Old clients already accept additional
+finite observation keys; old servers remain readable with their existing coverage.
+Learning and Discipline reuse the existing seven-day trailing summary formula
+and minimum samples at each point, explicitly labelled rather than invented
+daily ratings. No-data and disabled-analysis states stay distinct. The Past
+window is independent of other Advanced filters, which remain unchanged.
+
 ### Advanced Skillset display
 
 The shared Advanced tab strip shows edge chevrons only where more tabs are
@@ -213,7 +239,7 @@ The end chevron disappears as soon as its reclaimed width reveals the last tab,
 without requiring a second click just to uncover that tab.
 
 Both viewport layouts use Compare, Top patterns, Trend overlay, Skillset,
-Matrix, then Discovered tabs. Skillset remains selectable with sparse data.
+Past, Matrix, then Discovered tabs. Skillset remains selectable with sparse data.
 Compare, Top patterns, Trend overlay, Skillset and Matrix expose the shared
 7/14/30/90-day selection, including sparse states. Switching tabs retains it.
 Skillset uses the same selector above its card rather than separate in-card

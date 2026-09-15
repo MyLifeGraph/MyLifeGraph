@@ -39,9 +39,17 @@ void main() {
         matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
       );
       expect(tester.widget<OutlinedButton>(morning).style!.backgroundColor!
-        .resolve({}), Colors.transparent);
+        .resolve({}), tester.element(morning).visualTokens.successSurface);
       expect(tester.widget<OutlinedButton>(evening).style!.backgroundColor!
-        .resolve({}), tester.element(evening).visualTokens.brand.withValues(alpha: 0.12));
+        .resolve({}), tester.element(evening).visualTokens.attentionSurface);
+      expect(tester.widget<OutlinedButton>(morning).style!.foregroundColor!
+        .resolve({}), tester.element(morning).visualTokens.success);
+      expect(tester.widget<OutlinedButton>(evening).style!.foregroundColor!
+        .resolve({}), tester.element(evening).visualTokens.attention);
+      if (width < 600) {
+        expect(find.text('Done'), findsOneWidget);
+        expect(find.text('To do'), findsOneWidget);
+      }
       expect(tester.takeException(), isNull);
     });
   }

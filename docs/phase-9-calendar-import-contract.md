@@ -33,7 +33,7 @@ token, arbitrary calendar URL fetch, webhook, incremental cursor, background
 sync, provider write, LLM processing, notification, or deployed job. Supabase
 Google sign-in authenticates the app only and is not calendar authorization.
 The existing import screen is reachable from Settings and the `Import calendar
-(.ics)` icon beside Planner's `Next seven days`. Opening either entry performs
+(.ics)` icon in Planner's page-header actions beside Refresh. Opening either entry performs
 no import; file selection and consent remain explicit inside the same screen.
 
 ## Contracts And Provenance

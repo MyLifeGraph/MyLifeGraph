@@ -46,14 +46,11 @@ class _MorningCalibrationPageState
     _MorningStep(
       eyebrow: 'MORNING · SLEEP',
       title: 'How did you sleep?',
-      subtitle: 'Estimate when sleep started and when you woke.',
       kind: _MorningStepKind.sleep,
     ),
     _MorningStep(
       eyebrow: 'MORNING · CHECK-IN',
       title: 'How are you starting today?',
-      subtitle:
-          'Add sleep quality and current energy. Evening context stays untouched.',
       kind: _MorningStepKind.checkIn,
     ),
   ];
@@ -79,7 +76,7 @@ class _MorningCalibrationPageState
       eyebrow: step.eyebrow,
       title: step.title,
       subtitle: widget.proposal == null
-          ? step.subtitle
+          ? null
           : _revisingSavedCapture
           ? 'Review suggestions. Saving updates today\'s Morning check-in.'
           : 'Review suggestions and fill any gaps before saving.',
@@ -89,7 +86,7 @@ class _MorningCalibrationPageState
       isLastStep: _stepIndex == _steps.length - 1,
       isLoading: _isLoading,
       isSaving: _isSaving,
-      saveLabel: 'Save morning check-in',
+      saveLabel: 'Save',
       errorMessage: _saveError,
       loadErrorMessage:
           (!_proposalMatchesContext
@@ -515,12 +512,10 @@ class _MorningStep {
   const _MorningStep({
     required this.eyebrow,
     required this.title,
-    required this.subtitle,
     required this.kind,
   });
 
   final String eyebrow;
   final String title;
-  final String subtitle;
   final _MorningStepKind kind;
 }

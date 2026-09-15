@@ -80,6 +80,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Synced account'), findsOneWidget);
+      expect(find.text('Speech to text'), findsNothing);
+      expect(find.text('Coach provider'), findsNothing);
       final container = ProviderScope.containerOf(
         tester.element(find.text('Synced account')),
       );

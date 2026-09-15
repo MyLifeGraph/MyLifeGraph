@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../core/constants/app_radii.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/navigation/app_routes.dart';
+import '../../../core/navigation/planner_add_request.dart';
 import '../../../core/theme/app_motion_tokens.dart';
 import '../../../core/theme/app_theme_effects.dart';
 import '../../../core/theme/app_visual_tokens.dart';
@@ -16,8 +18,9 @@ import '../../../core/widgets/app_brand_mark.dart';
 import '../../../composition/notifications_providers.dart';
 import '../../notifications/domain/entities/notification_action_target.dart';
 import 'shell_destination_descriptor.dart';
+import 'shell_swipe_region.dart';
 
-class MainShell extends ConsumerWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({
     required this.currentPath,
     required this.child,
@@ -28,7 +31,28 @@ class MainShell extends ConsumerWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends ConsumerState<MainShell> {
+  double? _pageDirection;
+  String get currentPath => widget.currentPath;
+  Widget get child => widget.child;
+
+  @override
+  void didUpdateWidget(covariant MainShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentPath == currentPath) return;
+    final paths = shellDestinations.where((item) => !item.emphasized)
+        .map((item) => item.path).toList();
+    final from = paths.indexOf(oldWidget.currentPath);
+    final to = paths.indexOf(currentPath);
+    // Auxiliary/form routes keep their normal push/back transitions.
+    _pageDirection = from >= 0 && to >= 0 ? (to > from ? 1 : -1) : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     ref.listen(inAppNotificationDeliveryProvider, (previous, next) {
       if (previous?.sequence == next.sequence || next.notification == null) {
@@ -84,9 +108,38 @@ class MainShell extends ConsumerWidget {
       (destination) => destination.emphasized,
     );
 
-    final content = _ShellBody(
-      isLocalDemo: capabilities.isLocalDemo,
-      child: child,
+    final swipeDestinations = visibleDestinations
+        .where((destination) => !destination.emphasized).toList();
+    final swipeIndex = swipeDestinations.indexWhere(
+      (destination) => destination.path == currentPath,
+    );
+    bool canSwipe() => MediaQuery.viewInsetsOf(context).bottom == 0 &&
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<EditableText>() == null;
+    final VoidCallback? requestPlannerAdd = currentPath != AppRoutes.planner
+        ? null : () {
+          if (canSwipe()) ref.read(plannerAddRequestProvider.notifier).state++;
+        };
+    final content = ShellSwipeRegion(
+      onHorizontalSwipe: swipeIndex < 0 ? null : (forward) {
+        if (!canSwipe()) return;
+        final next = swipeIndex + (forward ? 1 : -1);
+        if (next >= 0 && next < swipeDestinations.length) {
+          context.go(swipeDestinations[next].path);
+        }
+      },
+      child: Theme(
+        data: _pageDirection == null ? Theme.of(context) : Theme.of(context).copyWith(
+          pageTransitionsTheme: PageTransitionsTheme(builders: {
+            for (final platform in TargetPlatform.values)
+              platform: _ShellRootPageTransitions(_pageDirection!),
+          }),
+        ),
+        child: _ShellBody(
+          isLocalDemo: capabilities.isLocalDemo,
+          child: child,
+        ),
+      ),
     );
 
     return LayoutBuilder(
@@ -111,21 +164,48 @@ class MainShell extends ConsumerWidget {
         return Scaffold(
           extendBody: true,
           body: content,
-          floatingActionButton: _QuickActionButton(
-            destination: quickActionDestination,
-            isSelected: selectedDestination == quickActionDestination,
-            onTap: () => context.go(quickActionDestination.path),
+          floatingActionButton: ShellSwipeRegion(
+            key: const ValueKey('shell-plus-swipe'),
+            onSwipeUp: requestPlannerAdd,
+            child: _QuickActionButton(
+              destination: quickActionDestination,
+              isSelected: selectedDestination == quickActionDestination,
+              onTap: () => context.go(quickActionDestination.path),
+            ),
           ),
           floatingActionButtonLocation:
               FloatingActionButtonLocation.centerDocked,
-          bottomNavigationBar: _FloatingBottomNav(
-            destinations: visibleDestinations,
-            selectedDestination: selectedDestination,
-            onDestinationSelected: (destination) =>
-                context.go(destination.path),
+          bottomNavigationBar: ShellSwipeRegion(
+            key: const ValueKey('shell-bottom-swipe'),
+            onSwipeUp: requestPlannerAdd,
+            child: _FloatingBottomNav(
+              destinations: visibleDestinations,
+              selectedDestination: selectedDestination,
+              onDestinationSelected: (destination) =>
+                  context.go(destination.path),
+            ),
           ),
         );
       },
+    );
+  }
+}
+
+class _ShellRootPageTransitions extends PageTransitionsBuilder {
+  const _ShellRootPageTransitions(this.direction);
+
+  final double direction;
+
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context,
+      Animation<double> animation, Animation<double> secondaryAnimation,
+      Widget child) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    return SlideTransition(
+      key: const ValueKey('shell-directional-transition'),
+      position: animation.drive(Tween(begin: Offset(direction, 0), end: Offset.zero)
+        .chain(CurveTween(curve: context.motionTokens.curve))),
+      child: child,
     );
   }
 }

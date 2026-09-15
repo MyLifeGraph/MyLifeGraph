@@ -14,7 +14,10 @@ payloads are excluded. No provider authority, prompt version or tool changes.
 After authenticated profile initialization, the client restores the device-local,
 profile-scoped provider choice; without a saved choice it preselects Project Coach
 (`Standard (provided)`). Only the provider name is saved in preferences, never a
-key. Web keys remain tab-memory-only, so a restored BYOK choice can require key
+key. The separate Gemini model choice is also profile-scoped and device-local.
+Its compact dropdown offers 3.6, 3.7 and 3.8 Flash, retaining 3.8 as the default.
+Changing the choice preserves the draft but clears exact-retry identity; no
+question is sent automatically. Web keys remain tab-memory-only, so a restored BYOK choice can require key
 entry after reload. Sign-out clears keys but retains this non-secret preference;
 another account does not inherit it. Personal OpenAI/Gemini keys remain opt-in. Every request
 still names its provider explicitly, with unchanged server admission and no
@@ -29,7 +32,22 @@ directly selectable. Each option has independent Info opening its explanation
 in a dialog without selecting that provider. Standard selection closes the sheet;
 personal-key options retain the existing key test/save/delete controls inside it.
 Errors remain visible above the chat. Opening the sheet or switching providers
-never sends a question. Settings retains its existing dropdown.
+never sends a question. Settings no longer duplicates these provider controls.
+
+A provider change during an in-flight capability refresh clears the old budget
+and queues a fresh read; the superseded result cannot restore the previous
+provider's limits. Capability and completed-response identities must match the
+explicit provider. Old upstream `account_limit` errors use provider-neutral
+client copy, not Codex wording. Quotas remain unchanged: the non-operator
+20-turn local-day limit is account-wide, while Standard has separate 5-per-user
+and 15-global UTC-day dispatch limits. Gemini never dispatches through Codex.
+Rejected BYOK selections (disabled provider or missing key) return unavailable
+before probing any base provider. Their capability read must not ask Codex for
+availability or forward its account-quota error under a Gemini identity.
+
+Remaining turns sit beneath the selected model name in the composer control,
+not in the page header, preserving room for the Coach title on narrow screens.
+The count and its period tooltip retain the server-provided budget semantics.
 
 The permanent chat outline starts below the fixed capability status card and
 continues through the fixed bottom composer. Only the timeline scrolls within
@@ -56,7 +74,10 @@ German changes only the trusted output-language instructions of the V5 base
 prompt; its named extension is included in the prompt and request fingerprint.
 User text, notes and tool output cannot choose or override response language.
 The existing response/provenance shape, grants, quotas and stored messages remain
-unchanged. No schema migration is needed for this language extension. Deploy the
+unchanged. The additive `coach_language_completion` migration is required so
+completion accepts the existing German fingerprint; no table or public RPC
+signature changes. The exact raw text is retained and changed-text/language
+replays remain rejected. Deploy the
 updated API before using German requests; older APIs reject the opt-in extension
 rather than silently answering in a different language. Existing English clients
 remain compatible. This is independent of the pending Gemini model rollout.
@@ -75,7 +96,8 @@ is represented honestly. Persisted V1/V2 responses and the V3 BYOK path remain
 readable for rolling compatibility.
 
 OpenAI BYOK uses the Responses API and exact `gpt-5.6-terra`; Gemini BYOK uses
-the Interactions API and exact `gemini-3.8-flash`. The REST adapter sends
+the Interactions API with an explicitly selected `gemini-3.6-flash`,
+`gemini-3.7-flash`, or `gemini-3.8-flash` (default). The REST adapter sends
 `Api-Revision: 2026-05-20`, consumes the current `steps` timeline, preserves
 every returned model/thought/function step during stateless tool continuation,
 and uses the current text/JSON-schema response format. Both loops set
@@ -93,11 +115,23 @@ separate pilot executor additionally expose isolated `run_python`.
 The client supplies the explicit provider in
 `X-MyLifeGraph-Coach-Provider`; only OpenAI/Gemini also supply a request-local
 key in `X-MyLifeGraph-Coach-Api-Key`. FastAPI never persists or emits a key and
-never falls back between modes. Hosted CORS allowlists both headers and exposes
+never falls back between modes. Coach capability/respond routes additionally
+accept optional `X-MyLifeGraph-Coach-Model`, restricted to the three exact Gemini
+IDs. Omission preserves the existing default. Claim/provenance records bind the
+selected ID, and the client rejects a capability or response using another ID.
+Deploy the additive 3.7 allowlist and updated API/client before using that model;
+old clients cannot parse 3.7 history. This choice does not change Ultra Quick's
+existing default-model extraction path. Hosted CORS allowlists these headers and exposes
 the bounded `Retry-After` header. Service-role-only
 `claim_coach_request_v8`, `complete_coach_request_v3`, and the operator
 dispatch RPCs preserve advisory-lock order, retry identity, local/global
 budgets, append-only usage, RLS, and grants.
+
+Google HTTP-400 `API_KEY_INVALID` is recognized from at most 16 KiB of error
+JSON (object or array). Only the fixed reason is retained; provider text and keys
+are never logged or returned. It remains the compatible `provider_failure` SQL
+code with a clear key-replacement message and `retryable:false`. Provider timeout,
+quota and model-unavailable messages identify the selected provider, not local Codex.
 
 ## Status
 
@@ -746,11 +780,14 @@ an ambiguous API/executor crash and always continues to consume global budget.
 
 ## Flutter Contract
 
-Settings → Speech to text and the discreet composer source icon share one
+The discreet Coach composer source icon manages one
 device-persisted selection: Server (default), or a downloaded on-device model.
 On-device inference is supported in the 64-bit Android app, not Flutter web.
-On-device opens a dedicated model picker; the selected model remains accessible
-from the source sheet. Web exposes the catalog but disables download/activation.
+On-device shows the complete model list in the same sheet, including when a
+saved local selection is reopened. Selected/Downloaded labels distinguish the
+active source from installed files. Web exposes the catalog but disables download/activation.
+The speech sheet uses the root overlay above app navigation, preserves Android's
+bottom safe inset and scroll on short screens or with enlarged text.
 The fixed multilingual catalog contains Whisper Tiny, Whisper Base and
 Parakeet TDT 0.6B V3, INT8 ONNX via pinned `sherpa_onnx` 1.13.8.
 Model files download only on explicit request from fixed Hugging Face revisions;
@@ -811,9 +848,9 @@ of Coach availability. Hosted Server-source and guest/mock gates are unchanged;
 unavailable Coach responses remain blocked in every environment. Local speech
 does not imply an offline Coach or bypass account/session requirements.
 
-Coach remains the fifth development-gated shell destination. Today, Insights,
+Coach remains the fifth explicitly gated shell destination. Today, Insights,
 Quick actions, Planner, Coach, and Settings share the same top action group:
-page-specific actions such as Refresh first, an unread Coach result second, and
+page-specific actions such as Refresh first, an unread Coach result, Inbox, and
 Settings last. Settings is pushed so Back returns to the originating main page;
 on Settings the redundant self-link is omitted while the unread result and
 Back remain available. Loading, empty, and error states retain their page's
@@ -849,7 +886,7 @@ provenance, safety, trace, evidence, replay, and feature error rules remain in
 the Coach layer; V4 is synchronized by named constants while persisted V1-V3
 history stays readable.
 
-Hosted Settings requires one deliberate mode selection: `Project Coach`,
+The hosted Coach provider menu requires one deliberate mode selection: `Project Coach`,
 `Use my OpenAI key`, or `Use my Gemini key`. Project Coach never reads or
 stores a key. BYOK keys remain isolated per provider, tab-memory-only on web
 and encrypted device-local on Android. A failed mode never changes providers.

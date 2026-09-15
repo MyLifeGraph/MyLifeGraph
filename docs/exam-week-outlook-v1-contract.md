@@ -46,7 +46,7 @@ you sleep?` shows 50-percent progress and owns both clocks, the derived
 `Estimated sleep duration`, and the target. Only a complete valid interval and
 target enable `Next`. `MORNING · CHECK-IN` / `How are you starting today?`
 shows 100 percent and owns quality and energy. `Back` retains every answer, and
-only `Save morning check-in` on the second page writes the branch; a failure
+only `Save` on the second page writes the branch; a failure
 keeps that page, draft, capture identity, and payload available for retry.
 
 The result area shows only `—` while no valid duration exists. The duration,

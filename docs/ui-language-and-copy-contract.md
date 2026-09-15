@@ -1,5 +1,9 @@
 # UI Language And Copy Contract
 
+Gemini Coach uses a short `Model` dropdown with `Gemini 3.6 Flash`,
+`Gemini 3.7 Flash`, and `Gemini 3.8 Flash`. Invalid-key errors explicitly ask the
+user to check/replace the key; generic cloud errors never call it a local provider.
+
 Planner's compact view labels are `This week` and `Planning`. Task filtering
 uses `Dated` / `Undated` because it reflects deadlines, not reservations.
 Speech source labels are `Server` / `On-device`; Whisper Tiny and Base are
@@ -167,7 +171,7 @@ uncalculable duration show only `—` beside the label, not a status card.
 Morning check-in presents one local draft in two steps. The first step uses
 `MORNING · SLEEP`, `How did you sleep?`, 50-percent progress, and `Next`; the
 second uses `MORNING · CHECK-IN`, `How are you starting today?`, 100-percent
-progress, `Back`, and the final `Save morning check-in`. The first step does
+progress, `Back`, and the final `Save`. The first step does
 not show quality, energy, or the save action. `Next` remains unavailable until
 both estimated clocks and the sleep target form a complete valid branch. When
 no duration can be calculated, the compact duration value shows only `—`; the
@@ -196,6 +200,27 @@ Dashboard detail. The Quick Actions subtitle is exactly
 `Typical weekday` remains separate and unchanged.
 
 ## Quick Actions Copy
+
+Specific blocker stays optional: selecting a source shows a chevron, and a second
+tap opens or closes its detail. The field appears immediately after the selected
+stress-source option, before the next option. No selection hides the field,
+without clearing its text. Optional Reflection remains separate; source changes
+retain the shared note. Sport/Social use the stress-influence button sizing.
+The selected source and blocker share an expanding card; copy and input limits
+are unchanged. Hover is not a second selection, and keyboard focus remains visible.
+
+Insights `Past` uses `Rolling` (7/14/30 days) and `Weekdays` (this vs last week).
+It labels units, date ranges, missing gaps and trailing summary metrics explicitly.
+Rolling labels name both equal periods; Weekdays labels this Monday through
+today and the full previous Monday–Sunday, matching the plotted values.
+Coach and Speech configuration live in Coach, without duplicate Settings entries.
+Speech distinguishes `Selected` from `Downloaded`; upstream AI quota errors do
+not identify Codex when another provider was selected.
+
+Manual Morning/Evening pages show the existing eyebrow and main heading without
+an extra introductory subtitle. Voice-draft review/update instructions and
+validation, error and field-specific information remain visible as before.
+Both final check-in buttons say `Save`.
 
 After a successful current-day capture read, the existing `Morning check-in`
 and `Evening check-in` actions appear in that order and use the exact status
@@ -259,6 +284,11 @@ multiple blocks never imply multiple required actions.
 
 ## Planner Copy
 
+The calendar preference is labeled `Plan around calendar events` in Planning.
+Both Planner views have a compact `+ Add` button opening `Add new`.
+The calendar hint preserves read-only behavior and the reminder to review
+previews after each import; without a current import it asks for a calendar file.
+
 Planner and Insights omit generic introductory subtitles in their page headers.
 Contextual evidence, preview warnings and explicit confirmation copy remain.
 
@@ -302,13 +332,15 @@ never presents the normal `Confirm plan` action. `Plan changed since preview`
 is a stale conflict, while `Saved, but some views could not refresh` preserves a
 durable mutation outcome. Avoid copy that promises automatic optimization.
 
-On mobile Planner leads with the next seven days, followed by `Add new`,
-`Needs attention`, `Ongoing preparation`, optional `Pending previews`, collapsed `Habits`,
-`Unscheduled Tasks`, and collapsed history under `planner-overview-v2`. Desktop
-places the agenda first, with creation/preferences and right-hand summaries below it.
+Mobile/tablet Planner keeps its This week/Planning toggle unchanged and an outlined `+ Add`
+in the calendar heading; Planning retains a compact Add button. This week shows the
+calendar; Planning retains `Needs attention`, `Ongoing preparation`, optional
+`Pending previews`, collapsed `Habits`, `Unscheduled Tasks`, and collapsed history
+under `planner-overview-v2`. Desktop combines the calendar and Add new/preferences
+on the left with the existing summaries on the right, without that toggle.
 `Days` and `List` remain labelled toggle actions at all widths. No sample
-appointment is added to fill the fixed-height Days frame. Its empty label remains
-`No planned or fixed items.`; more items remain accessible by scrolling. No
+appointment is added to fill the Days frame. Its empty label remains
+`No planned or fixed items.`; all items scroll with the page. No
 reference-only success claim or invented habit streak is shown. The
 preview section contains every staged create and update and says
 `Review every staged Task or Habit change before confirmation.` The
@@ -449,7 +481,8 @@ less confidence and no level guarantees correctness.
 Ultra Quick Check-in uses the compact choices `Morning`, `Evening`, `Quick note`.
 Morning/Evening speaking guides follow manual-form order with blank values,
 `… / 10` ratings, named optional choices, and conditional stress context.
-They are display-only hints while empty and remain visible during recording;
+They are display-only hints immediately on opening while empty (without a
+covering field label) and remain visible during recording;
 the guide is never prefilled as user input.
 `Review fields` means an uncommitted proposal, followed by the existing required
 form and final save. `Save note` is separate optional context, not a check-in.
@@ -490,7 +523,10 @@ says `Early evidence`.
 
 ## Plain-language Rules
 
-Auth introduces `Sign in to sync your personal data.` in synced-only mode, or
+Mobile Auth uses a larger MyLifeGraph heading and `Make room for a better day.`
+Email fields are directly visible, with existing recovery/resend actions;
+Google and the mode-appropriate guest option remain available.
+Desktop Auth introduces `Sign in to sync your personal data.` in synced-only mode, or
 `Sign in to sync, or try a local demo.` otherwise. The guest action explains
 `Local demo. Setup stays here; check-ins may transfer on sign-in.` Google needs
 no repeated subtitle. Full privacy disclosures and authentication errors remain
@@ -563,10 +599,10 @@ the full explanation. Package identifiers remain available as app-label tooltips
   source truth, and the action needed to continue remain visible. Information
   controls start closed, operate independently, and use `Show/Hide information
   about <heading>` semantics.
-- Coach answers are English-only in the current free-agent contract, including
-  uncertainty text, even when the question or stored evidence is not English.
-  A rejected provider-language response uses ordinary retry copy and is never
-  shown as a partial answer.
+- Coach answers and uncertainty text follow the explicitly selected English
+  (default) or German response language. Question/evidence language does not
+  silently change that preference. Invalid provider output uses ordinary retry
+  copy and is never shown as a partial answer.
 - Do not use `generated`, `learned`, `optimized`, or `AI-powered` unless the
   current execution path and its visible provenance prove that claim.
 
@@ -577,8 +613,9 @@ the full explanation. Package identifiers remain available as app-label tooltips
   current measured report ratings, not a personal-ability score. Legacy demo
   Skillset data and demo radar reports are labelled as examples.
 - In-app reminders may show a foreground banner only while MyLifeGraph is open.
-  The app does not claim browser, phone-system, email, push, background-mobile,
-  or deployed delivery.
+  This foreground feature does not imply OS delivery. Separate Android Push
+  reminders require explicit consent and permission; do not promise delivery
+  while force-stopped or offline. Web/iOS push and email are not implemented.
 - Reminder configuration belongs to Settings, is not delivery consent, and is
   never changed by Setup.
 - Deterministic generated Inbox items and banners use the compact provenance

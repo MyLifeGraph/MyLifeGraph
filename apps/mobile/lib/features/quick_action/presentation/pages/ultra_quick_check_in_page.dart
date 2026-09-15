@@ -403,11 +403,11 @@ class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
                       decoration: InputDecoration(
                         labelText: _mode == 'note'
                             ? 'Your note'
-                            : 'Tell us about your day',
+                            : null,
                         hintMaxLines: 20,
                         hintText: _mode == 'note'
                             ? 'Anything worth remembering…'
-                            : _speakingGuide,
+                            : _text.text.isEmpty ? _speakingGuide : null,
                       ),
                     ),
                   const SizedBox(height: AppSpacing.sm),

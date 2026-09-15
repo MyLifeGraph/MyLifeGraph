@@ -86,6 +86,7 @@ final coachRepositoryProvider = Provider<CoachRepository>((ref) {
       return CoachProviderCredentials(
         provider: provider,
         apiKey: key,
+        model: provider == CoachProviderName.gemini ? credentials.geminiModel : null,
       );
     },
   );

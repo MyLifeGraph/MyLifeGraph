@@ -25,11 +25,65 @@ import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  testWidgets('context choices share dimensions and blocker stays with its source', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _RecordingCaptureStore();
+    await _pumpEveningPage(tester, store, skillsetEnabled: true);
+    await tester.tap(find.bySemanticsLabel('evening mood 2 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening energy 9 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening stress 8 of 10'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('Next'));
+    await _tapVisible(tester, find.text('Next'));
+    final blocker = _textFieldWithLabel('Specific blocker (optional)');
+    expect(blocker, findsNothing);
+    await _tapVisible(tester, find.bySemanticsLabel('stress influence hardly_controllable'));
+    final controls = find.byWidgetPredicate((w) => w is CaptureChoiceControl<StressControllability>);
+    final reference = tester.getSize(find.descendant(of: controls, matching: find.byType(ChoiceChip)).first);
+    for (final label in ['Sport today', 'Social contact']) {
+      final chips = find.descendant(of: find.widgetWithText(OptionalSkillsetChoice, label),
+        matching: find.byType(ChoiceChip));
+      for (var i = 0; i < 3; i++) { expect(tester.getSize(chips.at(i)), reference); }
+    }
+    await _tapVisible(tester, find.bySemanticsLabel('stress source workload'));
+    expect(blocker, findsNothing);
+    await _tapVisible(tester, find.bySemanticsLabel('stress source workload'));
+    await tester.enterText(blocker, 'Too many deadlines');
+    expect(tester.widget<TextField>(blocker).decoration!.enabledBorder, InputBorder.none);
+    expect(tester.widget<TextField>(blocker).decoration!.focusedBorder, InputBorder.none);
+    for (final (source, next) in [
+      ('workload', 'avoidable_pressure'),
+      ('avoidable_pressure', 'private_emotional'),
+      ('physical_recovery', 'external_environment'),
+    ]) {
+      final selected = find.bySemanticsLabel('stress source $source');
+      if (source != 'workload') {
+        await _tapVisible(tester, selected);
+        expect(blocker, findsNothing);
+        await _tapVisible(tester, selected);
+      }
+      await tester.pumpAndSettle();
+      expect(blocker, findsOneWidget);
+      expect(find.text('Too many deadlines'), findsOneWidget);
+      expect(tester.getTopLeft(blocker).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(selected).dy));
+      expect(tester.getBottomLeft(blocker).dy,
+        lessThan(tester.getTopLeft(find.bySemanticsLabel('stress source $next')).dy));
+    }
+    await _tapVisible(tester, find.text('Save'));
+    expect(store.eveningAttempts.single.specificBlocker, 'Too many deadlines');
+    expect(store.eveningAttempts.single.stressSource, StressSource.physicalRecovery);
+  });
   testWidgets('sport and social save with no Insights dimensions selected', (
     tester,
   ) async {
     final store = _RecordingCaptureStore();
     await _pumpEveningPage(tester, store, skillsetEnabled: true);
+    expect(find.text('Close today in under a minute'), findsOneWidget);
+    expect(find.text('Three quick ratings are enough for today\'s state.'), findsNothing);
     expect(find.text('Sport today'), findsNothing);
     await _completeEveningDraft(tester, includeOptionals: false);
     expect(find.text('More (optional)'), findsNothing);
@@ -43,7 +97,7 @@ void main() {
         matching: find.text('Some'),
       ),
     );
-    await _tapVisible(tester, find.text('Save evening check-in'));
+    await _tapVisible(tester, find.text('Save'));
     expect(store.eveningAttempts.single.skillset?.values, {
       'sport': 2,
       'social': 1,
@@ -214,7 +268,7 @@ void main() {
     await _pumpEveningPage(tester, store, snapshotRefresh: snapshotRefresh);
 
     await _completeEveningDraft(tester);
-    await _tapVisible(tester, find.text('Save evening check-in'));
+    await _tapVisible(tester, find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(
@@ -241,7 +295,7 @@ void main() {
     expect(first.sleepTargetMinutes, 480);
     expect(snapshotRefresh.targetDates, isEmpty);
 
-    await _tapVisible(tester, find.text('Save evening check-in'));
+    await _tapVisible(tester, find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard destination'), findsOneWidget);
@@ -269,7 +323,7 @@ void main() {
       findsNothing,
     );
     expect(_textFieldWithLabel('Reflection (optional)'), findsOneWidget);
-    await _tapVisible(tester, find.text('Save evening check-in'));
+    await _tapVisible(tester, find.text('Save'));
     await tester.pumpAndSettle();
 
     final written = store.eveningAttempts.single.toMetadataJson();
@@ -297,8 +351,8 @@ void main() {
       _textFieldWithLabel('Possible priority tomorrow (optional)'),
       findsNothing,
     );
-    expect(_textFieldWithLabel('Specific blocker (optional)'), findsOneWidget);
-    await _tapVisible(tester, find.text('Save evening check-in'));
+    expect(_textFieldWithLabel('Specific blocker (optional)'), findsNothing);
+    await _tapVisible(tester, find.text('Save'));
     await tester.pumpAndSettle();
 
     final saved = store.eveningAttempts.single;
@@ -419,7 +473,7 @@ void main() {
     await _pumpEveningPage(tester, store);
     await _completeEveningDraft(tester, includeOptionals: false);
 
-    await _tapVisible(tester, find.text('Save evening check-in'));
+    await _tapVisible(tester, find.text('Save'));
     await tester.tap(find.widgetWithText(FilledButton, 'Saving...'));
     await tester.pump();
 
@@ -640,6 +694,7 @@ Future<void> _completeEveningDraft(
   );
 
   if (includeOptionals) {
+    await _tapVisible(tester, find.bySemanticsLabel('stress source private_emotional'));
     await tester.enterText(
       _textFieldWithLabel('Reflection (optional)'),
       'Exact retry reflection',

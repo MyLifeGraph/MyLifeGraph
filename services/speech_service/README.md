@@ -1,5 +1,10 @@
 # Independent Coach dictation
 
+For the complete runtime/service map and recorded rollout boundary, see the
+[development handoff](../../docs/development-handoff.md). This sidecar is the
+Server option; Android's downloaded on-device models are independent and owned
+by the Coach/Flutter contract. The catalog is Parakeet **V3**, not V4.
+
 This optional sidecar adds Parakeet TDT 0.6B v3 INT8 transcription without
 changing the existing API, Coach executor, database, or release directories.
 The feature owner is [Coach](../../docs/phase-10-controlled-coach-plan.md).
@@ -70,7 +75,10 @@ recording service so Android 13+ lint can validate its notification code. This
 does not request or grant notification permission, enable background recording,
 or turn the application's in-app Inbox into OS/push delivery.
 
-Local development: forward laptop loopback 8002 to VPS loopback 8002 and set
+Laptop testing with real Cloud accounts uses the supported
+[Cloud frontend launcher](../../docs/local-dev.md#personal-windows-browser-with-existing-cloud-accounts),
+which keeps the released HTTPS speech endpoint and needs no speech SSH tunnel.
+For the separate development-account stack only, forward laptop loopback 8002 to VPS loopback 8002 and set
 `SPEECH_SERVICE_BASE_URL=http://127.0.0.1:8002/dev` before starting Flutter.
 Only approved exact browser origins are allowed (see installer); adding another
 site requires reviewing that list. Hosted staging needs its own corresponding

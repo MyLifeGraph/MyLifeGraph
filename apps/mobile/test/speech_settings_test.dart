@@ -16,6 +16,60 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  for (final largeText in [false, true]) {
+    testWidgets('speech sheets clear Android navigation (large text: $largeText)', (tester) async {
+      tester.view.physicalSize = const Size(360, 740);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = FakeViewPadding(bottom: 48);
+      tester.view.viewPadding = FakeViewPadding(bottom: 48);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      final settings = SpeechSettings(_Store());
+      await settings.ready;
+      final root = GlobalKey<NavigatorState>();
+      final nested = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [speechSettingsProvider.overrideWith((ref) => settings)],
+        child: MaterialApp(
+          navigatorKey: root,
+          theme: AppTheme.dark,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(largeText ? 2 : 1)),
+            child: child!,
+          ),
+          home: Scaffold(
+            extendBody: true,
+            bottomNavigationBar: const SizedBox(height: 96),
+            body: Navigator(key: nested, onGenerateRoute: (_) => MaterialPageRoute<void>(
+              builder: (_) => const Center(child: SpeechSourceButton()),
+            )),
+          ),
+        ),
+      ));
+      await tester.tap(find.byType(SpeechSourceButton));
+      await tester.pumpAndSettle();
+      expect(root.currentState!.canPop(), isTrue);
+      expect(nested.currentState!.canPop(), isFalse);
+      final serverHint = find.text('Audio is transcribed on our server.');
+      await tester.ensureVisible(serverHint);
+      await tester.pumpAndSettle();
+      expect(tester.getBottomRight(serverHint).dy, lessThanOrEqualTo(740 - 48));
+      await tester.ensureVisible(find.text('On-device'));
+      await tester.tap(find.text('On-device'));
+      await tester.pumpAndSettle();
+      final download = find.byTooltip('Download Parakeet V3');
+      final row = find.ancestor(of: download, matching: find.byType(ListTile));
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      expect(download.hitTestable(), findsOneWidget);
+      expect(tester.getBottomRight(row).dy, lessThanOrEqualTo(740 - 48));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final supported in [true, false]) {
     testWidgets('On-device opens model picker (supported: $supported)', (tester) async {
       final store = supported ? _Store() : _UnsupportedStore();
@@ -31,7 +85,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('On-device'));
       await tester.pumpAndSettle();
-      expect(find.text('On-device models'), findsOneWidget);
+      expect(find.text('Speech to text'), findsOneWidget);
       for (final model in speechModels) {
         expect(find.text(model.label), findsOneWidget);
       }
@@ -69,6 +123,45 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('reopened local selection shows the entire model catalog above Android inset', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = FakeViewPadding(bottom: 48);
+    tester.view.viewPadding = FakeViewPadding(bottom: 48);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    final store = _Store()..files.addAll(speechModels.map((m) => m.id));
+    final first = SpeechSettings(store);
+    await first.ready;
+    await first.select('parakeet-v3');
+    first.dispose();
+    final reopened = SpeechSettings(store);
+    await reopened.ready;
+    expect(reopened.source, 'parakeet-v3');
+    expect(reopened.installed.length, 3);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [speechSettingsProvider.overrideWith((ref) => reopened)],
+      child: MaterialApp(theme: AppTheme.dark,
+        home: const Scaffold(body: SpeechSourceButton())),
+    ));
+    for (var open = 0; open < 2; open++) {
+      await tester.tap(find.byType(SpeechSourceButton));
+      await tester.pumpAndSettle();
+      for (final model in speechModels) {
+        expect(find.text(model.label).hitTestable(), findsOneWidget);
+      }
+      expect(find.textContaining('Selected'), findsOneWidget);
+      expect(find.textContaining('Downloaded'), findsNWidgets(2));
+      final last = find.ancestor(of: find.text('Parakeet V3'), matching: find.byType(ListTile));
+      expect(tester.getBottomRight(last).dy, lessThanOrEqualTo(752));
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   test('installed local speech permits a signed-in draft, never guest or server fallback', () async {
     final speech = SpeechSettings(_Store());

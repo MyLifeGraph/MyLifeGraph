@@ -117,17 +117,6 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       title: 'Coach',
       compactHeader: true,
       actions: [
-        if (state.capabilities?.canRespond == true)
-          Tooltip(
-            message: '${state.capabilities!.limits.remainingRequests} of '
-                '${state.capabilities!.limits.requestsPerLocalDay} questions left '
-                '${state.capabilities!.limits.requestPeriod == 'utc_day' ? 'today (UTC)' : 'today'}',
-            child: Text(
-              '${state.capabilities!.limits.remainingRequests}/'
-              '${state.capabilities!.limits.requestsPerLocalDay} left',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ),
         AppHeaderActions(
           pageActions: [
             AssistantLanguageButton(
@@ -187,7 +176,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                   onChanged: ref.read(coachControllerProvider.notifier).updateDraft,
                   onSend: _send,
                   onCancel: ref.read(coachControllerProvider.notifier).cancelAnalysis,
-                  onProviderChanged: () => ref.read(coachControllerProvider.notifier).load(),
+                  onProviderChanged: () => ref.read(coachControllerProvider.notifier).providerChanged(),
                 ),
             );
             final compactHeight = constraints.maxHeight <
@@ -587,7 +576,10 @@ class _ComposerCardState extends State<_ComposerCard> {
                           ),
                         ),
                   icon: const Icon(AppIcons.tuneOutlined),
-                  label: Text(switch (state.capabilities?.provider) {
+                  label: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [Text(switch (state.capabilities?.provider) {
                     CoachProviderName.operatorCodexPilot => 'Standard',
                     CoachProviderName.openai => 'OpenAI',
                     CoachProviderName.gemini => 'Gemini',
@@ -595,6 +587,19 @@ class _ComposerCardState extends State<_ComposerCard> {
                     CoachProviderName.fake => 'Test Coach',
                     _ => 'Choose Coach',
                   }),
+                    if (state.capabilities?.canRespond == true)
+                      Tooltip(
+                        message: '${state.capabilities!.limits.remainingRequests} of '
+                            '${state.capabilities!.limits.requestsPerLocalDay} questions left '
+                            '${state.capabilities!.limits.requestPeriod == 'utc_day' ? 'today (UTC)' : 'today'}',
+                        child: Text(
+                          '${state.capabilities!.limits.remainingRequests}/'
+                          '${state.capabilities!.limits.requestsPerLocalDay} left',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ),
+                    ],
+                  ),
                   style: TextButton.styleFrom(alignment: Alignment.centerLeft),
                 ))),
                 SpeechSourceButton(enabled: !state.isSending && !state.isLoading),

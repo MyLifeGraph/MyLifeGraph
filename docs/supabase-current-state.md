@@ -1,6 +1,32 @@
 # Supabase Current State
 
-The latest repository migration is `20260915105930_coach_gemini_38_flash.sql`.
+Current local-versus-published work is summarized in the
+[development handoff](development-handoff.md). The migration list below is the
+repository inventory, not an instruction to reapply installed SQL. Recorded
+Pilot application of the German-completion fix is in
+[Verification](verification.md#current-verified-baseline); the newer Gemini
+model-selection migration remains a separate pending rollout. This documentation
+refresh performs no database, Auth, RLS, grant, account or provider mutation.
+
+The latest repository migration is `20260915182801_coach_gemini_model_selection.sql`.
+It adds exactly `gemini-3.7-flash` to the existing 3.6/3.8 claim and response
+allowlists. Drift-guarded replacements preserve function OIDs, ACLs, lock order,
+budgets, and model-bound retry identities. No rows, tables, RLS or RPC signatures
+change. Apply before selecting 3.7 with the updated API/client; older clients
+cannot parse 3.7 history. This does not establish live Cloud application.
+
+The preceding migration is `20260915145741_coach_language_completion.sql`.
+It lets the locked Coach completion delegate verify the existing German V4
+language-bound fingerprint as well as the historical text-only fingerprint.
+The alternate hash is recomputed from the exact raw message and fixed
+`coach-language-v1` / `de` constants, and is accepted only for V4 claims.
+No claim fingerprint, stored message, function signature, privilege, lock,
+quota or replay rule is rewritten. The drift-guarded replacement preserves
+the function OID and ACL. This fixes German completion rejection leaving the
+claim pending; it does not clear pending requests or redispatch a model.
+Repository presence does not establish live Cloud state.
+
+The preceding migration is `20260915105930_coach_gemini_38_flash.sql`.
 It adds exactly `gemini-3.8-flash` to the existing Gemini claim and response
 validation paths, retaining `gemini-3.6-flash`. Drift-guarded function replacements
 preserve OIDs, privileges, locks, budgets and retry identities. No stored rows,

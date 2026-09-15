@@ -18,14 +18,22 @@ class CoachApiDataSource {
     required String accessToken,
     CoachProviderName? provider,
     String? apiKey,
+    String? model,
   }) async {
     final json = await _guardRemote(
       () => _client.getJson(
         '/v1/coach/capabilities',
-        headers: _headers(accessToken, provider: provider, apiKey: apiKey),
+        headers: _headers(accessToken, provider: provider, apiKey: apiKey, model: model),
       ),
     );
-    return CoachCapabilities.fromJson(json);
+    final capability = CoachCapabilities.fromJson(json);
+    if (provider != null && capability.provider != provider) {
+      throw const CoachContractException('The Coach server returned a different provider. Reload before sending.');
+    }
+    if (model != null && capability.modelRequested != model) {
+      throw const CoachInputException('This Coach server does not support the selected model yet.');
+    }
+    return capability;
   }
 
   Future<CoachHistory> getHistory({required String accessToken}) async {
@@ -44,12 +52,13 @@ class CoachApiDataSource {
     required CancelToken cancelToken,
     CoachProviderName? provider,
     String? apiKey,
+    String? model,
   }) async* {
     final body = await _guardStream(
       () => _client.postStream(
         '/v1/coach/respond/stream',
         headers: {
-          ..._headers(accessToken, provider: provider, apiKey: apiKey),
+          ..._headers(accessToken, provider: provider, apiKey: apiKey, model: model),
           'Accept': 'text/event-stream',
         },
         body: request.toJson(),
@@ -57,10 +66,20 @@ class CoachApiDataSource {
         cancelToken: cancelToken,
       ),
     );
-    yield* _parseSse(
+    await for (final event in _parseSse(
       body.stream.cast<List<int>>(),
       expectedRequestContractVersion: request.contractVersion,
-    );
+    )) {
+      if (provider != null && event is CoachCompletedEvent &&
+          event.response.provenance.provider != provider) {
+        throw const CoachContractException('The Coach response used a different provider.');
+      }
+      if (model != null && event is CoachCompletedEvent &&
+          event.response.provenance.modelRequested != model) {
+        throw const CoachContractException('The Coach response used a different model.');
+      }
+      yield event;
+    }
   }
 
   Future<CoachHistoryDeleteResult> deleteHistory({
@@ -79,6 +98,7 @@ class CoachApiDataSource {
     String accessToken, {
     CoachProviderName? provider,
     String? apiKey,
+    String? model,
   }) {
     final operator = provider == CoachProviderName.operatorCodexPilot;
     final byok = const {
@@ -88,7 +108,8 @@ class CoachApiDataSource {
     if (provider == null && apiKey != null ||
         operator && apiKey != null ||
         byok && (apiKey == null || apiKey.trim().isEmpty) ||
-        provider != null && !operator && !byok) {
+        provider != null && !operator && !byok ||
+        model != null && (provider != CoachProviderName.gemini || !coachGeminiModels.containsKey(model))) {
       throw const CoachInputException(
         'Coach provider selection and API key do not match.',
       );
@@ -97,6 +118,7 @@ class CoachApiDataSource {
       'Authorization': 'Bearer $accessToken',
       if (provider != null) 'X-MyLifeGraph-Coach-Provider': provider.code,
       if (apiKey != null) 'X-MyLifeGraph-Coach-Api-Key': apiKey,
+      if (model != null) 'X-MyLifeGraph-Coach-Model': model,
     };
   }
 }

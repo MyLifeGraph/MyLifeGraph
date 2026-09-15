@@ -44,6 +44,7 @@ class CoachRepositoryImpl implements CoachRepository {
       accessToken: await _requireToken(),
       provider: credentials?.provider,
       apiKey: credentials?.apiKey,
+      model: credentials?.model,
     );
   }
 
@@ -88,6 +89,7 @@ class CoachRepositoryImpl implements CoachRepository {
         cancelToken: cancellation,
         provider: credentials?.provider,
         apiKey: credentials?.apiKey,
+        model: credentials?.model,
       )) {
         if (event is CoachStartedEvent && event.requestId != requestId) {
           throw const CoachContractException(
@@ -175,7 +177,7 @@ class CoachRepositoryImpl implements CoachRepository {
     if (credentials == null &&
         const {'staging', 'pilot', 'production'}.contains(environment)) {
       throw const CoachAccessException(
-        'Choose Project Coach or a personal API-key provider in Settings first.',
+          'Choose Standard or a personal API-key provider in Coach first.',
       );
     }
   }

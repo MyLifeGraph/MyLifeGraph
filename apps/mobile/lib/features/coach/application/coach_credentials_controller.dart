@@ -12,6 +12,7 @@ class CoachCredentials {
     required this.keys,
     this.busy = false,
     this.error,
+    this.geminiModel = coachDefaultGeminiModel,
   });
 
   final String? profileId;
@@ -19,6 +20,7 @@ class CoachCredentials {
   final Map<CoachProviderName, String> keys;
   final bool busy;
   final String? error;
+  final String geminiModel;
 
   String? get activeKey => provider == null ? null : keys[provider];
   bool get hasSelection => provider != null;
@@ -31,6 +33,7 @@ class CoachCredentials {
     Map<CoachProviderName, String>? keys,
     bool? busy,
     Object? error = _unchanged,
+    String? geminiModel,
   }) =>
       CoachCredentials(
         profileId: profileId ?? this.profileId,
@@ -40,6 +43,7 @@ class CoachCredentials {
         keys: keys ?? this.keys,
         busy: busy ?? this.busy,
         error: identical(error, _unchanged) ? this.error : error as String?,
+        geminiModel: geminiModel ?? this.geminiModel,
       );
 }
 
@@ -70,6 +74,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
 
   static String _selectionKey(String profileId) =>
       'coach_provider_v1:$profileId';
+  static String _modelKey(String profileId) => 'coach_gemini_model_v1:$profileId';
 
   Future<void> get initialization => _initialization;
 
@@ -94,6 +99,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
       final preferences = await SharedPreferences.getInstance();
       if (generation != _profileGeneration) return;
       final savedProvider = preferences.getString(_selectionKey(profileId));
+      final savedModel = preferences.getString(_modelKey(profileId));
       final provider = const [
         CoachProviderName.operatorCodexPilot,
         CoachProviderName.openai,
@@ -112,6 +118,8 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
         profileId: profileId,
         provider: provider ?? CoachProviderName.operatorCodexPilot,
         keys: keys,
+        geminiModel: coachGeminiModels.containsKey(savedModel)
+            ? savedModel! : coachDefaultGeminiModel,
       );
     } catch (_) {
       if (generation != _profileGeneration) return;
@@ -150,6 +158,27 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
     });
   }
 
+  Future<void> selectGeminiModel(String model) {
+    if (!coachGeminiModels.containsKey(model)) throw ArgumentError.value(model, 'model');
+    if (state.busy) return Future<void>.value();
+    state = state.copyWith(geminiModel: model, error: null);
+    final profileId = state.profileId;
+    final generation = _profileGeneration;
+    if (profileId == null) return Future<void>.value();
+    return _selectionSave = _selectionSave.then((_) async {
+      try {
+        final preferences = await SharedPreferences.getInstance();
+        if (!await preferences.setString(_modelKey(profileId), model)) {
+          throw StateError('Model was not saved');
+        }
+      } catch (_) {
+        if (mounted && generation == _profileGeneration) {
+          state = state.copyWith(error: 'Model choice could not be saved. Try again.');
+        }
+      }
+    });
+  }
+
   Future<bool> testAndSave(CoachProviderName provider, String value) async {
     if (!const {CoachProviderName.openai, CoachProviderName.gemini}
         .contains(provider)) {
@@ -169,6 +198,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
         accessToken: token,
         provider: provider,
         apiKey: key,
+        model: provider == CoachProviderName.gemini ? state.geminiModel : null,
       );
       if (capability.state != CoachCapabilityState.ready) {
         state = state.copyWith(

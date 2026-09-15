@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.mcp.coach_data_server import CoachDataMcpServer, ToolFailure
-from app.models.coach import COACH_AGENT_MAX_TOOL_CALLS, COACH_GEMINI_MODEL, CoachAgentModelOutput
+from app.models.coach import COACH_AGENT_MAX_TOOL_CALLS, COACH_GEMINI_COMPATIBLE_MODELS, COACH_GEMINI_MODEL, CoachAgentModelOutput
 from app.providers.base import (
     CoachActivityCallback,
     CoachAgentProviderResult,
@@ -55,7 +55,7 @@ _TOOLS = [
 class CloudByokCoachProvider:
     """A secret-bearing provider instance whose lifetime is one HTTP request."""
 
-    __slots__ = ("_provider", "_api_key", "_settings", "_client")
+    __slots__ = ("_provider", "_api_key", "_settings", "_client", "_model")
 
     def __init__(
         self,
@@ -64,6 +64,7 @@ class CloudByokCoachProvider:
         api_key: str,
         settings: Settings,
         client: httpx.AsyncClient | None = None,
+        model: str | None = None,
     ) -> None:
         key = api_key.strip()
         if not key:
@@ -73,6 +74,9 @@ class CloudByokCoachProvider:
                 retryable=False,
             )
         self._provider = provider
+        if model is not None and (provider != "gemini" or model not in COACH_GEMINI_COMPATIBLE_MODELS):
+            raise CoachProviderError("unavailable_model", "The selected Coach model is unsupported.", retryable=False)
+        self._model = model or _MODELS[provider]
         self._api_key = key
         self._settings = settings
         self._client = client
@@ -147,7 +151,7 @@ class CloudByokCoachProvider:
 
     @property
     def model(self) -> str:
-        return _MODELS[self._provider]
+        return self._model
 
     def _capability(self, state: str, reason: str) -> CoachProviderCapability:
         return CoachProviderCapability(
@@ -319,6 +323,14 @@ class CloudByokCoachProvider:
                 ) as response:
                     if response.status_code >= 400:
                         reason = _reason_for_status(response.status_code)
+                        if self._provider == "gemini" and response.status_code == 400:
+                            raw_error = bytearray()
+                            async for chunk in response.aiter_bytes():
+                                if len(raw_error) + len(chunk) > 16 * 1024:
+                                    break
+                                raw_error.extend(chunk)
+                            if _google_invalid_key(raw_error):
+                                reason = "invalid_api_key"
                         raise CoachProviderError(
                             reason,
                             "The Coach provider rejected the request.",
@@ -377,6 +389,26 @@ def _reason_for_status(status: int) -> str:
     if status == 429:
         return "account_limit"
     return "provider_failure"
+
+
+def _google_invalid_key(raw: bytes | bytearray) -> bool:
+    """Extract a fixed machine reason only; never return/log provider content."""
+    try:
+        value = json.loads(raw)
+        errors = value if isinstance(value, list) else [value]
+        for item in errors:
+            error = item.get("error") if isinstance(item, dict) else None
+            if not isinstance(error, dict):
+                continue
+            details = error.get("details", [])
+            if isinstance(details, list) and any(
+                isinstance(detail, dict) and detail.get("reason") == "API_KEY_INVALID"
+                for detail in details
+            ):
+                return True
+    except (ValueError, UnicodeError, RecursionError):
+        pass
+    return False
 
 
 def _output_schema() -> dict[str, Any]:

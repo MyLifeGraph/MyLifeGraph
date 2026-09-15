@@ -166,7 +166,23 @@ class CoachController extends StateNotifier<CoachState> {
   bool _disposed = false;
   bool _cancelRequested = false;
   bool _operationInProgress = false;
+  bool _reloadAfterProviderChange = false;
   Timer? _busyRetryTimer;
+
+  Future<void> providerChanged() async {
+    if (state.isSending || state.isDeletingHistory) return;
+    _busyRetryTimer?.cancel();
+    state = state.copyWith(
+      requestId: newClientUuid(), exactRetryMessage: null, sendError: null,
+      capabilities: null, capabilityError: null, busyRetrySeconds: 0,
+      isLoading: true,
+    );
+    if (_operationInProgress) {
+      _reloadAfterProviderChange = true;
+      return;
+    }
+    await load();
+  }
 
   Future<void> load() async {
     if (_operationInProgress ||
@@ -186,6 +202,10 @@ class CoachController extends StateNotifier<CoachState> {
       await _refreshProjections();
     } finally {
       _operationInProgress = false;
+      if (_reloadAfterProviderChange && !_disposed) {
+        _reloadAfterProviderChange = false;
+        await load();
+      }
     }
   }
 
@@ -210,7 +230,7 @@ class CoachController extends StateNotifier<CoachState> {
         }
       }(),
     ]);
-    if (_disposed) return;
+    if (_disposed || _reloadAfterProviderChange) return;
     state = state.copyWith(
       isLoading: false,
       capabilities: capabilities ?? state.capabilities,
@@ -488,7 +508,12 @@ bool coachFailurePreservesRequestIdentity(Object error) {
 String coachErrorMessage(Object? error) {
   if (error is CoachRemoteException) {
     if (error.isProviderBusy) {
-      return 'Project Coach is busy. Retry manually when the countdown ends.';
+      return 'Coach is busy. Retry manually when the countdown ends.';
+    }
+    if (error.code == 'account_limit') {
+      // Older APIs used Codex wording for every provider's upstream quota.
+      // This is not the separate app daily-question limit.
+      return 'Your selected AI provider\'s quota has been reached. Check its usage limits.';
     }
     if (error.code == 'route_busy') {
       return 'Coach service is busy. Retry manually when the countdown ends.';

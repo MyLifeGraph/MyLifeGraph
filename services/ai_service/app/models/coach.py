@@ -32,7 +32,7 @@ COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v5"
 COACH_LANGUAGE_CONTRACT_VERSION = "coach-language-v1"
 COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v3"
 COACH_GEMINI_MODEL = "gemini-3.8-flash"
-COACH_GEMINI_COMPATIBLE_MODELS = frozenset({"gemini-3.6-flash", COACH_GEMINI_MODEL})
+COACH_GEMINI_COMPATIBLE_MODELS = frozenset({"gemini-3.6-flash", "gemini-3.7-flash", COACH_GEMINI_MODEL})
 
 COACH_MESSAGE_CODEPOINTS = 2_000
 COACH_CONTEXT_BYTES = 32_768

@@ -1,27 +1,83 @@
 # MyLifeGraph Mobile App
 
+Insights → Advanced → Past compares adjacent 7/14/30-day periods or aligned
+Monday–Sunday weeks. It reuses Personal Patterns with missing-data gaps and
+an exact-values disclosure; Learning/Discipline are labelled trailing summaries.
+Rolling includes today with no overlapping dates; Weekdays' current curve and
+legend end today, while the previous week covers Monday–Sunday.
+The additive API observation `sleep_hours` includes non-Focus Morning check-ins
+without changing existing correlation calculations. New API deployment enables
+that extra coverage; this change needs no database migration.
+
+Evening Sport/Social choices match stress influence button sizes. Specific
+blocker appears immediately below the chosen option within the stress-source
+list. Selection first highlights the row and reveals a chevron; a second tap
+opens/closes the input. New selections start collapsed; existing text is retained.
+The source and borderless input share one expanding outline at the choice width;
+the Info control stays outside it. Check-in ratings and stress
+sources distinguish selection from neutral hover and keyboard-focus outlines.
+Settings no longer duplicates Coach or Speech controls: both stay in the Coach
+composer. The speech sheet shows all model rows directly when On-device is
+selected, including after reopening, above Android's navigation inset.
+Selected and Downloaded labels distinguish the persisted source and local files.
+
+Coach provider changes invalidate old capability/retry state even during a
+pending refresh. Capability and completion provider identities must match the
+selection. Upstream account-quota errors use provider-neutral copy even from an
+older API; per-provider and account-wide quota policies remain unchanged.
+
+Coach shows remaining turns beneath the composer model name, freeing header
+space without changing quota, language selection or provider actions.
+
+Morning and Evening final action labels are simply `Save`; validation,
+draft review, retries and persistence remain unchanged.
+Manual check-in headers keep their eyebrow/question without an introductory
+subtitle. Voice-review and saved-answer update guidance remain visible.
+
+Today check-in buttons use muted attention colors when pending and success
+colors when saved, with unchanged labels and add/edit behavior on all widths.
+
 Coach and Ultra Quick each have a compact English/German flag toggle, saved
 separately on this device, with English as default. Coach uses `coach-language-v1`
 for German replies, uncertainty and safety text; the rest of its UI is unchanged.
 The language is pinned to exact retries. Ultra Quick changes only the speaking
 guide, still accepts both transcript languages, and retains review/final Save.
 No app-wide localization is claimed. Updated API deployment is required before
-German Coach requests work; the English request payload remains unchanged.
+German Coach requests work, together with the additive Coach language-completion
+migration. The English request payload remains unchanged.
 
-Gemini BYOK accepts exact `gemini-3.8-flash` capability/response provenance and
-retains `gemini-3.6-flash` history/server compatibility. Backend deployment plus
-the additive model-allowlist migration are required to start new 3.8 requests.
+Gemini BYOK includes a compact Model dropdown (3.6 / 3.7 / 3.8 Flash, default 3.8)
+in the existing Coach provider sheet. The non-secret choice is
+saved per account on this device; keys keep their existing storage policy.
+Coach capability/send headers carry the exact selection, with mismatch rejection
+for old servers and a fresh request ID after changing provider/model.
+The updated API and additive 3.7 allowlist migration are required before using
+3.7; older apps cannot parse its history. Ultra Quick extraction is unchanged.
 
-Planner now separates `This week` and `Planning` without changing scheduling.
+Mobile/tablet Planner separates `This week` and `Planning` without changing scheduling.
+Desktop restores the pre-split `593ea22` layout: calendar and Add new/preferences
+left, summaries right (29%, clamped 280–360px), with no two-view toggle. The
+existing 1280px and enlarged-text fallback thresholds remain unchanged.
+On phones below 600px the Planning Add button fills the content width.
+Calendar import sits beside Refresh in the loaded page header.
+The view toggle stays on its own row. This week has an outlined `+ Add` in the calendar
+heading; Planning retains a compact Add below the toggle. Only Planning shows
+`Plan around calendar events`, avoiding imported busy times without changing
+the source calendar. Upward touch swipes starting on Planner's bottom navigation
+open the same Add new menu; content scrolling does not.
+The calendar's Days/List icons remain beside its heading; all day appointments
+expand within the outline and scroll with the page, not inside a capped frame.
 Unscheduled Tasks support completion and confirmed removal (restorable in
 Today → All tasks). All tasks includes Dated/Undated filters, initially both.
 The shared refresh coordinator also refreshes retained Today command views.
 
-Settings → Speech to text and the Coach composer's speech-source icon select
+The Coach composer's speech-source icon selects
 Server (default) or a downloaded multilingual model on 64-bit Android:
 Whisper Tiny (~104 MB), Whisper Base (~161 MB), Parakeet V3 (~670 MB).
-Tapping On-device opens a model picker for download and activation. Web shows
+Tapping On-device reveals model rows for download and activation. Web shows
 the catalog with Android-only actions disabled.
+Speech source/model sheets sit above app navigation and respect Android's bottom
+safe area; all models remain scroll-accessible on short screens and at large text.
 Downloads are explicit, cancellable and SHA256-verified; on-device inference
 keeps audio local and never silently falls back to Server. Web retains Server.
 See the [Coach contract](../../docs/phase-10-controlled-coach-plan.md#flutter-contract).
@@ -41,7 +97,8 @@ profile timezone and reject ambiguous DST instants for manual correction.
 `quick-notes-v1` saves only explicitly confirmed optional Coach context, not
 ratings or streaks. Saved notes can be read/deleted; retries retain identity.
 Morning/Evening show a short speaking guide in manual form order. It is an
-empty-field hint while typing and stays visible during dictation, including
+empty-field hint immediately on opening, without tapping the field, and stays
+visible during dictation, including
 when earlier text exists. Guide text is never inserted into the transcript.
 The three mode choices share one mobile row with wrapping labels.
 Guest/mock makes no authenticated calls. These endpoints require the matching
@@ -490,6 +547,11 @@ confirmed.
 
 ## Auth Modes
 
+Mobile Auth shows email fields immediately, with a larger brand heading and one
+short encouraging sentence. Content is vertically centered when it fits and
+scrolls when necessary. Google/allowed-guest, submit, reset, resend, privacy/age
+requirements and errors retain their existing behavior. Desktop is unchanged.
+
 The sign-in introduction is concise; the guest tile retains device-only Setup
 and best-effort check-in transfer limits. All login/recovery methods, CAPTCHA,
 pilot disclosures and acceptance controls are unchanged.
@@ -593,6 +655,15 @@ actual backend time while retaining their original planned interval.
 
 ## Main Routes
 
+Deliberate horizontal touch swipes switch the root Today, Insights, Planner and
+capability-visible Coach pages without wrapping. Quick actions remains the Plus
+action, not an intermediate swipe page. Nested horizontal scrollers keep their
+gestures. Short/diagonal/slow drags, vertical scrolling, mouse selection, active
+text editing and auxiliary/form routes do not switch main pages.
+Root-page transitions follow the same order in both directions, for navigation
+buttons and swipes: later tabs enter from the right, earlier tabs from the left.
+Auxiliary routes retain normal push/back behavior; reduced motion removes slides.
+
 With the development Coach surface enabled, the five shell destinations are
 Today, Insights, Quick actions, Planner, and Coach. Those pages plus Settings
 share a top action group with optional page action, unread Coach result, Inbox,
@@ -609,7 +680,7 @@ Today, Insights, Quick actions, Planner, and Coach align compact icon actions at
 top-right inset; large text moves actions above the title. Other page headers
 retain their existing layout. Pushed native Settings integrations also show Back,
 returning to the actual caller; direct root pages do not acquire a fake history.
-Speech settings and its nested model picker have explicit Back controls.
+The Speech settings sheet has an explicit Back control and an inline model list.
 Quick actions orders Morning, Evening, Focus, then Habit completion. Insights
 remembers Overview/Advanced and its subtab; Planner remembers Days/List across
 route recreation in the app session. Only display choices are retained, not
@@ -722,13 +793,12 @@ newly previewed accordion is expanded. In-page navigation pushes route history,
 while shell destinations replace it. The shared top back control pops real
 history and uses route-specific fallbacks for direct deep links.
 
-Planner Days uses a stable-height outlined appointment viewport with internal
-scrolling, including empty days. Larger text gets extra space; date navigation
-stays outside and resets the item scroll to the top. List remains continuous.
+Planner Days uses a content-height outlined appointment frame with page scrolling
+and an explicit empty state. Date navigation stays outside. List remains continuous.
 Planner supports Days/List at every width, retains the selected day across
 mode switches and places the agenda first at every width. Desktop keeps its
-main/right-summary columns below the calendar. Add new stays below the agenda
-with the existing five actions; calendar preferences
+main/right-summary columns in Planning. The calendar Plus and Planning Add
+open the existing five actions; calendar preferences
 and all warnings/previews remain reachable. Mobile uses weekday underlines and
 broad icon-led cards; tablet/enlarged text stacks sections. Sidebar, mobile
 navigation and FAB are unchanged. The mobile Add new sheet scrolls at constrained
@@ -808,7 +878,7 @@ Sleep Recommendation (or demo summaries) stay there; Advanced opens correlation
 tools directly. Switching tabs preserves filters and expanded details without
 changing provider calls or calculations. Sparse data has the same selector.
 Advanced now uses the same ordered tabs on every width: Compare, Top patterns,
-Trend overlay, Skillset, Matrix, Discovered. Skillset offers a compact dimensions
+Trend overlay, Skillset, Past, Matrix, Discovered. Skillset offers a compact dimensions
 multi-select and a radar of recorded ratings and explicit activity summaries, with raw values,
 sources and observation counts under collapsed Details. Short names accompany
 the numbered radar axes; the selected window stays visible. Unmeasured dimensions are

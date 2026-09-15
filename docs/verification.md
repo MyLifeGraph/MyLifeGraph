@@ -19,34 +19,286 @@ status; they never prove a later checkout.
 Before running or claiming a gate, inspect the affected boundary and its owning
 contract. Test source or a historical pass is not current evidence.
 
-The future hosted acceptance sequence is centralized in
-[VPS Pilot Release Plan](vps-pilot-release-plan.md). Its repository,
-infrastructure, Supabase/Auth, provider, Vercel, Android, capacity, rollback,
-and professor-handoff gates are requirements, not current pass evidence. That
-future gate also requires distinct staging/pilot project identities,
-publishable/secret-key compatibility, pilot-target denial in synthetic seed
-tooling, and versioned 18-or-older acceptance. The local configuration and
-hosted-build guards now cover the first two: pilot current-key enforcement,
-exact URL/ref binding, and staging crossover denial have focused tests. Remote
-key state, a confirmed remote scenario run, VPS deployment, and the hosted
-shared Codex provider remain open. Repository source now contains the
-default-off operator provider/executor, tagged deployment/rollback package,
-signed-APK workflow, and encrypted-backup runner; none is live evidence. The
-`staging-scenarios-v1` generator has
-source/unit/preview coverage only. `pilot-participation-v1` /
-`pilot-participation-notice-v1` adult acceptance and persistent staging
-identity now exist in the working tree with focused unit/widget/source tests;
-their normal-database and complete captured-base gates now pass as well. The hosted
-participation browser flow and remote gates are not current baseline evidence.
-The additive `pilot-participation-gate-v1` restrictive-RLS contract and its
-operator check/enable tool pass source plus isolated/current local database
-tests; exact enablement and attestation against the hosted project remain open.
-The `hosted-database-contract-v1` source gate binds hosted readiness and VPS
-promotion to the release's ordered migration-prefix head/count/digest and
-derives the prepared-deletion guard from installed function definitions. Its
-local unit/pgTAP evidence is not a claim about a hosted database.
+The release sequence is centralized in [VPS Pilot Release Plan](vps-pilot-release-plan.md).
+Published pilot, Supabase, VPS, Vercel and signed-APK evidence is recorded below;
+repository definitions alone do not prove any live state. Every new candidate
+must establish its own checks rather than inherit an earlier release's pass.
+Staging and Pilot identities, current-key compatibility, synthetic-seed denial,
+optional participation policy, deletion guards and release identity remain
+fail-closed boundaries. `hosted-database-contract-v1` binds readiness/promotion
+to the ordered migration-prefix head/count/digest and installed deletion guards.
+Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
+
+### Documentation and complete release-candidate checks (2026-09-16)
+
+- Candidate base: `7351a41e467195b9ac73b2c50507114c1d9a827e`, working branch
+  `fix/coach-german-completion`. This section supersedes older local “not yet
+  checked” results below, not their dated observations.
+- Full `verify:fast` passed on a separate Linux checkout with the pinned backend
+  requirements: source gates, Flutter analysis, **1,325 Flutter tests**, and
+  **1,949 Python tests** with two explicit opt-in provider/image tests skipped.
+  No golden baselines, tolerances, safety assertions or production UI were
+  changed to obtain a pass. Windows golden differences did not reproduce on Linux.
+- Initial full checks identified two Dart lint issues and one outdated guest
+  Settings label expectation after intentional removal of duplicate Coach settings.
+  Those were corrected. A stale PG17 restore-inventory expectation was updated
+  to the exact 77-file migration chain; its role/grant/replay assertions remain.
+- The complete isolated PostgreSQL 15 and 17 harnesses each passed all **620
+  assertions across 30 pgTAP files**, plus transition/concurrency checks. PG17
+  additionally passed full database restore and deletion replay. The existing VM
+  database history remained unchanged; no reset or normal-stack SQL was applied.
+- `verify:web` completed. The documentation gate passed all 18 checker tests,
+  route/link/contract synchronization and source hygiene. Auth presentation did
+  not change Study Setup/Intake contracts; those owners remain accurate.
+- Normal VM database history is older than this candidate, and that VM has no
+  pinned Android SDK. Full browser E2E and Android JVM/lint therefore remain
+  required fresh GitHub CI gates before promotion, not claimed local passes.
+- Actual Pilot CLI history contains German completion `20260915145741`.
+  A target-bound `db push --skip-vault --dry-run` selected only
+  `20260915182801_coach_gemini_model_selection.sql`, with no roles or seeds.
+  This read-only observation is not a claim that the pending migration is applied.
+- Current feature/service orientation: `docs/development-handoff.md`; exact
+  external release and installed-device acceptance must be verified separately.
+
+### Shell direction and documentation reconciliation (2026-09-15)
+
+- Based on `7351a41e467195b9ac73b2c50507114c1d9a827e`, still local and
+  uncommitted on `fix/coach-german-completion`; existing work preserved.
+- 26 focused Flutter tests passed across shell direction, swipe recognizers and
+  MainShell. Real ShellRoute tests inspect opposite slide offsets for all
+  adjacent forward/reverse transitions by button and touch, plus auxiliary
+  push/back and reduced motion. Targeted static analysis passed.
+- Documentation reconciliation compares the current working-tree changes with
+  that last released base, not an assumed last commit by a particular author.
+  The service/change index is `docs/development-handoff.md`; the product guide,
+  architecture, Flutter/API/Speech and VPS/local/Auth owners are aligned.
+  Provider catalogs do not prove live model/key availability; historic bootstrap
+  and migration descriptions are retained as history, not repeated instructions.
+- Earlier local release handoff records PR #23 merged, RC8 tag
+  `v0.1.0-pilot.1-rc.8`, APK versionCode `10000082`, successful tag/main APK runs
+  `34979625361` / `34979621198`, Vercel READY deployment
+  `dpl_4xUqofgy4NR7Xa4xJ8jPhtm4VLZS`, and VPS RC8 promotion. Those prior
+  observations are consolidated here, not newly remotely checked in this task.
+  The subsequent Pilot German-completion SQL observation is recorded below;
+  Gemini model-selection SQL and current code changes are not claimed deployed.
+- No new push, PR, merge, release, cloud configuration, VPS action or SQL apply.
+- Final documentation gate passed 18 tests and consistency across 56 Markdown
+  files/93 routes; the visual source gate and diff hygiene also passed.
+
+### Connected Evening detail and selection feedback (2026-09-15)
+
+- Color-only follow-up (2026-09-16): all 10 shared Capture widget tests passed,
+  including selected header tint, primary-text chevron, distinct expanded input
+  surface, retained text and two-step disclosure. No layout or save changes.
+
+- Two-step disclosure follow-up: all 26 shared-control/Evening tests passed.
+  First selection stays collapsed; re-tapping opens/closes, changing sources
+  closes the detail, and typed text/selection/save behavior remain intact.
+  Existing narrow-screen, large-text and reduced-motion cases pass.
+
+- Follow-up: 26 shared-control/Evening widget tests passed after removing nested
+  frames. They also check matching header/input width, an external Info action,
+  borderless blocker input, retained text and unchanged save behavior.
+
+- Same base `7351a41e467195b9ac73b2c50507114c1d9a827e`, no publication.
+- 34 focused Flutter tests passed: shared Capture controls, Evening and Morning.
+  Added tests cover neutral rating hover in dark/light/Space, single selection,
+  two-pixel keyboard-focus borders, retained inline text and shared-card ancestry
+  at 320 px/200% text. Existing save/retry/tooltip behavior remains covered.
+- A new reduced-motion regression exposed Flutter's zero-duration AnimatedSize
+  layout assertion. Reduced motion now omits that wrapper entirely and passes.
+- No backend, persistence, validation or wire-shape changes.
+- Targeted analysis, docs consistency (18 tests), visual source gate and diff
+  hygiene passed. No installed-device or production deployment claim.
+
+### Inline stress detail and explicit Past ranges (2026-09-15)
+
+- Same base `7351a41e467195b9ac73b2c50507114c1d9a827e`; prior work retained.
+- Evening and period-comparison suites pass all 28 tests. They verify hidden
+  unselected blocker, placement between each selected source and the next option,
+  preserved text/save, exact adjacent 7/14-day labels and non-overlapping windows,
+  and Monday–today against the full previous week, including future-value gaps.
+  Period controls remain covered at 320/1280 px and normal/doubled text.
+- Rolling arithmetic was already correct and is unchanged; labels now identify
+  the N-day periods and Weekdays' current legend stops today. No write payload,
+  persistence, backend, correlation formula or remote deployment changes.
+- Targeted Flutter analysis passed for all five affected code/test files.
+  Documentation gate passed 18 tests and consistency checks; diff hygiene passed.
+
+### Evening context, speech picker, provider isolation and Past comparison (2026-09-15)
+
+- Task base remains `7351a41e467195b9ac73b2c50507114c1d9a827e` on
+  `fix/coach-german-completion`; prior uncommitted work is retained.
+- Targeted Flutter analysis passed. Nine relevant suites passed 150 tests:
+  period comparison, Evening, speech settings, Coach controller/repository/page,
+  Insights load states and both Settings suites. Coverage includes narrow/large
+  text, reopened Android safe-inset model rows and persisted selection, equal
+  choice sizes, retained blocker text, stale-provider budget refresh, rolling/
+  weekday/date-boundary comparisons, missing values and trailing summaries.
+- Focused Python tests passed 109 cases across Skillset observations, Personal
+  Patterns, Coach agent service and agent API. Rejected Gemini selections no
+  longer probe a base Codex provider; exhausted Standard provider budgets do not
+  become Gemini's 5-turn allowance. Account-wide quota policy is unchanged.
+- Initial UI failures identified the English date-locale initialization and
+  large-text day-label overflow, both corrected. Existing tab-order and fake
+  provider-response fixtures were aligned with the new tab/identity validation;
+  no production safety assertion was relaxed.
+- Docs (18 tests plus consistency), visual contract and diff hygiene passed.
+  This is targeted evidence, not a full suite, live Gemini call, installed APK
+  acceptance, remote deployment or ten-user load test. New non-Focus-day sleep
+  duration coverage requires API rollout but no database migration. Prior
+  Gemini model/language migrations remain separate uncommitted work.
+
+### Gemini model selection and bounded error classification (2026-09-15)
+
+- Task base `7351a41e467195b9ac73b2c50507114c1d9a827e`, uncommitted on
+  `fix/coach-german-completion`; earlier UI/SQL work is preserved.
+- 100 focused Python tests passed (cloud BYOK adapter, Coach API and service).
+  67 focused Flutter tests passed (credentials, repository, controller, page),
+  including the dropdown at normal and enlarged mobile text, exact selected-model
+  headers, persisted account-scoped choice, old-server rejection and new retry ID.
+- 68 focused SQL assertions passed in a separate PG17 RAM-only, networkless
+  container on the own VM, using synthetic fixtures and the existing migration
+  harness. The new exact 3.7 allowlist preserves 3.6/3.8 validation; Coach replay,
+  operator budgets, role guards and migration attestation pass. The test container
+  was removed; no normal database or Cloud migration was changed.
+- The local proxy test, documentation gate, focused Flutter analysis, Ruff
+  diagnostic and `git diff --check` passed. The Cloud frontend/proxy were restarted
+  through the existing launcher; loopback 7357 returned HTTP 200. No full affected
+  gate or installed-device/provider-success claim is made. Supabase changelog Markdown
+  was unreadable through the web tool; official function/security guidance and
+  existing drift-guarded migration contracts were reviewed instead.
+- Authorized synthetic Google calls with the Desktop key returned HTTP 400 for
+  3.6, 3.7 and 3.8. The inspected 3.8 response specifically says API_KEY_INVALID;
+  no key or personal Cloud content was printed or copied to the repo. This is not
+  proof that the key used by earlier successful app requests is the same key.
+  A successful real-model comparison remains blocked on a valid supplied key.
+- No push, VPS deployment, remote migration or signed APK publication is claimed.
+  Apply the migration and deploy the API/client before selecting 3.7; older
+  clients cannot parse newly stored 3.7 history. Ultra Quick extraction is unchanged.
+
+### Coach narrow header and Gemini diagnosis (2026-09-15)
+
+- All 17 Coach page tests passed with remaining turns under the composer model
+  instead of in the header, including narrow/enlarged-text coverage.
+- Documentation, visual-contract and diff checks passed; restarted local
+  frontend returned HTTP 200. No provider, backend or deployment was changed.
+- Read-only Gemini diagnosis found a generic `local Coach provider failed`
+  fallback shared by cloud-provider errors. The bounded accessible API logs
+  did not expose the reported upstream error. Full journal inspection requires
+  interactive OPS sudo; exact Google failure and a live BYOK turn are unverified.
+
+### Minimal manual capture headers (2026-09-15)
+
+- All 32 Morning, Evening and voice-review widget tests passed after removing
+  manual introductory subtitles. Review/update guidance is retained.
+- Documentation and visual-contract gates plus `git diff --check` passed.
+  Only presentation changed; local frontend restarted, no remote deployment.
+
+### Compact Add and Save labels (2026-09-15)
+
+- Four Planner reference layouts passed; phone assertions cover the Add pill,
+  gap, matching center and height against Days/List.
+- All 42 tests across Morning, Evening, voice review and app widget suites passed
+  with final `Save` labels. Only label finders changed, not behavioral assertions.
+- Documentation, visual-contract and diff-whitespace checks passed. No release
+  or backend changes; local frontend restarted on the same task base.
+
+### Planner header and Today status polish (2026-09-15)
+
+- On the uncommitted `7351a41` base, all four Planner reference-layout tests
+  passed with outlined Add and import beside Refresh. All 27 dashboard-section
+  tests passed with distinct pending/saved check-in colors and unchanged copy.
+- This supersedes the circular Planner Plus styling below; no backend,
+  scheduling, capture persistence or release was changed.
+- Documentation and visual-contract gates plus `git diff --check` passed.
+  Restarted local frontend returned HTTP 200 on port 7357.
+
+### Historical Desktop Planner restoration and phone Add polish (2026-09-15)
+
+- Read `593ea22` before restoring only the existing desktop layout boundary:
+  calendar/Add/preferences left, bounded summaries right, no view split.
+- All 66 Planner page tests passed after the desktop restoration. After the
+  phone-only circle Plus/full-width Add styling, all four reference layouts
+  passed, including assertions for the phone button shape/color/width and
+  desktop geometry, plus unchanged tablet and large-text behavior.
+- No data, planning command, backend or deployment change is part of this work.
+
+### Revised Auth and unbounded Planner day (2026-09-15)
+
+- The user replaced email disclosure with directly visible fields and requested
+  a standalone Planner toggle, small calendar Plus and full-page day scrolling.
+- 96 focused Flutter tests passed across Auth recovery, Planner page, day-frame
+  and view-retention suites. Day checks cover 0/1/4/6 appointments at phone,
+  desktop and 320px/200% text, no nested day scroller and the final item action.
+- Docs/visual guards and whitespace checks passed. No APK publication or
+  installed-device visual acceptance is claimed.
+
+### Compact Auth and Planner header follow-up (2026-09-15)
+
+- Auth/recovery, pilot participation and app widget checks passed 41 tests.
+  Mobile 360×640 shows email, Google and permitted guest entry points without
+  scrolling in either mode; expanding/collapsing retains the email draft.
+  Existing CAPTCHA, recovery, consent and guest-flow checks remain green.
+- Planner page/creation checks passed 68 tests. After increasing the stable day
+  viewport, all four reference-layout cases (including 320px/200% text) passed.
+- Docs and visual guards and `git diff --check` passed. No hosted Auth changes,
+  new APK, deployment or installed-device acceptance are claimed.
+
+### Speech-sheet Android inset regression (2026-09-15)
+
+- `speech_settings_test.dart` passed 9 tests, including nested app navigation,
+  a 48px Android bottom inset and normal/200% text. Server help and the full
+  Parakeet row remain above the inset, with download reachable after scrolling.
+  This is widget evidence, not an installed-APK acceptance or new release.
+
+### Local Planner/navigation follow-up (2026-09-15)
+
+- On the dirty working branch based at `7351a41`, the focused Flutter run of
+  `planner_page_test.dart`, `planner_task_controls_test.dart`,
+  `main_shell_test.dart` and `shell_swipe_region_test.dart` passed 91 tests.
+- Coverage includes compact creation in both views, all existing creation and
+  stale-state guards, 320px/large text, upward navigation/Plus intent, unchanged
+  content scrolling, nested horizontal scrollers, root/capability routing and
+  focused text-editing protection. Existing tests now open the Add menu instead
+  of assuming five permanently visible creation buttons.
+- Docs consistency (18 tests), visual contract and `git diff --check` passed.
+  No full-app suite, installed-device acceptance or publication is claimed.
+
+### German Coach completion and immediate speaking guides — 2026-09-15
+
+- After the user's explicit Cloud approval, CLI applied only
+  `20260915145741_coach_language_completion.sql` to Pilot. Live postcheck shows
+  76 migrations with digest
+  `eccbd6e43a11c121187d6858d713668ab3d0f48aa5696432d1f599f2c11d7fe4`.
+  The locked completion function retains OID 50822, postgres ownership, its
+  original ACL/search path and backend-only entry access. The German/V4 guard
+  is present and the prior 75-migration release prefix still matches exactly.
+  Public API health and readiness return HTTP 200 on unchanged RC8, and the
+  local frontend returns HTTP 200. Security advisors at error level reported
+  no issues. No accounts, messages, pending claims, Vault or roles were changed.
+  A real German provider turn remains user acceptance; no new APK or GitHub
+  publication was performed.
+- Task base: `7351a41e467195b9ac73b2c50507114c1d9a827e`; local fix branch
+  `fix/coach-german-completion`, not a published release.
+- The unchanged old completion rejected the Python-generated German fingerprint
+  with `Coach completion does not match its claim`. A physically isolated,
+  network-disabled, RAM-only PG17 test reproduced that failure before the additive
+  migration; after it, 64 focused pgTAP assertions passed (language completion,
+  terminal replay, operator budgets, BYOK, Gemini and hosted readiness). Unicode/
+  escaping, raw saved text, changed-text/language rejection, no duplicate usage,
+  and backend-only privileges were checked. The test container was removed.
+- All 20 Ultra Quick widget tests pass, including guides before focus, hiding
+  while typing, visibility during dictation, and 320px/200% layout. All 72 focused
+  Coach language/service/repository Python tests pass. Docs (18) and the visual
+  source gate pass. These isolated checks alone do not establish a live provider
+  turn or deployment; the separately authorized Cloud evidence is above.
+- The local Cloud launcher was restarted and `http://127.0.0.1:7357` returns
+  HTTP 200. The migration inventory/PG17 restore expectations now name 76 files
+  and head `20260915145741`; owner/role/restore checks remain intact. The full
+  restore harness itself was not rerun for this focused task.
 
 ### Consolidated publication candidate — 2026-09-15
 
@@ -3009,31 +3261,25 @@ credential-bearing workflows.
 
 - Hosted CI evidence must come from GitHub; repository source or a local run
   proves only that the workflow is defined.
-- Project access and runtime foundations have the scoped host acceptance
-  recorded above. Application release, HTTPS, rollback, complete runtime
-  permissions, monitoring, and signed-Android gates remain open. Their
-  certificate, signed-secret, physical-device, and promotion gates have no
-  current deployment evidence. Static rehearsal binds each release to a
-  deterministic analysis-image tag, seals the complete prepared tree, rejects
-  post-seal mutation before promotion, and restores the prior tag on symlink
-  rollback; actual root ownership and retained-image availability still require
-  VPS evidence.
-- There is no deployed scheduler/cron or production background worker.
-- Notification Delivery has no Android/system, push, browser, email, or
-  background-mobile channel; physical foreground acceptance remains useful.
+- Release/HTTPS/VPS/signing observations are recorded in the dated baseline,
+  not perpetually pending. Each promotion still needs sealed-tree, readiness,
+  retained-analysis-image and rollback-boundary verification on its target.
+- The Daily Preparation endpoint has no deployed cron. Android push instead has
+  an optional worker inside the existing API process. It is not a background LLM.
+- Android push is implemented; FCM acceptance cannot prove device receipt.
+  Browser/iOS push and email remain unimplemented. Permission, offline,
+  force-stop and manufacturer behavior still require device acceptance.
 - Installed-device Google OAuth/recovery, device-specific layout/accessibility,
   and best-effort authenticated guest-capture migration still need manual
   acceptance.
 - Calendar coverage uses selected local `.ics` bytes, not provider OAuth,
   refresh/revocation, URL fetch, live sync, provider writes, or native picker
   behavior.
-- OpenAI/Gemini BYOK adapters are covered by deterministic HTTP mocks but have
-  no live-key turn. The local Codex provider remains development-only. The
-  separate `mylifegraph-coach` protocol, admission, permission templates, and
-  deterministic failure paths are implemented. Target-host identities, rootless
-  startup and aggregate cgroup configuration have foundation acceptance, while
-  real analysis-container, provider, restart/reboot and answer-quality acceptance
-  remain open.
+- OpenAI/Gemini adapters have deterministic HTTP coverage. Live-key probes and
+  model availability are time/account-specific; use dated evidence, not the
+  catalog alone. Same-user Codex remains development-only; Standard uses the
+  separate hosted executor. Answer quality and concurrent capacity are not
+  proved by a successful mock or a single successful model request.
 - Hosted Turnstile acquisition/reset/cancel/error source now covers each
   protected email Auth operation on web and Android, but the real widget,
   domain, Supabase provider/secret, browser, accessibility, and physical-device
@@ -3041,23 +3287,19 @@ credential-bearing workflows.
   also external gates. Shared-provider global admission/budget and invalid-BYOK
   no-fallback have deterministic repository coverage but remain unverified
   through public origins.
-- No separate real-data pilot Supabase project or remote current-key rotation is
-  repository-proven. Local code now supports publishable/secret keys and exact
-  staging/pilot crossover guards plus source-level visible staging identity,
-  versioned 18-or-older acceptance, and a hard-allowlisted staging scenario
-  generator. Normal local migration evidence, confirmed remote fixture
-  creation/cleanup, remote migration, and public-origin acceptance remain
-  absent.
+- Separate Staging and Pilot projects have recorded operator observations.
+  Recheck their actual migration/auth/configuration state for the candidate;
+  no source document proves current key rotation or dashboard settings.
 - Pre-stream HTTP 429 admission, same-id retry without claim/budget, executor
   reservation cleanup, and race/disconnect behavior are implemented and
   deterministically tested. The global UTC-day aggregate is tested to survive
   owner/account deletion while personal dispatch linkage cascades; public/VPS
   acceptance remains open.
-- An inert protected GitHub workflow can create encrypted checksum-verified
+- An opt-in protected GitHub workflow can create encrypted checksum-verified
   Restic snapshots, enforce empty Storage, retain 7 daily/4 weekly, and call an
-  off-host heartbeat. No storage account/credentials, real backup snapshot,
-  isolated database restore, deletion replay, API/TLS monitor, or tested alert
-  exists yet.
+  off-host heartbeat. Do not claim an active unattended backup/monitoring service
+  without its own current observation. One-time backup/restore tests and local
+  recovery archives are separately recorded evidence, not an ongoing schedule.
 - `account-deletion-v2`, `account-deletion-status-v2`, the
   `account-deletion-journal-v2` writer/exporter, dedicated-role replay, and
   watermark checks exist in source. No real object-locked journal, encrypted

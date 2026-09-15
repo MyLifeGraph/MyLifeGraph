@@ -96,6 +96,7 @@ def test_checkins_do_not_need_focus_and_missing_answers_stay_absent():
         asyncio.run(service.get_patterns(user_id="owner")).skillset_points[0].values
     )
     assert values["sleep_quality"] == values["mood_score"] == 7
+    assert values["sleep_hours"] == captures["morning"]["sleep_hours"]
     assert "sport_activity" not in values
     assert "study_motivation" not in values
     assert "learning_count" not in values

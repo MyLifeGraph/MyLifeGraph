@@ -13,6 +13,14 @@ The easiest way to explore the product is the local guest/demo flow. Real
 accounts use Supabase-backed data and never fall back to personalized-looking
 demo content when a read fails.
 
+## Returning to the project
+
+Start with the [development and service handoff](docs/development-handoff.md):
+it summarizes local follow-ups, all runtime services, secret ownership and what
+still needs deployment. The [product guide](docs/current-product-guide.md)
+describes the current checkout; [Verification](docs/verification.md#current-verified-baseline)
+records actual release and test evidence. Local changes are not automatically live.
+
 ## Repository Structure
 
 - `apps/mobile` — Flutter client, feature modules, local guest state, Supabase
@@ -29,10 +37,9 @@ demo content when a read fails.
 
 ## VPS-Übergabe für Matthias
 
-Für die Fortsetzung der vorbereiteten Servereinrichtung zuerst die
-[VPS-Übergabe](docs/vps-matthias-handoff.md) lesen. Sie enthält den Paketpfad auf
-dem Server, die geprüfte Prüfsumme, den Abschlussbefehl und die noch offenen
-Domain-, Key- und Vercel-Schritte. Für Entwicklung und Betrieb direkt auf dem VPS
+Für Wartung der bereits eingerichteten Umgebung zuerst die
+[VPS-Übergabe](docs/vps-matthias-handoff.md) lesen. Historische Bootstrap- und
+Aktivierungsschritte nicht erneut ausführen. Für Entwicklung und Betrieb auf dem VPS
 beschreibt die [Projektbetreuer-Anleitung](deploy/vps/PROJECT_ADMIN.md) den
 Arbeits-Checkout, die eigene Entwicklungsumgebung und alle delegierten Befehle.
 Die Rechte gelten erst nach der dort beschriebenen Administrator-Installation.

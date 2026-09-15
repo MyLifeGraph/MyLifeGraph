@@ -4,10 +4,12 @@ class CoachProviderCredentials {
   const CoachProviderCredentials({
     required this.provider,
     this.apiKey,
+    this.model,
   });
 
   final CoachProviderName provider;
   final String? apiKey;
+  final String? model;
 }
 
 abstract interface class CoachRepository {

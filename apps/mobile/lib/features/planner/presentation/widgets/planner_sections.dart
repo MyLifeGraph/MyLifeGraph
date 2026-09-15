@@ -71,13 +71,18 @@ class PlannerAddNewSection extends StatelessWidget {
   final ValueChanged<bool>? onCalendarPreference;
   final bool showCreationActions;
 
+  Future<void> openCreationMenu(BuildContext context) async {
+    if (busy) return;
+    await _openPlannerAddNewSheet(context,
+      onTask: onTask, onHabit: onHabit, onExam: onExam,
+      onAssignment: onAssignment, onCommitment: onCommitment);
+  }
+
   Widget buildCreationButton(BuildContext context) => FilledButton.icon(
     key: const ValueKey('planner-add-new-button'),
-    onPressed: busy ? null : () => _openPlannerAddNewSheet(context,
-      onTask: onTask, onHabit: onHabit, onExam: onExam,
-      onAssignment: onAssignment, onCommitment: onCommitment),
+    onPressed: busy ? null : () => openCreationMenu(context),
     icon: const Icon(AppIcons.add),
-    label: const Text('Add new'),
+    label: const Text('Add'),
   );
 
   @override
@@ -152,7 +157,7 @@ class PlannerAddNewSection extends StatelessWidget {
               ),
             ],
             if (availabilityIncomplete) ...[
-              const Divider(height: AppSpacing.xl),
+              if (showCreationActions) const Divider(height: AppSpacing.xl),
               Container(
                 key: const ValueKey('planner-availability-warning'),
                 width: double.infinity,
@@ -198,18 +203,19 @@ class PlannerAddNewSection extends StatelessWidget {
               ),
             ],
             if (calendarPreference != null) ...[
-              const Divider(height: AppSpacing.xl),
+              if (showCreationActions || availabilityIncomplete)
+                const Divider(height: AppSpacing.xl),
               SwitchListTile(
                 key: const ValueKey('planner-calendar-consent'),
                 contentPadding: EdgeInsets.zero,
                 value: calendarPreference!.useCalendarBusyTime,
                 onChanged: busy ? null : onCalendarPreference,
                 secondary: const Icon(AppIcons.calendarMonthOutlined),
-                title: const Text('Treat imported calendar as busy'),
+                title: const Text('Plan around calendar events'),
                 subtitle: Text(
                   calendarPreference!.calendarAvailable
-                      ? 'Read-only. After a new import, check open previews.'
-                      : 'No current .ics import is available. Import one in Settings first.',
+                      ? 'Calendar unchanged. Review previews after each import.'
+                      : 'Import a calendar first (.ics).',
                 ),
               ),
             ],
@@ -921,6 +927,8 @@ class PlannerSevenDaySection extends ConsumerStatefulWidget {
     required this.timezone,
     required this.onItemTap,
     this.onImportCalendar,
+    this.onAdd,
+    this.showAddButton = false,
     this.enabled = true,
   });
 
@@ -928,6 +936,8 @@ class PlannerSevenDaySection extends ConsumerStatefulWidget {
   final String timezone;
   final ValueChanged<PlannerDayItem> onItemTap;
   final VoidCallback? onImportCalendar;
+  final VoidCallback? onAdd;
+  final bool showAddButton;
   final bool enabled;
 
   @override
@@ -941,19 +951,12 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
 
   _SevenDayView get _view => ref.watch(_calendarViewProvider);
   set _view(_SevenDayView value) => ref.read(_calendarViewProvider.notifier).state = value;
-  final _dayScrollController = ScrollController(keepScrollOffset: false);
   late int _page;
 
   @override
   void initState() {
     super.initState();
     _page = _initialPage(widget.days);
-  }
-
-  @override
-  void dispose() {
-    _dayScrollController.dispose();
-    super.dispose();
   }
 
   @override
@@ -996,6 +999,21 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
                 onPressed: widget.onImportCalendar,
                 icon: const Icon(AppIcons.downloadOutlined),
               ),
+            if (widget.showAddButton) ...[
+              OutlinedButton.icon(
+                key: const ValueKey('planner-add-new-button'),
+                onPressed: widget.onAdd,
+                icon: const Icon(AppIcons.add, size: 20),
+                label: const Text('Add'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  visualDensity: VisualDensity.compact,
+                  shape: const StadiumBorder(),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+            ],
             if (wide) ...[
               IconButton(tooltip: 'Previous day',
                 onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
@@ -1228,14 +1246,9 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
   Widget _dayViewport(BuildContext context, {
     required Widget child,
   }) {
-    // About three normal appointments; independent of the selected day's count.
-    // Larger text gets more room, while every row remains readable by scrolling.
-    final textScale = (MediaQuery.textScalerOf(context).scale(16) / 16)
-        .clamp(1.0, 1.5);
-    final height = 280.0 * textScale;
     return Container(
       key: const ValueKey('planner-day-viewport'),
-      height: height,
+      constraints: const BoxConstraints(minHeight: 96),
       width: double.infinity,
       decoration: BoxDecoration(
         color: context.visualTokens.surfaceSubtle,
@@ -1244,21 +1257,7 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadii.md - 1),
-        child: ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-          child: Scrollbar(
-            controller: _dayScrollController,
-            child: SingleChildScrollView(
-              key: const ValueKey('planner-day-scroll'),
-              controller: _dayScrollController,
-              primary: false,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: height - 2),
-                child: child,
-              ),
-            ),
-          ),
-        ),
+        child: child,
       ),
     );
   }
@@ -1267,7 +1266,6 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
     final last = widget.days.length - 1;
     final next = page.clamp(0, last);
     if (next == _page) return;
-    if (_dayScrollController.hasClients) _dayScrollController.jumpTo(0);
     setState(() => _page = next);
   }
 

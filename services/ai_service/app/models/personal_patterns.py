@@ -180,6 +180,7 @@ class SkillsetObservation(BaseModel):
     local_date: date
     values: dict[
         Literal[
+            "sleep_hours",
             "sleep_quality",
             "energy_level",
             "mood_score",
@@ -195,7 +196,7 @@ class SkillsetObservation(BaseModel):
             "learning_completed",
         ],
         float,
-    ] = Field(min_length=1, max_length=13)
+    ] = Field(min_length=1, max_length=14)
 
 
 class PersonalPatternsResponse(BaseModel):

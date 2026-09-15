@@ -55,8 +55,10 @@ class AgentService:
         self.calls.append(("select_operator", USER_ID))
         return self
 
-    def for_byok_request(self, *, provider_name: str | None, api_key: str | None):
+    def for_byok_request(self, *, provider_name: str | None, api_key: str | None, model_name: str | None = None):
         self.calls.append(("select_byok", provider_name, api_key))
+        if model_name is not None:
+            self.calls.append(("select_model", model_name))
         if provider_name not in {"openai", "gemini"} or not api_key:
             raise CoachServiceError(
                 "invalid_provider_credentials",
@@ -253,6 +255,16 @@ def _v3_body() -> dict[str, object]:
 
 def _v4_body() -> dict[str, object]:
     return {**_v3_body(), "contract_version": "coach-request-v4"}
+
+
+@pytest.mark.parametrize('path', ['/v1/coach/respond', '/v1/coach/respond/stream'])
+def test_gemini_model_header_reaches_request_scoped_service(path):
+    response, service = asyncio.run(_request('POST', path, json_body=_v4_body(), extra_headers={
+        'X-MyLifeGraph-Coach-Provider': 'gemini', 'X-MyLifeGraph-Coach-Api-Key': 'test-key',
+        'X-MyLifeGraph-Coach-Model': 'gemini-3.6-flash',
+    }))
+    assert response.status_code == 200
+    assert ('select_model', 'gemini-3.6-flash') in service.calls
 
 
 def _sse_events(body: str) -> list[tuple[str, dict[str, object]]]:

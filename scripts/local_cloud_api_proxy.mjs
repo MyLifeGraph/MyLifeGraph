@@ -6,7 +6,7 @@ export const localWebOrigin = 'http://127.0.0.1:7357';
 const localWebOrigins = new Set([localWebOrigin, 'http://localhost:7357']);
 const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const requestHeaders = ['authorization', 'content-type', 'accept',
-  'x-mylifegraph-coach-provider', 'x-mylifegraph-coach-api-key'];
+  'x-mylifegraph-coach-provider', 'x-mylifegraph-coach-api-key', 'x-mylifegraph-coach-model'];
 const responseHeaders = ['content-type', 'content-length', 'content-encoding',
   'retry-after', 'x-request-id'];
 

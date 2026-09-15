@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:my_life_graph/core/constants/app_radii.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:my_life_graph/core/theme/app_motion_tokens.dart';
 import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/core/widgets/app_info_disclosure.dart';
 
@@ -53,12 +54,13 @@ class CaptureChoice<T> {
   final String? description;
 }
 
-class CaptureChoiceControl<T> extends StatelessWidget {
+class CaptureChoiceControl<T> extends StatefulWidget {
   const CaptureChoiceControl({
     required this.value,
     required this.choices,
     required this.onChanged,
     this.equalWidthRow = false,
+    this.selectedDetail,
     super.key,
   });
 
@@ -67,9 +69,33 @@ class CaptureChoiceControl<T> extends StatelessWidget {
   final ValueChanged<T> onChanged;
   final bool equalWidthRow;
 
+  /// Inline detail below the selected option in the vertical choice list.
+  final Widget? selectedDetail;
+
+  @override
+  State<CaptureChoiceControl<T>> createState() =>
+      _CaptureChoiceControlState<T>();
+}
+
+class _CaptureChoiceControlState<T> extends State<CaptureChoiceControl<T>> {
+  bool _detailExpanded = false;
+
+  @override
+  void didUpdateWidget(covariant CaptureChoiceControl<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) _detailExpanded = false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (equalWidthRow) {
+    final value = widget.value;
+    final choices = widget.choices;
+    final onChanged = widget.onChanged;
+    final selectedDetail = widget.selectedDetail;
+    final theme = Theme.of(context);
+    final tokens = context.visualTokens;
+    final connected = selectedDetail != null;
+    if (widget.equalWidthRow) {
       return Row(
         children: [
           for (var index = 0; index < choices.length; index++) ...[
@@ -85,44 +111,158 @@ class CaptureChoiceControl<T> extends StatelessWidget {
         ],
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: choices.map((choice) {
-        final selected = choice.value == value;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: MergeSemantics(
-                  child: Semantics(
-                    label: choice.semanticLabel ?? choice.label,
-                    child: ChoiceChip(
-                      selected: selected,
-                      onSelected: (_) => onChanged(choice.value),
-                      label: ExcludeSemantics(
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: Text(choice.label),
-                        ),
-                      ),
-                      padding: const EdgeInsets.all(AppSpacing.md),
+    return Theme(
+      data: theme.copyWith(
+        focusColor: Colors.transparent,
+        highlightColor: tokens.textPrimary.withValues(alpha: 0.08),
+        splashColor: tokens.textPrimary.withValues(alpha: 0.08),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: choices.map((choice) {
+          final selected = choice.value == value;
+          final expanded = connected && selected && _detailExpanded;
+          final option = MergeSemantics(
+            child: Semantics(
+              label: choice.semanticLabel ?? choice.label,
+              expanded: connected && selected ? expanded : null,
+              hint: connected && selected
+                  ? (expanded
+                        ? 'Hide optional details'
+                        : 'Add optional details')
+                  : null,
+              child: ChoiceChip(
+                selected: selected,
+                color: WidgetStateProperty.resolveWith(
+                  (states) => connected
+                      ? (states.contains(WidgetState.selected)
+                            ? Color.alphaBlend(
+                                tokens.brand.withValues(alpha: 0.14),
+                                tokens.surface,
+                              )
+                            : Colors.transparent)
+                      : states.contains(WidgetState.selected)
+                      ? theme.chipTheme.selectedColor ??
+                            tokens.surfaceInteractive
+                      : theme.chipTheme.backgroundColor ?? tokens.surface,
+                ),
+                side: WidgetStateBorderSide.resolveWith(
+                  (states) => BorderSide(
+                    color: states.contains(WidgetState.focused)
+                        ? tokens.focus
+                        : tokens.outlineSoft,
+                    width: states.contains(WidgetState.focused) ? 2 : 1,
+                  ),
+                ),
+                shape: connected
+                    ? RoundedRectangleBorder(
+                        borderRadius: expanded
+                            ? const BorderRadius.vertical(
+                                top: Radius.circular(AppRadii.md),
+                              )
+                            : BorderRadius.circular(AppRadii.md),
+                      )
+                    : null,
+                materialTapTargetSize: connected
+                    ? MaterialTapTargetSize.shrinkWrap
+                    : null,
+                surfaceTintColor: Colors.transparent,
+                onSelected: (_) {
+                  if (connected && selected) {
+                    setState(() => _detailExpanded = !_detailExpanded);
+                  } else {
+                    onChanged(choice.value);
+                  }
+                },
+                label: ExcludeSemantics(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(choice.label)),
+                        if (connected && selected) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          Icon(
+                            expanded
+                                ? AppIcons.expandLess
+                                : AppIcons.expandMore,
+                            size: 20,
+                            color: tokens.textPrimary,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
+                padding: const EdgeInsets.all(AppSpacing.md),
               ),
-              if (choice.description != null) ...[
-                const SizedBox(width: AppSpacing.xs),
-                _ChoiceInfoButton(
-                  label: choice.label,
-                  description: choice.description!,
+            ),
+          );
+          final card = connected
+              ? DecoratedBox(
+                  key: ValueKey('capture-choice-card-${choice.value}'),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? tokens.surfaceInteractive
+                        : theme.chipTheme.backgroundColor,
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      option,
+                      if (expanded)
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceSubtle,
+                            border: Border(
+                              top: BorderSide(
+                                color: tokens.outlineSoft,
+                                style: BorderStyle.none,
+                              ),
+                              left: BorderSide(color: tokens.outlineSoft),
+                              right: BorderSide(color: tokens.outlineSoft),
+                              bottom: BorderSide(color: tokens.outlineSoft),
+                            ),
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(AppRadii.md),
+                            ),
+                          ),
+                          child: selectedDetail,
+                        ),
+                    ],
+                  ),
+                )
+              : option;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Row(
+              crossAxisAlignment: connected
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: connected && !MediaQuery.disableAnimationsOf(context)
+                      ? AnimatedSize(
+                          duration: context.motionTokens.stateFor(context),
+                          curve: context.motionTokens.curve,
+                          alignment: Alignment.topCenter,
+                          child: card,
+                        )
+                      : card,
                 ),
+                if (choice.description != null) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  _ChoiceInfoButton(
+                    label: choice.label,
+                    description: choice.description!,
+                  ),
+                ],
               ],
-            ],
-          ),
-        );
-      }).toList(),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -167,10 +307,7 @@ class _EqualChoiceButton<T> extends StatelessWidget {
 }
 
 class _ChoiceInfoButton extends StatefulWidget {
-  const _ChoiceInfoButton({
-    required this.label,
-    required this.description,
-  });
+  const _ChoiceInfoButton({required this.label, required this.description});
 
   final String label;
   final String description;
@@ -218,10 +355,7 @@ class _ChoiceInfoButtonState extends State<_ChoiceInfoButton> {
               onPressed: _showTooltip,
               focusNode: _focusNode,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(
-                width: 44,
-                height: 44,
-              ),
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
               icon: Container(
                 width: 24,
                 height: 24,
@@ -280,10 +414,7 @@ class CaptureRatingControl extends StatelessWidget {
               )
             else
               const Spacer(),
-            Text(
-              valueLabel,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text(valueLabel, style: Theme.of(context).textTheme.titleMedium),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -293,13 +424,13 @@ class CaptureRatingControl extends StatelessWidget {
             const gap = AppSpacing.xs;
             final oneRowWidth = 10 * buttonSize + 9 * gap;
             if (constraints.maxWidth >= oneRowWidth) {
-              return Center(child: _ratingRow(1, 10));
+              return Center(child: _ratingRow(context, 1, 10));
             }
             return Column(
               children: [
-                Center(child: _ratingRow(1, 5)),
+                Center(child: _ratingRow(context, 1, 5)),
                 const SizedBox(height: gap),
-                Center(child: _ratingRow(6, 5)),
+                Center(child: _ratingRow(context, 6, 5)),
               ],
             );
           },
@@ -308,21 +439,22 @@ class CaptureRatingControl extends StatelessWidget {
     );
   }
 
-  Widget _ratingRow(int start, int count) {
+  Widget _ratingRow(BuildContext context, int start, int count) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < count; i++) ...[
           if (i > 0) const SizedBox(width: AppSpacing.xs),
-          _ratingButton(start + i),
+          _ratingButton(context, start + i),
         ],
       ],
     );
   }
 
-  Widget _ratingButton(int rating) {
+  Widget _ratingButton(BuildContext context, int rating) {
     final selected = rating == value;
+    final tokens = context.visualTokens;
     return Semantics(
       button: true,
       selected: selected,
@@ -344,12 +476,27 @@ class CaptureRatingControl extends StatelessWidget {
                 )
               : OutlinedButton(
                   onPressed: () => onChanged(rating),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.square(44),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  style:
+                      OutlinedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        overlayColor: tokens.textPrimary,
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        minimumSize: const Size.square(44),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ).copyWith(
+                        // Hover/focus must not resemble a second selected rating.
+                        side: WidgetStateProperty.resolveWith(
+                          (states) => BorderSide(
+                            color: states.contains(WidgetState.focused)
+                                ? tokens.focus
+                                : tokens.outlineSoft,
+                            width: states.contains(WidgetState.focused) ? 2 : 1,
+                          ),
+                        ),
+                      ),
                   child: Text('$rating'),
                 ),
         ),
@@ -455,65 +602,67 @@ class CaptureClockControl extends StatelessWidget {
       style: Theme.of(context).textTheme.titleMedium,
     );
     final clockButton = Semantics(
-          button: true,
-          label: semanticLabel,
-          value: value ?? '—',
-          child: OutlinedButton(
-            onPressed: () async {
-              final selected = await showTimePicker(
-                context: context,
-                initialTime: parsed ?? fallback,
-                helpText: label,
-              );
-              if (selected == null) {
-                return;
-              }
-              onChanged(
-                '${selected.hour.toString().padLeft(2, '0')}:'
-                '${selected.minute.toString().padLeft(2, '0')}',
-              );
-            },
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              alignment: Alignment.centerLeft,
-            ),
-            child: Row(
-              children: [
-                if (!quickAdjust) ...[
-                  const Icon(AppIcons.schedule),
-                  const SizedBox(width: AppSpacing.sm),
-                ],
-                if (!quickAdjust) Expanded(child: Text(label)),
-                if (quickAdjust) Flexible(child: timeText) else timeText,
-              ],
-            ),
+      button: true,
+      label: semanticLabel,
+      value: value ?? '—',
+      child: OutlinedButton(
+        onPressed: () async {
+          final selected = await showTimePicker(
+            context: context,
+            initialTime: parsed ?? fallback,
+            helpText: label,
+          );
+          if (selected == null) {
+            return;
+          }
+          onChanged(
+            '${selected.hour.toString().padLeft(2, '0')}:'
+            '${selected.minute.toString().padLeft(2, '0')}',
+          );
+        },
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
           ),
-        );
+          alignment: Alignment.centerLeft,
+        ),
+        child: Row(
+          children: [
+            if (!quickAdjust) ...[
+              const Icon(AppIcons.schedule),
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            if (!quickAdjust) Expanded(child: Text(label)),
+            if (quickAdjust) Flexible(child: timeText) else timeText,
+          ],
+        ),
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (quickAdjust) ...[
           Text(label, style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: AppSpacing.xs),
-          Row(children: [
-            Expanded(child: clockButton),
-            const SizedBox(width: AppSpacing.xs),
-            IconButton(
-              tooltip: '$label 30 minutes earlier',
-              onPressed: parsed == null ? null : () => _adjust(parsed, -30),
-              icon: const Icon(AppIcons.removeCircleOutline),
-            ),
-            Text('30m', style: Theme.of(context).textTheme.labelSmall),
-            IconButton(
-              tooltip: '$label 30 minutes later',
-              onPressed: parsed == null ? null : () => _adjust(parsed, 30),
-              icon: const Icon(AppIcons.add),
-            ),
-          ]),
+          Row(
+            children: [
+              Expanded(child: clockButton),
+              const SizedBox(width: AppSpacing.xs),
+              IconButton(
+                tooltip: '$label 30 minutes earlier',
+                onPressed: parsed == null ? null : () => _adjust(parsed, -30),
+                icon: const Icon(AppIcons.removeCircleOutline),
+              ),
+              Text('30m', style: Theme.of(context).textTheme.labelSmall),
+              IconButton(
+                tooltip: '$label 30 minutes later',
+                onPressed: parsed == null ? null : () => _adjust(parsed, 30),
+                icon: const Icon(AppIcons.add),
+              ),
+            ],
+          ),
         ] else
           clockButton,
         if (quickValues.isNotEmpty) ...[
@@ -622,7 +771,7 @@ class CaptureFlowScaffold extends StatelessWidget {
   const CaptureFlowScaffold({
     required this.eyebrow,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.progress,
     required this.child,
     required this.canGoBack,
@@ -645,7 +794,7 @@ class CaptureFlowScaffold extends StatelessWidget {
 
   final String eyebrow;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final double progress;
   final Widget child;
   final bool canGoBack;
@@ -709,17 +858,19 @@ class CaptureFlowScaffold extends StatelessWidget {
                                       const SizedBox(height: AppSpacing.sm),
                                       Text(
                                         title,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineMedium,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.headlineMedium,
                                       ),
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Text(
-                                        subtitle,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyLarge,
-                                      ),
+                                      if (subtitle != null) ...[
+                                        const SizedBox(height: AppSpacing.sm),
+                                        Text(
+                                          subtitle!,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodyLarge,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -817,8 +968,8 @@ class CaptureFlowScaffold extends StatelessWidget {
                                   isSaving
                                       ? 'Saving...'
                                       : isLastStep
-                                          ? saveLabel
-                                          : 'Next',
+                                      ? saveLabel
+                                      : 'Next',
                                 ),
                               ),
                             ),
@@ -863,9 +1014,9 @@ class CaptureInlineMessage extends StatelessWidget {
         Expanded(
           child: Text(
             message,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: color,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: color),
           ),
         ),
       ],

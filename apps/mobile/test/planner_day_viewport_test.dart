@@ -9,7 +9,7 @@ import 'support/planner_fixtures.dart';
 
 void main() {
   for (final width in [390.0, 1100.0, 320.0]) {
-    testWidgets('Planner day frame stays fixed and scrolls at $width', (
+    testWidgets('Planner day grows with appointments and uses page scrolling at $width', (
       tester,
     ) async {
       tester.view.physicalSize = Size(width, 1400);
@@ -21,10 +21,9 @@ void main() {
         fixture.first['items'][1] as Map,
       );
       double? frameHeight;
-      double? followingTop;
       PlannerDayItem? tapped;
       var importCalls = 0;
-      for (final count in [0, 1, 3, 6]) {
+      for (final count in [0, 1, 4, 6]) {
         final days = [
           for (var day = 0; day < 7; day++)
             PlannerDay.fromJson({
@@ -80,33 +79,25 @@ void main() {
           expect(importCalls, 1);
         }
         final frame = find.byKey(const ValueKey('planner-day-viewport'));
-        frameHeight ??= tester.getSize(frame).height;
-        followingTop ??= tester
-            .getTopLeft(find.byKey(const Key('following-section')))
-            .dy;
-        expect(tester.getSize(frame).height, frameHeight);
-        expect(
-          tester.getTopLeft(find.byKey(const Key('following-section'))).dy,
-          followingTop,
-        );
+        expect(tester.getSize(frame).height, greaterThanOrEqualTo(frameHeight ?? 0));
+        frameHeight = tester.getSize(frame).height;
+        expect(find.descendant(of: frame, matching: find.byType(Scrollable)), findsNothing);
+        for (var i = 0; i < count; i++) {
+          expect(find.text('Appointment $i'), findsOneWidget);
+        }
         if (count == 0) {
           expect(find.text('No planned or fixed items.'), findsOneWidget);
         }
         if (count == 6) {
-          final scroll = tester
-              .widget<SingleChildScrollView>(
-                find.byKey(const ValueKey('planner-day-scroll')),
-              )
-              .controller!;
-          expect(scroll.position.maxScrollExtent, greaterThan(0));
-          scroll.jumpTo(scroll.position.maxScrollExtent);
+          await tester.ensureVisible(find.text('Appointment 5'));
           await tester.pumpAndSettle();
           await tester.tap(find.text('Appointment 5'));
           expect(tapped?.id, '10000000-0000-4000-8000-000000000005');
+          await tester.ensureVisible(find.byTooltip('Next day'));
+          await tester.pumpAndSettle();
           await tester.tap(find.byTooltip('Next day'));
           await tester.pumpAndSettle();
-          expect(scroll.offset, 0);
-          expect(tester.getSize(frame).height, frameHeight);
+          expect(tester.getSize(frame).height, lessThan(frameHeight));
           expect(find.text('No planned or fixed items.'), findsOneWidget);
           expect(tester.takeException(), isNull);
         }

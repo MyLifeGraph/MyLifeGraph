@@ -7,6 +7,12 @@ test evidence belongs in [Verification](../../docs/verification.md#current-verif
 
 ## Scope
 
+For the complete current service map and pending local changes, see the
+[development handoff](../../docs/development-handoff.md). These role/bootstrap
+instructions are not evidence that an existing host needs reinstalling. The
+separate speech installer and API-hosted FCM worker do not broaden this role's
+authority over other users, rootful Docker or unrelated services.
+
 The personal `mylifegraph-matthias` login keeps its own keys and primary/work
 groups. A narrow `NOPASSWD:NOSETENV` sudo rule permits only the installed,
 root-owned `/usr/local/sbin/mylifegraph-project` command and `sudoedit` of exactly

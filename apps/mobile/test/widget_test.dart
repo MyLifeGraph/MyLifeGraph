@@ -306,8 +306,8 @@ void main() {
       _textFieldWithLabel('Possible priority tomorrow (optional)'),
       findsNothing,
     );
-    await tester.ensureVisible(find.text('Save evening check-in'));
-    await tester.tap(find.text('Save evening check-in'));
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(find.text("Today's schedule"), findsOneWidget);
@@ -343,8 +343,8 @@ void main() {
     );
     await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
     await tester.pump();
-    await tester.ensureVisible(find.text('Save morning check-in'));
-    await tester.tap(find.text('Save morning check-in'));
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(find.text("Today's schedule"), findsOneWidget);
@@ -488,7 +488,8 @@ void main() {
       find.text('Calendar import (optional)'),
     );
     expect(find.text('Calendar import (optional)'), findsOneWidget);
-    expect(find.text('Coach'), findsNWidgets(2));
+    // Provider settings live in Coach; Settings no longer duplicates them.
+    expect(find.text('Coach'), findsOneWidget);
     await _scrollSliverUntilVisible(
       tester,
       find.text('Export data'),

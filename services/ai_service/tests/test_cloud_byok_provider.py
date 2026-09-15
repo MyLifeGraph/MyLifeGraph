@@ -43,6 +43,41 @@ def _output() -> str:
     )
 
 
+@pytest.mark.parametrize('wrapper', ['object', 'array'])
+def test_google_invalid_key_is_safe_and_not_retryable(wrapper):
+    error = {'error': {'message': 'DO NOT ECHO secret-key or prompt',
+        'details': [{'reason': 'API_KEY_INVALID'}]}}
+    body = error if wrapper == 'object' else [error]
+    provider = CloudByokCoachProvider(provider='gemini', api_key='secret-key',
+        settings=_settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda _: httpx.Response(400, json=body))))
+    with pytest.raises(CoachProviderError) as caught:
+        asyncio.run(provider._post('https://generativelanguage.googleapis.com/v1beta/interactions', {}, {}))
+    assert caught.value.code == 'invalid_api_key'
+    assert caught.value.retryable is False
+    assert 'secret-key' not in str(caught.value)
+    from app.services.coach_agent_service import _provider_error_message, _provider_error_code
+    assert 'API key' in _provider_error_message(caught.value.code)
+    assert _provider_error_code(caught.value.code) == 'provider_failure'  # existing SQL error allowlist
+
+
+@pytest.mark.parametrize('body', [b'not json', b'x' * (17 * 1024), b'[]', b'{"error": "unknown"}'])
+def test_google_unknown_or_oversized_failure_does_not_echo_response(body):
+    provider = CloudByokCoachProvider(provider='gemini', api_key='secret-key',
+        settings=_settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda _: httpx.Response(400, content=body))))
+    with pytest.raises(CoachProviderError) as caught:
+        asyncio.run(provider._post('https://generativelanguage.googleapis.com/v1beta/interactions', {}, {}))
+    assert caught.value.code == 'provider_failure'
+    assert str(caught.value) == 'The Coach provider rejected the request.'
+
+
+@pytest.mark.parametrize('provider,model', [('gemini', 'unknown'), ('openai', 'gemini-3.6-flash')])
+def test_model_override_is_exact_and_gemini_only(provider, model):
+    with pytest.raises(CoachProviderError):
+        CloudByokCoachProvider(provider=provider, model=model, api_key='secret-key', settings=_settings())
+
+
 def test_openai_capability_uses_bearer_key_without_persisting_it() -> None:
     seen: list[httpx.Request] = []
 
@@ -137,8 +172,10 @@ def test_openai_agent_is_stateless_and_replays_only_current_tool_steps(
     }
 
 
+@pytest.mark.parametrize('model', ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'])
 def test_gemini_interaction_uses_current_steps_schema_and_full_stateless_history(
     tmp_path: Path,
+    model: str,
 ) -> None:
     bodies: list[dict[str, object]] = []
     requests: list[httpx.Request] = []
@@ -178,6 +215,7 @@ def test_gemini_interaction_uses_current_steps_schema_and_full_stateless_history
     provider = CloudByokCoachProvider(
         provider="gemini",
         api_key="secret-b",
+        model=model,
         settings=_settings(),
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
@@ -188,8 +226,8 @@ def test_gemini_interaction_uses_current_steps_schema_and_full_stateless_history
             trace_path=tmp_path / "trace.jsonl",
         )
     )
-    assert result.model_reported == "gemini-3.8-flash"
-    assert all(body["model"] == "gemini-3.8-flash" for body in bodies)
+    assert result.model_reported == model
+    assert all(body["model"] == model for body in bodies)
     assert len(bodies) == 2
     assert all(body["store"] is False for body in bodies)
     assert all(

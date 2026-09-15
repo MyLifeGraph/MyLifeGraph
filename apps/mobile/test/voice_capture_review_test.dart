@@ -67,7 +67,7 @@ void main() {
         600,
       );
       await _tap(tester, 'Next');
-      await _tap(tester, 'Save morning check-in');
+      await _tap(tester, 'Save');
       expect(store.morningWrites.single.sleepTargetMinutes, 600);
       expect(store.morningWrites.single.energy, 8);
     },
@@ -97,7 +97,7 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Save morning check-in'),
+            find.widgetWithText(FilledButton, 'Save'),
           )
           .onPressed,
       isNull,
@@ -168,7 +168,7 @@ void main() {
       expect(store.morningWrites, isEmpty);
       await _tap(tester, 'Retry load');
       await _tap(tester, 'Next');
-      await _tap(tester, 'Save morning check-in');
+      await _tap(tester, 'Save');
       expect(store.morningWrites.single.energy, 8);
       expect(store.loads, 2);
     },
@@ -198,7 +198,7 @@ void main() {
       await _tap(tester, 'Next');
       expect(find.text('Study motivation (optional)'), findsOneWidget);
       expect(store.morningWrites, isEmpty);
-      await _tap(tester, 'Save morning check-in');
+      await _tap(tester, 'Save');
       expect(store.morningWrites.single.energy, 8);
       expect(store.morningWrites.single.sleepQuality, 7);
       expect(store.morningWrites.single.skillset?.values['motivation'], 2);
@@ -223,7 +223,7 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Save morning check-in'),
+            find.widgetWithText(FilledButton, 'Save'),
           )
           .onPressed,
       isNull,
@@ -233,7 +233,7 @@ void main() {
         .first;
     quality.onChanged(6);
     await tester.pumpAndSettle();
-    await _tap(tester, 'Save morning check-in');
+    await _tap(tester, 'Save');
     expect(store.morningWrites.single.sleepQuality, 6);
   });
 
@@ -263,7 +263,7 @@ void main() {
       expect(
         tester
             .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Save evening check-in'),
+              find.widgetWithText(FilledButton, 'Save'),
             )
             .onPressed,
         isNull,
@@ -280,7 +280,7 @@ void main() {
           );
       control.onChanged(StressControllability.partlyControllable);
       await tester.pumpAndSettle();
-      await _tap(tester, 'Save evening check-in');
+      await _tap(tester, 'Save');
       expect(store.eveningWrites.single.reflectionNote, 'Existing note');
       expect(store.eveningWrites.single.mood, 4);
       expect(store.eveningWrites.single.skillset?.values['sport'], 0);

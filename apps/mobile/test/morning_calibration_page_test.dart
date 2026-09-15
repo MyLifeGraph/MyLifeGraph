@@ -16,13 +16,15 @@ void main() {
     (tester) async {
       final store = _MorningStore();
       await _pumpPage(tester, store, skillsetEnabled: true);
+      expect(tester.widget<CaptureFlowScaffold>(find.byType(CaptureFlowScaffold)).subtitle, isNull);
+      expect(find.text('How did you sleep?'), findsOneWidget);
       await _tapVisible(tester, find.text('Next'));
       expect(find.text('More (optional)'), findsNothing);
       expect(find.text('Study motivation (optional)'), findsOneWidget);
       await _tapVisible(tester, find.text('Low'));
       await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
       await _performSemanticTap(tester, 'morning energy 4 of 10');
-      await _tapVisible(tester, find.text('Save morning check-in'));
+      await _tapVisible(tester, find.text('Save'));
       expect(store.attempts.single.skillset?.values['motivation'], 0);
     },
   );
@@ -47,7 +49,7 @@ void main() {
       expect(find.text('Choose a value to continue.'), findsNothing);
       expect(find.text('Sleep quality'), findsNothing);
       expect(find.text('Current energy'), findsNothing);
-      expect(find.text('Save morning check-in'), findsNothing);
+      expect(find.text('Save'), findsNothing);
       expect(
         tester
             .widget<LinearProgressIndicator>(
@@ -80,7 +82,7 @@ void main() {
       expect(find.text('MORNING · CHECK-IN'), findsOneWidget);
       expect(find.text('How are you starting today?'), findsOneWidget);
       expect(find.text('Estimated sleep duration'), findsNothing);
-      expect(find.text('Save morning check-in'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
       expect(
         tester
             .widget<LinearProgressIndicator>(
@@ -93,7 +95,7 @@ void main() {
       await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
       await _performSemanticTap(tester, 'morning energy 4 of 10');
       await tester.pump();
-      await tester.tap(find.text('Save morning check-in'));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(find.text('Dashboard destination'), findsOneWidget);
@@ -120,8 +122,8 @@ void main() {
     await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
     await tester.pump();
-    await tester.ensureVisible(find.text('Save morning check-in'));
-    await tester.tap(find.text('Save morning check-in'));
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(
@@ -131,8 +133,8 @@ void main() {
     expect(find.text('How are you starting today?'), findsOneWidget);
     expect(find.text('3 / 10'), findsOneWidget);
     expect(find.text('4 / 10'), findsOneWidget);
-    await tester.ensureVisible(find.text('Save morning check-in'));
-    await tester.tap(find.text('Save morning check-in'));
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(store.attempts, hasLength(2));
@@ -152,8 +154,8 @@ void main() {
     await _pumpPage(tester, store);
 
     await _tapVisible(tester, find.text('Next'));
-    await tester.ensureVisible(find.text('Save morning check-in'));
-    await tester.tap(find.text('Save morning check-in'));
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     final written = store.attempts.single;
     expect(written.sleepHours, saved.sleepHours);
@@ -187,7 +189,7 @@ void main() {
     await _tapVisible(tester, find.text('Next'));
     await _performSemanticTap(tester, 'morning sleep quality 7 of 10');
     await _performSemanticTap(tester, 'morning energy 7 of 10');
-    final save = find.text('Save morning check-in');
+    final save = find.text('Save');
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
     expect(save.hitTestable(), findsOneWidget);
@@ -218,13 +220,13 @@ void main() {
       await _tapVisible(tester, find.text('Next'));
       expect(find.text('Sleep quality'), findsOneWidget);
       final saveButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Save morning check-in'),
+        find.widgetWithText(FilledButton, 'Save'),
       );
       expect(saveButton.onPressed, isNull);
 
       await _performSemanticTap(tester, 'morning sleep quality 6 of 10');
-      await tester.ensureVisible(find.text('Save morning check-in'));
-      await tester.tap(find.text('Save morning check-in'));
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(store.attempts.single.sleepQuality, 6);
@@ -331,7 +333,7 @@ void main() {
       );
       expect(ratings.first.value, 6);
       expect(ratings.last.value, 7);
-      await _tapVisible(tester, find.text('Save morning check-in'));
+      await _tapVisible(tester, find.text('Save'));
       await tester.pumpAndSettle();
       expect(store.attempts, hasLength(1));
     },

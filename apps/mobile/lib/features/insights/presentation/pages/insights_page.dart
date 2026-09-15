@@ -23,6 +23,7 @@ import 'package:my_life_graph/composition/optimization_providers.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/insights_providers.dart';
 import '../widgets/insights_skillset_card.dart';
+import '../widgets/period_comparison_card.dart';
 import '../../../../composition/skillset_providers.dart';
 import '../../domain/entities/skillset_observations.dart';
 
@@ -108,7 +109,7 @@ class _InsightsHome extends ConsumerStatefulWidget {
   ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
 }
 
-enum _AdvancedPane { compare, topPatterns, trend, skillset, matrix, discovered }
+enum _AdvancedPane { compare, topPatterns, trend, skillset, past, matrix, discovered }
 
 enum _InsightsView { overview, advanced }
 
@@ -307,6 +308,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         ),
         _AdvancedPane.trend => _trendOverlayCard(isMobile: isMobile),
         _AdvancedPane.skillset => _skillsetCard(),
+        _AdvancedPane.past => const PeriodComparisonCard(),
         _AdvancedPane.matrix => _correlationMatrixCard(isMobile: isMobile),
         _AdvancedPane.discovered => _DiscoveredPatternsCard(
           insights: widget.insights,
