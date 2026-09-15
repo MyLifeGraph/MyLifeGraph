@@ -61,6 +61,20 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   This read-only observation is not a claim that the pending migration is applied.
 - Current feature/service orientation: `docs/development-handoff.md`; exact
   external release and installed-device acceptance must be verified separately.
+- First complete GitHub run `35032667191` passed source/docs, full Flutter and
+  Android JVM/lint, backend, web build and fresh migrations/pgTAP. Seven of eight
+  browser journeys passed; Exam Outlook still tried the mobile-only Planning
+  switch at the fixed desktop viewport. The test now asserts the intended
+  desktop layout and retains all Outlook, replan and unchanged-data assertions.
+  A complete rerun is required before calling this revised candidate green.
+- Correct-project Vercel Preview `dpl_HxmHyeYnVLdaNDLjX6AMtvScwo7H` reached READY
+  for `a72907edede4dea99dba5a7a38c90ae1cfdd038f`. The automatic blocked status
+  came from the other team/project, which was not modified.
+- Live migration execution was denied by execution policy pending a fresh
+  explicit confirmation of the exact Gemini SQL, despite general rollout
+  authorization. Read-only preflight matched all three existing function
+  definitions; their OIDs, owners and ACLs are saved in ignored operator files.
+  No Cloud mutation, main merge or new VPS/APK release is claimed at this point.
 
 ### Shell direction and documentation reconciliation (2026-09-15)
 
