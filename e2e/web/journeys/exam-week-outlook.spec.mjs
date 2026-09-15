@@ -150,6 +150,7 @@ test('@exam-week-outlook renders a read-only Planner outlook and replan entry', 
   await expect(page.getByText('Exam week', { exact: true })).toHaveCount(0);
 
   await openFlutterRoute(page, e2e.appUrl, '/planner');
+  await clickFlutterText(page, 'Planning');
   await expectFlutterText(page, 'Exam week');
   await clickFlutterText(page, 'Exam week');
   await scrollFlutterTextIntoView(page, exam.title, { maxSteps: 20 });
