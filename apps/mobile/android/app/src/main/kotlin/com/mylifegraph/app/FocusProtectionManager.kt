@@ -362,8 +362,8 @@ class FocusProtectionManager(private val context: Context) {
         val configuration = store.readConfiguration()
         val now = System.currentTimeMillis()
         return configuration.enabled && configuration.blockSelectedApps &&
-            configuration.selectedPackages.filter { packageName == null || it == packageName }.any { package ->
-                configuration.appRules[package]?.active(now, store.readLease()?.isActive(now) == true)
+            configuration.selectedPackages.filter { packageName == null || it == packageName }.any { selectedPackage ->
+                configuration.appRules[selectedPackage]?.active(now, store.readLease()?.isActive(now) == true)
                     ?: configuration.blockingSchedule.active(now, store.readLease()?.isActive(now) == true)
             }
     }

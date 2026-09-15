@@ -143,15 +143,17 @@ class LocalSpeechStore {
         throw StateError('Download the model before recording');
       }
       final path = (await _directory(model)).path;
-      final text = await Isolate.run(
-        () => decodeLocalSpeech(model.id, path, pcm),
-      );
+      final text = await _runLocalDecode(model.id, path, pcm);
       return text.isEmpty || text.runes.length > 2000 ? null : text;
     } finally {
       _decoding = false;
     }
   }
 }
+
+// A top-level launch scope prevents capturing the store/plugin state in a closure.
+Future<String> _runLocalDecode(String id, String path, Uint8List pcm) =>
+    Isolate.run(() => decodeLocalSpeech(id, path, pcm));
 
 // Native recognizers are created/freed in the worker, never on the Flutter UI thread.
 String decodeLocalSpeech(String id, String directory, Uint8List pcm) {

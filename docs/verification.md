@@ -65,6 +65,10 @@ local unit/pgTAP evidence is not a claim about a hosted database.
   without device inference. Physical Android download/inference, memory usage,
   recognition quality and live accessibility behavior still require device
   acceptance; no on-device performance or server rollout is claimed here.
+- PR #23 initial CI `34920857962` passed source/docs, full backend, all Flutter
+  tests and the debug web build. Android compilation found a reserved Kotlin
+  word used as a lambda parameter; the follow-up renames it without changing
+  behavior. Subsequent Android/E2E results must be checked before promotion.
 
 ### App-blocking modes release candidate - 2026-09-15
 
