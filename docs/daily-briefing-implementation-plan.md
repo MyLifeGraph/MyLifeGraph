@@ -408,6 +408,10 @@ the editable transcript is not itself a check-in. `daily-capture-draft-v1`
 uses the selected Coach provider and its existing shared budget to propose only
 explicitly supported fields with transcript excerpts. It uses no personal-data
 snapshot and writes no Capture. Missing or ambiguous values remain missing.
+The transcript box shows display-only Morning/Evening prompts in manual-form
+order, with the existing rating scales and optional choices. Typing hides the
+hint; recording shows it even with an existing transcript. Prompts never become
+submitted values and do not alter the required review/save flow.
 
 The proposal opens the existing branch form for correction and completion.
 Only the normal final Save writes a complete check-in through the existing

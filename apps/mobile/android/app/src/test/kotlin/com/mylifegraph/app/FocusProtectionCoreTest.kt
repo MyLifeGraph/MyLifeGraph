@@ -6,8 +6,75 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
+import java.util.TimeZone
 
 class FocusProtectionCoreTest {
+    private fun instant(day: Int, hour: Int, minute: Int, zone: String = "UTC"): Long =
+        Calendar.getInstance(TimeZone.getTimeZone(zone)).apply {
+            clear()
+            set(2026, Calendar.SEPTEMBER, day, hour, minute)
+        }.timeInMillis
+
+    @Test
+    fun weeklyScheduleHonorsDaysAndExclusiveEnd() {
+        val schedule = AppBlockingSchedule("weekly", setOf(1, 3), 540, 1020)
+        val zone = TimeZone.getTimeZone("UTC")
+        assertFalse(schedule.active(instant(14, 8, 59), false, zone))
+        assertTrue(schedule.active(instant(14, 9, 0), false, zone))
+        assertTrue(schedule.active(instant(14, 16, 59), false, zone))
+        assertFalse(schedule.active(instant(14, 17, 0), true, zone))
+        assertFalse(schedule.active(instant(15, 12, 0), true, zone))
+        assertTrue(schedule.active(instant(16, 12, 0), false, zone))
+    }
+
+    @Test
+    fun overnightWindowUsesStartDayIncludingSundayRollover() {
+        val schedule = AppBlockingSchedule("weekly", setOf(7), 22 * 60, 6 * 60)
+        val zone = TimeZone.getTimeZone("Europe/Berlin")
+        assertTrue(schedule.active(instant(13, 23, 0, zone.id), false, zone))
+        assertTrue(schedule.active(instant(14, 5, 59, zone.id), false, zone))
+        assertFalse(schedule.active(instant(14, 6, 0, zone.id), true, zone))
+        assertFalse(schedule.active(instant(14, 23, 0, zone.id), true, zone))
+    }
+
+    @Test
+    fun modesAreIndependentAndAlwaysStillHonorsMasterAndEssentialApps() {
+        val now = instant(14, 12, 0)
+        assertFalse(AppBlockingSchedule().active(now, false))
+        assertTrue(AppBlockingSchedule().active(now, true))
+        val always = AppBlockingSchedule("always")
+        assertTrue(always.active(now, false))
+        fun block(enabled: Boolean, essential: Set<String>) = FocusProtectionDecision.shouldBlockPackage(
+            enabled, true, true, setOf("selected"), essential, "selected", null, now, always,
+        )
+        assertTrue(block(true, emptySet()))
+        assertFalse(block(false, emptySet()))
+        assertFalse(block(true, setOf("selected")))
+        assertFalse(FocusProtectionDecision.shouldRequestZen(true, true, null, now))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun emptyWeekdaysAreRejected() { AppBlockingSchedule("weekly", emptySet()) }
+
+    @Test
+    fun repeatedDstHourFollowsDeviceWallTimeBothTimes() {
+        val zone = TimeZone.getTimeZone("Europe/Berlin")
+        val schedule = AppBlockingSchedule("weekly", setOf(7), 120, 180)
+        fun utc(hour: Int) = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            clear()
+            set(2026, Calendar.OCTOBER, 25, hour, 30)
+        }.timeInMillis
+        assertTrue(schedule.active(utc(0), false, zone))
+        assertTrue(schedule.active(utc(1), false, zone))
+        assertFalse(schedule.active(utc(2), false, zone))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun equalClockTimesAreRejectedInsteadOfAccidentallyBlockingAllDay() {
+        AppBlockingSchedule("weekly", setOf(1), 600, 600)
+    }
+
     @Test
     fun ownOverlayEventsDoNotReplaceTheBlockedForegroundPackage() {
         var foreground = "com.instagram.android"

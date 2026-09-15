@@ -41,7 +41,9 @@ class FocusProtectionManager(private val context: Context) {
         if (configuration.enabled && configuration.blockSelectedApps) {
             if (!accessibilityEnabled) warnings += "accessibility_disabled"
             if (!hasSelectableConfiguredApp) warnings += "no_apps_selected"
-            if (activeLease && accessibilityEnabled && hasSelectableConfiguredApp) {
+            if (configuration.blockingSchedule.active(System.currentTimeMillis(), activeLease) &&
+                accessibilityEnabled && hasSelectableConfiguredApp
+            ) {
                 activeMechanisms += "app_blocking"
             }
         }
@@ -137,6 +139,24 @@ class FocusProtectionManager(private val context: Context) {
                 ?: throw IllegalArgumentException("Missing notification setting."),
             selectedPackages = selectedPackages - essentialPackages(),
             consentVersions = consentVersions,
+            blockingSchedule = AppBlockingSchedule(
+                mode = arguments["blockingMode"]?.let {
+                    require(it is String) { "Invalid app-blocking mode." }
+                    it
+                } ?: "focus",
+                weekdays = (arguments["weekdays"] as? List<*>)?.map {
+                    require(it is Int) { "Invalid weekday." }
+                    it
+                }?.toSet() ?: setOf(1, 2, 3, 4, 5),
+                startMinute = arguments["startMinute"]?.let {
+                    require(it is Int) { "Invalid start minute." }
+                    it
+                } ?: 540,
+                endMinute = arguments["endMinute"]?.let {
+                    require(it is Int) { "Invalid end minute." }
+                    it
+                } ?: 1020,
+            ),
         )
         check(store.saveConfiguration(configuration)) {
             "Could not persist Focus protection configuration."
@@ -150,6 +170,7 @@ class FocusProtectionManager(private val context: Context) {
         if (!configuration.enabled || !configuration.silenceNotifications) {
             zenController.deactivate()
         }
+        FocusBlockAccessibilityService.refreshOverlayIfRunning(context)
         return readStatus()
     }
 
@@ -323,7 +344,32 @@ class FocusProtectionManager(private val context: Context) {
             foregroundPackage = packageName,
             lease = activeLease(),
             nowEpochMs = System.currentTimeMillis(),
+            schedule = configuration.blockingSchedule,
         )
+    }
+
+    fun blockingMode(): String = store.readConfiguration().blockingSchedule.mode
+
+    fun appBlockingActive(): Boolean {
+        val configuration = store.readConfiguration()
+        val now = System.currentTimeMillis()
+        return configuration.enabled && configuration.blockSelectedApps &&
+            configuration.blockingSchedule.active(now, store.readLease()?.isActive(now) == true)
+    }
+
+    fun releaseAppBlocking() {
+        if (blockingMode() == "focus") {
+            activeLease()?.let { emergencyRelease(it.sessionId) }
+        } else {
+            if (!store.disableAppBlocking()) store.setNativeFailure(true)
+            FocusBlockAccessibilityService.refreshOverlayIfRunning(context)
+        }
+    }
+
+    fun blockingSummary(): String = when (blockingMode()) {
+        "always" -> "Always blocked"
+        "weekly" -> "Scheduled app block"
+        else -> "Focus time remaining"
     }
 
     fun rescheduleAfterBoot() {
@@ -448,6 +494,10 @@ class FocusProtectionManager(private val context: Context) {
         "silenceNotifications" to silenceNotifications,
         "selectedPackages" to selectedPackages.sorted(),
         "consentVersions" to consentVersions,
+        "blockingMode" to blockingSchedule.mode,
+        "weekdays" to blockingSchedule.weekdays.sorted(),
+        "startMinute" to blockingSchedule.startMinute,
+        "endMinute" to blockingSchedule.endMinute,
     )
 
     private fun LocalFocusLease.toChannelMap(): Map<String, Any> = mapOf(

@@ -25,6 +25,22 @@ class UltraQuickCheckInPage extends ConsumerStatefulWidget {
 }
 
 class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
+  String get _speakingGuide => _mode == 'morning'
+      ? 'Sleep start: … · Wake time: …\n'
+            'Sleep quality: … / 10\n'
+            'Current energy: … / 10\n'
+            'Study motivation (optional): Low / Medium / High'
+      : 'Mood: … / 10\n'
+            'Energy left: … / 10\n'
+            'Stress: … / 10\n'
+            'Planned sleep start: …\n'
+            'Sleep duration target: … hours\n'
+            'If stress ≥ 5: source …; influence Little / Some / Mostly\n'
+            'Reflection (optional): …\n'
+            'Specific blocker (optional): …\n'
+            'Sport (optional): None / Light / Intense\n'
+            'Social contact (optional): Little / Some / Lots';
+
   final _text = TextEditingController();
   String _lastText = '';
   String _mode = 'morning';
@@ -292,29 +308,44 @@ class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
               child: Text('Sign in to use voice check-ins and cloud notes.'),
             )
           else ...[
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.xs,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final option in [
                   ('morning', 'Morning', AppIcons.wbSunnyOutlined),
                   ('evening', 'Evening', AppIcons.nightsStayOutlined),
                   ('note', 'Quick note', AppIcons.editNoteOutlined),
                 ])
-                  ChoiceChip(
-                    avatar: Icon(option.$3, size: 18),
-                    label: Text(option.$2),
-                    selected: _mode == option.$1,
-                    onSelected: locked
-                        ? null
-                        : (_) {
-                            setState(() {
-                              _mode = option.$1;
-                              _requestId = newClientUuid();
-                              _noteTimezone = null;
-                              _error = null;
-                            });
-                          },
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: ChoiceChip(
+                        showCheckmark: false,
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+                        label: SizedBox(
+                          width: double.infinity,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(option.$3, size: 18),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(option.$2, textAlign: TextAlign.center),
+                            ],
+                          ),
+                        ),
+                        selected: _mode == option.$1,
+                        onSelected: locked
+                            ? null
+                            : (_) {
+                                setState(() {
+                                  _mode = option.$1;
+                                  _requestId = newClientUuid();
+                                  _noteTimezone = null;
+                                  _error = null;
+                                });
+                              },
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -329,23 +360,33 @@ class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  TextField(
-                    controller: _text,
-                    enabled: !locked,
-                    minLines: 4,
-                    maxLines: 8,
-                    maxLength: 2000,
-                    decoration: InputDecoration(
-                      labelText: _mode == 'note'
-                          ? 'Your note'
-                          : 'Tell us about your day',
-                      hintText: _mode == 'morning'
-                          ? 'Sleep times, sleep quality, energy…'
-                          : _mode == 'evening'
-                          ? 'Energy, stress, mood, sleep plan…'
-                          : 'Anything worth remembering…',
+                  if (_recording && _mode != 'note')
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Speaking guide',
+                      ),
+                      child: Text(
+                        _speakingGuide,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    )
+                  else
+                    TextField(
+                      controller: _text,
+                      enabled: !locked,
+                      minLines: 4,
+                      maxLines: 20,
+                      maxLength: 2000,
+                      decoration: InputDecoration(
+                        labelText: _mode == 'note'
+                            ? 'Your note'
+                            : 'Tell us about your day',
+                        hintMaxLines: 20,
+                        hintText: _mode == 'note'
+                            ? 'Anything worth remembering…'
+                            : _speakingGuide,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: AppSpacing.sm),
                   CaptureDictationInput(
                     enabled: !_busy && !_notesBusy && canRecord,

@@ -4,8 +4,9 @@ Status: implemented repository boundary, 2026-08-01.
 
 ## Product Boundary
 
-Focus Protection V1 is an optional Android-only, device-local companion to a
-real authenticated `focus_sessions` lifecycle. It is off by default and is not
+Focus Protection V1 is optional, Android-only and device-local. Its default
+mode follows the real authenticated `focus_sessions` lifecycle; explicitly
+chosen weekly/always app blocking runs independently. It is off by default and is not
 shown on web, non-Android platforms, guest sessions, demo accounts, or mock-data
 runs. The direct `/settings/focus-protection` route returns to Settings when
 either the Android or synced-account capability is absent.
@@ -29,6 +30,31 @@ The native configuration and lease use the private SharedPreferences file
 `mylifegraph_focus_protection_v1`; nothing is uploaded. They remain available
 without a Flutter engine. Configuration is locked while an unexpired active
 protection lease exists.
+
+### App-blocking modes
+
+The additive local configuration fields are `blockingMode` (`focus`, `weekly`,
+`always`), `weekdays` (Monday=1 through Sunday=7), and `startMinute`/`endMinute`
+(0..1439). Old configuration defaults to Focus. A weekly editor confirms the
+days and times together; cancelling writes nothing. Empty days, equal times,
+out-of-range values and unknown modes are rejected. Earlier end times mean the
+following day, attributed to the selected start weekday. End is exclusive.
+
+Weekly rules use current device wall time/timezone, including clock changes;
+repeated DST wall-clock minutes follow the same selection. The Accessibility
+service evaluates each package event and once per wall-clock minute while alive,
+so it can block an already-open remembered app without Flutter running. There
+is no foreground-content query, wake lock, new alarm permission or new service.
+Android suspension/process death may delay checks until the service resumes or
+a package event arrives; exact unattended start-time delivery is not promised.
+
+Always/weekly rules persist on this device until disabled, not as account/cloud
+records. Master-off and app-blocking-off stop them. The existing five-second
+emergency confirmation disables app blocking in these two modes until explicit
+re-enable; it does not mutate the Focus lease or DND. Essential-app exclusions
+and the unchanged Focus emergency suppression remain authoritative. DND remains
+Focus-only in every app-blocking mode. Finishing Focus never clears a weekly or
+always preference and never creates a synthetic Focus session.
 
 The consent-gated app list can collapse from its top or bottom without losing
 selection. Deselect all clears the local selection. Block social media adds
@@ -96,8 +122,8 @@ MyLifeGraph, installed launchers, Android Settings, System UI, permission
 controllers, package installers, the default dialer, and resolved alarm/clock
 handlers are always allowed and not selectable where Android can resolve them.
 
-A selected foreground package during an active lease gets an API-owned
-`TYPE_ACCESSIBILITY_OVERLAY` with live remaining time, Return to MyLifeGraph,
+A selected foreground package during its configured active blocking mode gets an API-owned
+`TYPE_ACCESSIBILITY_OVERLAY` with Focus remaining time or a weekly/always status, Return to MyLifeGraph,
 and a five-second press-and-hold emergency control followed by confirmation.
 Lifting the original hold never confirms release. Accessibility `ACTION_CLICK`
 starts the same five-second gate and requires a second action after it arms;

@@ -8,40 +8,142 @@ import 'package:my_life_graph/features/focus_protection/domain/focus_protection.
 import 'package:my_life_graph/features/focus_protection/presentation/pages/focus_protection_settings_page.dart';
 
 void main() {
-  testWidgets('app list collapses from both ends and bulk selection preserves manual choices', (tester) async {
-    final gateway = _FakeGateway(_status())..apps = const [
-      InstalledLaunchableApp(packageName: 'video.app', label: 'Video'),
-      InstalledLaunchableApp(packageName: 'com.instagram.android', label: 'Instagram'),
-      InstalledLaunchableApp(packageName: 'com.twitter.android', label: 'X'),
-      InstalledLaunchableApp(packageName: 'unrelated.app', label: 'Instagram lookalike'),
-    ];
-    await _pumpSettings(tester, gateway);
-    Future<void> tapVisible(Finder finder) async {
-      if (finder.evaluate().isEmpty) {
-        await tester.scrollUntilVisible(finder, 300,
-            scrollable: find.byType(Scrollable).first);
+  test(
+    'blocking configuration roundtrips and old installs default to Focus',
+    () {
+      final original = FocusProtectionConfiguration.disabled();
+      final schedule = original.copyWith(
+        blockingMode: AppBlockingMode.weekly,
+        weekdays: {1, 7},
+        startMinute: 1320,
+        endMinute: 360,
+      );
+      final restored = FocusProtectionConfiguration.fromMap(schedule.toMap());
+      expect(restored.blockingMode, AppBlockingMode.weekly);
+      expect(restored.weekdays, {1, 7});
+      expect(restored.startMinute, 1320);
+      expect(restored.endMinute, 360);
+      expect(restored.silenceNotifications, original.silenceNotifications);
+      final legacy = original.toMap()
+        ..remove('blockingMode')
+        ..remove('weekdays')
+        ..remove('startMinute')
+        ..remove('endMinute');
+      expect(
+        FocusProtectionConfiguration.fromMap(legacy).blockingMode,
+        AppBlockingMode.focus,
+      );
+      expect(() => original.copyWith(weekdays: {}), throwsFormatException);
+      expect(
+        () => original.copyWith(startMinute: 540, endMinute: 540),
+        throwsFormatException,
+      );
+    },
+  );
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets(
+      'weekly schedule is explicit and editable on mobile at $scale',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final gateway = _FakeGateway(_status());
+        await _pumpSettings(tester, gateway, scale: scale);
+        final mode = find.byType(DropdownButtonFormField<AppBlockingMode>);
+        await tester.scrollUntilVisible(
+          mode,
+          180,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.ensureVisible(mode);
+        await tester.pumpAndSettle();
+        await tester.tap(mode);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Weekly schedule').last);
+        await tester.pumpAndSettle();
+        expect(gateway.savedConfigurations, isEmpty);
+        await tester.tap(find.byKey(const ValueKey('blocking-weekday-1')));
+        await tester.ensureVisible(find.text('Save schedule'));
+        await tester.tap(find.text('Save schedule'));
+        await tester.pumpAndSettle();
+        expect(
+          gateway.status.configuration.blockingMode,
+          AppBlockingMode.weekly,
+        );
+        expect(gateway.status.configuration.weekdays, {2, 3, 4, 5});
+        expect(gateway.status.configuration.silenceNotifications, isTrue);
+        await tester.ensureVisible(mode);
+        await tester.pumpAndSettle();
+        await tester.tap(mode);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Always block').last);
+        await tester.pumpAndSettle();
+        expect(
+          gateway.status.configuration.blockingMode,
+          AppBlockingMode.always,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets(
+    'app list collapses from both ends and bulk selection preserves manual choices',
+    (tester) async {
+      final gateway = _FakeGateway(_status())
+        ..apps = const [
+          InstalledLaunchableApp(packageName: 'video.app', label: 'Video'),
+          InstalledLaunchableApp(
+            packageName: 'com.instagram.android',
+            label: 'Instagram',
+          ),
+          InstalledLaunchableApp(
+            packageName: 'com.twitter.android',
+            label: 'X',
+          ),
+          InstalledLaunchableApp(
+            packageName: 'unrelated.app',
+            label: 'Instagram lookalike',
+          ),
+        ];
+      await _pumpSettings(tester, gateway);
+      Future<void> tapVisible(Finder finder) async {
+        if (finder.evaluate().isEmpty) {
+          await tester.scrollUntilVisible(
+            finder,
+            300,
+            scrollable: find.byType(Scrollable).first,
+          );
+        }
+        await tester.ensureVisible(finder);
+        await tester.pumpAndSettle();
+        await tester.tap(finder);
+        await tester.pumpAndSettle();
       }
-      await tester.ensureVisible(finder);
-      await tester.pumpAndSettle();
-      await tester.tap(finder);
-      await tester.pumpAndSettle();
-    }
-    await tapVisible(find.text('Choose apps'));
-    await tapVisible(find.text('Agree and show apps'));
-    await tapVisible(find.byKey(const ValueKey('focus-app-video.app')));
-    await tapVisible(find.text('Block social media'));
-    expect(gateway.status.configuration.selectedPackages,
-        {'video.app', 'com.instagram.android', 'com.twitter.android'});
-    await tapVisible(find.byKey(const ValueKey('collapse-focus-apps-bottom')));
-    expect(find.byType(CheckboxListTile), findsNothing);
-    await tapVisible(find.text('Choose apps'));
-    expect(gateway.listCalls, 1);
-    await tapVisible(find.text('Deselect all'));
-    expect(gateway.status.configuration.selectedPackages, isEmpty);
-    await tapVisible(find.byKey(const ValueKey('collapse-focus-apps-top')));
-    expect(find.byType(CheckboxListTile), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+
+      await tapVisible(find.text('Choose apps'));
+      await tapVisible(find.text('Agree and show apps'));
+      await tapVisible(find.byKey(const ValueKey('focus-app-video.app')));
+      await tapVisible(find.text('Block social media'));
+      expect(gateway.status.configuration.selectedPackages, {
+        'video.app',
+        'com.instagram.android',
+        'com.twitter.android',
+      });
+      await tapVisible(
+        find.byKey(const ValueKey('collapse-focus-apps-bottom')),
+      );
+      expect(find.byType(CheckboxListTile), findsNothing);
+      await tapVisible(find.text('Choose apps'));
+      expect(gateway.listCalls, 1);
+      await tapVisible(find.text('Deselect all'));
+      expect(gateway.status.configuration.selectedPackages, isEmpty);
+      await tapVisible(find.byKey(const ValueKey('collapse-focus-apps-top')));
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test('typed status parses all supported warnings and lease state', () {
     final status = FocusProtectionStatus.fromMap({
@@ -74,10 +176,7 @@ void main() {
 
     expect(status.configuration.selectedPackages, {'video.app'});
     expect(status.activeMechanisms, {'app_blocking'});
-    expect(
-      status.lease?.state,
-      FocusProtectionLeaseState.emergencyReleased,
-    );
+    expect(status.lease?.state, FocusProtectionLeaseState.emergencyReleased);
     expect(status.warnings, FocusProtectionWarning.values.toSet());
   });
 
@@ -91,13 +190,14 @@ void main() {
     expect(known.configurationKnown, isTrue);
   });
 
-  testWidgets('app catalog disclosure can be declined without side effects',
-      (tester) async {
+  testWidgets('app catalog disclosure can be declined without side effects', (
+    tester,
+  ) async {
     final gateway = _FakeGateway(_status());
     await _pumpSettings(tester, gateway);
 
     await tester.scrollUntilVisible(
-      find.text('Choose apps'),
+      find.text('Choose apps').hitTestable(),
       300,
       scrollable: find.byType(Scrollable).first,
     );
@@ -112,13 +212,14 @@ void main() {
     expect(find.text('Choose apps'), findsOneWidget);
   });
 
-  testWidgets('accepted disclosure loads and saves selected apps',
-      (tester) async {
+  testWidgets('accepted disclosure loads and saves selected apps', (
+    tester,
+  ) async {
     final gateway = _FakeGateway(_status());
     await _pumpSettings(tester, gateway);
 
     await tester.scrollUntilVisible(
-      find.text('Choose apps'),
+      find.text('Choose apps').hitTestable(),
       300,
       scrollable: find.byType(Scrollable).first,
     );
@@ -138,10 +239,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('focus-app-video.app')));
     await tester.pumpAndSettle();
-    expect(
-      gateway.savedConfigurations.last.selectedPackages,
-      {'video.app'},
-    );
+    expect(gateway.savedConfigurations.last.selectedPackages, {'video.app'});
   });
 
   testWidgets('active lease locks every configuration control', (tester) async {
@@ -158,10 +256,7 @@ void main() {
     );
     await _pumpSettings(tester, gateway);
 
-    expect(
-      find.textContaining('protected Focus session is active'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Focus is active.'), findsOneWidget);
     final master = tester.widget<SwitchListTile>(
       find.byKey(const ValueKey('focus-protection-master-switch')),
     );
@@ -181,50 +276,61 @@ void main() {
     );
   });
 
-  test('Android manifest and accessibility source keep the narrow boundary',
-      () {
-    final manifest =
-        File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
-    final service = File(
-      'android/app/src/main/res/xml/focus_block_accessibility_service.xml',
-    ).readAsStringSync();
-    final nativeSources = Directory(
-      'android/app/src/main/kotlin/com/mylifegraph/app',
-    )
-        .listSync()
-        .whereType<File>()
-        .map((file) => file.readAsStringSync())
-        .join('\n');
+  test(
+    'Android manifest and accessibility source keep the narrow boundary',
+    () {
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+      final service = File(
+        'android/app/src/main/res/xml/focus_block_accessibility_service.xml',
+      ).readAsStringSync();
+      final nativeSources =
+          Directory('android/app/src/main/kotlin/com/mylifegraph/app')
+              .listSync()
+              .whereType<File>()
+              .map((file) => file.readAsStringSync())
+              .join('\n');
 
-    expect(service, contains('typeWindowStateChanged'));
-    expect(service, contains('android:canRetrieveWindowContent="false"'));
-    expect(service, contains('android:canPerformGestures="false"'));
-    expect(service, contains('android:isAccessibilityTool="false"'));
-    expect(manifest, isNot(contains('QUERY_ALL_PACKAGES')));
-    expect(manifest, isNot(contains('NotificationListenerService')));
-    expect(manifest, isNot(contains('BIND_VPN_SERVICE')));
-    expect(manifest, contains('BIND_ACCESSIBILITY_SERVICE'));
-    expect(manifest, contains('BIND_CONDITION_PROVIDER_SERVICE'));
-    expect(manifest, contains('android:exported="false"'));
-    expect(nativeSources, isNot(contains('rootInActiveWindow')));
-    expect(nativeSources, isNot(contains('event.text')));
-    expect(nativeSources, contains('event.packageName'));
-    expect(nativeSources, contains('notifyCondition'));
-    expect(nativeSources, contains('Build.VERSION.SDK_INT >= 35'));
-    expect(nativeSources, contains('publishDesiredState'));
-    expect(nativeSources, contains('EmergencyReleaseGate'));
-    expect(nativeSources, isNot(contains('setOnLongClickListener')));
-  });
+      expect(service, contains('typeWindowStateChanged'));
+      expect(service, contains('android:canRetrieveWindowContent="false"'));
+      expect(service, contains('android:canPerformGestures="false"'));
+      expect(service, contains('android:isAccessibilityTool="false"'));
+      expect(manifest, isNot(contains('QUERY_ALL_PACKAGES')));
+      expect(manifest, isNot(contains('NotificationListenerService')));
+      expect(manifest, isNot(contains('BIND_VPN_SERVICE')));
+      expect(manifest, contains('BIND_ACCESSIBILITY_SERVICE'));
+      expect(manifest, contains('BIND_CONDITION_PROVIDER_SERVICE'));
+      expect(manifest, contains('android:exported="false"'));
+      expect(nativeSources, isNot(contains('rootInActiveWindow')));
+      expect(nativeSources, isNot(contains('event.text')));
+      expect(nativeSources, contains('event.packageName'));
+      expect(nativeSources, contains('notifyCondition'));
+      expect(nativeSources, contains('Build.VERSION.SDK_INT >= 35'));
+      expect(nativeSources, contains('publishDesiredState'));
+      expect(nativeSources, contains('EmergencyReleaseGate'));
+      expect(nativeSources, isNot(contains('setOnLongClickListener')));
+    },
+  );
 }
 
 Future<void> _pumpSettings(
   WidgetTester tester,
-  FocusProtectionGateway gateway,
-) async {
+  FocusProtectionGateway gateway, {
+  double scale = 1,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [focusProtectionGatewayProvider.overrideWithValue(gateway)],
-      child: const MaterialApp(home: FocusProtectionSettingsPage()),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
+        home: const FocusProtectionSettingsPage(),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -296,8 +402,7 @@ class _FakeGateway implements FocusProtectionGateway {
     required String sessionId,
     required DateTime startedAt,
     required DateTime endsAt,
-  }) async =>
-      status;
+  }) async => status;
 
   @override
   Future<FocusProtectionStatus> deactivateLease(String sessionId) async =>

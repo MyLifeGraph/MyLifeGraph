@@ -1,5 +1,36 @@
 package com.mylifegraph.app
 
+import java.util.Calendar
+import java.util.TimeZone
+
+/** Device-local wall-clock policy; Monday=1. Overnight windows belong to their start day. */
+data class AppBlockingSchedule(
+    val mode: String = "focus",
+    val weekdays: Set<Int> = setOf(1, 2, 3, 4, 5),
+    val startMinute: Int = 540,
+    val endMinute: Int = 1020,
+) {
+    init {
+        require(mode in setOf("focus", "weekly", "always"))
+        require(weekdays.isNotEmpty() && weekdays.all { it in 1..7 })
+        require(startMinute in 0..1439 && endMinute in 0..1439 && startMinute != endMinute)
+    }
+
+    fun active(now: Long, focusActive: Boolean, zone: TimeZone = TimeZone.getDefault()): Boolean {
+        if (mode == "focus") return focusActive
+        if (mode == "always") return true
+        val clock = Calendar.getInstance(zone).apply { timeInMillis = now }
+        val day = (clock.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
+        val minute = clock.get(Calendar.HOUR_OF_DAY) * 60 + clock.get(Calendar.MINUTE)
+        return if (startMinute < endMinute) {
+            day in weekdays && minute >= startMinute && minute < endMinute
+        } else {
+            (day in weekdays && minute >= startMinute) ||
+                ((if (day == 1) 7 else day - 1) in weekdays && minute < endMinute)
+        }
+    }
+}
+
 data class LocalFocusLease(
     val sessionId: String,
     val startedAtEpochMs: Long,
@@ -65,13 +96,14 @@ object FocusProtectionDecision {
         foregroundPackage: String?,
         lease: LocalFocusLease?,
         nowEpochMs: Long,
+        schedule: AppBlockingSchedule = AppBlockingSchedule(),
     ): Boolean {
         val packageName = foregroundPackage?.trim().orEmpty()
         return protectionEnabled &&
             blockingEnabled &&
             accessibilityEnabled &&
             packageName.isNotEmpty() &&
-            lease?.isActive(nowEpochMs) == true &&
+            schedule.active(nowEpochMs, lease?.isActive(nowEpochMs) == true) &&
             packageName in selectedPackages &&
             packageName !in essentialPackages
     }

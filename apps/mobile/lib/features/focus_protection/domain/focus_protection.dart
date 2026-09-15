@@ -5,6 +5,8 @@ const focusProtectionAccessibilityConsent = 'accessibility';
 const focusProtectionNotificationPolicyConsent = 'notification_policy';
 const focusProtectionConsentVersion = 1;
 
+enum AppBlockingMode { focus, weekly, always }
+
 class InstalledLaunchableApp {
   const InstalledLaunchableApp({
     required this.packageName,
@@ -38,12 +40,27 @@ class FocusProtectionConfiguration {
     required this.silenceNotifications,
     Iterable<String> selectedPackages = const [],
     Map<String, int> consentVersions = const {},
-  })  : selectedPackages = Set.unmodifiable(
-          selectedPackages.map((value) => value.trim()).where(
-                (value) => value.isNotEmpty,
-              ),
-        ),
-        consentVersions = Map.unmodifiable(consentVersions);
+    this.blockingMode = AppBlockingMode.focus,
+    Iterable<int> weekdays = const [1, 2, 3, 4, 5],
+    this.startMinute = 9 * 60,
+    this.endMinute = 17 * 60,
+  }) : selectedPackages = Set.unmodifiable(
+         selectedPackages
+             .map((value) => value.trim())
+             .where((value) => value.isNotEmpty),
+       ),
+       weekdays = Set.unmodifiable(weekdays),
+       consentVersions = Map.unmodifiable(consentVersions) {
+    if (this.weekdays.isEmpty ||
+        this.weekdays.any((day) => day < 1 || day > 7) ||
+        startMinute < 0 ||
+        startMinute >= 1440 ||
+        endMinute < 0 ||
+        endMinute >= 1440 ||
+        startMinute == endMinute) {
+      throw const FormatException('Invalid app-blocking schedule.');
+    }
+  }
 
   factory FocusProtectionConfiguration.fromMap(Map<Object?, Object?> map) {
     final rawPackages = map['selectedPackages'];
@@ -77,6 +94,13 @@ class FocusProtectionConfiguration {
       silenceNotifications: map['silenceNotifications'] as bool,
       selectedPackages: packages,
       consentVersions: consents,
+      blockingMode: AppBlockingMode.values.byName(
+        map['blockingMode'] as String? ?? 'focus',
+      ),
+      weekdays:
+          (map['weekdays'] as List?)?.cast<int>() ?? const [1, 2, 3, 4, 5],
+      startMinute: map['startMinute'] as int? ?? 9 * 60,
+      endMinute: map['endMinute'] as int? ?? 17 * 60,
     );
   }
 
@@ -92,6 +116,10 @@ class FocusProtectionConfiguration {
   final bool silenceNotifications;
   final Set<String> selectedPackages;
   final Map<String, int> consentVersions;
+  final AppBlockingMode blockingMode;
+  final Set<int> weekdays;
+  final int startMinute;
+  final int endMinute;
 
   bool hasConsent(String kind) =>
       (consentVersions[kind] ?? 0) >= focusProtectionConsentVersion;
@@ -102,6 +130,10 @@ class FocusProtectionConfiguration {
     bool? silenceNotifications,
     Iterable<String>? selectedPackages,
     Map<String, int>? consentVersions,
+    AppBlockingMode? blockingMode,
+    Iterable<int>? weekdays,
+    int? startMinute,
+    int? endMinute,
   }) {
     return FocusProtectionConfiguration(
       enabled: enabled ?? this.enabled,
@@ -109,16 +141,24 @@ class FocusProtectionConfiguration {
       silenceNotifications: silenceNotifications ?? this.silenceNotifications,
       selectedPackages: selectedPackages ?? this.selectedPackages,
       consentVersions: consentVersions ?? this.consentVersions,
+      blockingMode: blockingMode ?? this.blockingMode,
+      weekdays: weekdays ?? this.weekdays,
+      startMinute: startMinute ?? this.startMinute,
+      endMinute: endMinute ?? this.endMinute,
     );
   }
 
   Map<String, Object> toMap() => {
-        'enabled': enabled,
-        'blockSelectedApps': blockSelectedApps,
-        'silenceNotifications': silenceNotifications,
-        'selectedPackages': selectedPackages.toList()..sort(),
-        'consentVersions': consentVersions,
-      };
+    'enabled': enabled,
+    'blockSelectedApps': blockSelectedApps,
+    'silenceNotifications': silenceNotifications,
+    'selectedPackages': selectedPackages.toList()..sort(),
+    'consentVersions': consentVersions,
+    'blockingMode': blockingMode.name,
+    'weekdays': weekdays.toList()..sort(),
+    'startMinute': startMinute,
+    'endMinute': endMinute,
+  };
 }
 
 enum FocusProtectionLeaseState {
@@ -207,8 +247,8 @@ class FocusProtectionStatus {
     this.configurationKnown = true,
     Iterable<String> activeMechanisms = const [],
     Iterable<FocusProtectionWarning> warnings = const [],
-  })  : activeMechanisms = Set.unmodifiable(activeMechanisms),
-        warnings = Set.unmodifiable(warnings);
+  }) : activeMechanisms = Set.unmodifiable(activeMechanisms),
+       warnings = Set.unmodifiable(warnings);
 
   factory FocusProtectionStatus.fromMap(Map<Object?, Object?> map) {
     final rawConfiguration = map['configuration'];

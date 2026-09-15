@@ -48,6 +48,26 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Local app-blocking modes follow-up - 2026-09-15
+
+- Working branch `fix/ultra-quick-check-in-guidance`, base `64ac25a`.
+  Existing uncommitted Ultra Quick guidance remains separate from the additive
+  Android Focus/weekly/always app-blocking changes. No push or rollout performed.
+- Focused Flutter protection/settings/lifecycle and Coach credentials: 29 tests
+  pass. New coverage includes legacy defaults, schedule roundtrip/validation,
+  weekly selection and always mode at 320px with 100%/200% text. Focus lifecycle,
+  emergency timing, essential-app source boundaries and key isolation remain.
+  Focused Dart analysis and documentation consistency pass.
+- Native tests add weekday/exclusive-end, overnight Sunday rollover, DST-repeat,
+  independent-mode/master/essential-app checks and invalid schedule cases.
+  They are NOT yet pass evidence: local Gradle cannot finish dependency downloads
+  due to repeated TLS `bad_record_mac` failures, including with TLS 1.2.
+  A temporary official checksum-verified Java 21 runtime replaced Java 25 only
+  for these bounded test processes; no project SDK/dependency version changed,
+  certificate verification remained enabled, and no VM/VPS test stack was used.
+  Native compilation/tests and installed-device acceptance remain release gates.
+
+
 ### RC6 production rollout — 2026-09-14
 
 This supersedes the pending rollout statements in the earlier candidate entries.

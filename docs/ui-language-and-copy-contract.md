@@ -430,6 +430,10 @@ not reported as saved. Coach uncertainty uses explicitly labelled
 reason. Semantic color/icons supplement these words; high uncertainty means
 less confidence and no level guarantees correctness.
 Ultra Quick Check-in uses the compact choices `Morning`, `Evening`, `Quick note`.
+Morning/Evening speaking guides follow manual-form order with blank values,
+`… / 10` ratings, named optional choices, and conditional stress context.
+They are display-only hints while empty and remain visible during recording;
+the guide is never prefilled as user input.
 `Review fields` means an uncommitted proposal, followed by the existing required
 form and final save. `Save note` is separate optional context, not a check-in.
 Recording/transcription never claims completion. Errors retain the text and
@@ -468,6 +472,13 @@ correlation says `Not compared · overlapping signals`; a 7–13-day coefficient
 says `Early evidence`.
 
 ## Plain-language Rules
+
+Android Focus protection names app-blocking modes `Focus sessions`, `Weekly
+schedule`, and `Always block`. Weekly selection confirms days/times in one
+compact sheet and names device time plus next-day end where relevant.
+`Silence during Focus` explicitly distinguishes DND from independent app blocks.
+Permission disclosures and warnings stay visible; `Privacy & limits` holds
+the full explanation. Package identifiers remain available as app-label tooltips.
 
 - State the user outcome before implementation detail.
 - Calendar `Plan study time` follows Event, Study time, then the generated

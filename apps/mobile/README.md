@@ -10,6 +10,10 @@ current branch read; manual form behavior is unchanged. Suggested clocks use the
 profile timezone and reject ambiguous DST instants for manual correction.
 `quick-notes-v1` saves only explicitly confirmed optional Coach context, not
 ratings or streaks. Saved notes can be read/deleted; retries retain identity.
+Morning/Evening show a short speaking guide in manual form order. It is an
+empty-field hint while typing and stays visible during dictation, including
+when earlier text exists. Guide text is never inserted into the transcript.
+The three mode choices share one mobile row with wrapping labels.
 Guest/mock makes no authenticated calls. These endpoints require the matching
 additive Cloud/API release; code presence alone does not prove availability.
 
@@ -40,8 +44,13 @@ must be verified separately; existing manual check-ins stay unchanged.
 Settings omits its own navigation cog while retaining Coach notices and Back;
 its compact header reduces the gap before Profile. The Focus target dropdown
 has a viewport-bounded scrollable menu so the final option remains reachable.
-These are presentation-only changes. Android Focus Protection remains tied to
-the confirmed Focus start and chosen duration; it is not a separate clock schedule.
+Android app blocking offers Focus sessions (the existing default), a confirmed
+weekly day/time schedule, or Always block. Weekly windows use device time and
+support overnight intervals. Notification silencing remains Focus-only.
+Independent-mode emergency release turns off app blocking until re-enabled;
+no Focus session is created or changed. The Android service, not Flutter or a
+Cloud scheduler, evaluates these device-local rules. OS suspension can delay
+checks; installed-device acceptance remains necessary.
 Its app list can collapse from either end, clear all selections, or add an
 installed-only Social media preset while preserving manual choices. All remain
 device-local and locked during an active protection lease. The native overlay

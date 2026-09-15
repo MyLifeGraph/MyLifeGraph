@@ -8,6 +8,7 @@ data class LocalFocusConfiguration(
     val silenceNotifications: Boolean,
     val selectedPackages: Set<String>,
     val consentVersions: Map<String, Int>,
+    val blockingSchedule: AppBlockingSchedule = AppBlockingSchedule(),
 )
 
 class FocusProtectionStore(context: Context) {
@@ -27,7 +28,18 @@ class FocusProtectionStore(context: Context) {
             val value = preferences.getInt("$KEY_CONSENT_PREFIX$kind", 0)
             if (value > 0) kind to value else null
         }.toMap(),
+        blockingSchedule = readBlockingSchedule(),
     )
+
+    private fun readBlockingSchedule(): AppBlockingSchedule = runCatching {
+        AppBlockingSchedule(
+            mode = preferences.getString("blocking_mode", "focus") ?: "focus",
+            weekdays = preferences.getStringSet("blocking_weekdays", setOf("1", "2", "3", "4", "5"))!!
+                .map { it.toInt() }.toSet(),
+            startMinute = preferences.getInt("blocking_start_minute", 540),
+            endMinute = preferences.getInt("blocking_end_minute", 1020),
+        )
+    }.getOrElse { AppBlockingSchedule() }
 
     fun saveConfiguration(configuration: LocalFocusConfiguration): Boolean {
         val editor = preferences.edit()
@@ -35,6 +47,10 @@ class FocusProtectionStore(context: Context) {
             .putBoolean(KEY_BLOCK_APPS, configuration.blockSelectedApps)
             .putBoolean(KEY_SILENCE_NOTIFICATIONS, configuration.silenceNotifications)
             .putStringSet(KEY_SELECTED_PACKAGES, configuration.selectedPackages)
+            .putString("blocking_mode", configuration.blockingSchedule.mode)
+            .putStringSet("blocking_weekdays", configuration.blockingSchedule.weekdays.map { it.toString() }.toSet())
+            .putInt("blocking_start_minute", configuration.blockingSchedule.startMinute)
+            .putInt("blocking_end_minute", configuration.blockingSchedule.endMinute)
         CONSENT_KEYS.forEach { kind ->
             val value = configuration.consentVersions[kind] ?: 0
             if (value > 0) {
@@ -57,6 +73,9 @@ class FocusProtectionStore(context: Context) {
         if (sessionId.isBlank() || startedAt <= 0L || endsAt <= startedAt) return null
         return LocalFocusLease(sessionId, startedAt, endsAt, state)
     }
+
+    // Independent-mode emergency release never touches the Focus lease or its DND rule.
+    fun disableAppBlocking(): Boolean = preferences.edit().putBoolean(KEY_BLOCK_APPS, false).commit()
 
     fun saveLease(lease: LocalFocusLease): Boolean =
         preferences.edit()

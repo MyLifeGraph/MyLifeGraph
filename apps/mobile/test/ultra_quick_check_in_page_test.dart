@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/composition/quick_capture_providers.dart';
+import 'package:my_life_graph/composition/widgets/capture_dictation_input.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
@@ -17,6 +18,45 @@ import 'package:my_life_graph/features/quick_action/domain/quick_capture_api.dar
 import 'package:my_life_graph/features/quick_action/presentation/pages/ultra_quick_check_in_page.dart';
 
 void main() {
+  for (final mode in ['Morning', 'Evening']) {
+    testWidgets('$mode guide hides on typing and stays during dictation', (
+      tester,
+    ) async {
+      final api = _Api();
+      await _pump(tester, api, width: 390);
+      await tester.tap(find.widgetWithText(ChoiceChip, mode));
+      await tester.pumpAndSettle();
+      final field = tester.widget<TextField>(find.byType(TextField));
+      final guide = field.decoration!.hintText!;
+      expect(
+        guide,
+        contains(mode == 'Morning' ? 'Sleep quality: … / 10' : 'Mood: … / 10'),
+      );
+      expect(field.controller!.text, isEmpty);
+      await tester.enterText(find.byType(TextField), 'My own words');
+      await tester.pumpAndSettle();
+      expect(find.text(guide).hitTestable(), findsNothing);
+      tester
+          .widget<CaptureDictationInput>(find.byType(CaptureDictationInput))
+          .onBusyChanged(true);
+      await tester.pump();
+      expect(find.text(guide), findsOneWidget);
+      expect(find.text('Speaking guide'), findsOneWidget);
+      tester
+          .widget<CaptureDictationInput>(find.byType(CaptureDictationInput))
+          .onText('more words');
+      tester
+          .widget<CaptureDictationInput>(find.byType(CaptureDictationInput))
+          .onBusyChanged(false);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'My own words more words',
+      );
+      expect(api.calls, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('guest makes no calls and has no cloud capture action', (
     tester,
   ) async {
@@ -35,7 +75,7 @@ void main() {
     (tester) async {
       final api = _Api()..failSave = true;
       await _pump(tester, api);
-      await tester.tap(find.text('Quick note'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Quick note'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'A useful thought');
       await tester.pump();
@@ -68,7 +108,7 @@ void main() {
       final api = _Api()..failSave = true;
       final date = _Date();
       await _pump(tester, api, date: date);
-      await tester.tap(find.text('Quick note'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Quick note'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'A useful thought');
       await tester.pump();
@@ -101,7 +141,7 @@ void main() {
         );
       final date = _Date();
       await _pump(tester, api, date: date);
-      await tester.tap(find.text('Quick note'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Quick note'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Unconfirmed note');
       await tester.pump();
@@ -257,7 +297,7 @@ void main() {
     final pending = Completer<QuickNote>();
     final api = _Api()..pending = pending;
     await _pump(tester, api);
-    await tester.tap(find.text('Quick note'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Quick note'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'New note');
     await tester.pump();
@@ -292,7 +332,7 @@ void main() {
       final api = _Api()..pending = pending;
       final owner = StateProvider<String?>((ref) => 'owner-a');
       final container = await _pump(tester, api, ownerProvider: owner);
-      await tester.tap(find.text('Quick note'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Quick note'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Private thought');
       await tester.pump();
@@ -321,7 +361,29 @@ void main() {
       'compact capture at 320px and text scale $scale has no overflow',
       (tester) async {
         await _pump(tester, _Api(), width: 320, scale: scale);
-        await tester.tap(find.text('Quick note'));
+        final chipTops = tester
+            .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+            .map((chip) => tester.getTopLeft(find.byWidget(chip)).dy)
+            .toSet();
+        expect(chipTops, hasLength(1));
+        for (final label in ['Morning', 'Evening', 'Quick note']) {
+          final bounds = tester.getRect(
+            find.ancestor(
+              of: find.text(label),
+              matching: find.byType(ChoiceChip),
+            ),
+          );
+          final textBounds = tester.getRect(find.text(label));
+          expect(bounds.contains(textBounds.topLeft), isTrue);
+          expect(
+            bounds.contains(textBounds.bottomRight - const Offset(0.1, 0.1)),
+            isTrue,
+          );
+        }
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Evening'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Quick note'));
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
           find.text('Saved notes').hitTestable(),

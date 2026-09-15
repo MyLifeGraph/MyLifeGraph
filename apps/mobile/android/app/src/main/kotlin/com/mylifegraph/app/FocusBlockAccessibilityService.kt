@@ -36,6 +36,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         manager = FocusProtectionManager(applicationContext)
         windowManager = getSystemService(WindowManager::class.java)
         runningService = WeakReference(this)
+        handler.removeCallbacks(scheduleTick)
+        handler.post(scheduleTick)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -93,7 +95,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         content.addView(textView("Focus protection", 30f, true))
         content.addView(
             textView(
-                "This app is blocked until the planned Focus time ends.",
+                "This app is blocked by your device settings.",
                 18f,
                 false,
             ).withTopMargin(16),
@@ -214,9 +216,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun releaseCurrentLease() {
-        val sessionId = manager.activeLease()?.sessionId ?: return
-        manager.emergencyRelease(sessionId)
-        hideOverlay()
+        manager.releaseAppBlocking()
+        refreshOverlay()
         returnToMyLifeGraph()
     }
 
@@ -228,6 +229,16 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun updateRemainingTime() {
+        if (!manager.appBlockingActive()) {
+            hideOverlay()
+            return
+        }
+        if (manager.blockingMode() != "focus") {
+            remainingText?.textSize = 24f
+            remainingText?.text = manager.blockingSummary()
+            remainingText?.contentDescription = manager.blockingSummary()
+            return
+        }
         val lease = manager.activeLease()
         if (lease == null) {
             hideOverlay()
@@ -254,6 +265,15 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             if (overlay == null) return
             updateRemainingTime()
             if (overlay != null) handler.postDelayed(this, 1_000L)
+        }
+    }
+
+    // Re-evaluate even if the user stays inside an app as a weekly window starts.
+    // No wake lock, exact alarm or new service: one check per wall-clock minute.
+    private val scheduleTick = object : Runnable {
+        override fun run() {
+            if (manager.blockingMode() == "weekly") refreshOverlay()
+            handler.postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
 

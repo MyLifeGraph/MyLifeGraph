@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_radii.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -28,6 +29,203 @@ class _FocusProtectionSettingsPageState
   bool _busy = true;
   String? _error;
   int _operationGeneration = 0;
+  int _modeRevision = 0;
+  static const _weekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  static const _dayNames = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  String _clock(int minute) =>
+      TimeOfDay(hour: minute ~/ 60, minute: minute % 60).format(context);
+
+  Future<void> _editSchedule(FocusProtectionConfiguration configuration) async {
+    final days = configuration.weekdays.toSet();
+    var start = configuration.startMinute;
+    var end = configuration.endMinute;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, update) {
+          Future<void> pickTime(bool isStart) async {
+            final current = isStart ? start : end;
+            final picked = await showTimePicker(
+              context: sheetContext,
+              initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
+            );
+            if (picked != null && sheetContext.mounted) {
+              update(() {
+                final minute = picked.hour * 60 + picked.minute;
+                if (isStart) {
+                  start = minute;
+                } else {
+                  end = minute;
+                }
+              });
+            }
+          }
+
+          return SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Weekly schedule',
+                      style: Theme.of(sheetContext).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    LayoutBuilder(
+                      builder: (context, constraints) => SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: constraints.maxWidth < 322
+                              ? 322
+                              : constraints.maxWidth,
+                          child: Row(
+                            children: [
+                              for (var day = 1; day <= 7; day++)
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 1,
+                                    ),
+                                    child: Semantics(
+                                      selected: days.contains(day),
+                                      button: true,
+                                      label: _dayNames[day - 1],
+                                      child: Tooltip(
+                                        message: _dayNames[day - 1],
+                                        child: InkWell(
+                                          key: ValueKey(
+                                            'blocking-weekday-$day',
+                                          ),
+                                          onTap: () => update(() {
+                                            days.contains(day)
+                                                ? days.remove(day)
+                                                : days.add(day);
+                                          }),
+                                          child: AnimatedContainer(
+                                            duration:
+                                                MediaQuery.of(
+                                                  sheetContext,
+                                                ).disableAnimations
+                                                ? Duration.zero
+                                                : const Duration(
+                                                    milliseconds: 160,
+                                                  ),
+                                            constraints: const BoxConstraints(
+                                              minHeight: 44,
+                                            ),
+                                            alignment: Alignment.center,
+                                            decoration: BoxDecoration(
+                                              color: days.contains(day)
+                                                  ? Theme.of(sheetContext)
+                                                        .colorScheme
+                                                        .primaryContainer
+                                                  : Theme.of(sheetContext)
+                                                        .colorScheme
+                                                        .surfaceContainerHighest,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                    AppRadii.sm,
+                                                  ),
+                                            ),
+                                            child: Text(
+                                              _weekdays[day - 1],
+                                              textAlign: TextAlign.center,
+                                              style: Theme.of(sheetContext)
+                                                  .textTheme
+                                                  .labelMedium
+                                                  ?.copyWith(
+                                                    color: days.contains(day)
+                                                        ? Theme.of(sheetContext)
+                                                              .colorScheme
+                                                              .onPrimaryContainer
+                                                        : Theme.of(sheetContext)
+                                                              .colorScheme
+                                                              .onSurface,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => pickTime(true),
+                            child: Text('From ${_clock(start)}'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => pickTime(false),
+                            child: Text('Until ${_clock(end)}'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      days.isEmpty
+                          ? 'Select at least one day.'
+                          : start == end
+                          ? 'Choose different start and end times.'
+                          : end < start
+                          ? 'Ends the next day · Device time'
+                          : 'Device time',
+                      style: Theme.of(sheetContext).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    FilledButton(
+                      onPressed: days.isEmpty || start == end
+                          ? null
+                          : () => Navigator.pop(sheetContext, true),
+                      child: const Text('Save schedule'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(sheetContext, false),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (mounted && confirmed == true && _status != null) {
+      await _save(
+        _status!.configuration.copyWith(
+          blockingMode: AppBlockingMode.weekly,
+          weekdays: days,
+          startMinute: start,
+          endMinute: end,
+        ),
+      );
+    }
+  }
 
   bool get _configurationLocked => _status?.lease?.isActive == true;
 
@@ -69,7 +267,8 @@ class _FocusProtectionSettingsPageState
 
     return AppPage(
       title: 'Focus protection',
-      subtitle: 'Optional device-only protection for synced Focus sessions',
+      subtitle: 'App blocking · This device only',
+      compactHeader: true,
       backFallback: AppRoutes.settings,
       actions: [
         IconButton(
@@ -114,7 +313,7 @@ class _FocusProtectionSettingsPageState
                   SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      'A protected Focus session is active. Finish, abandon, wait for its planned end, or use the emergency release before changing these settings.',
+                      'Focus is active. Finish, abandon, or use emergency release to edit. Settings unlock at its planned end.',
                     ),
                   ),
                 ],
@@ -129,9 +328,9 @@ class _FocusProtectionSettingsPageState
                   ? (value) => _save(configuration.copyWith(enabled: value))
                   : null,
               secondary: const Icon(AppIcons.lockOutline),
-              title: const Text('Protect new Focus sessions'),
+              title: const Text('Enable protection'),
               subtitle: const Text(
-                'Off by default. When on, available protection starts after a synced Focus session is confirmed.',
+                'Use your app-blocking mode and Focus preferences.',
               ),
             ),
           ),
@@ -143,28 +342,81 @@ class _FocusProtectionSettingsPageState
                   value: configuration.blockSelectedApps,
                   onChanged: controlsEnabled && enabled
                       ? (value) => _save(
-                            configuration.copyWith(blockSelectedApps: value),
-                          )
+                          configuration.copyWith(blockSelectedApps: value),
+                        )
                       : null,
                   title: const Text('Block selected apps'),
-                  subtitle: const Text(
-                    'Shows a full-screen local block page. Browsers can only be blocked as whole apps.',
-                  ),
+                  subtitle: const Text('Block whole apps, including browsers.'),
                 ),
+                if (configuration.blockSelectedApps) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  DropdownButtonFormField<AppBlockingMode>(
+                    key: ValueKey(
+                      'blocking-mode-${configuration.blockingMode.name}-$_modeRevision',
+                    ),
+                    initialValue: configuration.blockingMode,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'When to block',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AppBlockingMode.focus,
+                        child: Text('Focus sessions'),
+                      ),
+                      DropdownMenuItem(
+                        value: AppBlockingMode.weekly,
+                        child: Text('Weekly schedule'),
+                      ),
+                      DropdownMenuItem(
+                        value: AppBlockingMode.always,
+                        child: Text('Always block'),
+                      ),
+                    ],
+                    onChanged: controlsEnabled && enabled
+                        ? (mode) async {
+                            if (mode == null) return;
+                            if (mode == AppBlockingMode.weekly) {
+                              await _editSchedule(configuration);
+                            } else {
+                              await _save(
+                                configuration.copyWith(blockingMode: mode),
+                              );
+                            }
+                            if (mounted) setState(() => _modeRevision++);
+                          }
+                        : null,
+                  ),
+                  if (configuration.blockingMode == AppBlockingMode.weekly)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        (configuration.weekdays.toList()..sort())
+                            .map((day) => _weekdays[day - 1])
+                            .join(' · '),
+                      ),
+                      subtitle: Text(
+                        '${_clock(configuration.startMinute)} – ${_clock(configuration.endMinute)}${configuration.endMinute < configuration.startMinute ? ' (+1 day)' : ''} · Device time',
+                      ),
+                      trailing: const Icon(AppIcons.editOutlined),
+                      onTap: controlsEnabled && enabled
+                          ? () => _editSchedule(configuration)
+                          : null,
+                    ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 const Divider(height: 1),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: configuration.silenceNotifications,
                   onChanged: controlsEnabled && enabled
                       ? (value) => _save(
-                            configuration.copyWith(
-                              silenceNotifications: value,
-                            ),
-                          )
+                          configuration.copyWith(silenceNotifications: value),
+                        )
                       : null,
-                  title: const Text('Silence normal notifications'),
+                  title: const Text('Silence during Focus'),
                   subtitle: const Text(
-                    'Uses one MyLifeGraph Focus rule. Alarms, favorite callers, repeated callers, and media stay allowed.',
+                    'Alarms, favorite/repeated callers and media stay allowed.',
                   ),
                 ),
               ],
@@ -205,9 +457,7 @@ class _FocusProtectionSettingsPageState
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                const Text(
-                  'Only package names are saved on this device. The app list and your choices are never uploaded.',
-                ),
+                const Text('Saved only on this device. Never uploaded.'),
                 const SizedBox(height: AppSpacing.md),
                 if (!_appsExpanded)
                   OutlinedButton(
@@ -234,12 +484,20 @@ class _FocusProtectionSettingsPageState
                         label: const Text('Hide apps'),
                       ),
                       TextButton(
-                        onPressed: controlsEnabled && enabled && configuration.selectedPackages.isNotEmpty
-                            ? () => _save(configuration.copyWith(selectedPackages: {})) : null,
+                        onPressed:
+                            controlsEnabled &&
+                                enabled &&
+                                configuration.selectedPackages.isNotEmpty
+                            ? () => _save(
+                                configuration.copyWith(selectedPackages: {}),
+                              )
+                            : null,
                         child: const Text('Deselect all'),
                       ),
                       TextButton(
-                        onPressed: controlsEnabled && enabled ? () => _selectSocialApps(configuration) : null,
+                        onPressed: controlsEnabled && enabled
+                            ? () => _selectSocialApps(configuration)
+                            : null,
                         child: const Text('Block social media'),
                       ),
                     ],
@@ -267,13 +525,15 @@ class _FocusProtectionSettingsPageState
                         ),
                         onChanged: controlsEnabled && enabled
                             ? (selected) => _toggleApp(
-                                  configuration,
-                                  app.packageName,
-                                  selected == true,
-                                )
+                                configuration,
+                                app.packageName,
+                                selected == true,
+                              )
                             : null,
-                        title: Text(app.label),
-                        subtitle: Text(app.packageName),
+                        title: Tooltip(
+                          message: app.packageName,
+                          child: Text(app.label),
+                        ),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
                   TextButton.icon(
@@ -305,8 +565,14 @@ class _FocusProtectionSettingsPageState
               ),
             ),
           const AppCard(
-            child: Text(
-              'Focus protection does not read messages, page text, clicks, or window content. It does not filter URLs, suspend packages, protect a computer, or prevent uninstalling MyLifeGraph. Settings and essential phone/alarm functions remain reachable.',
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text('Privacy & limits'),
+              children: [
+                Text(
+                  'Focus protection does not read messages, page text, clicks, or window content. It does not filter URLs, suspend packages, protect a computer, or prevent uninstalling MyLifeGraph. Settings and essential phone/alarm functions remain reachable.',
+                ),
+              ],
             ),
           ),
         ],
@@ -323,8 +589,9 @@ class _FocusProtectionSettingsPageState
       _error = null;
     });
     try {
-      final status =
-          await ref.read(focusProtectionGatewayProvider).readStatus();
+      final status = await ref
+          .read(focusProtectionGatewayProvider)
+          .readStatus();
       if (!isCurrent()) return;
       setState(() => _status = status);
     } catch (_) {
@@ -378,8 +645,9 @@ class _FocusProtectionSettingsPageState
     bool isCurrent() => mounted && generation == _operationGeneration;
     setState(() => _busy = true);
     try {
-      final apps =
-          await ref.read(focusProtectionGatewayProvider).listLaunchableApps();
+      final apps = await ref
+          .read(focusProtectionGatewayProvider)
+          .listLaunchableApps();
       if (!isCurrent()) return;
       setState(() {
         _apps = apps;
@@ -422,9 +690,7 @@ class _FocusProtectionSettingsPageState
 
   Future<void> _openNotificationPolicySettings() async {
     var configuration = _status!.configuration;
-    if (!configuration.hasConsent(
-      focusProtectionNotificationPolicyConsent,
-    )) {
+    if (!configuration.hasConsent(focusProtectionNotificationPolicyConsent)) {
       final agreed = await _showDisclosure(
         title: 'Allow notification silencing?',
         body:
@@ -507,20 +773,35 @@ class _FocusProtectionSettingsPageState
   void _selectSocialApps(FocusProtectionConfiguration configuration) {
     // Exact package IDs, intersected with the native, essential-app-safe catalog.
     const socialPackages = {
-      'com.instagram.android', 'com.twitter.android',
-      'com.facebook.katana', 'com.facebook.lite', 'com.instagram.barcelona',
-      'com.zhiliaoapp.musically', 'com.zhiliaoapp.musically.go',
-      'com.ss.android.ugc.trill', 'com.snapchat.android',
-      'com.reddit.frontpage', 'com.pinterest', 'com.linkedin.android',
+      'com.instagram.android',
+      'com.twitter.android',
+      'com.facebook.katana',
+      'com.facebook.lite',
+      'com.instagram.barcelona',
+      'com.zhiliaoapp.musically',
+      'com.zhiliaoapp.musically.go',
+      'com.ss.android.ugc.trill',
+      'com.snapchat.android',
+      'com.reddit.frontpage',
+      'com.pinterest',
+      'com.linkedin.android',
       'com.google.android.youtube',
     };
     final matches = (_apps ?? const <InstalledLaunchableApp>[])
-        .map((app) => app.packageName).where(socialPackages.contains).toSet();
+        .map((app) => app.packageName)
+        .where(socialPackages.contains)
+        .toSet();
     if (matches.isEmpty) {
-      _showMessage('No matching social media apps installed. You can still choose apps manually.');
+      _showMessage(
+        'No matching social media apps installed. You can still choose apps manually.',
+      );
       return;
     }
-    _save(configuration.copyWith(selectedPackages: {...configuration.selectedPackages, ...matches}));
+    _save(
+      configuration.copyWith(
+        selectedPackages: {...configuration.selectedPackages, ...matches},
+      ),
+    );
   }
 
   void _showMessage(String message) {
