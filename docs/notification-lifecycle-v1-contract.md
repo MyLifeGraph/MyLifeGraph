@@ -42,7 +42,9 @@ inconsistent rows fail the real-data load instead of becoming mock content.
 Only the existing internal route allowlist may turn `action_url` into an Open
 button.
 An allowlisted Open action pushes in-app history, while a direct `/alerts`
-deep link uses Settings as its Back fallback. Neither Back nor Open implicitly
+deep link uses Today as its Back fallback. Inbox is opened using the main-page
+header icon immediately before Settings; its former Settings card is removed.
+Back stays available in loading/error states. Neither Back nor Open implicitly
 marks a row read or dismissed.
 
 Rows with deterministic generation provenance use the visible label
@@ -51,6 +53,15 @@ prototype-oriented AI disclaimers and does not weaken strict `llm_used=false`
 validation in the delivery contract. Inbox groups use the shared subtle
 surface; failure, pending, exact-retry, reload, unread, and dismissed authority
 remain visible outside decorative or optional help.
+
+The Inbox uses a short list-scope introduction, three compact equal-width
+counters, and a single icon-action row for read/unread, dismiss and the
+allowlisted Open target. Actions sit at the title's right edge, moving together
+below it at narrow widths or enlarged text. Tapping the card opens the same
+allowlisted target without a lifecycle write; nested controls never activate
+the card, including when disabled. Cards without a target stay non-interactive.
+Tooltips and accessibility labels name each action; all original item fields
+and lifecycle/error/retry behavior remain available.
 
 ## Lifecycle Endpoint
 

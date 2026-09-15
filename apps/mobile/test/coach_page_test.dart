@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/widgets/app_page.dart';
@@ -21,6 +22,7 @@ import 'package:my_life_graph/features/coach/presentation/widgets/coach_dictatio
 import 'support/coach_fixtures.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('composer grows upward to five lines and keeps its toolbar', (tester) async {
     await _pumpPage(tester, _FakeCoachRepository(historyTurns: []));
     final field = find.byKey(const Key('coach-message-field'));
@@ -244,6 +246,17 @@ void main() {
     expect(tester.getRect(find.byKey(const Key('app-page-body-outline'))), frame);
     expect(tester.getRect(find.byKey(const Key('coach-model-button'))), provider);
     expect(tester.getRect(find.byKey(const Key('coach-message-field'))), composer);
+    expect(find.byKey(const Key('coach-scroll-to-latest')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('coach-scroll-to-latest')));
+    await tester.pumpAndSettle();
+    expect(chat.controller!.offset, chat.controller!.position.maxScrollExtent);
+    expect(find.byKey(const Key('coach-scroll-to-latest')), findsNothing);
+    await tester.drag(find.byKey(const Key('coach-chat-scroll')), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Refresh Coach'));
+    await tester.pumpAndSettle();
+    expect(chat.controller!.offset, chat.controller!.position.maxScrollExtent);
+    expect(find.byKey(const Key('coach-scroll-to-latest')), findsNothing);
     await tester.enterText(find.byKey(const Key('coach-message-field')),
         'Newest question');
     await tester.pump();
@@ -590,6 +603,7 @@ class _FakeCoachRepository implements CoachRepository {
   Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
+    String responseLanguage = 'en',
   }) async* {
     messages.add(message);
     _latestRequestId = requestId;

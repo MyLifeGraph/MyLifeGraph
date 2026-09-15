@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/composition/quick_capture_providers.dart';
@@ -18,6 +19,27 @@ import 'package:my_life_graph/features/quick_action/domain/quick_capture_api.dar
 import 'package:my_life_graph/features/quick_action/presentation/pages/ultra_quick_check_in_page.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+  testWidgets('German guide changes hints only and stays visible while recording', (tester) async {
+    final api = _Api();
+    await _pump(tester, api, width: 320);
+    await tester.tap(find.byKey(const Key('capture-language-toggle')));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.decoration!.hintText, contains('Schlafqualität: … / 10'));
+    expect(field.controller!.text, isEmpty);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Evening'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).decoration!.hintText,
+        contains('Stimmung: … / 10'));
+    await tester.enterText(find.byType(TextField), 'Meine eigenen Worte');
+    tester.widget<CaptureDictationInput>(find.byType(CaptureDictationInput)).onBusyChanged(true);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Soziale Kontakte (optional)'), findsOneWidget);
+    expect(tester.widget<IconButton>(find.byKey(const Key('capture-language-toggle'))).onPressed, isNull);
+    expect(api.calls, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
   for (final mode in ['Morning', 'Evening']) {
     testWidgets('$mode guide hides on typing and stays during dictation', (
       tester,

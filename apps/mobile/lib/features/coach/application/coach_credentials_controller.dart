@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/coach_api_data_source.dart';
 import '../data/coach_credential_store.dart';
@@ -65,6 +66,10 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
   final Future<String?> Function() _accessToken;
   int _profileGeneration = 0;
   Future<void> _initialization = Future<void>.value();
+  Future<void> _selectionSave = Future<void>.value();
+
+  static String _selectionKey(String profileId) =>
+      'coach_provider_v1:$profileId';
 
   Future<void> get initialization => _initialization;
 
@@ -85,6 +90,15 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
         if (generation != _profileGeneration) return;
       }
       if (profileId == null) return;
+      await _selectionSave;
+      final preferences = await SharedPreferences.getInstance();
+      if (generation != _profileGeneration) return;
+      final savedProvider = preferences.getString(_selectionKey(profileId));
+      final provider = const [
+        CoachProviderName.operatorCodexPilot,
+        CoachProviderName.openai,
+        CoachProviderName.gemini,
+      ].where((value) => value.name == savedProvider).firstOrNull;
       final keys = <CoachProviderName, String>{};
       for (final provider in const [
         CoachProviderName.openai,
@@ -96,7 +110,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
       }
       state = CoachCredentials(
         profileId: profileId,
-        provider: CoachProviderName.operatorCodexPilot,
+        provider: provider ?? CoachProviderName.operatorCodexPilot,
         keys: keys,
       );
     } catch (_) {
@@ -110,7 +124,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
     }
   }
 
-  void select(CoachProviderName provider) {
+  Future<void> select(CoachProviderName provider) {
     if (!const {
       CoachProviderName.operatorCodexPilot,
       CoachProviderName.openai,
@@ -119,6 +133,21 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
       throw ArgumentError.value(provider, 'provider');
     }
     state = state.copyWith(provider: provider, error: null);
+    final profileId = state.profileId;
+    final generation = _profileGeneration;
+    if (profileId == null) return Future<void>.value();
+    return _selectionSave = _selectionSave.then((_) async {
+      try {
+        final preferences = await SharedPreferences.getInstance();
+        if (!await preferences.setString(_selectionKey(profileId), provider.name)) {
+          throw StateError('Selection was not saved');
+        }
+      } catch (_) {
+        if (mounted && generation == _profileGeneration) {
+          state = state.copyWith(error: 'Coach choice could not be saved. Try again.');
+        }
+      }
+    });
   }
 
   Future<bool> testAndSave(CoachProviderName provider, String value) async {
@@ -162,6 +191,7 @@ class CoachCredentialsController extends StateNotifier<CoachCredentials> {
         provider: provider,
         busy: false,
       );
+      await select(provider);
       return true;
     } catch (_) {
       state = state.copyWith(

@@ -52,7 +52,8 @@ class SpeechSourceButton extends ConsumerWidget {
 }
 
 class _SpeechSettingsSheet extends ConsumerStatefulWidget {
-  const _SpeechSettingsSheet();
+  const _SpeechSettingsSheet({this.modelsOnly = false});
+  final bool modelsOnly;
   @override
   ConsumerState<_SpeechSettingsSheet> createState() =>
       _SpeechSettingsSheetState();
@@ -60,6 +61,14 @@ class _SpeechSettingsSheet extends ConsumerStatefulWidget {
 
 class _SpeechSettingsSheetState extends ConsumerState<_SpeechSettingsSheet> {
   bool? _local;
+
+  Future<void> _openModels() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (_) => const _SpeechSettingsSheet(modelsOnly: true),
+  );
   Future<void> _download(SpeechSettings settings, SpeechModel model) async {
     final accepted = await showDialog<bool>(
       context: context,
@@ -100,49 +109,72 @@ class _SpeechSettingsSheetState extends ConsumerState<_SpeechSettingsSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Speech to text',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: false,
-                  label: Text('Server'),
-                  icon: Icon(AppIcons.publicOutlined),
-                ),
-                ButtonSegment(
-                  value: true,
-                  label: Text('On-device'),
-                  icon: Icon(AppIcons.downloadOutlined),
+            Row(
+              children: [
+                BackButton(onPressed: () => Navigator.of(context).pop()),
+                Expanded(
+                  child: Text(
+                    widget.modelsOnly ? 'On-device models' : 'Speech to text',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
               ],
-              selected: {local},
-              onSelectionChanged: settings.loading
-                  ? null
-                  : (value) {
-                      setState(() => _local = value.single);
-                      if (!value.single) settings.select('server');
-                    },
             ),
+            const SizedBox(height: AppSpacing.md),
+            if (!widget.modelsOnly)
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    label: Text('Server'),
+                    icon: Icon(AppIcons.publicOutlined),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text('On-device'),
+                    icon: Icon(AppIcons.downloadOutlined),
+                  ),
+                ],
+                selected: {local},
+                onSelectionChanged: settings.loading
+                    ? null
+                    : (value) {
+                        setState(() => _local = value.single);
+                        if (value.single) {
+                          _openModels();
+                        } else {
+                          settings.select('server');
+                        }
+                      },
+              ),
             const SizedBox(height: AppSpacing.sm),
             if (settings.loading)
               const LinearProgressIndicator()
-            else if (!local)
+            else if (!widget.modelsOnly && !local)
               const ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text('Parakeet · provided'),
                 subtitle: Text('Audio is transcribed on our server.'),
               )
-            else if (!settings.supported)
-              const Padding(
-                padding: EdgeInsets.all(AppSpacing.md),
-                child: Text(
-                  'On-device models require the 64-bit Android app. This browser uses Server.',
+            else if (!widget.modelsOnly)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(AppIcons.microphone),
+                title: Text(
+                  settings.source == 'server' ? 'Choose model' : settings.label,
                 ),
+                trailing: const Icon(AppIcons.chevronRight),
+                onTap: _openModels,
               )
             else ...[
+              if (!settings.supported)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: Text(
+                    'Download and activation require the 64-bit Android app.',
+                  ),
+                ),
               Text(
                 'Multilingual · audio stays on this device',
                 style: Theme.of(context).textTheme.bodySmall,
@@ -161,7 +193,9 @@ class _SpeechSettingsSheetState extends ConsumerState<_SpeechSettingsSheet> {
                         ),
                         title: Text(model.label),
                         subtitle: Text('${(model.bytes / 1000000).ceil()} MB'),
-                        onTap: settings.installed.contains(model.id)
+                        onTap:
+                            settings.supported &&
+                                settings.installed.contains(model.id)
                             ? () => settings.select(model.id)
                             : null,
                         trailing: settings.downloading == model.id
@@ -184,7 +218,9 @@ class _SpeechSettingsSheetState extends ConsumerState<_SpeechSettingsSheet> {
                               )
                             : IconButton(
                                 tooltip: 'Download ${model.label}',
-                                onPressed: settings.downloading == null
+                                onPressed:
+                                    settings.supported &&
+                                        settings.downloading == null
                                     ? () => _download(settings, model)
                                     : null,
                                 icon: const Icon(AppIcons.downloadOutlined),

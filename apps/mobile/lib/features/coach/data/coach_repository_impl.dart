@@ -58,6 +58,7 @@ class CoachRepositoryImpl implements CoachRepository {
   Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
+    String responseLanguage = 'en',
   }) async* {
     _requireRemote();
     if (!isClientUuid(requestId)) {
@@ -68,6 +69,7 @@ class CoachRepositoryImpl implements CoachRepository {
     final request = CoachRequest(
       requestId: requestId,
       message: message,
+      responseLanguage: responseLanguage,
       contractVersion: credentials == null
           ? 'coach-request-v3'
           : coachRequestContractVersion,
@@ -108,6 +110,14 @@ class CoachRepositoryImpl implements CoachRepository {
         }
         yield event;
       }
+    } on CoachRemoteException catch (error) {
+      if (responseLanguage == 'de' && error.statusCode == 422 &&
+          error.code == 'invalid_request') {
+        throw const CoachInputException(
+          'German requests need an updated Coach server. Switch to English for now.',
+        );
+      }
+      rethrow;
     } finally {
       if (identical(_activeResponseCancellation, cancellation)) {
         _activeResponseCancellation = null;

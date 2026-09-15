@@ -148,9 +148,11 @@ class CoachController extends StateNotifier<CoachState> {
     required CoachRepository repository,
     String? profileId,
     CoachTurnNoticeController? turnNoticeController,
+    Future<String> Function()? responseLanguage,
   })  : _repository = repository,
         _profileId = profileId,
         _turnNoticeController = turnNoticeController,
+        _responseLanguage = responseLanguage ?? (() async => 'en'),
         super(CoachState.loading()) {
     Future<void>.microtask(load);
   }
@@ -158,6 +160,9 @@ class CoachController extends StateNotifier<CoachState> {
   final CoachRepository _repository;
   final String? _profileId;
   final CoachTurnNoticeController? _turnNoticeController;
+  final Future<String> Function() _responseLanguage;
+  String? _languageRequestId;
+  String _requestLanguage = 'en';
   bool _disposed = false;
   bool _cancelRequested = false;
   bool _operationInProgress = false;
@@ -275,9 +280,16 @@ class CoachController extends StateNotifier<CoachState> {
       );
       CoachResponse? completed;
       try {
+        if (_languageRequestId != requestId) {
+          _requestLanguage = await _responseLanguage();
+          _languageRequestId = requestId;
+        }
+        if (_disposed) return false;
+        if (_cancelRequested) throw const CoachAccessException('Cancelled.');
         await for (final event in _repository.respond(
           requestId: requestId,
           message: message,
+          responseLanguage: _requestLanguage,
         )) {
           if (_disposed) return false;
           if (event is CoachStartedEvent) {

@@ -785,7 +785,7 @@ class _FloatingBottomNav extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 4,
                           children: [
-                            for (final destination in destinations)
+                            for (final destination in destinations.where((item) => !item.emphasized))
                               _CompactNavLabel(
                                 destination: destination,
                                 isSelected: selectedDestination == destination,

@@ -25,7 +25,7 @@ _RATING_CONTEXT = {
     "energy": r"energy|energie",
     "current_energy": r"energy|energie",
     "stress_intensity": r"stress\w*",
-    "sleep_quality": r"sleep\s+quality|schlafqualität|quality|qualität",
+    "sleep_quality": r"sleep\s+quality|schlafqualität|schlaf|quality|qualität",
 }
 _SIGNAL_CHOICES = {
     "motivation": (
@@ -97,7 +97,7 @@ def _value_is_supported(key: str, value: object, excerpt: str) -> bool:
                 return True
         return minute == 0 and re.search(rf"(?<!\d)0?{hour}\s*uhr\b", text) is not None
     if key == "sleep_target_minutes":
-        if re.search(r"\b(?:target|aim|goal|want|ziel\w*|möchte|will)\b", text) is None:
+        if re.search(r"\b(?:target|aim|goal|want|schlafziel|ziel\w*|möchte|will)\b", text) is None:
             return False
         if re.search(rf"(?<!\d){value}\s*(?:minutes?|minuten?|min)\b", text):
             return True
@@ -129,7 +129,7 @@ def _value_is_supported(key: str, value: object, excerpt: str) -> bool:
             if re.search(rf"\b(?:{terms})\b", text)
         }
         return (
-            re.search(r"\b(?:control\w*|kontroll\w*|beeinfluss\w*|steuer\w*)\b", text) is not None
+            re.search(r"\b(?:control\w*|influence|einfluss|kontroll\w*|beeinfluss\w*|steuer\w*)\b", text) is not None
             and matches == {value}
         )
     if key in {"reflection_note", "specific_blocker"}:
@@ -170,6 +170,10 @@ evidence maps EVERY non-null field to an exact contiguous verbatim excerpt from
 the transcript, including the field context. Null fields have no evidence entry.
 Evidence is quoted input, not an English translation. No invented excerpts.
 Numeric ratings require an explicitly stated 1..10 rating, e.g. 'energy 7 out of 10'.
+German and English transcripts are both supported. For example, 'Schlaf 7/10'
+means sleep_quality=7, and 'Energie sieben von zehn' means current_energy=7 in
+Morning or energy=7 in Evening. 'Schlaf sieben' is ambiguous and stays null.
+Keep canonical field names and enum values unchanged; evidence stays verbatim.
 Feeling good, being productive, or completing tasks never implies a rating.
 Use explicit unambiguous local clocks HH:mm only. A duration alone cannot supply
 sleep start or wake time; never anchor it on the current clock. Do not translate

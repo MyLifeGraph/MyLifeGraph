@@ -1,5 +1,12 @@
 # Architecture
 
+Coach's additive `coach-language-v1` extension binds explicit German answer
+selection to the request fingerprint; omitted selection preserves English and
+historical replay hashes. Language changes trusted prompt/output-safety copy
+only, not tools, quotas, owner authority, stored messages or database schema.
+Ultra Quick's separate saved language preference changes its speaking guide;
+both transcript languages use unchanged canonical Capture fields and final Save.
+
 Presentation additions retain existing authorities: Planner Task completion
 and cancellation reuse the owner-scoped Task command port; projection
 invalidation refreshes retained Today command snapshots after in-flight writes.
@@ -1459,7 +1466,7 @@ authenticated coach-request-v4 plus explicit provider (key only for BYOK)
   -> retry-safe owner claim and local-day budget
   -> fresh owner-only personal SQLite snapshot
   -> explicitly selected provider
-       -> OpenAI gpt-5.6-terra or Gemini gemini-3.6-flash
+       -> OpenAI gpt-5.6-terra or Gemini gemini-3.8-flash
             -> bounded inspect_data/query_data results; no SQLite/Python
        -> local `codex exec`: gpt-5.5 + explicit Fast
             -> required per-turn stdio MCP
@@ -1481,7 +1488,7 @@ loopback CORS values cannot start a hosted app. CORS wraps admission errors so
 browser clients receive the same allowlisted `429`/`413` responses and
 `Retry-After` semantics as native clients.
 OpenAI/Gemini use exact
-`gpt-5.6-terra`/`gemini-3.6-flash`, `store:false`, and no Python. For the private
+`gpt-5.6-terra`/`gemini-3.8-flash`, `store:false`, and no Python. For the private
 local adapter only, OAuth stays inside the current Linux user's Codex
 installation and is never copied into Flutter, Supabase, the snapshot, the MCP
 server, the Python container, Git, or logs. Every developer signs in

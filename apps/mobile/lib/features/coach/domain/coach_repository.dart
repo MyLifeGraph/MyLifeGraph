@@ -18,6 +18,7 @@ abstract interface class CoachRepository {
   Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
+    String responseLanguage = 'en',
   });
 
   Future<CoachHistoryDeleteResult> deleteHistory();

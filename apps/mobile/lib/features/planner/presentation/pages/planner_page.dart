@@ -405,7 +405,17 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         ),
       ],
       children: [
-        SegmentedButton<bool>(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: SegmentedButton<bool>(
+          expandedInsets: EdgeInsets.zero,
+          showSelectedIcon: false,
+          style: SegmentedButton.styleFrom(
+            side: BorderSide.none,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+          ),
           segments: [
             const ButtonSegment(
               value: false,
@@ -426,6 +436,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
           selected: {_showPlanning},
           onSelectionChanged: (values) =>
               setState(() => _showPlanning = values.single),
+            ),
+          ),
         ),
         if (desktop && _showPlanning)
           Row(

@@ -57,7 +57,7 @@ class AppPage extends StatelessWidget {
           final router = GoRouter.maybeOf(context);
           final hasImperativeHistory =
               router != null && _hasImperativeHistory(router);
-          final showBack = hasImperativeHistory ||
+          final showBack = hasImperativeHistory || _hasNativePageHistory(context) ||
               (backFallback != null && showBackForFallback);
 
           final header = Padding(
@@ -268,7 +268,9 @@ class _AppPageHeader extends StatelessWidget {
             tooltip: 'Back',
             onPressed: () {
               final activeRouter = GoRouter.maybeOf(context);
-              if (activeRouter != null && _hasImperativeHistory(activeRouter)) {
+              if (_hasNativePageHistory(context)) {
+                Navigator.of(context).pop();
+              } else if (activeRouter != null && _hasImperativeHistory(activeRouter)) {
                 final navigator = Navigator.maybeOf(context);
                 if (navigator?.canPop() ?? false) {
                   navigator!.pop();
@@ -380,6 +382,12 @@ class AppPageHeading extends StatelessWidget {
     );
   }
 }
+
+// Settings integrations use Navigator.push(MaterialPageRoute), not GoRouter.push.
+// Do not confuse a declarative shell/root page with a pushed integration page.
+bool _hasNativePageHistory(BuildContext context) =>
+    ModalRoute.of(context) is MaterialPageRoute &&
+    (Navigator.maybeOf(context)?.canPop() ?? false);
 
 bool _hasImperativeHistory(GoRouter router) {
   bool containsImperative(Iterable<RouteMatchBase> matches) {

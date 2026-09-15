@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/preferences/assistant_language.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
@@ -151,6 +152,14 @@ final coachControllerProvider =
     repository: ref.watch(coachRepositoryProvider),
     profileId: profileId,
     turnNoticeController: ref.read(coachTurnNoticeProvider.notifier),
+    responseLanguage: () async {
+      final language = ref.read(assistantLanguageProvider('coach'));
+      await language.ready;
+      if (language.failed || language.loading) {
+        throw const CoachInputException('Wait for the response language to load.');
+      }
+      return language.value;
+    },
   );
 });
 

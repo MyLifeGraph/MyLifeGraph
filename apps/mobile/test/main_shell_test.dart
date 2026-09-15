@@ -588,7 +588,7 @@ void main() {
     semantics.dispose();
   });
 
-  for (final textScale in [1.5, 2.0]) {
+  for (final textScale in [1.0, 1.5, 2.0]) {
     testWidgets(
         'compact bottom navigation respects ${textScale}x text and remains selectable',
         (tester) async {
@@ -627,10 +627,11 @@ void main() {
       const labels = [
         'today',
         'insights',
-        'quick-actions',
         'planner',
         'coach',
       ];
+      expect(find.byKey(const ValueKey('main-nav-label-quick-actions')), findsNothing);
+      expect(find.byKey(const ValueKey('main-shell-add-signal-control')), findsOneWidget);
       for (final label in labels) {
         final labelFinder = find.byKey(ValueKey('main-nav-label-$label'));
         expect(labelFinder, findsOneWidget);

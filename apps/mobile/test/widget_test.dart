@@ -455,6 +455,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("Today's schedule"), findsOneWidget);
     expect(find.text('Weekly review'), findsNothing);
+    expect(find.byTooltip('Inbox'), findsOneWidget);
 
     router.go(AppRoutes.calendarIntegration);
     await tester.pumpAndSettle();
@@ -469,7 +470,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Profile'), findsOneWidget);
-    expect(find.text('Inbox'), findsOneWidget);
+    expect(find.text('Inbox'), findsNothing);
     expect(find.text('Guest Coach User'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);

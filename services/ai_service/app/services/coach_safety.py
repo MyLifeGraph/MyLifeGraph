@@ -331,10 +331,11 @@ def pre_provider_safety(
     message: str,
     *,
     force_english: bool = False,
+    response_language: str | None = None,
 ) -> CoachSafetyDecision:
     if not _matches_any(message, _URGENT_PATTERNS):
         return CoachSafetyDecision(bypass_provider=False)
-    german = not force_english and _looks_german(message)
+    german = response_language == "de" or (response_language is None and not force_english and _looks_german(message))
     reply = (
         "Es klingt, als könntest du gerade unmittelbar gefährdet sein. "
         "Bitte kontaktiere jetzt den örtlichen Notruf oder eine Krisenhilfe und "
@@ -369,11 +370,13 @@ def post_provider_safety(
     *,
     message: str,
     force_english: bool = False,
+    response_language: str | None = None,
 ) -> CoachPostProviderSafetyResult:
     if output.safety.classification == "safety_redirect":
         decision = pre_provider_safety(
             message,
             force_english=force_english,
+            response_language=response_language,
         )
         if decision.output is not None:
             return CoachPostProviderSafetyResult(
@@ -382,7 +385,7 @@ def post_provider_safety(
             )
         # The provider may recognize urgent wording that the deterministic
         # detector missed. Use backend-owned copy, never provider-authored crisis copy.
-        german = not force_english and _looks_german(message)
+        german = response_language == "de" or (response_language is None and not force_english and _looks_german(message))
         return CoachPostProviderSafetyResult(
             output=CoachModelOutput(
                 reply=(
@@ -419,13 +422,21 @@ def post_provider_safety(
             "The Coach output crossed the non-clinical or non-causal boundary.",
             retryable=True,
         )
-    if force_english and any(
+    if (force_english or response_language == "en") and any(
         _is_clearly_german(value)
         for value in (output.reply, output.uncertainty.reason)
     ):
         raise CoachProviderError(
             "invalid_output",
             "The Coach output did not follow the English-only response contract.",
+            retryable=True,
+        )
+    if response_language == "de" and any(
+        _is_clearly_english(value)
+        for value in (output.reply, output.uncertainty.reason)
+    ):
+        raise CoachProviderError(
+            "invalid_output", "The Coach output did not follow the selected response language.",
             retryable=True,
         )
     return CoachPostProviderSafetyResult(
@@ -557,3 +568,10 @@ def _is_clearly_german(value: str) -> bool:
         and german_hits >= 2
         and german_hits > english_hits
     )
+
+
+def _is_clearly_english(value: str) -> bool:
+    words = re.findall(r"[a-zäöüß]+", value.casefold())
+    english_hits = sum(word in _ENGLISH_LANGUAGE_MARKERS for word in words)
+    german_hits = sum(word in _GERMAN_LANGUAGE_MARKERS for word in words)
+    return english_hits >= 4 and english_hits >= german_hits + 2

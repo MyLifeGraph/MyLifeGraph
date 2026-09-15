@@ -33,6 +33,19 @@ void main() {
     useMockData: false,
   );
 
+  test('old API rejection explains German rollout without fallback', () async {
+    final client = _TrackingApiClient(requestError: const AppException(
+      'Rejected', cause: ApiFailure(kind: ApiFailureKind.response, statusCode: 422,
+        responseData: {'detail': {'code': 'invalid_request',
+          'message': 'Unsupported fields', 'retryable': false}}),
+    ));
+    final repository = _repository(client, config: pilotConfig,
+      credentials: const CoachProviderCredentials(provider: CoachProviderName.operatorCodexPilot));
+    await expectLater(repository.respond(requestId: coachRequestId,
+      message: 'Hallo', responseLanguage: 'de'), emitsError(isA<CoachInputException>()
+        .having((error) => error.message, 'message', contains('updated Coach server'))));
+  });
+
   test('reads and streams exact V3 request without a mode', () async {
     final client = _TrackingApiClient(
       getResponses: {

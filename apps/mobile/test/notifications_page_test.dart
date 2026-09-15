@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
@@ -13,6 +14,54 @@ import 'package:my_life_graph/features/notifications/presentation/pages/notifica
 import 'package:my_life_graph/composition/notifications_providers.dart';
 
 void main() {
+  testWidgets('card opens its target but lifecycle controls never navigate',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const id = '11111111-1111-4111-8111-111111111111';
+    final repository = _PageNotificationsRepository(items: [
+      _notification(
+        id: id,
+        title: 'Focus window approaching',
+        body: 'Open your planned Focus session.',
+        type: 'reminder',
+        priority: 'medium',
+        actionUrl: '/dashboard',
+        isRead: false,
+      ),
+    ], action: (_) async => throw _httpFailure(409));
+    final router = GoRouter(initialLocation: '/alerts', routes: [
+      GoRoute(path: '/alerts', builder: (_, _) => const Scaffold(body: NotificationsPage())),
+      GoRoute(path: '/dashboard', builder: (_, _) => const Scaffold(body: Text('Destination'))),
+    ]);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(overrides: [
+      notificationsRepositoryProvider.overrideWithValue(repository),
+      appSurfaceCapabilitiesProvider.overrideWithValue(
+        const AppSurfaceCapabilities(isLocalDemo: false, canUseSyncedHabits: false)),
+    ], child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpAndSettle();
+    final title = find.text('Focus window approaching');
+    final read = find.byKey(const ValueKey('notification-read-toggle-$id'));
+    await tester.ensureVisible(title);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(read).top, tester.getRect(title).top);
+    await tester.tap(read);
+    await tester.pumpAndSettle();
+    expect(repository.requests, hasLength(1));
+    expect(find.text('Destination'), findsNothing);
+    // The disabled read button must not pass its tap through to the card.
+    await tester.tap(read);
+    await tester.pumpAndSettle();
+    expect(find.text('Destination'), findsNothing);
+    expect(repository.requests, hasLength(1));
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    expect(find.text('Destination'), findsOneWidget);
+    expect(repository.requests, hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
+
   test('Inbox reloads after its last route listener leaves', () async {
     final repository = _PageNotificationsRepository(items: const []);
     final container = ProviderContainer(
@@ -195,6 +244,8 @@ void main() {
 
   testWidgets('exposes labeled lifecycle controls and applies confirmed state',
       (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     const id = '11111111-1111-4111-8111-111111111111';
     final repository = _PageNotificationsRepository(
       items: [
@@ -204,7 +255,7 @@ void main() {
           body: 'A durable account item.',
           type: 'reminder',
           priority: 'medium',
-          actionUrl: null,
+          actionUrl: '/dashboard',
           isRead: false,
         ),
       ],
@@ -226,6 +277,15 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.ensureVisible(find.byKey(const ValueKey('notification-read-toggle-$id')));
+    await tester.pumpAndSettle();
+    final readRect = tester.getRect(find.byKey(const ValueKey('notification-read-toggle-$id')));
+    final dismissRect = tester.getRect(find.byKey(const ValueKey('notification-dismiss-$id')));
+    final openRect = tester.getRect(find.byKey(const ValueKey('notification-open-$id')));
+    expect(readRect.top, dismissRect.top);
+    expect(readRect.top, openRect.top);
+    expect(readRect.width, greaterThanOrEqualTo(44));
+    expect(openRect.height, greaterThanOrEqualTo(44));
     await tester.tap(
       find.byKey(const ValueKey('notification-read-toggle-$id')),
     );
@@ -282,6 +342,8 @@ void main() {
       useDemoData: false,
     );
 
+    await tester.ensureVisible(find.byKey(const ValueKey('notification-dismiss-$id')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('notification-dismiss-$id')));
     await tester.pumpAndSettle();
 
@@ -335,6 +397,8 @@ void main() {
       useDemoData: false,
     );
 
+    await tester.ensureVisible(find.byKey(const ValueKey('notification-read-toggle-$id')));
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('notification-read-toggle-$id')),
     );
@@ -357,7 +421,7 @@ void main() {
     );
     expect(
       tester
-          .widget<OutlinedButton>(
+          .widget<IconButton>(
             find.byKey(const ValueKey('notification-read-toggle-$id')),
           )
           .onPressed,
@@ -365,7 +429,7 @@ void main() {
     );
     expect(
       tester
-          .widget<TextButton>(
+          .widget<IconButton>(
             find.byKey(const ValueKey('notification-dismiss-$id')),
           )
           .onPressed,
@@ -396,7 +460,7 @@ void main() {
     );
     expect(
       tester
-          .widget<OutlinedButton>(
+          .widget<IconButton>(
             find.byKey(const ValueKey('notification-read-toggle-$id')),
           )
           .onPressed,
@@ -404,7 +468,7 @@ void main() {
     );
     expect(
       tester
-          .widget<TextButton>(
+          .widget<IconButton>(
             find.byKey(const ValueKey('notification-dismiss-$id')),
           )
           .onPressed,
@@ -480,11 +544,18 @@ void main() {
     expect(find.text('Inbox'), findsOneWidget);
     expect(
       find.text(
-        'Saved Inbox items can be marked read or dismissed here. Banners need separate consent and appear only while the app is open. There is no push, email, system, or background delivery. Up to the latest 30 items are shown.',
+        'Latest 30 items · counts cover this list.',
       ),
       findsOneWidget,
     );
     expect(find.text('Account data'), findsOneWidget);
+    final unread = tester.getRect(find.byKey(const ValueKey('notifications-unread-count')));
+    final read = tester.getRect(find.byKey(const ValueKey('notifications-read-count')));
+    final links = tester.getRect(find.byKey(const ValueKey('notifications-action-count')));
+    expect(read.top, unread.top);
+    expect(links.top, unread.top);
+    expect(read.width, closeTo(unread.width, 0.1));
+    expect(unread.height, lessThan(90));
     expect(
       find.byKey(const ValueKey('notifications-unread-count')),
       findsOneWidget,

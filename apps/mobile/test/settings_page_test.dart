@@ -52,6 +52,7 @@ void main() {
     );
     await _revealText(tester, 'In-app reminders', pageScrollable);
     expect(find.text('Tools and connections'), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-inbox-entry')), findsNothing);
     expect(find.text('In-app reminders'), findsOneWidget);
     await _revealText(tester, 'Personal learning', pageScrollable);
     expect(find.text('Personal learning'), findsOneWidget);

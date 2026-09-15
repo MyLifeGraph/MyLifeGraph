@@ -11,6 +11,54 @@ import 'package:my_life_graph/features/coach/presentation/providers/coach_provid
 import 'support/coach_fixtures.dart';
 
 void main() {
+  test('language load failure preserves draft and does not dispatch', () async {
+    final repository = _FakeCoachRepository();
+    final controller = CoachController(repository: repository,
+      responseLanguage: () async => throw StateError('Local preference unavailable'));
+    addTearDown(controller.dispose);
+    await _settle();
+    controller.updateDraft('Keep this question');
+    expect(await controller.send(), isFalse);
+    expect(controller.state.isSending, isFalse);
+    expect(controller.state.draft, 'Keep this question');
+    expect(repository.messages, isEmpty);
+  });
+
+  test('cancel while language loads never dispatches a request', () async {
+    final language = Completer<String>();
+    final repository = _FakeCoachRepository();
+    final controller = CoachController(repository: repository,
+      responseLanguage: () => language.future);
+    addTearDown(controller.dispose);
+    await _settle();
+    controller.updateDraft('Keep this question');
+    final sent = controller.send();
+    controller.cancelAnalysis();
+    language.complete('de');
+    expect(await sent, isFalse);
+    expect(controller.state.isSending, isFalse);
+    expect(repository.messages, isEmpty);
+  });
+  test('exact retry retains language, next question uses current choice', () async {
+    final repository = _FakeCoachRepository(error: const CoachRemoteException(
+      code: 'network_error', message: 'Lost response', retryable: true, statusCode: 503,
+    ));
+    var language = 'de';
+    final controller = CoachController(repository: repository,
+      responseLanguage: () async => language);
+    addTearDown(controller.dispose);
+    await _settle();
+    controller.updateDraft('Wie geht es mir?');
+    expect(await controller.send(), isFalse);
+    language = 'en';
+    repository.error = null;
+    expect(await controller.send(), isTrue);
+    expect(repository.languages, ['de', 'de']);
+    expect(repository.requestIds[0], repository.requestIds[1]);
+    controller.updateDraft('A different question');
+    expect(await controller.send(), isTrue);
+    expect(repository.languages.last, 'en');
+  });
   test('load reads only capabilities and conversation history', () async {
     final repository = _FakeCoachRepository();
     final controller = CoachController(repository: repository);
@@ -490,6 +538,7 @@ class _FakeCoachRepository implements CoachRepository {
   final List<int> remainingRequests;
   Completer<void>? responseGate;
   final List<String> messages = [];
+  final List<String> languages = [];
   final List<String> requestIds = [];
   final StreamController<CoachStreamEvent> _blocking =
       StreamController<CoachStreamEvent>();
@@ -532,8 +581,10 @@ class _FakeCoachRepository implements CoachRepository {
   Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
+    String responseLanguage = 'en',
   }) async* {
     requestIds.add(requestId);
+    languages.add(responseLanguage);
     messages.add(message);
     yield CoachStartedEvent(requestId);
     yield const CoachActivityEvent('Checking relevant history …');

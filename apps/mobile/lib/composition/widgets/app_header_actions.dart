@@ -39,7 +39,18 @@ class AppHeaderActions extends ConsumerWidget {
             notice: notice,
             onPressed: () => _showCoachNotice(context, notice),
           ),
-        if (!settingsSelected) const _SettingsButton(selected: false),
+        if (!settingsSelected) ...[
+          IconButton(
+            key: const ValueKey('global-header-inbox'),
+            tooltip: 'Inbox',
+            onPressed: GoRouter.maybeOf(context) == null
+                ? null : () => context.push(AppRoutes.alerts),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+            icon: const Icon(AppIcons.inboxOutlined),
+          ),
+          const _SettingsButton(selected: false),
+        ],
       ],
     );
   }

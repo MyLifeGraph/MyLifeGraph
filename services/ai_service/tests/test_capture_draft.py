@@ -96,6 +96,21 @@ def test_german_verbatim_input_remains_data_and_is_not_subject_to_chat_language_
     assert draft.proposal.evidence["current_energy"] == transcript
 
 
+@pytest.mark.parametrize('transcript', ['Schlaf 7/10', 'Schlafqualität sieben von zehn'])
+def test_german_sleep_rating_maps_to_canonical_field(transcript):
+    draft = operation(transcript)
+    draft.accept_output(output({'sleep_quality': 7}, {'sleep_quality': transcript}))
+    assert draft.proposal.fields.sleep_quality == 7
+    assert draft.proposal.fields.sleep_start is None
+    assert draft.proposal.fields.wake_time is None
+
+
+def test_ambiguous_german_sleep_is_not_a_rating():
+    draft = operation('Schlaf sieben')
+    with pytest.raises(CoachProviderError):
+        draft.accept_output(output({'sleep_quality': 7}, {'sleep_quality': 'Schlaf sieben'}))
+
+
 @pytest.mark.parametrize("fields,evidence,transcript", [
     ({"current_energy": 8}, {"current_energy": "Feeling good"}, "Feeling good"),
     ({"current_energy": 8}, {"current_energy": "Energy 7/10"}, "Energy 7/10"),

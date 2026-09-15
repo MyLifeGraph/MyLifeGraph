@@ -18,6 +18,7 @@ import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/coach_providers.dart';
 import '../widgets/coach_dictation_button.dart';
 import '../../../../composition/widgets/speech_settings_sheet.dart';
+import '../../../../composition/widgets/assistant_language_button.dart';
 import '../widgets/coach_uncertainty_view.dart';
 
 class CoachPage extends ConsumerStatefulWidget {
@@ -37,17 +38,67 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   final _composerViewportKey = GlobalKey();
   bool _readCheckScheduled = false;
   bool _historyPositioned = false;
+  final _showScrollToLatest = ValueNotifier<bool>(false);
+
+  @override
+  void initState() {
+    super.initState();
+    _chatScrollController.addListener(_updateScrollToLatest);
+  }
+
+  void _updateScrollToLatest() {
+    if (_chatScrollController.hasClients) {
+      _showScrollToLatest.value =
+          _chatScrollController.position.extentAfter > 48;
+    }
+  }
+
+  Widget _withScrollToLatest(Widget scroll) => Stack(
+    children: [
+      Positioned.fill(child: scroll),
+      Positioned(
+        bottom: AppSpacing.sm,
+        left: 0,
+        right: 0,
+        child: Center(child: ValueListenableBuilder<bool>(
+          valueListenable: _showScrollToLatest,
+          builder: (context, visible, _) => visible
+              ? IconButton.filledTonal(
+                  key: const Key('coach-scroll-to-latest'),
+                  tooltip: 'Latest message',
+                  style: IconButton.styleFrom(
+                    shape: const CircleBorder(),
+                    side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+                  ),
+                  onPressed: () => _chatScrollController.animateTo(
+                    _chatScrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                  ),
+                  icon: const Icon(AppIcons.arrowDownward, size: 20),
+                )
+              : const SizedBox.shrink(),
+        )),
+      ),
+    ],
+  );
 
   @override
   void dispose() {
     _messageController.dispose();
     _chatScrollController.dispose();
+    _showScrollToLatest.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(coachControllerProvider);
+    ref.listen(coachControllerProvider, (_, next) {
+      // A fast history refresh can finish between two frames. Observe the
+      // transition itself so its loading frame need not have been rendered.
+      if (next.isLoading) _historyPositioned = false;
+    });
     ref.listen(coachTurnNoticeProvider, (_, __) => _scheduleReadCheck());
     _syncDraft(state.isSending ? '' : state.draft);
     final history = [
@@ -79,6 +130,11 @@ class _CoachPageState extends ConsumerState<CoachPage> {
           ),
         AppHeaderActions(
           pageActions: [
+            AssistantLanguageButton(
+              scope: 'coach',
+              enabled: !state.isSending && !state.isLoading &&
+                  !state.isDeletingHistory && state.exactRetryMessage == null,
+            ),
             IconButton(
               tooltip: 'Refresh Coach',
               onPressed: state.isLoading ||
@@ -146,9 +202,9 @@ class _CoachPageState extends ConsumerState<CoachPage> {
             );
             // At very small heights keep all controls reachable in this same
             // chat viewport rather than adding another page/composer scroller.
-            if (compactHeight) return scroll;
+            if (compactHeight) return _withScrollToLatest(scroll);
             return Column(children: [
-              Expanded(child: scroll),
+              Expanded(child: _withScrollToLatest(scroll)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(AppSpacing.sm, 0, AppSpacing.sm, AppSpacing.sm),
                 child: composer,

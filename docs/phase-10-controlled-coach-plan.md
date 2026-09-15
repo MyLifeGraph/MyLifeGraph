@@ -11,13 +11,17 @@ calendar-day totals and forbids adding them to overlapping manual check-ins.
 Only the public account consent preference is included; latest mutation replay
 payloads are excluded. No provider authority, prompt version or tool changes.
 
-After authenticated profile initialization, the client preselects Project Coach
-(`Standard (provided)`); personal OpenAI/Gemini keys remain opt-in. Every request
+After authenticated profile initialization, the client restores the device-local,
+profile-scoped provider choice; without a saved choice it preselects Project Coach
+(`Standard (provided)`). Only the provider name is saved in preferences, never a
+key. Web keys remain tab-memory-only, so a restored BYOK choice can require key
+entry after reload. Sign-out clears keys but retains this non-secret preference;
+another account does not inherit it. Personal OpenAI/Gemini keys remain opt-in. Every request
 still names its provider explicitly, with unchanged server admission and no
 fallback. The selector remains available when capabilities fail, with or without
 saved history. The chat has a fixed 8px top inset inside its outline.
 Capability reads and sends await credential initialization, so the first read
-already names Standard instead of racing the stored-key load. This wait does
+already names the restored choice or Standard instead of racing the stored-key load. This wait does
 not replace a subsequent explicit provider choice or bypass storage failures.
 
 The composer model control opens a bottom sheet with all three provider options
@@ -31,6 +35,8 @@ The permanent chat outline starts below the fixed capability status card and
 continues through the fixed bottom composer. Only the timeline scrolls within
 the frame, including when messages exist. Opening or refreshing loaded history
 positions it at the newest message; typing does not reset the scroll position.
+A small circular down-arrow inside the timeline appears when more than 48px
+remain below the viewport, returns to the latest message, and hides at the bottom.
 The empty invitation adds one non-interactive example question. Optional Coach
 information opens in a dialog so expanded copy cannot push the fixed panels away.
 At very small remaining heights the composer participates in that same chat
@@ -43,6 +49,23 @@ history reads, active requests, and existing messages do not show that invitatio
 
 ## Explicit-provider V4 extension (current repository contract)
 
+The additive `coach-language-v1` extension accepts `response_language: de` with
+`language_contract: coach-language-v1` on `coach-request-v4`. Omitted language
+defaults to English and preserves the existing body, prompt and message hash.
+German changes only the trusted output-language instructions of the V5 base
+prompt; its named extension is included in the prompt and request fingerprint.
+User text, notes and tool output cannot choose or override response language.
+The existing response/provenance shape, grants, quotas and stored messages remain
+unchanged. No schema migration is needed for this language extension. Deploy the
+updated API before using German requests; older APIs reject the opt-in extension
+rather than silently answering in a different language. Existing English clients
+remain compatible. This is independent of the pending Gemini model rollout.
+
+The Coach header flag toggles English/German directly and saves the preference
+on the current device, separately from the Ultra Quick speaking-guide language.
+Language is frozen for an in-flight or exact-retry request; a new question uses
+the latest choice. Neither flag sends a request or translates existing history.
+
 The current public contracts are `coach-capabilities-v5`,
 `coach-response-v4`, and `coach-history-v4`, paired with
 `coach-request-v4`, `personal-snapshot-v3`, and
@@ -52,7 +75,7 @@ is represented honestly. Persisted V1/V2 responses and the V3 BYOK path remain
 readable for rolling compatibility.
 
 OpenAI BYOK uses the Responses API and exact `gpt-5.6-terra`; Gemini BYOK uses
-the Interactions API and exact `gemini-3.6-flash`. The REST adapter sends
+the Interactions API and exact `gemini-3.8-flash`. The REST adapter sends
 `Api-Revision: 2026-05-20`, consumes the current `steps` timeline, preserves
 every returned model/thought/function step during stateless tool continuation,
 and uses the current text/JSON-schema response format. Both loops set
@@ -166,7 +189,8 @@ decides whether to:
 - ask one concise clarifying question.
 
 There is no request classifier and no requirement to produce a recommendation.
-The final reply is plain English text. It may contain several reasoned
+The final reply is plain English text by default, or German with the explicit
+language extension. It may contain several reasoned
 suggestions, but the Coach cannot execute, stage, or claim any product
 mutation. `staged_suggestion` and visible analysis artifacts are absent from
 the current response contract.
@@ -192,7 +216,7 @@ Flutter Coach
   -> owner-locked retry claim and local-day budget
   -> fresh owner-only personal-snapshot-v3 SQLite file
   -> explicitly selected provider
-       -> OpenAI gpt-5.6-terra or Gemini gemini-3.6-flash with request BYOK
+       -> OpenAI gpt-5.6-terra or Gemini gemini-3.8-flash with request BYOK
             -> inspect_data and query_data through bounded FastAPI tool results
        -> local Codex CLI: gpt-5.5, Fast, development only
             -> required per-turn coach_data stdio MCP server
@@ -528,9 +552,17 @@ free text are untrusted data and cannot add tools or permissions.
 
 The current cloud providers are request-scoped `openai` and `gemini` adapters
 behind the empty-by-default `COACH_BYOK_PROVIDERS` allowlist. They require a
-user-supplied key, use exact `gpt-5.6-terra` and `gemini-3.6-flash`
+user-supplied key, use exact `gpt-5.6-terra` and `gemini-3.8-flash`
 respectively, set `store:false`, expose only inspect/query tools, and never
 persist a key or fall back to another provider.
+
+The additive Gemini 3.8 migration admits 3.8 alongside 3.6 in the existing
+private response validator and both internal claim paths. Old 3.6 rows retain
+their original provenance; requested/reported model mismatches remain invalid.
+Wire versions are unchanged. Deploy the compatible client, then migration, then
+API; older clients that only accept 3.6 need updating before using Gemini 3.8.
+No operator/Standard or OpenAI behavior changes. The official model identifier
+is documented in [Google's model reference](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash).
 
 The private development provider is exactly `local_codex_oauth`. It invokes:
 
@@ -691,8 +723,12 @@ an ambiguous API/executor crash and always continues to consume global budget.
   values, and Python output are data, never instructions.
 - Compatible `free-coach-agent-prompt-v4` and current
   `free-coach-agent-prompt-v5` require English in every visible response field
-  regardless of the question or stored-data language. Clearly German reply or
-  uncertainty output fails as retryable `invalid_output` and is not stored as
+  unless a V4 request explicitly activates `coach-language-v1` for German.
+  That extension changes reply/uncertainty and deterministic safety language,
+  not clinical/causal, mutation, tool or data-access restrictions. Default English is enforced
+  regardless of the question or stored-data language. In English mode, clearly
+  German reply or uncertainty output fails as retryable `invalid_output`; in
+  German mode clearly English prose is likewise rejected. Rejected output is not stored as
   an assistant message.
 - The agent receives no service-role credential, Supabase URL, OAuth file,
   general host filesystem, host shell, network tool, app, plugin, sub-agent, or
@@ -713,6 +749,8 @@ an ambiguous API/executor crash and always continues to consume global budget.
 Settings → Speech to text and the discreet composer source icon share one
 device-persisted selection: Server (default), or a downloaded on-device model.
 On-device inference is supported in the 64-bit Android app, not Flutter web.
+On-device opens a dedicated model picker; the selected model remains accessible
+from the source sheet. Web exposes the catalog but disables download/activation.
 The fixed multilingual catalog contains Whisper Tiny, Whisper Base and
 Parakeet TDT 0.6B V3, INT8 ONNX via pinned `sherpa_onnx` 1.13.8.
 Model files download only on explicit request from fixed Hugging Face revisions;
@@ -891,7 +929,8 @@ and it does not show plots, raw hidden reasoning, mode controls, time-horizon
 controls, Focus selectors, prompt buttons, memory selectors, or structured
 action cards.
 
-All visible Coach UI and model-facing reply copy is English.
+The existing Coach UI remains English. The header language flag controls only
+new reply/uncertainty and deterministic safety text, not technical trace labels.
 
 ## Local Preparation
 

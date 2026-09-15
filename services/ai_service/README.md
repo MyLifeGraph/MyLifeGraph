@@ -1,5 +1,15 @@
 # MyLifeGraph AI Service
 
+The additive `coach-language-v1` request extension allows `response_language: de`
+with `language_contract: coach-language-v1` on `/v1/coach/respond` and its stream
+route using V4. Omission retains English and historical request hashes. German
+is bound into the existing fingerprint and changes trusted prompt/safety copy,
+not read-only permissions, quotas or response storage. Unsupported languages
+are rejected; no database migration is needed for this extension. Deploy this
+API before using German clients; older APIs reject the opt-in fields.
+Capture draft extraction remains a separate language-independent canonical-field
+proposal with verbatim source evidence and no Capture write before normal Save.
+
 `POST /v1/daily-capture/draft` accepts `daily-capture-draft-v1`, UUID request id,
 Morning/Evening branch and bounded transcript. It derives owner/date/timezone,
 uses the selected Coach provider with unchanged shared quotas, and returns only
@@ -59,7 +69,7 @@ The current explicit-provider extension publishes `coach-request-v4`,
 `coach-capabilities-v5`, `coach-response-v4`, and `coach-history-v4` with
 `free-coach-agent-prompt-v5`. `X-MyLifeGraph-Coach-Provider` is required for
 hosted V4 capability/response routes; `X-MyLifeGraph-Coach-Api-Key` accompanies
-only OpenAI (`gpt-5.6-terra`) or Gemini (`gemini-3.6-flash`) BYOK. Keys are
+only OpenAI (`gpt-5.6-terra`) or Gemini (`gemini-3.8-flash`) BYOK. Keys are
 request-local and are never persisted, logged, traced, or returned. History and
 deletion never accept or need provider keys. V1-V3 rows remain compatible.
 Hosted CORS allowlists both request headers and exposes bounded `Retry-After`.

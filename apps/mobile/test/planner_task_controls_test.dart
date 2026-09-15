@@ -5,6 +5,33 @@ import 'package:my_life_graph/features/planner/domain/planner.dart';
 import 'package:my_life_graph/features/planner/presentation/widgets/planner_sections.dart';
 
 void main() {
+  testWidgets('mobile Add new exposes all options without scrolling', (tester) async {
+    tester.view.physicalSize = const Size(390, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var selected = false;
+    final section = PlannerAddNewSection(
+      busy: false, calendarPreference: null, availabilityIncomplete: false,
+      onTask: () {}, onHabit: () {}, onExam: () {}, onAssignment: () {},
+      onCommitment: () => selected = true, onReviewSetup: () {},
+      onCalendarPreference: null,
+    );
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.dark,
+      home: Scaffold(body: Builder(builder: section.buildCreationButton))));
+    await tester.tap(find.text('Add new'));
+    await tester.pumpAndSettle();
+    for (final key in ['task', 'habit', 'exam', 'assignment', 'commitment']) {
+      final option = find.byKey(ValueKey('planner-add-$key'));
+      expect(option.hitTestable(), findsOneWidget);
+      expect(tester.getBottomRight(option).dy, lessThanOrEqualTo(640));
+    }
+    await tester.tap(find.text('Fixed commitment'));
+    await tester.pumpAndSettle();
+    expect(selected, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'unscheduled task keeps plan, completion and confirmed-removal entry points',
     (tester) async {

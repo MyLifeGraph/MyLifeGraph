@@ -1,5 +1,17 @@
 # MyLifeGraph Mobile App
 
+Coach and Ultra Quick each have a compact English/German flag toggle, saved
+separately on this device, with English as default. Coach uses `coach-language-v1`
+for German replies, uncertainty and safety text; the rest of its UI is unchanged.
+The language is pinned to exact retries. Ultra Quick changes only the speaking
+guide, still accepts both transcript languages, and retains review/final Save.
+No app-wide localization is claimed. Updated API deployment is required before
+German Coach requests work; the English request payload remains unchanged.
+
+Gemini BYOK accepts exact `gemini-3.8-flash` capability/response provenance and
+retains `gemini-3.6-flash` history/server compatibility. Backend deployment plus
+the additive model-allowlist migration are required to start new 3.8 requests.
+
 Planner now separates `This week` and `Planning` without changing scheduling.
 Unscheduled Tasks support completion and confirmed removal (restorable in
 Today → All tasks). All tasks includes Dated/Undated filters, initially both.
@@ -8,6 +20,8 @@ The shared refresh coordinator also refreshes retained Today command views.
 Settings → Speech to text and the Coach composer's speech-source icon select
 Server (default) or a downloaded multilingual model on 64-bit Android:
 Whisper Tiny (~104 MB), Whisper Base (~161 MB), Parakeet V3 (~670 MB).
+Tapping On-device opens a model picker for download and activation. Web shows
+the catalog with Android-only actions disabled.
 Downloads are explicit, cancellable and SHA256-verified; on-device inference
 keeps audio local and never silently falls back to Server. Web retains Server.
 See the [Coach contract](../../docs/phase-10-controlled-coach-plan.md#flutter-contract).
@@ -476,6 +490,10 @@ confirmed.
 
 ## Auth Modes
 
+The sign-in introduction is concise; the guest tile retains device-only Setup
+and best-effort check-in transfer limits. All login/recovery methods, CAPTCHA,
+pilot disclosures and acceptance controls are unchanged.
+
 - Guest mode works without Supabase and stores session plus typed, revisioned
   Setup state locally. It never calls FastAPI or Supabase, and guest Setup is not
   copied automatically into an account later. Canonical guest captures are
@@ -577,15 +595,21 @@ actual backend time while retaining their original planned interval.
 
 With the development Coach surface enabled, the five shell destinations are
 Today, Insights, Quick actions, Planner, and Coach. Those pages plus Settings
-share a top action group with optional page action, unread Coach result, and
-Settings in that order. Settings omits its own navigation action while keeping
+share a top action group with optional page action, unread Coach result, Inbox,
+and Settings in that order. Settings omits its own navigation action while keeping
 the unread result and Back; it is pushed so Back returns to the originating
-page. Inbox remains under Settings. A disabled Coach gate omits the fifth
-destination rather than restoring Settings; Settings-owned routes such as
+page. Inbox is opened from the header, not a Settings card. Its compact counters
+cover only the loaded list; read/unread, dismiss and Open share an icon row with
+tooltips beside the title (stacked for large text). Tapping a card opens its
+allowlisted target without marking it read; lifecycle actions remain separate.
+A disabled Coach gate omits the fifth
+destination rather than restoring Settings; auxiliary routes such as
 `/alerts` leave the shell destinations unselected.
 Today, Insights, Quick actions, Planner, and Coach align compact icon actions at the same
 top-right inset; large text moves actions above the title. Other page headers
-retain their existing layout.
+retain their existing layout. Pushed native Settings integrations also show Back,
+returning to the actual caller; direct root pages do not acquire a fake history.
+Speech settings and its nested model picker have explicit Back controls.
 Quick actions orders Morning, Evening, Focus, then Habit completion. Insights
 remembers Overview/Advanced and its subtab; Planner remembers Days/List across
 route recreation in the app session. Only display choices are retained, not
@@ -617,7 +641,7 @@ and tablet retain their existing stacked section order.
 - `/planner/replan?plan_id=<uuid>` (focused saved-value review, staged preview,
   and explicit confirmation for exactly one Preparation plan)
 - `/weekly-review` (authenticated, completed-week review)
-- `/alerts` (Settings-owned stored Inbox with authenticated
+- `/alerts` (header-accessible stored Inbox with authenticated
   read/unread/dismiss lifecycle; notification generation/delivery contracts are
   unchanged)
 - `/notifications` (compatibility redirect to `/alerts`)
@@ -893,12 +917,17 @@ and errors remain visible. Flutter never
 handles a Codex OAuth login, snapshot, SQL, Python container, or operator
 credential. It loads capability and mixed legacy/current history without
 generating. The first capability read waits for profile credential initialization,
-which preselects `Standard (provided)` (Project Coach). The selector still offers
+which restores the provider name saved on this device for this profile, or
+preselects `Standard (provided)` (Project Coach) if none exists. Only the choice
+persists across sign-out/reload; web API keys still require re-entry after reload.
+The selector still offers
 personal OpenAI/Gemini keys; later reads preserve the active choice. Project Coach never reads or stores
 a key, and an error never changes the selection. Coach presents an oldest-first
 chat with separate user/Coach messages, preserving uncertainty and details.
 The bottom composer stays visible while the conversation scrolls and uses a
 `Send` icon, with exact retry and Cancel retaining their existing semantics.
+Opening or refreshing history scrolls to the newest message. Scrolling up reveals
+a compact circular `Latest message` down-arrow above the composer.
 While sending, a Coach reply placeholder in the timeline shows the spinner and
 safe activity text directly after the pending user message.
 `Delete conversation` retains its confirmation. This is presentation only:

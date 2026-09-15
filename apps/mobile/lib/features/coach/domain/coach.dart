@@ -14,6 +14,7 @@ const _acceptedCoachAgentPromptVersions = {
 };
 const coachAgentContextVersion = 'personal-snapshot-v3';
 const coachMessageCodepoints = 2000;
+const coachLanguageContractVersion = 'coach-language-v1';
 const coachReplyCodepoints = 4000;
 
 enum CoachCapabilityState {
@@ -254,11 +255,11 @@ class CoachCapabilities {
         }
       case CoachProviderName.openai:
       case CoachProviderName.gemini:
-        final expectedModel = provider == CoachProviderName.openai
-            ? 'gpt-5.6-terra'
-            : 'gemini-3.6-flash';
+        final expectedModels = provider == CoachProviderName.openai
+            ? const {'gpt-5.6-terra'}
+            : const {'gemini-3.6-flash', 'gemini-3.8-flash'};
         if (result.providerMode != 'user_supplied_key' ||
-            result.modelRequested != expectedModel ||
+            !expectedModels.contains(result.modelRequested) ||
             result.modelSource != 'explicit' ||
             result.serviceTier != 'not_applicable' ||
             result.fastMode ||
@@ -339,7 +340,12 @@ class CoachRequest {
     required this.requestId,
     required String message,
     this.contractVersion = coachRequestContractVersion,
+    this.responseLanguage = 'en',
   }) : message = message.trim() {
+    if (!const {'en', 'de'}.contains(responseLanguage) ||
+        responseLanguage == 'de' && contractVersion != coachRequestContractVersion) {
+      throw const CoachInputException('Coach response language is not supported.');
+    }
     if (!const {'coach-request-v3', coachRequestContractVersion}
         .contains(contractVersion)) {
       throw const CoachInputException('Coach request contract is invalid.');
@@ -362,11 +368,16 @@ class CoachRequest {
   final String requestId;
   final String message;
   final String contractVersion;
+  final String responseLanguage;
 
   Map<String, dynamic> toJson() => {
         'contract_version': contractVersion,
         'request_id': requestId,
         'message': message,
+        if (responseLanguage == 'de') ...{
+          'response_language': responseLanguage,
+          'language_contract': coachLanguageContractVersion,
+        },
       };
 }
 
@@ -646,13 +657,13 @@ class CoachProvenance {
         }
       case CoachProviderName.openai:
       case CoachProviderName.gemini:
-        final expectedModel = provider == CoachProviderName.openai
-            ? 'gpt-5.6-terra'
-            : 'gemini-3.6-flash';
+        final expectedModels = provider == CoachProviderName.openai
+            ? const {'gpt-5.6-terra'}
+            : const {'gemini-3.6-flash', 'gemini-3.8-flash'};
         if (result.providerMode != 'user_supplied_key' ||
-            result.modelRequested != expectedModel ||
+            !expectedModels.contains(result.modelRequested) ||
             result.modelReported != null &&
-                result.modelReported != expectedModel ||
+                result.modelReported != result.modelRequested ||
             result.modelSource != 'explicit' ||
             result.serviceTier != 'not_applicable' ||
             result.serviceTierStatus != 'not_applicable' ||

@@ -202,19 +202,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
-            key: const ValueKey('settings-inbox-entry'),
-            leading: const Icon(AppIcons.inboxOutlined),
-            title: const Text('Inbox'),
-            subtitle: const Text(
-              'Your saved notifications.',
-            ),
-            trailing: const Icon(AppIcons.chevronRight),
-            onTap: () => context.push(AppRoutes.alerts),
-          ),
-        ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
             leading: const Icon(AppIcons.notificationsActiveOutlined),
             title: const Text('In-app reminders'),
             subtitle: Text(

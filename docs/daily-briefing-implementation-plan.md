@@ -412,6 +412,12 @@ The transcript box shows display-only Morning/Evening prompts in manual-form
 order, with the existing rating scales and optional choices. Typing hides the
 hint; recording shows it even with an existing transcript. Prompts never become
 submitted values and do not alter the required review/save flow.
+The header flag saves a device-local English/German guide preference (English
+default), independent from Coach answer language. German templates keep manual
+field order and scales. Both transcript languages map to the same canonical
+fields with verbatim evidence: `Schlaf 7/10` is a sleep-quality rating, while
+`Schlaf sieben` remains ambiguous. No duration is converted into a rating or
+invented sleep clocks. Changing the guide never changes a draft request's data.
 
 The proposal opens the existing branch form for correction and completion.
 Only the normal final Save writes a complete check-in through the existing
@@ -1756,7 +1762,7 @@ Implemented:
   bypass, explicit uncertainty, non-causal/diagnostic rules, and source-aware
   responses.
 - Adds request-scoped OpenAI `gpt-5.6-terra` and Gemini
-  `gemini-3.6-flash` user-key adapters plus an injectable
+  `gemini-3.8-flash` user-key adapters plus an injectable
   `local_codex_oauth` provider that invokes the current Linux/WSL user's
   explicitly enabled, already authenticated Codex CLI, plus a default-off
   `operator_codex_pilot` path through a separate peer-UID executor. Keys and

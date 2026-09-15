@@ -48,6 +48,81 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### Consolidated publication candidate — 2026-09-15
+
+- Task base: `37d86428a311ac803aab919b48a2e339d669e36d`, existing PR #23.
+- Full Dart analysis and Python Ruff pass; docs/visual checks pass. The English
+  source guard now permits only the explicitly selected German speaking guide;
+  the guest shell test follows Inbox's intentional move out of Settings.
+- Windows full verification is not a passing release gate: the source wrapper
+  lacks `setsid`; backend collection requires Unix sockets, and Windows runtime
+  checks expose POSIX/timezone/dependency differences. Flutter golden images
+  also differ from the Linux baseline. Complete Linux PR CI is required before
+  promotion; no production migration or release is claimed by these local runs.
+
+### Inbox card navigation and concise login — 2026-09-15
+
+- Task base: `37d86428a311ac803aab919b48a2e339d669e36d`; local candidate only.
+- Inbox widget suite: 12 passed, including top-right actions at 320px, card
+  navigation without a lifecycle write, and disabled controls not opening a card.
+- Auth/recovery widget suite: 25 passed, including 320px/2x text, email, Google,
+  CAPTCHA and recovery paths. Targeted Dart analysis: no issues.
+- No Auth configuration, backend, migration or hosted deployment changed.
+
+### Compact Inbox presentation — 2026-09-15
+
+- Task base: `37d86428a311ac803aab919b48a2e339d669e36d`; local candidate only.
+- Inbox widget suite: 11 passed, including 320px action alignment, compact
+  counters, 2x text layouts, confirmed lifecycle updates and stale-action locks.
+- Targeted Dart analysis: no issues. Only presentation/copy and corresponding
+  test expectations changed; no notification backend or delivery changes.
+
+### English/German Coach and speaking-guide extension — 2026-09-15
+
+- Task base: `37d86428a311ac803aab919b48a2e339d669e36d`; local candidate only.
+- Focused backend language, Capture draft, safety, Coach service, API and base
+  prompt suites: 241 passed. Includes German pipeline output, deterministic
+  safety language, canonical ratings, ambiguous-input rejection and unchanged
+  English request fingerprints/prompts.
+- Focused Flutter language preference, Coach controller/page/lifecycle/repository,
+  Ultra Quick page and proposal suites: 96 passed. Covers persistence, independent
+  guide/answer languages, exact retries, cancellation during preference loading,
+  old-API rejection without fallback, mandatory review and compact layouts.
+- Targeted Dart analysis: no issues. Python Ruff: passed. Documentation checks:
+  18 passed; consistency passed. `git diff --check`: passed.
+- Local Cloud frontend restarted and loopback HTTP 200 confirmed. No speech-model
+  live inference, German live-provider turn or live database test was performed.
+  No dependencies, schema, RLS, quotas, Capture Save or Insights calculations changed
+  for this language task. No push/deployment was performed. German replies and
+  additional extraction aliases require the updated API; the local speaking
+  guide is already usable. The earlier Gemini migration remains separate/pending.
+
+### Coach choice and chat navigation follow-up — 2026-09-15
+
+- Task base: `37d86428a311ac803aab919b48a2e339d669e36d`; local changes only.
+- Focused Flutter credential, Coach page and speech settings suites: 37 passed.
+  Covers profile-isolated provider restoration without persisting web keys,
+  Parakeet download visibility/confirmation with a fake native store, bottom-arrow
+  navigation and fast history refresh positioning.
+- Targeted analysis of the two changed Coach runtime files: no issues.
+  Documentation checks: 18 passed; consistency passed.
+- No physical-device model download/inference, Cloud migration, VPS deployment,
+  push or main update was performed for this follow-up.
+
+### Gemini 3.8 BYOK compatibility candidate — 2026-09-15
+
+- Task base: `37d86428a311ac803aab919b48a2e339d669e36d`.
+- Focused backend provider, model compatibility, historical migration-source
+  and Coach agent-service checks: 81 passed. Flutter credential/capability and
+  provenance checks: 12 passed. Both preserve historical Gemini 3.6 and reject
+  requested/reported model mismatches and unapproved model identifiers.
+- `20260915105930_coach_gemini_38_flash.sql` is prepared, not applied to Cloud.
+  Its pgTAP test is present but not executed here: this laptop has no local
+  Docker/Postgres test runtime. Source tests are not SQL execution evidence.
+- No live Google-key invocation, push, API deployment or main update occurred.
+  Deploy compatible clients, apply/verify the migration, then deploy the API
+  before claiming Gemini 3.8 available on the hosted service.
+
 ### Planner / local speech / combined blocking candidate — 2026-09-15
 
 - Task base: `3b19ec1b9c75486f2c2b506fbf5a07d6d93fd390`, working branch

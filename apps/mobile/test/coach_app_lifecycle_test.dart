@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/constants/app_spacing.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
@@ -17,6 +18,7 @@ import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import 'support/coach_fixtures.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets(
     'draft and running turn survive navigation until the answer is read',
     (tester) async {
@@ -367,6 +369,7 @@ class _ControlledCoachRepository implements CoachRepository {
   Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
+    String responseLanguage = 'en',
   }) async* {
     _requestId = requestId;
     _message = message;

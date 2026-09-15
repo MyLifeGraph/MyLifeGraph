@@ -25,6 +25,7 @@ from app.models.coach import (
     COACH_AGENT_REQUESTS_PER_LOCAL_DAY,
     COACH_AGENT_TIMEOUT_SECONDS,
     COACH_CAPABILITIES_V5_CONTRACT_VERSION,
+    COACH_GEMINI_MODEL,
     COACH_HISTORY_V4_CONTRACT_VERSION,
     COACH_OPERATOR_REQUESTS_PER_LOCAL_DAY,
     COACH_OPERATOR_REQUESTS_PER_UTC_DAY,
@@ -76,6 +77,17 @@ _OPERATOR_DISPATCH_NAMESPACE = UUID("96bcaa7b-cb52-4d87-9c9e-02b62a3db87e")
 _LOGGER = logging.getLogger(__name__)
 
 
+def _message_fingerprint(request: CoachAgentRequest) -> str:
+    # Preserve historical English replay hashes byte-for-byte. German requests
+    # bind the extension and language without changing saved message text.
+    payload = request.message if request.response_language == "en" else json.dumps(
+        {"language_contract": request.language_contract,
+         "response_language": request.response_language, "message": request.message},
+        sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 @dataclass(slots=True)
 class PreparedCoachTurn:
     """One-use, service-owned result of pre-stream Coach admission."""
@@ -104,7 +116,7 @@ class PreparedCoachTurn:
             self.user_id != user_id
             or self.request_id != request.request_id
             or self.message_fingerprint
-            != hashlib.sha256(request.message.encode("utf-8")).hexdigest()
+            != _message_fingerprint(request)
         ):
             raise RuntimeError("Coach turn preparation does not match the request.")
         self.consumed = True
@@ -291,7 +303,7 @@ class CoachAgentService:
                 retryable=False,
                 status_code=422,
             )
-        model = "gpt-5.6-terra" if provider_name == "openai" else "gemini-3.6-flash"
+        model = "gpt-5.6-terra" if provider_name == "openai" else COACH_GEMINI_MODEL
         pre_admission_error: CoachServiceError | None = None
         provider: CoachProvider = self._provider
         if not api_key or not api_key.strip():
@@ -464,10 +476,8 @@ class CoachAgentService:
         self._require_user_not_blocked(user_id)
         identity = self._identity()
         profile = await self._lifecycle.eligible_profile(user_id=user_id)
-        safety = pre_provider_safety(request.message, force_english=True)
-        message_fingerprint = hashlib.sha256(
-            request.message.encode("utf-8"),
-        ).hexdigest()
+        safety = pre_provider_safety(request.message, response_language=request.response_language)
+        message_fingerprint = _message_fingerprint(request)
         replay = await self._probe_terminal_replay(
             user_id=user_id,
             request=request,
@@ -809,6 +819,7 @@ class CoachAgentService:
                     prompt = self._draft_operation.build_prompt() if self._draft_operation else build_coach_agent_prompt(
                         message=request.message,
                         allow_python=identity[0] not in {"openai", "gemini"},
+                        response_language=request.response_language,
                     )
                     if activity_callback is not None:
                         await activity_callback("Preparing a private data snapshot …")
@@ -887,7 +898,7 @@ class CoachAgentService:
                 safety_result = post_provider_safety(
                     legacy,
                     message=request.message,
-                    force_english=True,
+                    response_language=request.response_language,
                 )
                 output = _agent_output(safety_result.output)
                 trace = _read_trace(trace_path)

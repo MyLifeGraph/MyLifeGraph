@@ -9,6 +9,7 @@ import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/widgets/app_page.dart';
+import 'package:my_life_graph/core/widgets/app_schedule_day_card.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 import 'package:my_life_graph/composition/projection_refresh_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/exam_week_outlook.dart';
@@ -273,6 +274,9 @@ void main() {
     await tester.ensureVisible(find.text('This week'));
     await tester.tap(find.text('This week'));
     await tester.pumpAndSettle();
+    final viewToggle = find.ancestor(of: find.text('This week'), matching: find.byType(SegmentedButton<bool>));
+    expect(tester.widget<SegmentedButton<bool>>(viewToggle).showSelectedIcon, isFalse);
+    expect(tester.getSize(viewToggle).width, 480);
     await tester.tap(find.byTooltip('List'));
     await tester.pumpAndSettle();
     expect(
@@ -291,6 +295,12 @@ void main() {
     }
     expect(find.text('Tuesday, Jul 21'), findsOneWidget);
     expect(find.text('Monday, Jul 27'), findsOneWidget);
+    final dayCards = find.byType(AppScheduleDayCard);
+    expect(dayCards, findsNWidgets(7));
+    final dayWidth = tester.getSize(dayCards.first).width;
+    for (var i = 1; i < 7; i++) {
+      expect(tester.getSize(dayCards.at(i)).width, dayWidth);
+    }
     await tester.ensureVisible(find.text('Planning'));
     await tester.tap(find.text('Planning'));
     await tester.pumpAndSettle();

@@ -29,7 +29,10 @@ COACH_CAPABILITIES_V4_CONTRACT_VERSION = "coach-capabilities-v4"
 COACH_CAPABILITIES_V5_CONTRACT_VERSION = "coach-capabilities-v5"
 COACH_HISTORY_V4_CONTRACT_VERSION = "coach-history-v4"
 COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v5"
+COACH_LANGUAGE_CONTRACT_VERSION = "coach-language-v1"
 COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v3"
+COACH_GEMINI_MODEL = "gemini-3.8-flash"
+COACH_GEMINI_COMPATIBLE_MODELS = frozenset({"gemini-3.6-flash", COACH_GEMINI_MODEL})
 
 COACH_MESSAGE_CODEPOINTS = 2_000
 COACH_CONTEXT_BYTES = 32_768
@@ -469,6 +472,17 @@ class CoachAgentRequest(BaseModel):
     contract_version: Literal["coach-request-v3", "coach-request-v4"]
     request_id: UUID = Field(strict=False)
     message: str
+    response_language: Literal["en", "de"] = "en"
+    language_contract: Literal["coach-language-v1"] | None = None
+
+    @model_validator(mode="after")
+    def validate_language_extension(self) -> Self:
+        if self.response_language != "en" and (
+            self.contract_version != "coach-request-v4"
+            or self.language_contract != COACH_LANGUAGE_CONTRACT_VERSION
+        ):
+            raise ValueError("German responses require the explicit language extension")
+        return self
 
     @field_validator("message")
     @classmethod
@@ -555,12 +569,12 @@ class CoachAgentCapabilitiesResponse(BaseModel):
             ):
                 raise ValueError("operator Coach capability identity is invalid")
         elif self.provider in {"openai", "gemini"}:
-            expected_model = (
-                "gpt-5.6-terra" if self.provider == "openai" else "gemini-3.6-flash"
+            expected_models = (
+                {"gpt-5.6-terra"} if self.provider == "openai" else COACH_GEMINI_COMPATIBLE_MODELS
             )
             if (
                 self.provider_mode != "user_supplied_key"
-                or self.model_requested != expected_model
+                or self.model_requested not in expected_models
                 or self.model_source != "explicit"
                 or self.service_tier != "not_applicable"
                 or self.fast_mode
@@ -713,13 +727,13 @@ class CoachAgentProvenance(BaseModel):
             ):
                 raise ValueError("operator Codex provenance is invalid")
         elif self.provider in {"openai", "gemini"}:
-            expected_model = (
-                "gpt-5.6-terra" if self.provider == "openai" else "gemini-3.6-flash"
+            expected_models = (
+                {"gpt-5.6-terra"} if self.provider == "openai" else COACH_GEMINI_COMPATIBLE_MODELS
             )
             if (
                 self.provider_mode != "user_supplied_key"
-                or self.model_requested != expected_model
-                or self.model_reported not in {None, expected_model}
+                or self.model_requested not in expected_models
+                or self.model_reported not in {None, self.model_requested}
                 or self.model_source != "explicit"
                 or self.service_tier != "not_applicable"
                 or self.service_tier_status != "not_applicable"

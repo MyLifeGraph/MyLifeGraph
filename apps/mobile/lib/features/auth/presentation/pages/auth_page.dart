@@ -139,13 +139,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
           _registrationMode ? 'Create your account' : 'Welcome back',
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          _registrationMode
-              ? 'Start with a synced space you can return to.'
-              : 'Choose how you want to continue.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
         if (authNotice != null) ...[
           const SizedBox(height: AppSpacing.md),
           _InlineStatus(
@@ -259,7 +252,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             icon: AppIcons.personOutlineRounded,
             title: 'Continue as guest',
             subtitle:
-                'Local demo. Setup stays on this device and will not move to a later account.',
+                'Local demo. Setup stays here; check-ins may transfer on sign-in.',
             onTap: isBusy ? null : _continueAsGuest,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -267,7 +260,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         _AuthActionTile(
           leading: const _GoogleLogo(),
           title: 'Sign in with Google',
-          subtitle: 'Continue with your Google account',
           onTap: isBusy ? null : _signInWithGoogle,
         ),
         if (isBusy) ...[
@@ -528,9 +520,9 @@ class _AuthIntro extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 560),
           child: Text(
             syncedOnly
-                ? 'Create or open a synced account for this adult evaluation pilot. Your saved data remains scoped to your account.'
-                : 'Use a synced account or explore locally as a guest. Guest Setup stays on this device and is not copied into a later account; only guest check-ins may migrate best-effort.',
-            style: theme.textTheme.bodyLarge,
+                ? 'Sign in to sync your personal data.'
+                : 'Sign in to sync, or try a local demo.',
+            style: theme.textTheme.bodyMedium,
           ),
         ),
       ],
@@ -598,7 +590,7 @@ class _PilotPreSignupNotice extends StatelessWidget {
             controlAffinity: ListTileControlAffinity.leading,
             title: const Text('I confirm that I am 18 or older'),
             subtitle: const Text(
-              'This records the current notice version and acceptance time after authentication. No birth date is collected.',
+              'Saves notice version and acceptance time after sign-in, not your birth date.',
             ),
           ),
         ],
@@ -715,14 +707,14 @@ class _AuthActionTile extends StatelessWidget {
     this.icon,
     this.leading,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.onTap,
   });
 
   final IconData? icon;
   final Widget? leading;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final VoidCallback? onTap;
 
   @override
@@ -764,11 +756,13 @@ class _AuthActionTile extends StatelessWidget {
                           title,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          subtitle,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            subtitle!,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
                       ],
                     ),
                   ),

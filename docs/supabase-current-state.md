@@ -1,6 +1,13 @@
 # Supabase Current State
 
-The latest repository migration is
+The latest repository migration is `20260915105930_coach_gemini_38_flash.sql`.
+It adds exactly `gemini-3.8-flash` to the existing Gemini claim and response
+validation paths, retaining `gemini-3.6-flash`. Drift-guarded function replacements
+preserve OIDs, privileges, locks, budgets and retry identities. No stored rows,
+tables, RLS policies or public signatures change. Apply before the 3.8 API rollout;
+repository presence does not establish live Cloud state.
+
+The preceding repository migration is
 `20260914152145_capture_draft_operations.sql`. It adds a private purpose marker
 and guarded service-only claim/completion for `daily-capture-draft-v1`, retaining
 the existing Coach request and operator budgets. Completion stores only redacted
@@ -1696,7 +1703,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260914152145_capture_draft_operations.sql
+20260915105930_coach_gemini_38_flash.sql
 ```
 
 Then configure `.env` with:

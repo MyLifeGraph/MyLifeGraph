@@ -39,10 +39,51 @@ void main() {
         expect(settings.right, tester.view.physicalSize.width - 16);
         expect(settings.width, greaterThanOrEqualTo(44));
         expect(settings.height, greaterThanOrEqualTo(44));
+        final inbox = tester.getRect(find.byKey(const ValueKey('global-header-inbox')));
+        expect(inbox.right, lessThan(settings.left));
+        expect(inbox.top, settings.top);
         expect(tester.takeException(), isNull);
       }
     }
   });
+
+  testWidgets('header Inbox opens and returns to its originating page', (tester) async {
+    final router = _pageRouter();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('global-header-inbox')));
+    await tester.pumpAndSettle();
+    expect(find.text('Inbox page'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('app-page-back')));
+    await tester.pumpAndSettle();
+    expect(find.text('Today page'), findsOneWidget);
+  });
+
+  for (final origin in [AppRoutes.settings, AppRoutes.planner]) {
+    testWidgets('native settings-style page returns to actual origin $origin', (tester) async {
+      final router = GoRouter(initialLocation: origin, routes: [
+        GoRoute(path: origin, builder: (context, state) => AppPage(
+          title: 'Origin', children: [TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: AppPage(title: 'Integration', children: [])),
+            )), child: const Text('Open integration'))],
+        )),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('app-page-back')), findsNothing);
+      await tester.tap(find.text('Open integration'));
+      await tester.pumpAndSettle();
+      expect(find.text('Integration'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('app-page-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('Origin'), findsOneWidget);
+      expect(find.byKey(const ValueKey('app-page-back')), findsNothing);
+      expect(router.routeInformationProvider.value.uri.path, origin);
+    });
+  }
 
   testWidgets('Today push to Planner returns through actual history',
       (tester) async {
@@ -161,6 +202,7 @@ GoRouter _pageRouter({String initialLocation = AppRoutes.dashboard}) {
         path: AppRoutes.dashboard,
         builder: (context, state) => AppPage(
           title: 'Today page',
+          actions: const [ProviderScope(child: AppHeaderActions())],
           children: [
             FilledButton(
               onPressed: () => context.push(AppRoutes.planner),
@@ -168,6 +210,10 @@ GoRouter _pageRouter({String initialLocation = AppRoutes.dashboard}) {
             ),
           ],
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.alerts,
+        builder: (context, state) => const AppPage(title: 'Inbox page', children: []),
       ),
       GoRoute(
         path: AppRoutes.planner,

@@ -159,7 +159,7 @@ def test_gemini_interaction_uses_current_steps_schema_and_full_stateless_history
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.method == "GET":
-            return httpx.Response(200, json={"name": "gemini-3.6-flash"})
+            return httpx.Response(200, json={"name": "gemini-3.8-flash"})
         bodies.append(json.loads(request.content))
         if len(bodies) == 1:
             return httpx.Response(200, json={"steps": provider_steps})
@@ -188,7 +188,8 @@ def test_gemini_interaction_uses_current_steps_schema_and_full_stateless_history
             trace_path=tmp_path / "trace.jsonl",
         )
     )
-    assert result.model_reported == "gemini-3.6-flash"
+    assert result.model_reported == "gemini-3.8-flash"
+    assert all(body["model"] == "gemini-3.8-flash" for body in bodies)
     assert len(bodies) == 2
     assert all(body["store"] is False for body in bodies)
     assert all(

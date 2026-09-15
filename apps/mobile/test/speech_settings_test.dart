@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/composition/widgets/speech_settings_sheet.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +15,60 @@ import 'package:my_life_graph/features/coach/domain/speech_models.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  for (final supported in [true, false]) {
+    testWidgets('On-device opens model picker (supported: $supported)', (tester) async {
+      final store = supported ? _Store() : _UnsupportedStore();
+      store.files.add('whisper-base');
+      final settings = SpeechSettings(store);
+      await settings.ready;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [speechSettingsProvider.overrideWith((ref) => settings)],
+        child: MaterialApp(theme: AppTheme.dark,
+          home: const Scaffold(body: SpeechSourceButton())),
+      ));
+      await tester.tap(find.byType(IconButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('On-device'));
+      await tester.pumpAndSettle();
+      expect(find.text('On-device models'), findsOneWidget);
+      for (final model in speechModels) {
+        expect(find.text(model.label), findsOneWidget);
+      }
+      final download = tester.widget<IconButton>(find.byWidgetPredicate(
+        (widget) => widget is IconButton && widget.tooltip == 'Download Whisper Tiny'));
+      expect(download.onPressed, supported ? isNotNull : isNull);
+      final parakeet = find.byWidgetPredicate((widget) =>
+          widget is IconButton && widget.tooltip == 'Download Parakeet V3');
+      await tester.ensureVisible(parakeet);
+      await tester.pumpAndSettle();
+      expect(tester.widget<IconButton>(parakeet).onPressed,
+          supported ? isNotNull : isNull);
+      if (supported) {
+        await tester.tap(parakeet);
+        await tester.pumpAndSettle();
+        expect(find.text('Download Parakeet V3?'), findsOneWidget);
+        await tester.tap(find.text('Download'));
+        await tester.pumpAndSettle();
+        expect(settings.installed, contains('parakeet-v3'));
+      }
+      if (supported) {
+        await tester.ensureVisible(find.text('Whisper Base'));
+        await tester.tap(find.text('Whisper Base'));
+        await tester.pumpAndSettle();
+        expect(settings.source, 'whisper-base');
+        await tester.tap(find.byTooltip('Download Whisper Tiny'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Download'));
+        await tester.pumpAndSettle();
+        expect(settings.installed, contains('whisper-tiny'));
+        expect(settings.source, 'whisper-base');
+      } else {
+        expect(settings.source, 'server');
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   test('installed local speech permits a signed-in draft, never guest or server fallback', () async {
     final speech = SpeechSettings(_Store());
@@ -131,4 +188,9 @@ class _Store extends LocalSpeechStore {
 
   @override
   Future<String?> transcribe(SpeechModel model, Uint8List pcm) => result.future;
+}
+
+class _UnsupportedStore extends _Store {
+  @override
+  bool get supported => false;
 }

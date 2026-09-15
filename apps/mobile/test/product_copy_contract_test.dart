@@ -20,7 +20,20 @@ void main() {
       final combined = presentationSources
           .map((file) => file.readAsStringSync())
           .join();
-      expect(combined, isNot(matches(RegExp(r'[äöüÄÖÜß]'))));
+      // Only the explicitly selected German speaking guide is localized.
+      final germanGuide = RegExp(
+        r"if \(ref.read\(assistantLanguageProvider\('capture'\)\).value == 'de'\) \{[\s\S]*?\r?\n    \}",
+      );
+      for (final file in presentationSources) {
+        var englishSource = file.readAsStringSync();
+        if (file.path.replaceAll('\\', '/').endsWith(
+            '/quick_action/presentation/pages/ultra_quick_check_in_page.dart')) {
+          expect(germanGuide.allMatches(englishSource), hasLength(1));
+          englishSource = englishSource.replaceFirst(germanGuide, '');
+        }
+        expect(englishSource, isNot(matches(RegExp(r'[äöüÄÖÜß]'))),
+            reason: file.path);
+      }
 
       const retiredVisiblePhrases = <String>[
         "'Morning Calibration'",

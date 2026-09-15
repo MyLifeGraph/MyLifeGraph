@@ -22,8 +22,8 @@ follow-ups, as of 2026-07-30.
 
 Planner V1 is the authenticated, deterministic planning home for Tasks,
 Habits, exam and assignment preparation, and manually fixed commitments. It
-replaces Inbox in the Coach-enabled five-item app shell. Inbox remains available from
-Settings and its persistence, generation, lifecycle, and delivery contracts are
+replaces Inbox in the Coach-enabled five-item app shell. Inbox is available from
+the shared main-page header and its persistence, generation, lifecycle, and delivery contracts are
 unchanged. The later navigation follow-up replaces the redundant Settings shell
 item with the gated Coach destination; Settings remains available from every
 main page through the shared header action.
@@ -40,11 +40,11 @@ destinations are, in order: `Today`, `Insights`, `Quick actions`, `Planner`, and
 and do not restore Settings as a fallback shell item. Settings is opened from
 the shared top-right action on Today, Insights, Quick actions, Planner, Coach,
 and Settings. Planner orders its `Reload Planner` action before an optional
-unread Coach result and Settings; the same action group remains visible in
+unread Coach result, Inbox and Settings; the same action group remains visible in
 locked, initial loading, overview-error, current, and stale-after-mutation
 states. Settings is pushed so Back returns to Planner. `/preparation-plans` and `/habits` remain
 compatible and select Planner in the shell; `/alerts` remains a compatible
-Settings-owned route without selecting an unrelated shell destination. Quick
+auxiliary route without selecting an unrelated shell destination. Quick
 actions contains Morning, Evening, Focus, and Habit completion. Today is an
 execution surface and no longer exposes generic Task creation or
 Habit-definition management.

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../composition/profile_local_date_providers.dart';
 import '../../../../composition/quick_capture_providers.dart';
 import '../../../../composition/widgets/capture_dictation_input.dart';
+import '../../../../composition/widgets/assistant_language_button.dart';
+import '../../../../core/preferences/assistant_language.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -25,7 +27,25 @@ class UltraQuickCheckInPage extends ConsumerStatefulWidget {
 }
 
 class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
-  String get _speakingGuide => _mode == 'morning'
+  String get _speakingGuide {
+    if (ref.read(assistantLanguageProvider('capture')).value == 'de') {
+      return _mode == 'morning'
+          ? 'Eingeschlafen: … · Aufgewacht: …\n'
+              'Schlafqualität: … / 10\n'
+              'Aktuelle Energie: … / 10\n'
+              'Lernmotivation (optional): Niedrig / Mittel / Hoch'
+          : 'Stimmung: … / 10\n'
+              'Übrige Energie: … / 10\n'
+              'Stress: … / 10\n'
+              'Geplanter Schlafbeginn: …\n'
+              'Schlafziel: … Stunden\n'
+              'Bei Stress ≥ 5: Ursache …; Einfluss Wenig / Teilweise / Überwiegend\n'
+              'Reflexion (optional): …\n'
+              'Konkretes Hindernis (optional): …\n'
+              'Sport (optional): Kein / Leicht / Intensiv\n'
+              'Soziale Kontakte (optional): Wenig / Einige / Viele';
+    }
+    return _mode == 'morning'
       ? 'Sleep start: … · Wake time: …\n'
             'Sleep quality: … / 10\n'
             'Current energy: … / 10\n'
@@ -40,6 +60,7 @@ class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
             'Specific blocker (optional): …\n'
             'Sport (optional): None / Light / Intense\n'
             'Social contact (optional): Little / Some / Lots';
+  }
 
   final _text = TextEditingController();
   String _lastText = '';
@@ -293,6 +314,7 @@ class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
       });
     });
     final locked = _busy || _recording || _notesBusy;
+    ref.watch(assistantLanguageProvider('capture'));
     final canRecord = ref
         .watch(appSurfaceCapabilitiesProvider)
         .canAccessCoachBackend;
@@ -302,6 +324,7 @@ class _UltraQuickCheckInPageState extends ConsumerState<UltraQuickCheckInPage> {
         compactHeader: true,
         backFallback: AppRoutes.quickAction,
         maxWidth: 680,
+        actions: [AssistantLanguageButton(scope: 'capture', enabled: !locked)],
         children: [
           if (owner == null)
             const AppCard(

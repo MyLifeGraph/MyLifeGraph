@@ -1,5 +1,11 @@
 # Frontend Visual System V2
 
+Coach and Ultra Quick show a compact, directly toggleable UK/German flag in
+their header actions, using existing icon-button targets and tooltips naming
+the current and next language. No language dialog, additional panel, translated
+navigation or new palette is introduced. The flags retain disabled state during
+their in-flight operation; Coach also locks language for an exact retry.
+
 Settings uses the compact page header without a redundant Settings cog on that
 same page; optional Coach-result notices and Back remain. Other page header
 actions are unchanged. Focus target menus cap their height to the usable
@@ -17,6 +23,8 @@ The permanent Coach outline encloses the timeline and bottom composer below the
 fixed capability status card. Only the timeline scrolls on the main page;
 the header, frame and composer stay fixed. Loaded history
 starts at its newest message. The frame uses existing outline color and radius;
+A circular tonal down-arrow floats at the bottom center of the timeline only
+while scrolled above the latest message; it never displaces the composer.
 message cards retain their existing styling. Empty-state typography is unchanged.
 The frame retains an 8px top inset even while its timeline scrolls. The composer
 model icon remains available when capability loading fails; errors stay above.
@@ -215,7 +223,7 @@ an overflow.
 
 Main-page top actions use one shared wrapping group on Today, Insights, Quick
 actions, Planner, Coach, and Settings. Page-specific actions come first, an
-unread Coach action comes second when present, and Settings comes last. Every
+unread Coach action comes second when present, followed by Inbox and Settings. Every
 icon action owns a 44 by 44 logical-pixel target and keyboard/semantic label.
 Today, Insights, Planner, and Coach align title-left/icon-actions-right at the
 same 16-pixel mobile top/right inset. Large text moves actions above the title.
@@ -264,6 +272,12 @@ organize the existing controls without adding another card style or changing
 their authority. Feature panels, auth/recovery regions, Inbox groups, Weekly
 facts, and Insights regions use the appropriate shared surface variant instead
 of route-local borders, radii, and shadows.
+
+Inbox uses three equal-width compact counters, smaller category icons and a
+shared top-right icon-action row on mobile and desktop, stacked below the title
+when narrow or text is enlarged. Allowlisted cards use the interactive surface.
+Preserve accessible touch targets,
+tooltips, scalable text, item provenance and visible lifecycle feedback.
 
 Category color and status color are separate vocabularies. Data categories use
 brand/data colors; they do not borrow success, attention, or danger merely to

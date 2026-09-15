@@ -229,6 +229,8 @@ Future<void> _openPlannerAddNewSheet(
 }) {
   return showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
     showDragHandle: true,
     builder: (sheetContext) {
       final options = <({
@@ -1074,6 +1076,7 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
 
   Widget _sevenDayList() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final day in widget.days) ...[
           AppScheduleDayCard(

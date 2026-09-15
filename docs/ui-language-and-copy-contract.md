@@ -51,6 +51,9 @@ Non-demo Coach offers `Choose Coach` inline in ready and unavailable states.
 Optional explanations use the `Coach modes` information control; selected-mode
 cost/data-sharing copy, unavailability, limits, and key errors remain visible.
 Web copy must say keys live only in the current tab and disappear on reload.
+The non-secret Coach provider choice is saved separately per profile on this
+device. Restoring a personal-key choice never implies its web key survived reload.
+The chat's down-arrow uses the tooltip/accessibility label `Latest message`.
 Failed replacement testing must explicitly say the previous key is unchanged.
 Hosted mode selection uses `Project Coach`, `Use my OpenAI key`, and `Use my
 Gemini key`. Project Coach copy states that the VPS creates a temporary
@@ -113,9 +116,13 @@ visible section guidance. `Setup summary` describes the complete setup state
 being saved and keeps manually created items separate. Semester date controls
 retain their start/end or opens/closes labels, with `Not set` for an unset date.
 
-The V1 product interface supports English only. User-entered text may of course
+The V1 product interface supports English, with two narrow opt-in exceptions:
+Coach replies/uncertainty/safety text and Ultra Quick's speaking guide support
+German. A compact flag toggles each independently and persists on this device;
+English is the default. Existing navigation and technical labels remain English.
+User-entered text may of course
 use any language, but navigation, controls, validation, empty states, and help
-copy are English. German localization is not currently implemented or claimed.
+copy are English. App-wide German localization is not implemented or claimed.
 
 Adding German later requires Flutter localization resources, locale selection
 or system-locale behavior, translated semantics and validation copy, and widget
@@ -480,6 +487,12 @@ says `Early evidence`.
 
 ## Plain-language Rules
 
+Auth introduces `Sign in to sync your personal data.` in synced-only mode, or
+`Sign in to sync, or try a local demo.` otherwise. The guest action explains
+`Local demo. Setup stays here; check-ins may transfer on sign-in.` Google needs
+no repeated subtitle. Full privacy disclosures and authentication errors remain
+available; the checkbox still explains recorded notice/time and no birth date.
+
 Android Focus protection names app-blocking modes `Focus sessions`, `Weekly
 schedule`, and `Always block`. Weekly selection confirms days/times in one
 compact sheet and names device time plus next-day end where relevant.
@@ -569,13 +582,17 @@ the full explanation. Package identifiers remain available as app-label tooltips
   `Rule-based reminder`. Reminder Settings may explain fixed templates and the
   exclusion of private check-in details behind optional information; it does
   not repeat an AI disclaimer on each item.
+- Inbox introduction: `Latest 30 items · counts cover this list.` Demo uses
+  `Local examples · not synced or sent. Counts cover up to 30 shown items.`
+  Compact icon actions retain read/unread, dismiss and destination tooltips;
+  stored items and counters do not claim delivery.
 - Coach is exposed in `staging`, `pilot`, and `production` only when
   `COACH_SURFACE_ENABLED` is exactly `true`; without that explicit gate it is
   hidden. In development, an explicit value wins and an unset release build
   stays hidden. When enabled, `Coach` is the right shell destination;
   `Settings` remains the last top-right action on Today, Insights, Quick
   actions, Planner, Coach, and Settings and is not duplicated in the shell.
-  Page-specific actions precede any unread Coach action and Settings. Surface
+  Page-specific actions precede any unread Coach action, Inbox and Settings. Surface
   visibility does not prove provider readiness. Project Coach is preselected as
   `Standard (provided)`; alternatives are `OpenAI (your key)` and
   `Gemini (your key)`. Selecting a provider does not send a question. Both strategies still

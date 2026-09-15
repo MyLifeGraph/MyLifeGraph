@@ -237,6 +237,16 @@
     },
     {
       "coverage": "shared_named",
+      "key": "coachLanguage",
+      "version": "coach-language-v1",
+      "sources": [
+        {"path": "apps/mobile/lib/features/coach/domain/coach.dart", "symbol": "coachLanguageContractVersion"},
+        {"path": "services/ai_service/app/models/coach.py", "symbol": "COACH_LANGUAGE_CONTRACT_VERSION"}
+      ],
+      "owners": ["apps/mobile/README.md", "docs/phase-10-controlled-coach-plan.md", "services/ai_service/README.md"]
+    },
+    {
+      "coverage": "shared_named",
       "key": "coachPrompt",
       "version": "free-coach-agent-prompt-v5",
       "sources": [

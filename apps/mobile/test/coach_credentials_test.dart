@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/features/coach/application/coach_credentials_controller.dart';
 import 'package:my_life_graph/features/coach/data/coach_api_data_source.dart';
@@ -9,6 +10,63 @@ import 'package:my_life_graph/features/coach/data/coach_credential_store.dart';
 import 'package:my_life_graph/features/coach/domain/coach.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('provider choice survives reload and sign-out, isolated by account', () async {
+    CoachCredentialsController create() => CoachCredentialsController(
+      store: PlatformCoachCredentialStore(web: true),
+      api: _Api(), accessToken: () async => 'test-token',
+    );
+    final first = create();
+    await first.setProfile('profile-a');
+    await first.select(CoachProviderName.gemini);
+    await first.setProfile(null);
+    first.dispose();
+    final reopened = create();
+    addTearDown(reopened.dispose);
+    await reopened.setProfile('profile-a');
+    expect(reopened.state.provider, CoachProviderName.gemini);
+    expect(reopened.state.activeKey, isNull);
+    await reopened.setProfile('profile-b');
+    expect(reopened.state.provider, CoachProviderName.operatorCodexPilot);
+    await reopened.setProfile('profile-a');
+    expect(reopened.state.provider, CoachProviderName.gemini);
+    await reopened.select(CoachProviderName.openai);
+    await reopened.select(CoachProviderName.operatorCodexPilot);
+    await reopened.setProfile('profile-a');
+    expect(reopened.state.provider, CoachProviderName.operatorCodexPilot);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getKeys(), {'coach_provider_v1:profile-a'});
+    expect(prefs.getString('coach_provider_v1:profile-a'), 'operatorCodexPilot');
+  });
+  for (final model in ['gemini-3.6-flash', 'gemini-3.8-flash']) {
+    test('Gemini capabilities preserve exact model $model', () async {
+      final api = _Api()..geminiModel = model;
+      final capabilities = await api.getCapabilities(accessToken: 'test',
+        provider: CoachProviderName.gemini, apiKey: 'test-key');
+      expect(capabilities.modelRequested, model);
+      final provenance = <String, dynamic>{
+        'source': 'model', 'provider': 'gemini', 'provider_mode': 'user_supplied_key',
+        'model_requested': model, 'model_reported': model, 'model_source': 'explicit',
+        'prompt_version': 'free-coach-agent-prompt-v5', 'context_version': 'personal-snapshot-v3',
+        'generated_at': '2026-09-15T10:00:00Z', 'provider_called': true,
+        'service_tier': 'not_applicable', 'service_tier_status': 'not_applicable',
+        'fast_mode': false, 'snapshot_row_count': 0, 'snapshot_bytes': 0,
+      };
+      expect(CoachProvenance.fromJson(provenance).modelRequested, model);
+      provenance['model_reported'] = model == 'gemini-3.8-flash'
+          ? 'gemini-3.6-flash' : 'gemini-3.8-flash';
+      expect(() => CoachProvenance.fromJson(provenance),
+        throwsA(isA<CoachContractException>()));
+    });
+  }
+  test('Gemini rejects unapproved model identifiers', () async {
+    final api = _Api()..geminiModel = 'gemini-unapproved';
+    await expectLater(api.getCapabilities(accessToken: 'test',
+      provider: CoachProviderName.gemini, apiKey: 'test-key'),
+      throwsA(isA<CoachContractException>()));
+  });
   test('initialization waits for stored keys before selecting Standard', () async {
     final read = Completer<void>();
     final controller = CoachCredentialsController(
@@ -262,6 +320,7 @@ class _Api extends CoachApiDataSource {
   _Api() : super(ApiClient(Dio()));
 
   bool ready = true;
+  String geminiModel = 'gemini-3.8-flash';
   Completer<void>? capabilityBarrier;
   final List<String> keys = [];
 
@@ -275,7 +334,7 @@ class _Api extends CoachApiDataSource {
     await capabilityBarrier?.future;
     final model = provider == CoachProviderName.openai
         ? 'gpt-5.6-terra'
-        : 'gemini-3.6-flash';
+        : geminiModel;
     return CoachCapabilities.fromJson({
       'contract_version': coachCapabilitiesContractVersion,
       'state': ready ? 'ready' : 'unavailable',

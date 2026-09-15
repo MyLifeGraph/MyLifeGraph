@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.mcp.coach_data_server import CoachDataMcpServer, ToolFailure
-from app.models.coach import COACH_AGENT_MAX_TOOL_CALLS, CoachAgentModelOutput
+from app.models.coach import COACH_AGENT_MAX_TOOL_CALLS, COACH_GEMINI_MODEL, CoachAgentModelOutput
 from app.providers.base import (
     CoachActivityCallback,
     CoachAgentProviderResult,
@@ -20,7 +20,7 @@ from app.providers.base import (
 
 
 ProviderName = Literal["openai", "gemini"]
-_MODELS = {"openai": "gpt-5.6-terra", "gemini": "gemini-3.6-flash"}
+_MODELS = {"openai": "gpt-5.6-terra", "gemini": COACH_GEMINI_MODEL}
 _OPENAI_BASE = "https://api.openai.com/v1"
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 _GEMINI_API_REVISION = "2026-05-20"

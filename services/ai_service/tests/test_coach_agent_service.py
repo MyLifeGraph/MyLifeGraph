@@ -384,6 +384,23 @@ def _request(message: str = "How has my stress changed?") -> CoachAgentRequest:
     )
 
 
+def test_german_request_uses_same_read_only_pipeline_and_saved_response_shape():
+    repository = AgentRepository()
+    provider = AgentProvider()
+    provider.output = CoachAgentModelOutput(
+        reply='Deine Daten sind begrenzt, aber du kannst einen Verlauf erkennen.',
+        uncertainty={'level': 'medium', 'reason': 'Die Daten sind nicht vollständig.'},
+        safety={'classification': 'normal'},
+    )
+    service = _service(repository=repository, snapshot=SnapshotService(), provider=provider)
+    request = CoachAgentRequest(contract_version='coach-request-v4', request_id=uuid4(),
+        message='Wie geht es mir?', response_language='de', language_contract='coach-language-v1')
+    response = asyncio.run(service.respond(user_id='owner-1', request=request))
+    assert response.reply == provider.output.reply
+    assert 'German only' in provider.last_prompt
+    assert response.provenance.prompt_version == 'free-coach-agent-prompt-v5'
+
+
 def _service(
     *,
     repository: AgentRepository,
