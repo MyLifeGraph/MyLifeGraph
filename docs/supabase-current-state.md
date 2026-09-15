@@ -1699,11 +1699,12 @@ no partial root, revision, or replay identity; the fiftieth single plan succeeds
 its exact replay remains valid at the cap, and another new plan is rejected.
 The existing schema and 50-open-plan limit are unchanged.
 
-When destruction of the exact normal local database is explicitly authorized,
-the guarded reset must complete through:
+Only when destruction of the exact normal local database is explicitly
+authorized, follow the two-phase preview/confirmation and verified-backup
+workflow in [Local Database Safety](local-database-safety.md#guarded-local-reset):
 
-```text
-20260915105930_coach_gemini_38_flash.sql
+```bash
+npm run db:reset:local
 ```
 
 Then configure `.env` with:

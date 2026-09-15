@@ -60,6 +60,10 @@ local unit/pgTAP evidence is not a claim about a hosted database.
   independently derived 75-entry identity while retaining missing-history,
   privilege, prefix and deletion-guard assertions. The first run's four Planner
   failures were resolved by finding the toggle inside its responsive wrapper.
+- Run `34973351727` passed all 603 pgTAP assertions. The subsequent PG17
+  restore precondition still named the prior 74-migration head; its expected
+  inventory is now 75 / `20260915105930`. Version, role safety, membership,
+  owner/ACL-preserving restore and deletion-replay checks remain unchanged.
 - Windows full verification is not a passing release gate: the source wrapper
   lacks `setsid`; backend collection requires Unix sockets, and Windows runtime
   checks expose POSIX/timezone/dependency differences. Flutter golden images
