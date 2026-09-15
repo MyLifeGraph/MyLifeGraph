@@ -259,6 +259,9 @@ multiple blocks never imply multiple required actions.
 
 ## Planner Copy
 
+Planner and Insights omit generic introductory subtitles in their page headers.
+Contextual evidence, preview warnings and explicit confirmation copy remain.
+
 Plan lifecycle actions use `Edit plan`, `Complete`, and `Cancel` in one row,
 with full-action tooltips and icons above the labels. `Complete` still means
 preparation completion; `Cancel` preserves history and is not permanent deletion.

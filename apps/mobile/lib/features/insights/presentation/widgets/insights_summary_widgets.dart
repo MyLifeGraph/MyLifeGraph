@@ -224,13 +224,6 @@ class _InsightsHeader extends StatelessWidget {
             ? Theme.of(context).textTheme.headlineMedium
             : Theme.of(context).textTheme.headlineLarge,
       ),
-      subtitle: Text(
-        'What your check-ins and focus days show so far.',
-        key: const Key('insights-header-description'),
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ),
       actions: AppHeaderActions(
         pageActions: [_InsightsRefreshButton(onRefresh: onRefresh)],
       ),

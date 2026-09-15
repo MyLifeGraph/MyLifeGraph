@@ -1091,7 +1091,7 @@ void main() {
     );
   });
 
-  testWidgets('light theme derives panel and header contrast from its scheme',
+  testWidgets('light theme keeps panel styling and compact header actions',
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -1107,9 +1107,6 @@ void main() {
     final panel = tester.widget<AppSurface>(
       find.byKey(const Key('insights-observation-panel')),
     );
-    final headerDescription = tester.widget<Text>(
-      find.byKey(const Key('insights-header-description')),
-    );
     final refreshButton = tester.widget<IconButton>(
       find.byWidgetPredicate(
         (widget) =>
@@ -1119,8 +1116,8 @@ void main() {
 
     expect(panel.variant, AppSurfaceVariant.raised);
     expect(
-      headerDescription.style?.color,
-      AppTheme.light.colorScheme.onSurfaceVariant,
+      find.byKey(const Key('insights-header-description')),
+      findsNothing,
     );
     expect(refreshButton.onPressed, isNotNull);
   });

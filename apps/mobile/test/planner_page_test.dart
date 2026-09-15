@@ -47,6 +47,7 @@ void main() {
         textScale: size.width == 320 ? 2 : 1);
       expect(tester.takeException(), isNull);
       final page = tester.widget<AppPage>(find.byType(AppPage));
+      expect(page.subtitle, isNull);
       final viewToggle = tester.widget<SegmentedButton<bool>>(
         find.descendant(
           of: find.byWidget(page.children.first),

@@ -388,7 +388,6 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       title: 'Planner',
       maxWidth: 1440,
       compactHeader: true,
-      subtitle: 'Preview first. Times are reserved only after confirmation.',
       backFallback: AppRoutes.dashboard,
       showBackForFallback: false,
       actions: [

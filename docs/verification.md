@@ -50,6 +50,14 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ### Consolidated publication candidate — 2026-09-15
 
+- Candidate `5cccdf7` passed all seven required CI contexts in run
+  `34975964903` attempt 2, including full browser E2E and database restore/replay.
+  The final requested UI follow-up removes only the generic Insights/Planner
+  header subtitles and updates their focused expectations. Its new head must
+  finish the same required CI before the authorized main promotion.
+  The two focused Planner/Insights files pass all 109 tests; docs and whitespace
+  checks pass. Analysis, scheduling and confirmation semantics are unchanged.
+
 - Task base: `37d86428a311ac803aab919b48a2e339d669e36d`, existing PR #23.
 - Full Dart analysis and Python Ruff pass; docs/visual checks pass. The English
   source guard now permits only the explicitly selected German speaking guide;
