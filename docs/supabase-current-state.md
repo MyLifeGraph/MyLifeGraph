@@ -3,10 +3,10 @@
 Current local-versus-published work is summarized in the
 [development handoff](development-handoff.md). The migration list below is the
 repository inventory, not an instruction to reapply installed SQL. Recorded
-Pilot application of the German-completion fix is in
-[Verification](verification.md#current-verified-baseline); the newer Gemini
-model-selection migration remains a separate pending rollout. This documentation
-refresh performs no database, Auth, RLS, grant, account or provider mutation.
+Pilot application of both the German-completion fix and Gemini model-selection
+migration is recorded in [Verification](verification.md#current-verified-baseline),
+including the post-apply function identity and permission checks. Inspect live
+history before future rollout; repository inventory alone is not live evidence.
 
 The latest repository migration is `20260915182801_coach_gemini_model_selection.sql`.
 It adds exactly `gemini-3.7-flash` to the existing 3.6/3.8 claim and response

@@ -13,10 +13,10 @@ results belong in [Verification](verification.md#current-verified-baseline).
 - The last recorded release already includes English/German Coach, Ultra Quick
   Check-in, optional Skillset capture, Health Connect, Android push, on-device
   speech and combined Android app-blocking rules. Device acceptance remains separate.
-- The subsequent German Coach completion migration was recorded as applied to
-  Pilot. The newer Gemini model-selection migration is prepared locally, not
-  recorded as applied. See the [schema owner](supabase-current-state.md) and
-  Verification; inspect actual migration history before any future apply.
+- Both German Coach completion and Gemini model-selection migrations were
+  recorded as applied to Pilot, with function identity and security unchanged.
+  See the [schema owner](supabase-current-state.md) and Verification; inspect
+  actual migration history before any future apply, rather than reapplying SQL.
 - New provider-isolation fixes and non-Focus-day sleep-duration coverage require
   the updated API. Gemini's additional model choice also needs compatible SQL
   and clients. A local UI restart cannot deploy these backend changes.

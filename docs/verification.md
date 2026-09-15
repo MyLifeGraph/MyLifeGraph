@@ -55,10 +55,14 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 - Normal VM database history is older than this candidate, and that VM has no
   pinned Android SDK. Full browser E2E and Android JVM/lint therefore remain
   required fresh GitHub CI gates before promotion, not claimed local passes.
-- Actual Pilot CLI history contains German completion `20260915145741`.
-  A target-bound `db push --skip-vault --dry-run` selected only
-  `20260915182801_coach_gemini_model_selection.sql`, with no roles or seeds.
-  This read-only observation is not a claim that the pending migration is applied.
+- Actual Pilot CLI history now contains **77 migrations**, latest
+  `20260915182801`, including German completion `20260915145741`.
+  After explicit approval, a fresh target-bound dry-run selected only the
+  Gemini model-selection migration, and the same CLI push applied it without
+  roles, seeds or Vault changes. Post-apply definitions exactly match the three
+  reviewed replacements; OIDs, owners, ACLs, security-definer flags and function
+  configuration are unchanged. Security advisors report only the pre-existing
+  disabled leaked-password-protection warning, not a new database finding.
 - Current feature/service orientation: `docs/development-handoff.md`; exact
   external release and installed-device acceptance must be verified separately.
 - First complete GitHub run `35032667191` passed source/docs, full Flutter and
@@ -66,15 +70,18 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   browser journeys passed; Exam Outlook still tried the mobile-only Planning
   switch at the fixed desktop viewport. The test now asserts the intended
   desktop layout and retains all Outlook, replan and unchanged-data assertions.
-  A complete rerun is required before calling this revised candidate green.
-- Correct-project Vercel Preview `dpl_HxmHyeYnVLdaNDLjX6AMtvScwo7H` reached READY
-  for `a72907edede4dea99dba5a7a38c90ae1cfdd038f`. The automatic blocked status
-  came from the other team/project, which was not modified.
-- Live migration execution was denied by execution policy pending a fresh
-  explicit confirmation of the exact Gemini SQL, despite general rollout
-  authorization. Read-only preflight matched all three existing function
-  definitions; their OIDs, owners and ACLs are saved in ignored operator files.
-  No Cloud mutation, main merge or new VPS/APK release is claimed at this point.
+  Revised candidate `8ffc7e78e594d782ff36c0ff40a222a3ee19f3db` passed all seven
+  required checks in GitHub run `35033612641` (attempt 2), including all eight
+  browser journeys and the complete Android gate. The first attempt's database
+  image pull hit registry rate limiting before tests; the rerun passed without
+  changing tests or SQL.
+- Correct-project Vercel Preview `dpl_2PffQrjmLgvzFRUArTo358aNn55M` reached READY
+  for that exact candidate. An earlier automatic blocked status came from the
+  other team/project, which was not modified.
+- This final documentation-only evidence update requires its own green merge
+  checks. Main/VPS/Vercel production and signed APK identities must be checked
+  against the published GitHub release and live health before claiming rollout;
+  the candidate checks and Cloud SQL observation alone do not prove deployment.
 
 ### Shell direction and documentation reconciliation (2026-09-15)
 
