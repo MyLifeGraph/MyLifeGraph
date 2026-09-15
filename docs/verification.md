@@ -48,6 +48,20 @@ local unit/pgTAP evidence is not a claim about a hosted database.
 
 ## Current Verified Baseline
 
+### App-blocking modes release candidate - 2026-09-15
+
+- Application candidate `e293e176431727a2b1397d4449db0251c4c9309c` on
+  `fix/ultra-quick-check-in-guidance` passed all seven jobs in
+  [full CI 34912193606](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/34912193606):
+  source/docs/visual, Flutter and Android JVM/lint, complete FastAPI, web build,
+  fresh migrations/pgTAP, and full browser E2E. PR #22's selected checks also pass.
+- This supersedes the local native dependency-download limitation below.
+  No test or safety guard was weakened for publication. The final follow-up
+  changes this verification document only; application code is identical.
+- No backend, schema, credentials, or production service change is needed.
+  Release APK signing/build and phone acceptance remain separate gates; this
+  CI evidence does not claim installed-device schedule enforcement.
+
 ### Local app-blocking modes follow-up - 2026-09-15
 
 - Working branch `fix/ultra-quick-check-in-guidance`, base `64ac25a`.
