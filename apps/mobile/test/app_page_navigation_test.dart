@@ -10,6 +10,48 @@ import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
 void main() {
+  for (final title in ['Planner', 'Coach']) {
+    testWidgets('$title header stays fixed while Settings opens and returns',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(routes: [
+        GoRoute(path: '/', builder: (_, _) => AppPage(
+          title: title,
+          compactHeader: true,
+          actions: const [Icon(Icons.refresh), Icon(Icons.inbox), Icon(Icons.settings)],
+          children: const [],
+        )),
+        GoRoute(path: '/settings', builder: (_, _) => const AppPage(
+          title: 'Settings', children: [],
+        )),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(
+        theme: AppTheme.dark, routerConfig: router,
+      ));
+      await tester.pumpAndSettle();
+      final titleFinder = find.text(title, skipOffstage: false);
+      final original = tester.getRect(titleFinder);
+      router.push('/settings');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.getRect(titleFinder).size, original.size);
+      expect(find.descendant(
+        of: find.ancestor(of: titleFinder, matching: find.byType(AppPage, skipOffstage: false)),
+        matching: find.byKey(const ValueKey('app-page-back'), skipOffstage: false),
+      ), findsNothing);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('app-page-back')));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(titleFinder), original);
+      expect(find.byKey(const ValueKey('app-page-back')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('compact main headers align Settings at mobile and large text',
       (tester) async {
     tester.view.devicePixelRatio = 1;

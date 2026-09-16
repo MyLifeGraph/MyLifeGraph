@@ -663,6 +663,10 @@ text editing and auxiliary/form routes do not switch main pages.
 Root-page transitions follow the same order in both directions, for navigation
 buttons and swipes: later tabs enter from the right, earlier tabs from the left.
 Auxiliary routes retain normal push/back behavior; reduced motion removes slides.
+While sliding, the incoming root page paints an opaque theme background so
+loading content cannot reveal the previous page. Settled pages retain the shared
+backdrop. Back controls use their own route's history, so opening Settings does
+not reflow the underlying main-page header.
 
 With the development Coach surface enabled, the five shell destinations are
 Today, Insights, Quick actions, Planner, and Coach. Those pages plus Settings

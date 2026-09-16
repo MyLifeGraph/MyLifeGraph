@@ -18,6 +18,10 @@ main-page swipes are deliberate and nested scrollers retain gesture priority.
 Root-page transitions enter from the right for a later destination and from the
 left for an earlier destination, consistently for buttons and swipes. Reduced
 motion removes the slide; auxiliary push/back navigation is unchanged.
+Incoming root pages cover outgoing content with the existing opaque background
+token during the slide, then expose the unchanged shared backdrop once settled.
+Header Back visibility is route-local: opening Settings must not insert a Back
+button into the page underneath or shift its title/actions on return.
 Planner's upward creation shortcut starts only on the bottom navigation;
 ordinary page scrolling must never open the menu.
 

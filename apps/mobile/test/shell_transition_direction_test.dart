@@ -4,9 +4,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
 void main() {
+  testWidgets('incoming tab covers outgoing content while loading', (tester) async {
+    final router = await _pump(tester);
+    addTearDown(router.dispose);
+    await tester.tap(find.text('Insights'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    final body = find.byKey(ValueKey('body-${AppRoutes.insights}'));
+    final surface = find.ancestor(of: body,
+      matching: find.byKey(const ValueKey('shell-transition-surface')));
+    expect(surface, findsOneWidget);
+    expect(tester.widget<ColoredBox>(surface).color,
+      tester.element(body).visualTokens.background);
+    await tester.pumpAndSettle();
+    // Settled pages still expose the app's existing themed backdrop.
+    expect(tester.widget<ColoredBox>(surface).color, Colors.transparent);
+  });
   for (final useSwipe in [false, true]) {
     testWidgets('root transition follows both directions, swipe=$useSwipe', (tester) async {
       final router = await _pump(tester);
@@ -62,13 +80,14 @@ Future<GoRouter> _pump(WidgetTester tester, {bool reducedMotion = false}) async 
   final router = GoRouter(initialLocation: AppRoutes.dashboard, routes: [
     ShellRoute(builder: (context, state, child) => MainShell(currentPath: state.uri.path, child: child), routes: [
       for (final path in [AppRoutes.dashboard, AppRoutes.insights, AppRoutes.planner, AppRoutes.coach, AppRoutes.settings])
-        GoRoute(path: path, builder: (_, _) => Scaffold(body: SizedBox.expand(key: ValueKey('body-$path')))),
+        // Like AppPage, the route itself has no opaque Scaffold background.
+        GoRoute(path: path, builder: (_, _) => SizedBox.expand(key: ValueKey('body-$path'))),
     ]),
   ]);
   await tester.pumpWidget(ProviderScope(overrides: [
     appSurfaceCapabilitiesProvider.overrideWithValue(const AppSurfaceCapabilities(
       isLocalDemo: false, canUseSyncedHabits: true, canUseSyncedExecution: true, canShowCoachSurface: true)),
-  ], child: MaterialApp.router(routerConfig: router,
+  ], child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router,
     builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(disableAnimations: reducedMotion), child: child!))));
   await tester.pumpAndSettle();
   return router;

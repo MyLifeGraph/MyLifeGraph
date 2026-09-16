@@ -54,10 +54,9 @@ class AppPage extends StatelessWidget {
           final scaledBodySize = MediaQuery.textScalerOf(context).scale(16);
           final stackHeaderActions =
               constraints.maxWidth < 600 || scaledBodySize >= 24;
-          final router = GoRouter.maybeOf(context);
-          final hasImperativeHistory =
-              router != null && _hasImperativeHistory(router);
-          final showBack = hasImperativeHistory || _hasNativePageHistory(context) ||
+          // Query this route, not the navigator's top route. A Settings push
+          // must not insert Back into the still-mounted page underneath it.
+          final showBack = (ModalRoute.canPopOf(context) ?? false) ||
               (backFallback != null && showBackForFallback);
 
           final header = Padding(
@@ -268,15 +267,8 @@ class _AppPageHeader extends StatelessWidget {
             tooltip: 'Back',
             onPressed: () {
               final activeRouter = GoRouter.maybeOf(context);
-              if (_hasNativePageHistory(context)) {
+              if (ModalRoute.canPopOf(context) ?? false) {
                 Navigator.of(context).pop();
-              } else if (activeRouter != null && _hasImperativeHistory(activeRouter)) {
-                final navigator = Navigator.maybeOf(context);
-                if (navigator?.canPop() ?? false) {
-                  navigator!.pop();
-                } else if (backFallback != null) {
-                  activeRouter.go(backFallback!);
-                }
               } else if (backFallback != null) {
                 activeRouter?.go(backFallback!);
               }
@@ -381,26 +373,4 @@ class AppPageHeading extends StatelessWidget {
       ],
     );
   }
-}
-
-// Settings integrations use Navigator.push(MaterialPageRoute), not GoRouter.push.
-// Do not confuse a declarative shell/root page with a pushed integration page.
-bool _hasNativePageHistory(BuildContext context) =>
-    ModalRoute.of(context) is MaterialPageRoute &&
-    (Navigator.maybeOf(context)?.canPop() ?? false);
-
-bool _hasImperativeHistory(GoRouter router) {
-  bool containsImperative(Iterable<RouteMatchBase> matches) {
-    for (final match in matches) {
-      if (match is ImperativeRouteMatch) return true;
-      if (match is ShellRouteMatch && containsImperative(match.matches)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  return containsImperative(
-    router.routerDelegate.currentConfiguration.matches,
-  );
 }

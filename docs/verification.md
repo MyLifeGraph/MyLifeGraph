@@ -31,6 +31,22 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Navigation overlap and Settings return regression (2026-09-17)
+
+- Task base: `c7344f84bad036a7a769c5dadacc26ea0e6cfeb5`.
+- Before the fix, new widget regressions reproduced a Planner title doubling
+  its height during Settings push and a spurious Back control on the covered
+  Coach page. The incoming root transition also lacked a covering surface.
+- After the fix, 38 focused Flutter tests passed across route-local Back,
+  root transition direction/surface, shell layout and swipe guards. No golden
+  baselines, content, provider, API or database contracts were changed.
+- These are local widget checks, not installed-APK or new hosted CI evidence.
+  Fresh candidate CI and main promotion remain separate gates.
+- Targeted analysis, documentation and visual source gates passed. The affected
+  selector requests Full for the shared navigation change. Its local Windows
+  run encountered missing `setsid` in the Linux-oriented source harness and was
+  stopped; complete verification must run on the hosted Linux candidate.
+
 ### Documentation and complete release-candidate checks (2026-09-16)
 
 - Candidate base: `7351a41e467195b9ac73b2c50507114c1d9a827e`, working branch

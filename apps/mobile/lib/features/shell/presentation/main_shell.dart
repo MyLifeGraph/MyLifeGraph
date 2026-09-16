@@ -205,7 +205,20 @@ class _ShellRootPageTransitions extends PageTransitionsBuilder {
       key: const ValueKey('shell-directional-transition'),
       position: animation.drive(Tween(begin: Offset(direction, 0), end: Offset.zero)
         .chain(CurveTween(curve: context.motionTokens.curve))),
-      child: child,
+      child: AnimatedBuilder(
+        animation: animation,
+        child: child,
+        builder: (context, child) => ColoredBox(
+          key: const ValueKey('shell-transition-surface'),
+          // AppPage is transparent so the shared backdrop remains visible.
+          // During a slide, cover the outgoing route instead of showing its
+          // content through the incoming page (including its loading state).
+          color: animation.isCompleted
+              ? Colors.transparent
+              : context.visualTokens.background,
+          child: child,
+        ),
+      ),
     );
   }
 }
