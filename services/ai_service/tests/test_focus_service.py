@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 
-from app.models.focus import ManualFocusStartRequest, ScheduledFocusStartRequest
+from app.models.focus import ManualFocusStartRequest, ScheduledFocusStartRequest, FocusTimeCorrectionRequest
 from app.services.focus_service import FocusConflictError, FocusService
 from app.repositories.focus_repository import FocusPersistenceConflict
 
@@ -17,6 +17,15 @@ NOW = datetime(2026, 8, 2, 10, tzinfo=UTC)
 
 
 class Repository:
+    async def correct_time(self, **kwargs):
+        self.calls.append(("correct_time", kwargs))
+        if self.conflict:
+            raise FocusPersistenceConflict("changed")
+        result = _session(active=False, status="completed")
+        result["actual_minutes"] = kwargs["minutes"]
+        result["ended_at"] = (NOW + timedelta(minutes=kwargs["minutes"])).isoformat()
+        return result
+
     def __init__(
         self,
         *,
@@ -55,6 +64,19 @@ class Repository:
             status=kwargs["terminal_status"],
             original_starts_at=self.original_starts_at,
         )
+
+
+def test_correction_preserves_identity_and_rejects_conflicts():
+    request = FocusTimeCorrectionRequest(request_id=BLOCK_ID, expected_updated_at=NOW, minutes=12)
+    repository = Repository()
+    result = asyncio.run(FocusService(repository=repository).correct_time(
+        user_id=USER_ID, session_id=SESSION_ID, request=request))
+    assert result.actual_minutes == 12
+    assert repository.calls[0][1]["user_id"] == USER_ID
+    assert repository.calls[0][1]["expected_updated_at"] == NOW
+    with pytest.raises(FocusConflictError):
+        asyncio.run(FocusService(repository=Repository(conflict=True)).correct_time(
+            user_id=USER_ID, session_id=SESSION_ID, request=request))
 
 
 def _context(original_starts_at: datetime | None = None):

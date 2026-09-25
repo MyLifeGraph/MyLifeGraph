@@ -1,5 +1,7 @@
 import 'dart:ui' as ui;
 
+import '../../../core/theme/app_liquid_glass.dart';
+
 import 'package:flutter/material.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
@@ -371,8 +373,19 @@ class _NavigationMaterial extends StatelessWidget {
     final tokens = context.visualTokens;
     final surfaceMaterial = context.themeEffects.surfaceMaterial;
     final background = surfaceMaterial.navigation(tokens.surface);
-    final foreground = ColoredBox(
+    final glass = Theme.of(context).extension<AppLiquidGlass>();
+    final foreground = glass == null ? ColoredBox(
       color: background,
+      child: RepaintBoundary(child: child),
+    ) : DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        gradient: glass.surfaceGradient(background),
+        border: Border.all(
+          color: tokens.textPrimary.withValues(alpha: 0.18),
+        ),
+        borderRadius: borderRadius,
+      ),
       child: RepaintBoundary(child: child),
     );
     if (surfaceMaterial.navigationBlurSigma <= 0) {

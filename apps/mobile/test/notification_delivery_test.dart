@@ -372,7 +372,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.textContaining('Android push is configured separately'),
+      find.textContaining('Android push is separate'),
       findsNothing,
     );
     await tester.tap(
@@ -380,7 +380,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('Android push is configured separately'),
+      find.textContaining('Android push is separate'),
       findsOneWidget,
     );
 
@@ -452,7 +452,7 @@ void main() {
     await tester.tap(deliveryDetails);
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('Android push is configured separately'),
+      find.textContaining('Android push is separate'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);

@@ -31,6 +31,309 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Product phone motion polish
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`. Eight website
+  tests, docs consistency and whitespace checks passed. Local browser confirmed
+  the visibility-triggered 4.8-second wrapper animation and six-degree hover
+  rotation while the phone retained its separate scroll transform. Presentation
+  inspected on desktop; reduced-motion rules covered structurally.
+- Vercel `dpl_3nUVXKbP6qX91xftA1N1B2GSt39K` reached READY on 2026-09-25,
+  with ten allowlisted public/config files. Public alias loaded the new motion
+  module and wrapper. No copy/theme redesign, app rollout, database changes or
+  Git promotion. Full-repository verification limitations below remain.
+
+### Website scroll-linked product scene
+
+- Task base remains `83f2de0e216e1835bb7d8997682a9d1b7bd06089`. Replaced the
+  walkthrough player and its assets with a CSS-3D phone in the hero. The previous
+  clip was moved to a recoverable local temporary folder, outside the upload.
+  No app, database or VPS changes; no Git push/main update.
+- Seven website tests and docs consistency passed; whitespace check passed.
+  Browser inspected English desktop at 1280px, German Light at 390px and Space
+  at 320px. No horizontal document overflow. Scroll changed the phone's computed
+  3D transform. Reduced-motion and unsupported-timeline fallbacks were inspected
+  in CSS/tested structurally, not claimed as installed-device evidence.
+- Production deployment `dpl_FbnQ76xk8hFtSEqBiXfMM6SsTswm` reached READY on
+  2026-09-25. Nine allowlisted public/config files, no media assets. Live
+  `https://mylifegraph-website.vercel.app/` rendered the phone, exposed its scroll
+  timeline, contained no video player and had no captured console errors.
+  This scoped check does not replace the full-repository gate described below.
+
+### Previous website appearance and walkthrough verification (superseded clip)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; edits limited
+  to the website and its documentation. Seven website Node tests passed,
+  JavaScript syntax check passed, docs consistency and whitespace checks passed.
+  This is not a new full-repository verification result; the existing Windows
+  `setsid` limitation described below remains.
+- Browser checks covered all four appearances, menu selection/dismissal,
+  preference retention on reload, English/German, desktop sidebar and mobile
+  bottom tabs, and responsive Planner/Insights views. Liquid Glass is the fresh
+  default. Synthetic data stays in memory; only language/appearance persist.
+- Eight-second H.264 walkthrough (184245 bytes) uses only synthetic demo
+  screenshots, with no audio or autoplay. Live browser playback reached its
+  eight-second end without a media error. Video section inspected at 390px and
+  1280px; console error log was empty.
+- Vercel deployment `dpl_8yZauqg41FSrXgWa9aod9PSGyw77` reached READY on
+  2026-09-25 at `https://mylifegraph-website.vercel.app/`. Dry-run allowlist and
+  upload contained ten public/config files only. Live HTML and video returned
+  HTTP 200, video MIME was `video/mp4`, and CSP retained `connect-src 'none'`,
+  `form-action 'none'` with `media-src 'self'`. No app deployment, database/VPS
+  mutation, Git push or main update was performed.
+
+### Product website and restored check-in order
+
+- Task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; existing dirty work
+  preserved. Today section tests: 33 passed, including metric-before-buttons
+  geometry. Flutter analysis passed; local frontend restarted. No app rollout.
+- Website: five Node tests passed (translation coverage, matching demo shapes,
+  bounded chart values, no product connection, local assets/CTA allowlist).
+  Local browser exercised toggle/undo, both metrics, empty Sunday, both scripted
+  replies, reset/reload language behavior and keyboard tab navigation. EN/DE
+  layouts inspected, including 320px and 1280px. Narrow document width matched
+  the viewport after clipping decorative light overflow.
+- Dedicated Vercel Production deployment `dpl_5pEVNrbn9xBp1Qyv9db3YGguURft`
+  reached READY on 2026-09-25. Public alias:
+  `https://mylifegraph-website.vercel.app/`. Only six website/config files were
+  uploaded. Public HTML/assets returned 200; final HTTP CSP explicitly contains
+  `connect-src 'none'` and `form-action 'none'`. Live demo rendered and operated
+  without authentication or console errors. Existing Flutter Vercel project,
+  VPS and Supabase were not changed. No Git push or main update.
+- Docs consistency and whitespace checks passed. The affected selector was
+  attempted against the task base; after resolving Git Bash on PATH it selected
+  full verification because of the broader existing dirty checkout and new
+  website paths. The source gate reported missing `setsid` on this Windows
+  host. This is not a full-suite pass; no database reset or migration was run.
+
+### Immediate Today feedback and visible last check-in (local candidate)
+
+- Same base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; no remote changes.
+- Today command/section tests: 46 passed; Today page tests: 16 passed. Covers
+  provisional Task/Habit state before a delayed response, failure rollback,
+  write locks, committed refresh failure, reload-only retry, disposal and direct
+  dated check-in values. Older streak-copy assertions were aligned with the
+  already implemented compact labels; no product wording was reverted.
+- Flutter analysis passed. Local preview restarted and Today visually checked:
+  saved values appear immediately under Last check-in with the historical date.
+  Existing settings such as theme selection already update optimistically;
+  permission/consent and other server-sensitive settings remain confirmed flows.
+- These checks do not prove a full-suite pass, faster server response, live
+  deployment or installed-device behavior.
+
+### Skillset defaults and full-width Compare heading (local candidate)
+
+- Same base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; no remote changes.
+- 62 tests passed across Skillset preferences/card and Insights load states;
+  Flutter analysis, docs, visual and whitespace checks passed. Default selection
+  includes all eleven dimensions; saved/empty selections and owner isolation
+  remain covered. Compare heading spans the card above the description/value row.
+- Local preview restarted. No full-suite or installed-device claim.
+
+### Compare value layout across all windows (local candidate)
+
+- Same base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; presentation only.
+- All 47 Insights load-state tests and Flutter analysis passed. New checks cover
+  the ready correlation badge at 7/14/30/90 days, 360px and normal/200% text.
+  Values use the same compact side-by-side header as insufficient-data states;
+  large text remains stacked. No calculation, wording or data contract changed.
+- No push, migration or installed-APK claim. Prior unrelated work remains intact.
+
+### Compact copy and shared header islands (local candidate)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; prior work
+  preserved. Presentation only; no remote changes or account mutations.
+- 127 focused Flutter tests passed across Personal Learning, notification
+  delivery, calendar import, dashboard sections, header navigation, Insights
+  load states and Settings. Includes explicit banner consent, all four theme
+  islands at narrow widths/large text, and compact sparse Compare geometry.
+- Flutter analysis passed. Copy expectations were updated without removing
+  consent coverage. Personal study pattern wording remains unchanged.
+- Local preview inspected at 390px: sparse Compare status appears alongside
+  its explanation and action. Earlier unrelated golden differences remain;
+  this is not a full-suite, installed-APK or deployment claim.
+
+### Frameless island controls and right-aligned streak (local candidate)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; no remote changes.
+- 51 focused Flutter tests passed (`app_page_navigation`, `dashboard_sections`,
+  `liquid_glass`). Island icons share a surface without individual sheen tiles;
+  circular feedback/focus and touch targets remain. Streak tests check the 8px
+  gap before Info, long counts and large text at narrow widths. An intermediate
+  long-count overflow was corrected before this passing run.
+- Flutter analysis and visual source gate passed. Local preview restarted.
+  No full-suite, new APK or deployment claim; earlier unrelated golden
+  differences and prepared backend migrations are unchanged.
+
+### Glass timeline contrast and header island (local candidate)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; existing work
+  preserved. This slice changes presentation only, with no remote/data changes.
+- 58 focused Flutter tests passed across `liquid_glass`, `app_schedule_day_card`,
+  `app_page_navigation` and `dashboard_sections`. Includes translucent timeline
+  side accents, retained touch targets, narrow/large-text headers and streaks.
+- `flutter analyze --no-pub`, `verify:docs`, `verify:visual` and
+  `git diff --check` passed. No full-suite or installed-device pass is claimed;
+  previously recorded unrelated golden differences remain outside this slice.
+
+### Anchored help and compact streak follow-up (local candidate)
+
+- Same base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; no remote changes.
+- Four focused Flutter suites passed all 64 tests: `app_haptics`,
+  `dashboard_sections`, `daily_capture_controls`, and `coach_page`.
+  Help is anchored without a Close button, outside tap dismisses it, and
+  system Back closes provider help without switching the provider. Streak
+  layout retains narrow/large-text checks. The larger number follows its title.
+- `flutter analyze --no-pub`, `verify:docs`, `verify:visual`, and
+  `git diff --check` passed. The previously documented six unrelated component
+  pixel-baseline differences were not rebaselined or claimed fixed.
+- Local Flutter preview restarted; no account data or backend behavior changed.
+
+### Compact information and local haptics (local candidate)
+
+- Task base remains `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; prior dirty
+  work is preserved. No commit, push, migration or remote configuration change.
+- Four focused Flutter suites passed: 50 tests (`app_haptics`,
+  `dashboard_sections`, `daily_capture_controls`, `settings_page`). Covers
+  default/persisted opt-out, no startup/desktop pulse, throttling, unavailable
+  hardware, long-press help alongside normal actions, settings persistence and
+  0/1/3650-day streaks at 320px with normal/200% type.
+- `flutter analyze --no-pub`, documentation (18 tests), visual source contract
+  and diff-whitespace checks passed. Additional app-bootstrap, accessibility
+  and visual-system run: 27 tests passed, six component-reference pixel goldens
+  differed. These fixtures do not render the newly changed info, streak, haptics
+  or Settings components; their baseline PNGs were not overwritten to mask the
+  broader checkout/rendering difference. This is not an all-green full suite.
+- Restarted the existing cloud-account local Flutter preview and inspected Today
+  at 360px: count and heading share one line, info remains accessible. No real
+  account data was changed. Native vibration still requires a device check.
+
+### Reversible flows and watch sleep (local candidate)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; earlier dirty
+  work is preserved. No push, remote migration, account mutation or deployment.
+- `flutter analyze --no-pub`: passed. Eleven focused Flutter suites: 186 passed
+  (reversible flows, Morning/Evening, notification lifecycle/data/page, deadline
+  plans, Focus controller/page/v2 data source, Health Connect). Added checks cover
+  discard protection, explicit watch acceptance/manual override, consent gating,
+  retry identity, dismissed restore and separate Plan-again preview identity.
+- Five focused Python suites: 64 passed (Focus service/API, notification
+  models/service/API). Changed Python files pass Ruff. `verify:docs` (18 tests),
+  `verify:visual` and `git diff --check` passed.
+- Initial two Flutter failures were old copy expectations; adjusted to current
+  wording without dropping assertions. New test fixtures were corrected to use
+  strict datetime values and a distinct new plan identity.
+- The final Morning-only rerun passed all 10 tests, including saved-value
+  protection and watch sleep at 320px/200% text. That extra viewport check found
+  an action-row overflow, fixed with a responsive second row for `Use times`.
+- Migration `20260925164043_reversible_notification_and_focus_correction.sql`
+  and `supabase/tests/reversible_flows_test.sql` are prepared, not executed:
+  Docker is unavailable locally. SQL runtime, security/concurrency and hosted
+  migration readiness remain unverified; source tests are not database evidence.
+- Android `:app:compileDebugKotlin --offline` could not configure under installed
+  Java 25 (`25.0.2`). Native Health Connect device behavior/build remain unverified.
+  No SDK/dependency replacement was made. No claim of full-suite or live success.
+
+### Focused UI clarity polish (2026-09-25, local candidate)
+
+- Task base: `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; the pre-existing
+  mixed working tree is retained. This slice changes Flutter presentation only.
+- `flutter analyze --no-pub`: passed. Focused suites for Today sections/page,
+  Inbox, Exam Health widgets, Skillset, Insights load states, Liquid Glass and
+  shared schedule cards: 123 passed. The subsequent Insights (including the
+  longer-window action) and Planner run: 111 passed; these runs overlap.
+- Tests cover retained navigation, grouped warning details, visible stale-source
+  warnings, missing values, collapsed latest values, 320px/large text and semantic
+  glass boundaries. Initial test expectations for the old Today order/always-open
+  values were updated to the intended presentation, not by removing assertions.
+- Docs and visual source gates passed. No database/backend changes, remote
+  deployment, new APK, full-suite or installed-Android acceptance is claimed.
+- The existing local cloud frontend was restarted for a read-only browser review;
+  no account records or remote settings were modified.
+
+### Liquid Glass background depth (2026-09-25, local candidate)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; only shared
+  optical paint and material opacity changed, preserving the dirty worktree.
+- **45 focused Flutter tests passed** across Liquid Glass, accessibility,
+  backdrop and shell; Flutter analysis has no issues. Contrast tests include
+  both background light pools composited together, including unframed text.
+  The first contrast check exposed excessive light intensity; reduced light
+  alpha restored the 4.5:1 requirement without weakening the check.
+- Docs/visual guards and diff hygiene pass. Local guest Today and Quick actions
+  were visually checked in the browser after Flutter restart. No new filters,
+  animations, dependencies, deployment or installed-device performance claim.
+
+### Liquid Glass tonal refinement (2026-09-25, local candidate)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; palette and
+  optical paint only. Earlier working-tree work is preserved; no deployment.
+- **52 focused Flutter tests passed** (`liquid_glass`, theme accessibility,
+  theme persistence, Settings and main shell); Flutter analysis has no issues.
+  Contrast, 320px/200% layout, high-contrast fallback and single-navigation-blur
+  checks remain green. A new test bounds content luminance and verifies that
+  lighting is concentrated at the edges instead of washing out the center.
+- Documentation and visual source gates pass. Browser inspection uses local
+  guest data: darker surfaces, muted champagne status colors and the appearance
+  dialog were checked at 390px. No Android performance or release claim.
+
+### Liquid Glass appearance (2026-09-25, local candidate)
+
+- Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; remains uncommitted,
+  with the earlier check-in work preserved. No push or live deployment.
+- **93 focused Flutter tests passed** across appearance persistence/settings,
+  material contrast, shared surfaces, backdrop, navigation and shell. Checks
+  include Glass surface geometry versus Dark, opaque page backing, 320px/200%
+  text, accessible appearance selection, a single navigation blur at mobile
+  and desktop widths, and the opaque/no-blur High Contrast fallback.
+- Flutter analysis, docs/visual source checks and diff hygiene pass. The source
+  gate allows gradient definitions only in the named Liquid Glass theme owner.
+- Dark reference images and the live local Dark view were inspected; new Glass
+  mobile/desktop component renders were reviewed. Local Windows review PNGs are
+  under ignored `.tools/visual-review/`, not cross-platform golden baselines.
+  Existing Dark/Light/Space golden files were not changed; their known Windows
+  platform differences remain excluded from this focused test run.
+- Browser review uses local guest data only: appearance selection survives a
+  Flutter restart/reload; Today, Settings and its appearance dialog were checked
+  at 390px. This is not an Android frame-time benchmark or release claim.
+
+### Check-in reminders, manual backfill and Focus checklist (2026-09-25, local candidate)
+
+- Task base: `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; uncommitted candidate on
+  `codex/checkin-reminders-history-focus`. No push, release or live migration.
+- Final focused Flutter run: **219 passed** across Focus, Morning, Evening,
+  voice review, Capture date picker, push, Planner, Deadline plans and guest
+  widget flows. Covers seven-day date bounds, confirmation, historical saves,
+  no invented historical sleep clocks, explicit voice clock replacement over
+  saved values. Its per-item ritual coverage was superseded by the follow-up below.
+- Follow-up: Focus preparation is now a passive reminder list with one
+  `Ready & start` confirmation. All **23 Focus page tests passed**, including
+  absence of per-item controls, cancel without starting, single confirmation,
+  and same-row actions at 360px. This is local widget evidence only.
+- Focused backend: **226 passed** across reminder rules, push, Capture draft,
+  Planner service and Today overview. Includes default-off check-in categories,
+  quiet hours/window/dedupe/cap behavior, explicit clocks and legacy push retry
+  payload shape. Changed Python files pass Ruff; Flutter analysis is clean;
+  documentation consistency and `git diff --check` pass.
+- Captured-base `verify:affected` selects Full. The Windows run is **not a
+  passing release gate**: the source harness lacks `setsid`, its default Python
+  lacks Ruff, and six existing Linux reference goldens differ under Windows.
+  The additional guest expectation incorrectly linked tonight's Evening plan
+  to the night ending today; it was corrected to expect no such source link and
+  passes in the final focused run. Golden baselines were not changed.
+- New rollback-only `checkin_push_reminders_test.sql` covers consent, private
+  execution, complete settings, old-client preservation, bucket isolation,
+  date dedupe and a Capture saved between reservation and dispatch. It is
+  **not executed here**: no local Docker/WSL database runtime is installed.
+- Native `PushReceiptTest` gains exact Morning/Evening route checks. Gradle
+  stops before tests with the installed Java `25.0.2`; the repository requires
+  Java 21. No native pass, installed-device delivery or migration execution is
+  claimed. Before rollout, run database/native/Linux gates, apply
+  `20260925104758_checkin_push_reminders.sql`, deploy API, and build the APK.
+- The reported intermittent voice extraction issue was not reproduced from
+  an actual transcript. Explicit-clock formats and saved-value replacement are
+  now regression-covered; model extraction still requires the user's review.
+
 ### Navigation overlap and Settings return regression (2026-09-17)
 
 - Task base: `c7344f84bad036a7a769c5dadacc26ea0e6cfeb5`.

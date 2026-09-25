@@ -5,15 +5,11 @@ import '../constants/app_radii.dart';
 import '../constants/app_spacing.dart';
 import '../theme/app_category_visuals.dart';
 import '../theme/app_icons.dart';
+import '../theme/app_liquid_glass.dart';
 import '../theme/app_visual_tokens.dart';
 import 'app_card.dart';
 
-enum AppScheduleItemStatus {
-  notApplicable,
-  open,
-  completed,
-  fullyRated,
-}
+enum AppScheduleItemStatus { notApplicable, open, completed, fullyRated }
 
 class AppScheduleDayItem {
   const AppScheduleDayItem({
@@ -53,6 +49,7 @@ class AppScheduleDayCard extends StatelessWidget {
   final String emptyLabel;
   final ValueChanged<AppScheduleDayItem> onItemTap;
   final bool showDate;
+
   /// Planner-only presentation; default Today cards retain their current style.
   final bool timelineStyle;
 
@@ -85,7 +82,11 @@ class AppScheduleDayCard extends StatelessWidget {
 }
 
 class _ScheduleItemRow extends StatefulWidget {
-  const _ScheduleItemRow({required this.item, required this.onTap, this.timelineStyle = false});
+  const _ScheduleItemRow({
+    required this.item,
+    required this.onTap,
+    this.timelineStyle = false,
+  });
 
   final AppScheduleDayItem item;
   final VoidCallback onTap;
@@ -121,34 +122,47 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
     final appearance = item.category.visual(context);
     final timeline = widget.timelineStyle;
     final tokens = context.visualTokens;
-    final largeTimeline = timeline && MediaQuery.textScalerOf(context).scale(16) >= 24;
-    final splitTime = timeline && MediaQuery.sizeOf(context).width >= 900 &&
-        MediaQuery.textScalerOf(context).scale(16) < 24 && item.detail.length < 25;
+    final glass = Theme.of(context).extension<AppLiquidGlass>() != null;
+    final largeTimeline =
+        timeline && MediaQuery.textScalerOf(context).scale(16) >= 24;
+    final splitTime =
+        timeline &&
+        MediaQuery.sizeOf(context).width >= 900 &&
+        MediaQuery.textScalerOf(context).scale(16) < 24 &&
+        item.detail.length < 25;
     final action = item.actionable ? _activate : null;
     final statusLabel = item.status == null ? null : _statusLabel(item.status!);
-    final semanticsLabel = '${[
-      item.title,
-      item.detail,
-      appearance.label,
-      if (statusLabel != null) statusLabel,
-    ].join('. ')}.';
+    final semanticsLabel =
+        '${[item.title, item.detail, appearance.label, if (statusLabel != null) statusLabel].join('. ')}.';
     return Container(
       key: ValueKey('schedule-day-item-${item.id}'),
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      padding: timeline ? const EdgeInsets.only(left: 3) : null,
-      decoration: timeline ? BoxDecoration(
-        color: appearance.foreground,
-        borderRadius: BorderRadius.circular(AppRadii.sm),
-      ) : null,
+      padding: timeline && !glass ? const EdgeInsets.only(left: 3) : null,
+      decoration: timeline
+          ? BoxDecoration(
+              // Glass must reveal the backdrop, not a solid category fill.
+              color: glass ? null : appearance.foreground,
+              border: glass
+                  ? Border(
+                      left: BorderSide(color: appearance.foreground, width: 3),
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+            )
+          : null,
       child: Material(
         key: ValueKey('schedule-day-item-material-${item.id}'),
-        color: timeline ? tokens.surfaceRaised : appearance.background,
+        color: timeline
+            ? tokens.surfaceRaised.withValues(alpha: glass ? 0.45 : 1)
+            : appearance.background,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
           side: BorderSide(
             color: _showFocusHighlight
                 ? context.visualTokens.focus
-                : timeline ? tokens.outlineSoft : appearance.foreground.withValues(alpha: 0.34),
+                : timeline
+                ? (glass ? Colors.transparent : tokens.outlineSoft)
+                : appearance.foreground.withValues(alpha: 0.34),
             width: _showFocusHighlight ? 2 : 1,
           ),
         ),
@@ -166,8 +180,9 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
             descendantsAreFocusable: false,
             descendantsAreTraversable: false,
             includeFocusSemantics: false,
-            mouseCursor:
-                action == null ? MouseCursor.defer : SystemMouseCursors.click,
+            mouseCursor: action == null
+                ? MouseCursor.defer
+                : SystemMouseCursors.click,
             onShowFocusHighlight: _handleFocusHighlight,
             actions: action == null
                 ? null
@@ -190,77 +205,128 @@ class _ScheduleItemRowState extends State<_ScheduleItemRow> {
                     horizontal: timeline ? AppSpacing.md : AppSpacing.sm,
                     vertical: timeline ? AppSpacing.md : AppSpacing.sm,
                   ),
-                  child: largeTimeline ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Icon(item.icon ?? appearance.icon, size: 22, color: appearance.foreground),
-                        const Spacer(),
-                        if (action != null) Icon(AppIcons.chevronRight, color: appearance.foreground),
-                      ]),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(item.title, style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(item.detail, style: Theme.of(context).textTheme.bodyMedium),
-                      Text(appearance.label, style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: tokens.textSecondary)),
-                    ],
-                  ) : Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (splitTime) ...[
-                        SizedBox(width: 106, child: Text(item.detail,
-                          style: Theme.of(context).textTheme.bodyMedium)),
-                        const SizedBox(width: AppSpacing.sm),
-                      ],
-                      if (item.status case final status?) ...[
-                        _ScheduleStatusBox(
-                          itemId: item.id,
-                          status: status,
-                          completedColor: appearance.foreground,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                      ],
-                      Container(
-                        padding: timeline ? const EdgeInsets.all(10) : EdgeInsets.zero,
-                        decoration: timeline ? BoxDecoration(
-                          color: appearance.background,
-                          borderRadius: BorderRadius.circular(AppRadii.sm),
-                        ) : null,
-                        child: Icon(item.icon ?? appearance.icon,
-                          size: 22, color: appearance.foreground),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
+                  child: largeTimeline
+                      ? Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  item.icon ?? appearance.icon,
+                                  size: 22,
+                                  color: appearance.foreground,
+                                ),
+                                const Spacer(),
+                                if (action != null)
+                                  Icon(
+                                    AppIcons.chevronRight,
+                                    color: appearance.foreground,
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
                             Text(
                               item.title,
-                              style: (splitTime ? Theme.of(context).textTheme.titleLarge
-                                  : Theme.of(context).textTheme.titleMedium)
-                                  ?.copyWith(color: timeline ? tokens.textPrimary : appearance.foreground),
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              splitTime ? appearance.label : '${item.detail} · ${appearance.label}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(color: timeline ? tokens.textSecondary : appearance.foreground),
+                              item.detail,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            Text(
+                              appearance.label,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: tokens.textSecondary),
                             ),
                           ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (splitTime) ...[
+                              SizedBox(
+                                width: 106,
+                                child: Text(
+                                  item.detail,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                            ],
+                            if (item.status case final status?) ...[
+                              _ScheduleStatusBox(
+                                itemId: item.id,
+                                status: status,
+                                completedColor: appearance.foreground,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                            ],
+                            Container(
+                              padding: timeline
+                                  ? const EdgeInsets.all(10)
+                                  : EdgeInsets.zero,
+                              decoration: timeline
+                                  ? BoxDecoration(
+                                      color: appearance.background,
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadii.sm,
+                                      ),
+                                    )
+                                  : null,
+                              child: Icon(
+                                item.icon ?? appearance.icon,
+                                size: 22,
+                                color: appearance.foreground,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.title,
+                                    style:
+                                        (splitTime
+                                                ? Theme.of(
+                                                    context,
+                                                  ).textTheme.titleLarge
+                                                : Theme.of(
+                                                    context,
+                                                  ).textTheme.titleMedium)
+                                            ?.copyWith(
+                                              color: timeline
+                                                  ? tokens.textPrimary
+                                                  : appearance.foreground,
+                                            ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    splitTime
+                                        ? appearance.label
+                                        : '${item.detail} · ${appearance.label}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: timeline
+                                              ? tokens.textSecondary
+                                              : appearance.foreground,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (action != null) ...[
+                              const SizedBox(width: AppSpacing.sm),
+                              Icon(
+                                AppIcons.chevronRight,
+                                color: appearance.foreground,
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
-                      if (action != null) ...[
-                        const SizedBox(width: AppSpacing.sm),
-                        Icon(
-                          AppIcons.chevronRight,
-                          color: appearance.foreground,
-                        ),
-                      ],
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -295,7 +361,8 @@ class _ScheduleStatusBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final checked = status == AppScheduleItemStatus.completed ||
+    final checked =
+        status == AppScheduleItemStatus.completed ||
         status == AppScheduleItemStatus.fullyRated;
     final checkColor = status == AppScheduleItemStatus.fullyRated
         ? completedColor
@@ -312,16 +379,17 @@ class _ScheduleStatusBox extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadii.sm),
           border: Border.all(color: colors.outlineVariant),
         ),
-        child:
-            checked ? Icon(AppIcons.check, size: 19, color: checkColor) : null,
+        child: checked
+            ? Icon(AppIcons.check, size: 19, color: checkColor)
+            : null,
       ),
     );
   }
 }
 
 String _statusLabel(AppScheduleItemStatus status) => switch (status) {
-      AppScheduleItemStatus.notApplicable => 'Completion status not applicable',
-      AppScheduleItemStatus.open => 'Not completed',
-      AppScheduleItemStatus.completed => 'Completed',
-      AppScheduleItemStatus.fullyRated => 'Completed and fully rated',
-    };
+  AppScheduleItemStatus.notApplicable => 'Completion status not applicable',
+  AppScheduleItemStatus.open => 'Not completed',
+  AppScheduleItemStatus.completed => 'Completed',
+  AppScheduleItemStatus.fullyRated => 'Completed and fully rated',
+};

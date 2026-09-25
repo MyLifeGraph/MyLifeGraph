@@ -32,8 +32,9 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
     final state = ref.watch(learningSettingsProvider);
     final controller = ref.read(learningSettingsProvider.notifier);
     final preferences = state.preferences;
-    final pilotEnabled =
-        ref.watch(appConfigProvider).learnedFocusPlanningPilotEnabled;
+    final pilotEnabled = ref
+        .watch(appConfigProvider)
+        .learnedFocusPlanningPilotEnabled;
     if (preferences != null &&
         _draftRevision != preferences.revision &&
         !state.isSaving) {
@@ -49,7 +50,6 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
     if (preferences == null) {
       return AppPage(
         title: 'Personal learning',
-        subtitle: 'Focus reflections and transparent patterns',
         backFallback: AppRoutes.settings,
         children: [
           AppCard(
@@ -69,14 +69,14 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
         ],
       );
     }
-    final enabled = !state.isLoading &&
+    final enabled =
+        !state.isLoading &&
         !state.isSaving &&
         !state.isClearing &&
         !state.requiresExactRetry &&
         !state.reloadRequired;
     return AppPage(
       title: 'Personal learning',
-      subtitle: 'Focus reflections and transparent patterns',
       backFallback: AppRoutes.settings,
       children: [
         AppCard(
@@ -91,9 +91,7 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                     ? (value) => _setDraft(() => _reflectionPrompt = value)
                     : null,
                 title: const Text('Ask after Focus sessions'),
-                subtitle: const Text(
-                  'You can still rate or edit finished sessions from Recent focus.',
-                ),
+                subtitle: const Text('Rate or edit anytime in Recent focus.'),
               ),
               const Divider(),
               SwitchListTile(
@@ -102,19 +100,17 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                 value: _analysis,
                 onChanged: enabled
                     ? (value) => _setDraft(() {
-                          _analysis = value;
-                          if (!value) _learnedPlanning = false;
-                        })
+                        _analysis = value;
+                        if (!value) _learnedPlanning = false;
+                      })
                     : null,
                 title: const Text('Analyze my study patterns'),
-                subtitle: const Text(
-                  'Finds transparent patterns in your saved study activity.',
-                ),
+                subtitle: const Text('Uses saved study activity.'),
               ),
               const AppInfoSectionDisclosure(
-                heading: 'How pattern analysis works',
+                heading: 'How it works',
                 description:
-                    'It compares up to 90 days of Focus reflections and valid sleep captures using fixed calculations you can inspect.',
+                    'It compares up to 90 days of Focus reflections and valid sleep captures using fixed calculations you can inspect. Only mature timing evidence can guide new planning previews.',
                 compactHeading: true,
                 keyPrefix: 'learning-info',
               ),
@@ -126,18 +122,18 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                 onChanged: enabled && _analysis && pilotEnabled
                     ? (value) => _setDraft(() => _learnedPlanning = value)
                     : null,
-                title: const Text('Prefer learned Focus times in new plans'),
+                title: const Text('Use learned Focus times'),
                 subtitle: Text(
                   !pilotEnabled
-                      ? 'This optional Planner pilot is not enabled in this build.'
+                      ? 'Unavailable in this build.'
                       : !_analysis
-                          ? 'Turn on pattern analysis first.'
-                          : 'Uses only mature timing evidence as a soft preference. Existing plans never move.',
+                      ? 'Enable pattern analysis first.'
+                      : 'Optional preference for new plans only. Existing plans never move.',
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'Sleep patterns are explanatory only. They never change your sleep target, capacity, or plan.',
+                'Sleep insights never change targets, capacity or plans.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -193,8 +189,8 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                   onPressed: state.isSaving || state.isClearing
                       ? null
                       : state.requiresExactRetry
-                          ? _retryExact
-                          : controller.load,
+                      ? _retryExact
+                      : controller.load,
                   icon: Icon(
                     state.requiresExactRetry
                         ? AppIcons.replayOutlined
@@ -235,7 +231,9 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
   }
 
   Future<void> _save() async {
-    final saved = await ref.read(learningSettingsProvider.notifier).save(
+    final saved = await ref
+        .read(learningSettingsProvider.notifier)
+        .save(
           focusReflectionPromptEnabled: _reflectionPrompt,
           personalPatternAnalysisEnabled: _analysis,
           learnedFocusPlanningEnabled: _learnedPlanning,
@@ -279,8 +277,9 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
   Future<void> _retryExact() async {
     final retryingClear =
         ref.read(learningSettingsProvider).exactClearRetry != null;
-    final retried =
-        await ref.read(learningSettingsProvider.notifier).retryExact();
+    final retried = await ref
+        .read(learningSettingsProvider.notifier)
+        .retryExact();
     if (!mounted || !retried || !retryingClear) return;
     await _afterFocusReflectionsCleared();
   }

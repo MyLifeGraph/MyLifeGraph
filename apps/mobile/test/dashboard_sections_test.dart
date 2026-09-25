@@ -21,31 +21,68 @@ import 'support/dashboard_full_week_fixture.dart';
 
 void main() {
   for (final width in [390.0, 900.0]) {
-    testWidgets('check-in button styling matches at width $width', (tester) async {
-      await _pump(tester, TodayOverviewSections(
-        snapshot: _snapshot(),
-        canExecute: true,
-        actions: TodayOverviewActions(
-          onAddMorning: () {}, onAddEvening: () {},
-          onOpenPreparationPlan: (_) {}, onStartPreparationFocus: (_) {},
+    testWidgets('check-in button styling matches at width $width', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        TodayOverviewSections(
+          snapshot: _snapshot(),
+          canExecute: true,
+          actions: TodayOverviewActions(
+            onAddMorning: () {},
+            onAddEvening: () {},
+            onOpenPreparationPlan: (_) {},
+            onStartPreparationFocus: (_) {},
+          ),
         ),
-      ), size: Size(width, 1400), theme: AppTheme.dark);
+        size: Size(width, 1400),
+        theme: AppTheme.dark,
+      );
       final morning = find.ancestor(
-        of: find.text(width < 600 ? 'Morning Check-in' : 'Edit Morning check-in'),
+        of: find.text(
+          width < 600 ? 'Morning Check-in' : 'Edit Morning check-in',
+        ),
         matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
       );
       final evening = find.ancestor(
-        of: find.text(width < 600 ? 'Evening Check-in' : 'Add Evening check-in'),
+        of: find.text(
+          width < 600 ? 'Evening Check-in' : 'Add Evening check-in',
+        ),
         matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
       );
-      expect(tester.widget<OutlinedButton>(morning).style!.backgroundColor!
-        .resolve({}), tester.element(morning).visualTokens.successSurface);
-      expect(tester.widget<OutlinedButton>(evening).style!.backgroundColor!
-        .resolve({}), tester.element(evening).visualTokens.attentionSurface);
-      expect(tester.widget<OutlinedButton>(morning).style!.foregroundColor!
-        .resolve({}), tester.element(morning).visualTokens.success);
-      expect(tester.widget<OutlinedButton>(evening).style!.foregroundColor!
-        .resolve({}), tester.element(evening).visualTokens.attention);
+      expect(
+        tester
+            .widget<OutlinedButton>(morning)
+            .style!
+            .backgroundColor!
+            .resolve({}),
+        tester.element(morning).visualTokens.successSurface,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(evening)
+            .style!
+            .backgroundColor!
+            .resolve({}),
+        tester.element(evening).visualTokens.attentionSurface,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(morning)
+            .style!
+            .foregroundColor!
+            .resolve({}),
+        tester.element(morning).visualTokens.success,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(evening)
+            .style!
+            .foregroundColor!
+            .resolve({}),
+        tester.element(evening).visualTokens.attention,
+      );
       if (width < 600) {
         expect(find.text('Done'), findsOneWidget);
         expect(find.text('To do'), findsOneWidget);
@@ -54,160 +91,160 @@ void main() {
     });
   }
 
-  test('Dashboard page composes section APIs instead of owning their widgets',
-      () {
-    final source = File(
-      'lib/features/dashboard/presentation/pages/dashboard_page.dart',
-    ).readAsStringSync();
+  test(
+    'Dashboard page composes section APIs instead of owning their widgets',
+    () {
+      final source = File(
+        'lib/features/dashboard/presentation/pages/dashboard_page.dart',
+      ).readAsStringSync();
 
-    expect(source, contains('TodayOverviewSections('));
-    expect(source, contains('TodayTaskSections('));
-    expect(source, contains('TodayHabitSection('));
-    expect(source, contains('DashboardSupportingSections('));
-    expect(source, isNot(contains('DashboardMoreSection(')));
-    expect(source, isNot(contains('class _TodayAgenda')));
-    expect(source, isNot(contains('class _TaskEditorSheet')));
-    expect(source, isNot(contains('class _RecommendationsSection')));
+      expect(source, contains('TodayOverviewSections('));
+      expect(source, contains('TodayTaskSections('));
+      expect(source, contains('TodayHabitSection('));
+      expect(source, contains('DashboardSupportingSections('));
+      expect(source, isNot(contains('DashboardMoreSection(')));
+      expect(source, isNot(contains('class _TodayAgenda')));
+      expect(source, isNot(contains('class _TaskEditorSheet')));
+      expect(source, isNot(contains('class _RecommendationsSection')));
 
-    final homeConstructor = RegExp(
-      r'const _DashboardHome\(\{(?<arguments>.*?)\}\);',
-      dotAll: true,
-    ).firstMatch(source);
-    expect(homeConstructor, isNotNull);
-    expect(
-      RegExp(r'required this\.')
-          .allMatches(homeConstructor!.namedGroup('arguments')!)
-          .length,
-      lessThanOrEqualTo(14),
-    );
-  });
+      final homeConstructor = RegExp(
+        r'const _DashboardHome\(\{(?<arguments>.*?)\}\);',
+        dotAll: true,
+      ).firstMatch(source);
+      expect(homeConstructor, isNotNull);
+      expect(
+        RegExp(
+          r'required this\.',
+        ).allMatches(homeConstructor!.namedGroup('arguments')!).length,
+        lessThanOrEqualTo(14),
+      );
+    },
+  );
 
   testWidgets(
-      'Today information keeps a 24px frame in an exact 44px target with semantics, keyboard, and bounded pointer operation',
-      (tester) async {
-    final semantics = tester.ensureSemantics();
-    const description = 'A compact explanation for this Today section.';
-    await _pump(
-      tester,
-      TodayInfoDisclosure(
-        topic: 'Test section',
-        description: description,
-        headerBuilder: (context, infoButton) => Row(
-          children: [
-            const Text('Test section'),
-            infoButton,
-          ],
+    'Today information keeps a 24px frame in an exact 44px target with semantics, keyboard, and bounded pointer operation',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      const description = 'A compact explanation for this Today section.';
+      await _pump(
+        tester,
+        TodayInfoDisclosure(
+          topic: 'Test section',
+          description: description,
+          headerBuilder: (context, infoButton) =>
+              Row(children: [const Text('Test section'), infoButton]),
         ),
-      ),
-    );
+      );
 
-    final target = find.byKey(
-      const ValueKey('today-info-control-Test section'),
-    );
-    final frame = find.descendant(
-      of: target,
-      matching: find.byType(AnimatedContainer),
-    );
-    final iconFrame = find.byKey(
-      const ValueKey('today-info-icon-Test section'),
-    );
-    expect(find.text(description), findsNothing);
-    expect(find.bySemanticsLabel(description), findsNothing);
-    expect(tester.getSize(target), const Size.square(44));
-    expect(tester.getSize(frame), const Size.square(24));
-    expect(tester.getSize(iconFrame), const Size.square(20));
-    expect(tester.getRect(frame).center, tester.getRect(target).center);
-    expect(tester.getRect(iconFrame).center, tester.getRect(frame).center);
-    expect(
-      find.byTooltip('Show information about Test section'),
-      findsOneWidget,
-    );
-    expect(
-      tester.getSemantics(
-        find.bySemanticsLabel('Show information about Test section'),
-      ),
-      isSemantics(
-        label: 'Show information about Test section',
-        isButton: true,
-        hasTapAction: true,
-        hasExpandedState: true,
-        isExpanded: false,
-      ),
-    );
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-
-    expect(find.text(description), findsOneWidget);
-    expect(
-      tester.getSemantics(
-        find.bySemanticsLabel('Hide information about Test section'),
-      ),
-      isSemantics(
-        label: 'Hide information about Test section',
-        isButton: true,
-        hasTapAction: true,
-        hasExpandedState: true,
-        isExpanded: true,
-      ),
-    );
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-    expect(find.text(description), findsNothing);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.space);
-    await tester.pumpAndSettle();
-    expect(find.text(description), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.space);
-    await tester.pumpAndSettle();
-    expect(find.text(description), findsNothing);
-
-    var targetRect = tester.getRect(target);
-    await tester.tapAt(Offset(targetRect.left + 1, targetRect.center.dy));
-    await tester.pumpAndSettle();
-    expect(find.text(description), findsOneWidget);
-
-    await tester.tap(target);
-    await tester.pumpAndSettle();
-    expect(find.text(description), findsNothing);
-
-    targetRect = tester.getRect(target);
-    await tester.tapAt(Offset(targetRect.center.dx, targetRect.top - 1));
-    await tester.pumpAndSettle();
-    expect(find.text(description), findsNothing);
-    semantics.dispose();
-  });
-
-  testWidgets('Today information uses zero-duration state motion when reduced',
-      (tester) async {
-    const description = 'Reduced-motion information.';
-    await _pump(
-      tester,
-      TodayInfoDisclosure(
-        topic: 'Reduced motion',
-        description: description,
-        headerBuilder: (context, infoButton) => Row(
-          children: [const Text('Reduced motion'), infoButton],
+      final target = find.byKey(
+        const ValueKey('today-info-control-Test section'),
+      );
+      final frame = find.descendant(
+        of: target,
+        matching: find.byType(AnimatedContainer),
+      );
+      final iconFrame = find.byKey(
+        const ValueKey('today-info-icon-Test section'),
+      );
+      expect(find.text(description), findsNothing);
+      expect(find.bySemanticsLabel(description), findsNothing);
+      expect(tester.getSize(target), const Size.square(44));
+      expect(tester.getSize(frame), const Size.square(24));
+      expect(tester.getSize(iconFrame), const Size.square(20));
+      expect(tester.getRect(frame).center, tester.getRect(target).center);
+      expect(tester.getRect(iconFrame).center, tester.getRect(frame).center);
+      expect(
+        find.byTooltip('Show information about Test section'),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSemantics(
+          find.bySemanticsLabel('Show information about Test section'),
         ),
-      ),
-      disableAnimations: true,
-    );
+        isSemantics(
+          label: 'Show information about Test section',
+          isButton: true,
+          hasTapAction: true,
+          hasExpandedState: true,
+          isExpanded: false,
+        ),
+      );
 
-    final switcher = tester.widget<AnimatedSwitcher>(
-      find.descendant(
-        of: find.byType(TodayInfoDisclosure),
-        matching: find.byType(AnimatedSwitcher),
-      ),
-    );
-    expect(switcher.duration, Duration.zero);
-    await tester.tap(
-      find.byKey(const ValueKey('today-info-control-Reduced motion')),
-    );
-    await tester.pump();
-    expect(find.text(description), findsOneWidget);
-  });
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(find.text(description), findsOneWidget);
+      expect(
+        tester.getSemantics(
+          find.bySemanticsLabel('Hide information about Test section'),
+        ),
+        isSemantics(
+          label: 'Hide information about Test section',
+          isButton: true,
+          hasTapAction: true,
+          hasExpandedState: true,
+          isExpanded: true,
+        ),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text(description), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(find.text(description), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(find.text(description), findsNothing);
+
+      var targetRect = tester.getRect(target);
+      await tester.tapAt(Offset(targetRect.left + 1, targetRect.center.dy));
+      await tester.pumpAndSettle();
+      expect(find.text(description), findsOneWidget);
+
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      expect(find.text(description), findsNothing);
+
+      targetRect = tester.getRect(target);
+      await tester.tapAt(Offset(targetRect.center.dx, targetRect.top - 1));
+      await tester.pumpAndSettle();
+      expect(find.text(description), findsNothing);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'Today information uses zero-duration state motion when reduced',
+    (tester) async {
+      const description = 'Reduced-motion information.';
+      await _pump(
+        tester,
+        TodayInfoDisclosure(
+          topic: 'Reduced motion',
+          description: description,
+          headerBuilder: (context, infoButton) =>
+              Row(children: [const Text('Reduced motion'), infoButton]),
+        ),
+        disableAnimations: true,
+      );
+
+      final switcher = tester.widget<AnimatedSwitcher>(
+        find.descendant(
+          of: find.byType(TodayInfoDisclosure),
+          matching: find.byType(AnimatedSwitcher),
+        ),
+      );
+      expect(switcher.duration, Duration.zero);
+      await tester.tap(
+        find.byKey(const ValueKey('today-info-control-Reduced motion')),
+      );
+      await tester.pump();
+      expect(find.text(description), findsOneWidget);
+    },
+  );
 
   for (final theme in <String, ThemeData>{
     'Dark': AppTheme.dark,
@@ -215,88 +252,91 @@ void main() {
     'Space': AppTheme.space,
   }.entries) {
     testWidgets(
-        '${theme.key} Today title, info, and action wrap at 320px and 200% text',
-        (tester) async {
+      '${theme.key} Today title, info, and action wrap at 320px and 200% text',
+      (tester) async {
+        await _pump(
+          tester,
+          const DashboardSectionTitle(
+            title: 'A deliberately long Today section title',
+            subtitle: 'Responsive explanatory copy stays readable.',
+            trailing: FilledButton(
+              onPressed: null,
+              child: Text('Planner action'),
+            ),
+          ),
+          size: const Size(320, 600),
+          textScaler: const TextScaler.linear(2),
+          theme: theme.value,
+        );
+
+        await tester.tap(
+          find.byKey(
+            const ValueKey(
+              'today-info-control-A deliberately long Today section title',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Responsive explanatory copy stays readable.'),
+          findsOneWidget,
+        );
+        expect(find.text('Planner action'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'long accordion title, information control, and chevron fit at 320px and 200% text',
+    (tester) async {
+      var accordionToggles = 0;
       await _pump(
         tester,
-        const DashboardSectionTitle(
-          title: 'A deliberately long Today section title',
-          subtitle: 'Responsive explanatory copy stays readable.',
-          trailing: FilledButton(
-            onPressed: null,
-            child: Text('Planner action'),
-          ),
+        DashboardInlineExpansionCard(
+          title: 'Long supporting section details',
+          subtitle: 'Independent supporting information remains readable.',
+          expanded: false,
+          onToggle: () => accordionToggles += 1,
+          child: const Text('Lazy content'),
         ),
         size: const Size(320, 600),
         textScaler: const TextScaler.linear(2),
-        theme: theme.value,
+        theme: AppTheme.space,
       );
 
       await tester.tap(
         find.byKey(
-          const ValueKey(
-            'today-info-control-A deliberately long Today section title',
-          ),
+          const ValueKey('today-info-control-Long supporting section details'),
         ),
       );
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Responsive explanatory copy stays readable.'),
+        find.text('Independent supporting information remains readable.'),
         findsOneWidget,
       );
-      expect(find.text('Planner action'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  }
+      expect(find.text('Lazy content'), findsNothing);
+      expect(accordionToggles, 0);
 
-  testWidgets(
-      'long accordion title, information control, and chevron fit at 320px and 200% text',
-      (tester) async {
-    var accordionToggles = 0;
-    await _pump(
-      tester,
-      DashboardInlineExpansionCard(
-        title: 'Long supporting section details',
-        subtitle: 'Independent supporting information remains readable.',
-        expanded: false,
-        onToggle: () => accordionToggles += 1,
-        child: const Text('Lazy content'),
-      ),
-      size: const Size(320, 600),
-      textScaler: const TextScaler.linear(2),
-      theme: AppTheme.space,
-    );
-
-    await tester.tap(
-      find.byKey(
-        const ValueKey('today-info-control-Long supporting section details'),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Independent supporting information remains readable.'),
-      findsOneWidget,
-    );
-    expect(find.text('Lazy content'), findsNothing);
-    expect(accordionToggles, 0);
-
-    await tester.tap(
-      find.byKey(
-        const ValueKey(
-          'dashboard-expansion-control-Long supporting section details',
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'dashboard-expansion-control-Long supporting section details',
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(accordionToggles, 1);
-    expect(find.text('Lazy content'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+      );
+      await tester.pumpAndSettle();
+      expect(accordionToggles, 1);
+      expect(find.text('Lazy content'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('accordion keyboard action shows a two-pixel focus ring',
-      (tester) async {
+  testWidgets('accordion keyboard action shows a two-pixel focus ring', (
+    tester,
+  ) async {
     var accordionToggles = 0;
     await _pump(
       tester,
@@ -328,59 +368,126 @@ void main() {
     expect(find.text('Independent information.'), findsNothing);
   });
 
-  testWidgets('Today schedule limits active rows and keeps completed actions accessible', (tester) async {
-    tester.view.physicalSize = const Size(390, 1800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    String? openedPlan;
-    String? startedBlock;
-    await _pump(tester, TodayOverviewSections(
-      snapshot: _snapshot(timeline: [
-        for (var i = 0; i < 6; i++)
-          TodayTimelineItem(
-            kind: TodayTimelineKind.preparation, id: 'block-$i',
-            blockId: 'block-$i', planId: 'plan-$i', title: 'Preparation $i',
-            allDay: false, startsAt: DateTime(2026, 7, 31, 9 + i),
-            endsAt: DateTime(2026, 7, 31, 10 + i),
-            state: i == 0 ? 'completed' : 'upcoming', plannedMinutes: 60,
+  testWidgets(
+    'Today schedule limits active rows and keeps completed actions accessible',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      String? openedPlan;
+      String? startedBlock;
+      await _pump(
+        tester,
+        TodayOverviewSections(
+          snapshot: _snapshot(
+            timeline: [
+              for (var i = 0; i < 6; i++)
+                TodayTimelineItem(
+                  kind: TodayTimelineKind.preparation,
+                  id: 'block-$i',
+                  blockId: 'block-$i',
+                  planId: 'plan-$i',
+                  title: 'Preparation $i',
+                  allDay: false,
+                  startsAt: DateTime(2026, 7, 31, 9 + i),
+                  endsAt: DateTime(2026, 7, 31, 10 + i),
+                  state: i == 0 ? 'completed' : 'upcoming',
+                  plannedMinutes: 60,
+                ),
+              TodayTimelineItem(
+                kind: TodayTimelineKind.calendarEvent,
+                id: 'past-event',
+                title: 'Elapsed calendar event',
+                allDay: false,
+                state: 'ended',
+              ),
+              TodayTimelineItem(
+                kind: TodayTimelineKind.focusSession,
+                id: 'abandoned',
+                title: 'Abandoned Focus',
+                allDay: false,
+                state: 'abandoned',
+              ),
+            ],
           ),
-        TodayTimelineItem(kind: TodayTimelineKind.calendarEvent, id: 'past-event',
-          title: 'Elapsed calendar event', allDay: false, state: 'ended'),
-        TodayTimelineItem(kind: TodayTimelineKind.focusSession, id: 'abandoned',
-          title: 'Abandoned Focus', allDay: false, state: 'abandoned'),
-      ]),
-      canExecute: true,
-      actions: TodayOverviewActions(onAddEvening: () {}, onAddMorning: () {},
-        onOpenPreparationPlan: (id) => openedPlan = id,
-        onStartPreparationFocus: (id) => startedBlock = id),
-    ));
-    expect(find.text('Preparation 0'), findsNothing);
-    expect(find.text('Preparation 3'), findsOneWidget);
-    expect(find.text('Preparation 4'), findsNothing);
-    final planIcon = find.byTooltip('Open plan').first;
-    final focusIcon = find.byTooltip('Start focus').first;
-    expect(tester.getCenter(planIcon).dy, tester.getCenter(focusIcon).dy);
-    await tester.tap(focusIcon);
-    expect(startedBlock, 'block-1');
-    await tester.ensureVisible(find.text('Show all (7)'));
-    await tester.tap(find.text('Show all (7)'));
-    await tester.pumpAndSettle();
-    expect(find.text('Preparation 5'), findsOneWidget);
-    expect(find.text('Elapsed calendar event'), findsOneWidget);
-    expect(find.text('Abandoned Focus'), findsOneWidget);
-    await tester.ensureVisible(find.text('Completed (1)'));
-    await tester.tap(find.text('Completed (1)'));
-    await tester.pumpAndSettle();
-    expect(find.text('Preparation 0'), findsOneWidget);
-    await tester.ensureVisible(find.byTooltip('Open plan').last);
-    await tester.tap(find.byTooltip('Open plan').last);
-    expect(openedPlan, 'plan-0');
-    expect(tester.takeException(), isNull);
-  });
+          canExecute: true,
+          actions: TodayOverviewActions(
+            onAddEvening: () {},
+            onAddMorning: () {},
+            onOpenPreparationPlan: (id) => openedPlan = id,
+            onStartPreparationFocus: (id) => startedBlock = id,
+          ),
+        ),
+      );
+      expect(find.text('Preparation 0'), findsNothing);
+      expect(find.text('Preparation 3'), findsOneWidget);
+      expect(find.text('Preparation 4'), findsNothing);
+      final planIcon = find.byTooltip('Open plan').first;
+      final focusIcon = find.byTooltip('Start focus').first;
+      expect(tester.getCenter(planIcon).dy, tester.getCenter(focusIcon).dy);
+      await tester.tap(focusIcon);
+      expect(startedBlock, 'block-1');
+      await tester.ensureVisible(find.text('Show all (7)'));
+      await tester.tap(find.text('Show all (7)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Preparation 5'), findsOneWidget);
+      expect(find.text('Elapsed calendar event'), findsOneWidget);
+      expect(find.text('Abandoned Focus'), findsOneWidget);
+      await tester.ensureVisible(find.text('Completed (1)'));
+      await tester.tap(find.text('Completed (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Preparation 0'), findsOneWidget);
+      await tester.ensureVisible(find.byTooltip('Open plan').last);
+      await tester.tap(find.byTooltip('Open plan').last);
+      expect(openedPlan, 'plan-0');
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('Today summary owns capture, progress, and agenda callbacks',
-      (tester) async {
+  for (final days in [0, 1, 3650]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets('streak $days days fits 320px at text scale $scale', (
+        tester,
+      ) async {
+        await _pump(
+          tester,
+          TodayOverviewSections(
+            snapshot: _snapshot(streak: days),
+            canExecute: true,
+            actions: TodayOverviewActions(
+              onAddEvening: () {},
+              onAddMorning: () {},
+              onOpenPreparationPlan: (_) {},
+              onStartPreparationFocus: (_) {},
+            ),
+          ),
+          size: const Size(320, 1200),
+          textScaler: TextScaler.linear(scale),
+          theme: AppTheme.dark,
+        );
+        final count = find.text('$days ${days == 1 ? 'day' : 'days'}');
+        expect(count, findsOneWidget);
+        expect(find.text('Streak'), findsOneWidget);
+        expect(find.textContaining('consecutive'), findsNothing);
+        if (scale == 1) {
+          final info = find.byTooltip('Show information about Check-in streak');
+          expect(tester.getRect(info).left - tester.getRect(count).right, 8);
+          expect(
+            (tester.getCenter(find.text('Streak')).dy -
+                    tester.getCenter(count).dy)
+                .abs(),
+            lessThan(1),
+          );
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('Today summary owns capture, progress, and agenda callbacks', (
+    tester,
+  ) async {
     var morningCalls = 0;
     String? openedPlan;
     await _pump(
@@ -424,12 +531,25 @@ void main() {
     expect(find.text('Check-in streak'), findsOneWidget);
     expect(find.text("Today's progress"), findsOneWidget);
     expect(find.text("Today's schedule"), findsOneWidget);
-    expect(find.text('Beat yesterday'), findsOneWidget);
+    expect(find.text('Last check-in'), findsOneWidget);
+    expect(find.text('(Jul 30, 2026)'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('beat-yesterday')),
+        matching: find.byType(ExpansionTile),
+      ),
+      findsNothing,
+    );
     expect(find.textContaining('Mood'), findsOneWidget);
     expect(find.textContaining('Energy'), findsOneWidget);
     expect(find.textContaining('Sleep duration'), findsOneWidget);
     expect(find.textContaining('Sleep quality'), findsOneWidget);
     expect(find.textContaining('Stress'), findsOneWidget);
+
+    expect(
+      tester.getBottomLeft(find.byKey(const ValueKey('beat-yesterday'))).dy,
+      lessThan(tester.getTopLeft(find.text('Edit Morning check-in')).dy),
+    );
 
     await tester.tap(find.text('Edit Morning check-in'));
     await tester.tap(find.byTooltip('Open plan'));
@@ -439,59 +559,61 @@ void main() {
   });
 
   testWidgets(
-      'streak and progress failures plus latest-check-in loading stay visible without opening information',
-      (tester) async {
-    const current = TodaySourceState(status: TodaySourceStatus.current);
-    await _pump(
-      tester,
-      TodayOverviewSections(
-        snapshot: _snapshot(
-          progress: null,
-          sourceStates: const TodaySourceStates(
-            checkIns: TodaySourceState(
-              status: TodaySourceStatus.unavailable,
-              message: 'Saved check-ins are temporarily unavailable.',
+    'streak and progress failures plus latest-check-in loading stay visible without opening information',
+    (tester) async {
+      const current = TodaySourceState(status: TodaySourceStatus.current);
+      await _pump(
+        tester,
+        TodayOverviewSections(
+          snapshot: _snapshot(
+            progress: null,
+            sourceStates: const TodaySourceStates(
+              checkIns: TodaySourceState(
+                status: TodaySourceStatus.unavailable,
+                message: 'Saved check-ins are temporarily unavailable.',
+              ),
+              tasks: current,
+              habits: current,
+              setupCommitments: current,
+              preparation: current,
+              calendarEvents: current,
+              focusSessions: current,
+              planner: current,
             ),
-            tasks: current,
-            habits: current,
-            setupCommitments: current,
-            preparation: current,
-            calendarEvents: current,
-            focusSessions: current,
-            planner: current,
+          ),
+          canExecute: true,
+          latestCheckIn: const AsyncLoading<DashboardCheckIn?>(),
+          actions: TodayOverviewActions(
+            onAddEvening: () {},
+            onAddMorning: () {},
+            onOpenPreparationPlan: (_) {},
+            onStartPreparationFocus: (_) {},
           ),
         ),
-        canExecute: true,
-        latestCheckIn: const AsyncLoading<DashboardCheckIn?>(),
-        actions: TodayOverviewActions(
-          onAddEvening: () {},
-          onAddMorning: () {},
-          onOpenPreparationPlan: (_) {},
-          onStartPreparationFocus: (_) {},
+        settle: false,
+      );
+
+      expect(find.text('Unavailable'), findsOneWidget);
+      expect(
+        find.text('Saved check-ins are temporarily unavailable.'),
+        findsOneWidget,
+      );
+      expect(find.text('Loading latest check-in…'), findsOneWidget);
+      expect(find.text('Progress unavailable'), findsOneWidget);
+      expect(find.text('Edit Morning check-in'), findsOneWidget);
+      expect(find.text('Add Evening check-in'), findsOneWidget);
+      expect(
+        find.text(
+          'Both check-ins count as one day. Complete them anytime today; your streak stays until the day ends.',
         ),
-      ),
-      settle: false,
-    );
+        findsNothing,
+      );
+    },
+  );
 
-    expect(find.text('Streak unavailable'), findsOneWidget);
-    expect(
-      find.text('Saved check-ins are temporarily unavailable.'),
-      findsOneWidget,
-    );
-    expect(find.text('Loading your latest saved check-in…'), findsOneWidget);
-    expect(find.text('Progress unavailable'), findsOneWidget);
-    expect(find.text('Edit Morning check-in'), findsOneWidget);
-    expect(find.text('Add Evening check-in'), findsOneWidget);
-    expect(
-      find.text(
-        'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
-      ),
-      findsNothing,
-    );
-  });
-
-  testWidgets('whole missed preparation row opens its exact scheduled block',
-      (tester) async {
+  testWidgets('whole missed preparation row opens its exact scheduled block', (
+    tester,
+  ) async {
     String? startedBlock;
     await _pump(
       tester,
@@ -527,8 +649,9 @@ void main() {
     expect(find.byTooltip('Start focus'), findsOneWidget);
   });
 
-  testWidgets('whole Focus and Task rows navigate with exact identities',
-      (tester) async {
+  testWidgets('whole Focus and Task rows navigate with exact identities', (
+    tester,
+  ) async {
     final router = GoRouter(
       routes: [
         GoRoute(
@@ -572,9 +695,8 @@ void main() {
         ),
         GoRoute(
           path: AppRoutes.deepWork,
-          builder: (context, state) => Scaffold(
-            body: Text(state.uri.queryParameters.toString()),
-          ),
+          builder: (context, state) =>
+              Scaffold(body: Text(state.uri.queryParameters.toString())),
         ),
       ],
     );
@@ -605,52 +727,82 @@ void main() {
   });
 
   for (final width in [390.0, 1100.0]) {
-    testWidgets('All tasks use compact completion and keep restore at $width',
-        (tester) async {
+    testWidgets('All tasks use compact completion and keep restore at $width', (
+      tester,
+    ) async {
       PlanItem task(String id, String status) => PlanItem(
-        id: id, title: id, priority: 'high',
-        isCompleted: status == 'done', status: status,
+        id: id,
+        title: id,
+        priority: 'high',
+        isCompleted: status == 'done',
+        status: status,
       );
       var completed = '';
       var focused = '';
       var plannerOpened = false;
       final restored = <String>[];
-      await _pump(tester, TodayTaskSections(
-        snapshot: _snapshot(todayTasks: const [], allTasks: [
-          task('Open task', 'todo'),
-          task('Finished task', 'done'),
-          task('Cancelled task', 'cancelled'),
-        ]),
-        commands: TodayCommandState.initial(),
-        canExecute: true,
-        visibility: const TodayTaskVisibility(
-          showAll: true, showCompleted: true, showCancelled: true,
+      await _pump(
+        tester,
+        TodayTaskSections(
+          snapshot: _snapshot(
+            todayTasks: const [],
+            allTasks: [
+              task('Open task', 'todo'),
+              task('Finished task', 'done'),
+              task('Cancelled task', 'cancelled'),
+            ],
+          ),
+          commands: TodayCommandState.initial(),
+          canExecute: true,
+          visibility: const TodayTaskVisibility(
+            showAll: true,
+            showCompleted: true,
+            showCancelled: true,
+          ),
+          actions: TodayTaskActions(
+            onOpenPlanner: () => plannerOpened = true,
+            onComplete: (task) => completed = task.id,
+            onRestore: (task) => restored.add(task.id),
+            onStartFocus: (task) => focused = task.id,
+            onToggleAll: () {},
+            onToggleCompleted: () {},
+            onToggleCancelled: () {},
+          ),
         ),
-        actions: TodayTaskActions(
-          onOpenPlanner: () => plannerOpened = true,
-          onComplete: (task) => completed = task.id,
-          onRestore: (task) => restored.add(task.id),
-          onStartFocus: (task) => focused = task.id,
-          onToggleAll: () {}, onToggleCompleted: () {}, onToggleCancelled: () {},
-        ),
-      ), size: Size(width, 1600));
+        size: Size(width, 1600),
+      );
       final group = find.byKey(const ValueKey('today-all-tasks'));
-      expect(find.descendant(of: group, matching: find.text('All tasks')),
-          findsOneWidget);
-      expect(find.descendant(of: group, matching: find.text('Tasks')),
-          findsNothing);
+      expect(
+        find.descendant(of: group, matching: find.text('All tasks')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: group, matching: find.text('Tasks')),
+        findsNothing,
+      );
       final complete = find.byTooltip('Complete task Open task');
-      expect(find.descendant(of: complete,
-          matching: find.byIcon(AppIcons.radioButtonUnchecked)), findsOneWidget);
-      expect(tester.getCenter(complete).dx,
-          lessThan(tester.getTopLeft(find.text('Open task')).dx));
-      expect(find.descendant(of: group, matching: find.byIcon(AppIcons.check)), findsNothing);
+      expect(
+        find.descendant(
+          of: complete,
+          matching: find.byIcon(AppIcons.radioButtonUnchecked),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getCenter(complete).dx,
+        lessThan(tester.getTopLeft(find.text('Open task')).dx),
+      );
+      expect(
+        find.descendant(of: group, matching: find.byIcon(AppIcons.check)),
+        findsNothing,
+      );
       await tester.tap(complete);
       await tester.tap(find.byTooltip('Focus on Open task'));
       await tester.tap(find.byTooltip('Restore task Finished task'));
       await tester.tap(find.byTooltip('Restore task Cancelled task'));
-      await tester.tap(find.descendant(of: group,
-          matching: find.byTooltip('Open Planner')));
+      await tester.tap(
+        find.descendant(of: group, matching: find.byTooltip('Open Planner')),
+      );
       expect(completed, 'Open task');
       expect(focused, 'Open task');
       expect(restored, ['Finished task', 'Cancelled task']);
@@ -659,8 +811,9 @@ void main() {
     });
   }
 
-  testWidgets('Task sections expose only their typed action boundary',
-      (tester) async {
+  testWidgets('Task sections expose only their typed action boundary', (
+    tester,
+  ) async {
     var completedTaskId = '';
     var focusedTaskId = '';
     var toggleAllCalls = 0;
@@ -695,26 +848,37 @@ void main() {
     );
 
     final openPlanner = find.byTooltip('Open Planner').first;
-    expect(tester.getCenter(openPlanner).dx,
-      greaterThan(tester.getTopRight(find.text('Tasks due today')).dx));
+    expect(
+      tester.getCenter(openPlanner).dx,
+      greaterThan(tester.getTopRight(find.text('Today & overdue')).dx),
+    );
     final complete = find.byTooltip('Complete task Write summary');
-    expect(find.descendant(of: complete,
-      matching: find.byIcon(AppIcons.radioButtonUnchecked)), findsOneWidget);
-    expect(tester.getCenter(complete).dx,
-      lessThan(tester.getTopLeft(find.text('Write summary')).dx));
+    expect(
+      find.descendant(
+        of: complete,
+        matching: find.byIcon(AppIcons.radioButtonUnchecked),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getCenter(complete).dx,
+      lessThan(tester.getTopLeft(find.text('Write summary')).dx),
+    );
     expect(find.byIcon(AppIcons.check), findsNothing);
     await tester.tap(find.byTooltip('Focus on Write summary'));
     expect(focusedTaskId, 'task-1');
     await tester.tap(complete);
-    await tester.tap(find.byKey(
-      const ValueKey('dashboard-expansion-control-All tasks')));
+    await tester.tap(
+      find.byKey(const ValueKey('dashboard-expansion-control-All tasks')),
+    );
 
     expect(completedTaskId, 'task-1');
     expect(toggleAllCalls, 1);
   });
 
-  testWidgets('Habit section renders optimistic outcome and delegates undo',
-      (tester) async {
+  testWidgets('Habit section renders optimistic outcome and delegates undo', (
+    tester,
+  ) async {
     var undoneHabitId = '';
     const habit = TodayHabit(
       id: 'habit-1',
@@ -748,63 +912,60 @@ void main() {
   });
 
   testWidgets(
-      'weekly review is direct and capability-gated while accordions stay independent',
-      (tester) async {
-    var weeklyReviewCalls = 0;
-    final state = DashboardSupportingState(
-      canUseWeeklyReview: true,
-      fullWeek: null,
-    );
-    final actions = DashboardSupportingActions(
-      onToggleFullWeek: () {},
-      onOpenWeeklyReview: () => weeklyReviewCalls += 1,
-      onRetryFullWeek: () {},
-      onFullWeekAction: (_) {},
-    );
+    'weekly review is direct and capability-gated while accordions stay independent',
+    (tester) async {
+      var weeklyReviewCalls = 0;
+      final state = DashboardSupportingState(
+        canUseWeeklyReview: true,
+        fullWeek: null,
+      );
+      final actions = DashboardSupportingActions(
+        onToggleFullWeek: () {},
+        onOpenWeeklyReview: () => weeklyReviewCalls += 1,
+        onRetryFullWeek: () {},
+        onFullWeekAction: (_) {},
+      );
 
-    await _pump(
-      tester,
-      DashboardSupportingSections(
-        fullWeekExpanded: false,
-        state: state,
-        actions: actions,
-      ),
-    );
-
-    expect(find.text('Weekly review'), findsOneWidget);
-    expect(
-      find.text(
-        'Look back at last week.',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('today-info-control-Weekly review')),
-      findsNothing,
-    );
-    await tester.tap(find.text('Weekly review'));
-    expect(weeklyReviewCalls, 1);
-
-    await _pump(
-      tester,
-      DashboardSupportingSections(
-        fullWeekExpanded: false,
-        state: DashboardSupportingState(
-          canUseWeeklyReview: false,
-          fullWeek: null,
+      await _pump(
+        tester,
+        DashboardSupportingSections(
+          fullWeekExpanded: false,
+          state: state,
+          actions: actions,
         ),
-        actions: actions,
-      ),
-    );
-    expect(
-      find.byKey(const ValueKey('dashboard-weekly-review')),
-      findsNothing,
-    );
-    expect(find.text('Weekly review'), findsNothing);
-  });
+      );
 
-  testWidgets('Full week Preparation row exposes its typed action',
-      (tester) async {
+      expect(find.text('Weekly review'), findsOneWidget);
+      expect(find.text('Look back at last week.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('today-info-control-Weekly review')),
+        findsNothing,
+      );
+      await tester.tap(find.text('Weekly review'));
+      expect(weeklyReviewCalls, 1);
+
+      await _pump(
+        tester,
+        DashboardSupportingSections(
+          fullWeekExpanded: false,
+          state: DashboardSupportingState(
+            canUseWeeklyReview: false,
+            fullWeek: null,
+          ),
+          actions: actions,
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-weekly-review')),
+        findsNothing,
+      );
+      expect(find.text('Weekly review'), findsNothing);
+    },
+  );
+
+  testWidgets('Full week Preparation row exposes its typed action', (
+    tester,
+  ) async {
     DashboardFullWeekAction? selectedAction;
     final fullWeek = dashboardFullWeekFixture(
       items: [
@@ -848,8 +1009,9 @@ void main() {
     );
   });
 
-  testWidgets('Full week reports each unavailable source without hiding days',
-      (tester) async {
+  testWidgets('Full week reports each unavailable source without hiding days', (
+    tester,
+  ) async {
     final fullWeek = dashboardFullWeekFixture(
       sourceStates: DashboardFullWeekSourceStates(
         setup: DashboardFullWeekSourceState(
@@ -891,8 +1053,9 @@ void main() {
     expect(find.text('Nothing scheduled.'), findsNothing);
   });
 
-  testWidgets('Full week mobile pager shows one day and moves with arrows',
-      (tester) async {
+  testWidgets('Full week mobile pager shows one day and moves with arrows', (
+    tester,
+  ) async {
     final projection = dashboardFullWeekFixture(
       localToday: DateTime.utc(2026, 8, 3),
     );
@@ -928,116 +1091,117 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Full week switches to seven columns only at the 208px threshold',
-      (tester) async {
-    final projection = dashboardFullWeekFixture(
-      localToday: DateTime.utc(2026, 8, 3),
-    );
-    const threshold =
-        dashboardFullWeekMinimumWebCardWidth * 7 + dashboardFullWeekDayGap * 6;
+  testWidgets(
+    'Full week switches to seven columns only at the 208px threshold',
+    (tester) async {
+      final projection = dashboardFullWeekFixture(
+        localToday: DateTime.utc(2026, 8, 3),
+      );
+      const threshold =
+          dashboardFullWeekMinimumWebCardWidth * 7 +
+          dashboardFullWeekDayGap * 6;
 
-    await _pump(
-      tester,
-      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
-      size: const Size(threshold + 32, 800),
-    );
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
-      findsNothing,
-    );
-    expect(
-      tester
-          .getSize(
-            find.byKey(
-              const ValueKey('dashboard-full-week-day-2026-08-03'),
-            ),
-          )
-          .width,
-      dashboardFullWeekMinimumWebCardWidth,
-    );
+      await _pump(
+        tester,
+        DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
+        size: const Size(threshold + 32, 800),
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey('dashboard-full-week-day-2026-08-03')),
+            )
+            .width,
+        dashboardFullWeekMinimumWebCardWidth,
+      );
 
-    await _pump(
-      tester,
-      DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
-      size: const Size(threshold + 31, 800),
-    );
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-pager')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-strip')),
-      findsNothing,
-    );
-  });
+      await _pump(
+        tester,
+        DashboardFullWeekAgenda(projection: projection, onAction: (_) {}),
+        size: const Size(threshold + 31, 800),
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-pager')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-strip')),
+        findsNothing,
+      );
+    },
+  );
 
-  testWidgets('Full week mobile pager starts on today and stays in week bounds',
-      (tester) async {
-    final sundayProjection = dashboardFullWeekFixture(
-      localToday: DateTime.utc(2026, 8, 9),
-    );
-    await _pump(
-      tester,
-      DashboardFullWeekAgenda(
-        projection: sundayProjection,
-        onAction: (_) {},
-      ),
-      size: const Size(432, 800),
-    );
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-09')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<IconButton>(
-            find.byKey(const ValueKey('dashboard-full-week-next')),
-          )
-          .onPressed,
-      isNull,
-    );
+  testWidgets(
+    'Full week mobile pager starts on today and stays in week bounds',
+    (tester) async {
+      final sundayProjection = dashboardFullWeekFixture(
+        localToday: DateTime.utc(2026, 8, 9),
+      );
+      await _pump(
+        tester,
+        DashboardFullWeekAgenda(projection: sundayProjection, onAction: (_) {}),
+        size: const Size(432, 800),
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-2026-08-09')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('dashboard-full-week-next')),
+            )
+            .onPressed,
+        isNull,
+      );
 
-    await tester.tap(find.byKey(const ValueKey('dashboard-full-week-prev')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-08')),
-      findsOneWidget,
-    );
+      await tester.tap(find.byKey(const ValueKey('dashboard-full-week-prev')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-2026-08-08')),
+        findsOneWidget,
+      );
 
-    final mondayProjection = dashboardFullWeekFixture(
-      localToday: DateTime.utc(2026, 8, 3),
-    );
-    await _pump(
-      tester,
-      DashboardFullWeekAgenda(
-        key: const ValueKey('monday-agenda'),
-        projection: mondayProjection,
-        onAction: (_) {},
-      ),
-      size: const Size(432, 800),
-    );
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-03')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<IconButton>(
-            find.byKey(const ValueKey('dashboard-full-week-prev')),
-          )
-          .onPressed,
-      isNull,
-    );
-    await tester.tap(find.byKey(const ValueKey('dashboard-full-week-next')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-2026-08-04')),
-      findsOneWidget,
-    );
-  });
+      final mondayProjection = dashboardFullWeekFixture(
+        localToday: DateTime.utc(2026, 8, 3),
+      );
+      await _pump(
+        tester,
+        DashboardFullWeekAgenda(
+          key: const ValueKey('monday-agenda'),
+          projection: mondayProjection,
+          onAction: (_) {},
+        ),
+        size: const Size(432, 800),
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-2026-08-03')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('dashboard-full-week-prev')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byKey(const ValueKey('dashboard-full-week-next')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-2026-08-04')),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('dense Full week stays uncut at 320px and 200 percent text',
-      (tester) async {
+  testWidgets('dense Full week stays uncut at 320px and 200 percent text', (
+    tester,
+  ) async {
     final items = List.generate(
       7,
       (index) => dashboardFullWeekTimedItem(
@@ -1066,8 +1230,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Full week delegates every server-approved action identity',
-      (tester) async {
+  testWidgets('Full week delegates every server-approved action identity', (
+    tester,
+  ) async {
     final actions = [
       const DashboardFullWeekAction(
         kind: DashboardFullWeekActionKind.startPreparationFocus,
@@ -1188,6 +1353,7 @@ DashboardSnapshot _snapshot({
   List<TodayTimelineItem> timeline = const [],
   TodayProgress? progress = const TodayProgress(completed: 2, total: 4),
   TodaySourceStates? sourceStates,
+  int streak = 3,
 }) {
   return DashboardSnapshot(
     origin: DashboardOrigin.account,
@@ -1197,10 +1363,10 @@ DashboardSnapshot _snapshot({
     todayPlan: allTasks,
     scheduleDays: const [],
     localDate: DateTime(2026, 7, 31),
-    checkIns: const TodayCheckIns(
+    checkIns: TodayCheckIns(
       morningSaved: true,
       eveningSaved: false,
-      completedDaysStreak: 3,
+      completedDaysStreak: streak,
     ),
     progress: progress,
     todayTasks: todayTasks,

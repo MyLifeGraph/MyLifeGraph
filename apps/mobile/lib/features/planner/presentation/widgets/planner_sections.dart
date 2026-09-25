@@ -20,27 +20,27 @@ class PlannerLockedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const AppCard(
-        key: ValueKey('planner-locked'),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(AppIcons.lockOutline),
-            SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Synced Planner unavailable'),
-                  SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Guest and demo sessions stay local. They do not create or invent synced plans.',
-                  ),
-                ],
+    key: ValueKey('planner-locked'),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(AppIcons.lockOutline),
+        SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Synced Planner unavailable'),
+              SizedBox(height: AppSpacing.xs),
+              Text(
+                'Guest and demo sessions stay local. They do not create or invent synced plans.',
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class PlannerAddNewSection extends StatelessWidget {
@@ -73,9 +73,14 @@ class PlannerAddNewSection extends StatelessWidget {
 
   Future<void> openCreationMenu(BuildContext context) async {
     if (busy) return;
-    await _openPlannerAddNewSheet(context,
-      onTask: onTask, onHabit: onHabit, onExam: onExam,
-      onAssignment: onAssignment, onCommitment: onCommitment);
+    await _openPlannerAddNewSheet(
+      context,
+      onTask: onTask,
+      onHabit: onHabit,
+      onExam: onExam,
+      onAssignment: onAssignment,
+      onCommitment: onCommitment,
+    );
   }
 
   Widget buildCreationButton(BuildContext context) => FilledButton.icon(
@@ -88,140 +93,140 @@ class PlannerAddNewSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-        key: const ValueKey('planner-add-new'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (showCreationActions && MediaQuery.sizeOf(context).width < 620)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonalIcon(
-                  key: const ValueKey('planner-add-new-button'),
-                  onPressed: busy
-                      ? null
-                      : () => _openPlannerAddNewSheet(
-                            context,
-                            onTask: onTask,
-                            onHabit: onHabit,
-                            onExam: onExam,
-                            onAssignment: onAssignment,
-                            onCommitment: onCommitment,
-                          ),
-                  icon: const Icon(AppIcons.add),
-                  label: const Text('Add new'),
+      key: const ValueKey('planner-add-new'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showCreationActions && MediaQuery.sizeOf(context).width < 620)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('planner-add-new-button'),
+                onPressed: busy
+                    ? null
+                    : () => _openPlannerAddNewSheet(
+                        context,
+                        onTask: onTask,
+                        onHabit: onHabit,
+                        onExam: onExam,
+                        onAssignment: onAssignment,
+                        onCommitment: onCommitment,
+                      ),
+                icon: const Icon(AppIcons.add),
+                label: const Text('Add new'),
+              ),
+            )
+          else if (showCreationActions) ...[
+            Text('Add new', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                _CreateButton(
+                  key: const ValueKey('planner-add-task'),
+                  category: AppCategory.task,
+                  icon: AppIcons.taskAltOutlined,
+                  label: 'Task',
+                  onPressed: busy ? null : onTask,
                 ),
-              )
-            else if (showCreationActions) ...[
-              Text('Add new', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: AppSpacing.md),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
+                _CreateButton(
+                  key: const ValueKey('planner-add-habit'),
+                  category: AppCategory.habit,
+                  icon: AppIcons.repeatOutlined,
+                  label: 'Habit',
+                  onPressed: busy ? null : onHabit,
+                ),
+                _CreateButton(
+                  key: const ValueKey('planner-add-exam'),
+                  category: AppCategory.preparation,
+                  icon: AppIcons.schoolOutlined,
+                  label: 'Exam',
+                  onPressed: busy ? null : onExam,
+                ),
+                _CreateButton(
+                  key: const ValueKey('planner-add-assignment'),
+                  category: AppCategory.preparation,
+                  icon: AppIcons.assignmentOutlined,
+                  label: 'Assignment',
+                  onPressed: busy ? null : onAssignment,
+                ),
+                _CreateButton(
+                  key: const ValueKey('planner-add-commitment'),
+                  category: AppCategory.fixedCommitment,
+                  icon: AppIcons.eventBusyOutlined,
+                  label: 'Fixed commitment',
+                  onPressed: busy ? null : onCommitment,
+                ),
+              ],
+            ),
+          ],
+          if (availabilityIncomplete) ...[
+            if (showCreationActions) const Divider(height: AppSpacing.xl),
+            Container(
+              key: const ValueKey('planner-availability-warning'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(AppRadii.lg),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _CreateButton(
-                    key: const ValueKey('planner-add-task'),
-                    category: AppCategory.task,
-                    icon: AppIcons.taskAltOutlined,
-                    label: 'Task',
-                    onPressed: busy ? null : onTask,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(AppIcons.eventNoteOutlined),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Availability may be incomplete',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            const Text(
+                              'Add recurring classes or work times before the first automatic plan. Calendar import stays optional.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  _CreateButton(
-                    key: const ValueKey('planner-add-habit'),
-                    category: AppCategory.habit,
-                    icon: AppIcons.repeatOutlined,
-                    label: 'Habit',
-                    onPressed: busy ? null : onHabit,
-                  ),
-                  _CreateButton(
-                    key: const ValueKey('planner-add-exam'),
-                    category: AppCategory.preparation,
-                    icon: AppIcons.schoolOutlined,
-                    label: 'Exam',
-                    onPressed: busy ? null : onExam,
-                  ),
-                  _CreateButton(
-                    key: const ValueKey('planner-add-assignment'),
-                    category: AppCategory.preparation,
-                    icon: AppIcons.assignmentOutlined,
-                    label: 'Assignment',
-                    onPressed: busy ? null : onAssignment,
-                  ),
-                  _CreateButton(
-                    key: const ValueKey('planner-add-commitment'),
-                    category: AppCategory.fixedCommitment,
-                    icon: AppIcons.eventBusyOutlined,
-                    label: 'Fixed commitment',
-                    onPressed: busy ? null : onCommitment,
+                  const SizedBox(height: AppSpacing.sm),
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('planner-review-setup-schedule'),
+                    onPressed: busy ? null : onReviewSetup,
+                    icon: const Icon(AppIcons.calendarViewWeekOutlined),
+                    label: const Text('Add weekly schedule'),
                   ),
                 ],
               ),
-            ],
-            if (availabilityIncomplete) ...[
-              if (showCreationActions) const Divider(height: AppSpacing.xl),
-              Container(
-                key: const ValueKey('planner-availability-warning'),
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(AppRadii.lg),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(AppIcons.eventNoteOutlined),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Availability may be incomplete',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              const Text(
-                                'Add recurring classes or work times before the first automatic plan. Calendar import stays optional.',
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    FilledButton.tonalIcon(
-                      key: const ValueKey('planner-review-setup-schedule'),
-                      onPressed: busy ? null : onReviewSetup,
-                      icon: const Icon(AppIcons.calendarViewWeekOutlined),
-                      label: const Text('Add weekly schedule'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (calendarPreference != null) ...[
-              if (showCreationActions || availabilityIncomplete)
-                const Divider(height: AppSpacing.xl),
-              SwitchListTile(
-                key: const ValueKey('planner-calendar-consent'),
-                contentPadding: EdgeInsets.zero,
-                value: calendarPreference!.useCalendarBusyTime,
-                onChanged: busy ? null : onCalendarPreference,
-                secondary: const Icon(AppIcons.calendarMonthOutlined),
-                title: const Text('Plan around calendar events'),
-                subtitle: Text(
-                  calendarPreference!.calendarAvailable
-                      ? 'Calendar unchanged. Review previews after each import.'
-                      : 'Import a calendar first (.ics).',
-                ),
-              ),
-            ],
+            ),
           ],
-        ),
-      );
+          if (calendarPreference != null) ...[
+            if (showCreationActions || availabilityIncomplete)
+              const Divider(height: AppSpacing.xl),
+            SwitchListTile(
+              key: const ValueKey('planner-calendar-consent'),
+              contentPadding: EdgeInsets.zero,
+              value: calendarPreference!.useCalendarBusyTime,
+              onChanged: busy ? null : onCalendarPreference,
+              secondary: const Icon(AppIcons.calendarMonthOutlined),
+              title: const Text('Plan around calendar events'),
+              subtitle: Text(
+                calendarPreference!.calendarAvailable
+                    ? 'Calendar unchanged. Review previews after each import.'
+                    : 'Import a calendar first (.ics).',
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -239,85 +244,92 @@ Future<void> _openPlannerAddNewSheet(
     useSafeArea: true,
     showDragHandle: true,
     builder: (sheetContext) {
-      final options = <({
-        String key,
-        AppCategory category,
-        IconData icon,
-        String label,
-        VoidCallback onSelect,
-      })>[
-        (
-          key: 'planner-add-task',
-          category: AppCategory.task,
-          icon: AppIcons.taskAltOutlined,
-          label: 'Task',
-          onSelect: onTask,
-        ),
-        (
-          key: 'planner-add-habit',
-          category: AppCategory.habit,
-          icon: AppIcons.repeatOutlined,
-          label: 'Habit',
-          onSelect: onHabit,
-        ),
-        (
-          key: 'planner-add-exam',
-          category: AppCategory.preparation,
-          icon: AppIcons.schoolOutlined,
-          label: 'Exam',
-          onSelect: onExam,
-        ),
-        (
-          key: 'planner-add-assignment',
-          category: AppCategory.preparation,
-          icon: AppIcons.assignmentOutlined,
-          label: 'Assignment',
-          onSelect: onAssignment,
-        ),
-        (
-          key: 'planner-add-commitment',
-          category: AppCategory.fixedCommitment,
-          icon: AppIcons.eventBusyOutlined,
-          label: 'Fixed commitment',
-          onSelect: onCommitment,
-        ),
-      ];
+      final options =
+          <
+            ({
+              String key,
+              AppCategory category,
+              IconData icon,
+              String label,
+              VoidCallback onSelect,
+            })
+          >[
+            (
+              key: 'planner-add-task',
+              category: AppCategory.task,
+              icon: AppIcons.taskAltOutlined,
+              label: 'Task',
+              onSelect: onTask,
+            ),
+            (
+              key: 'planner-add-habit',
+              category: AppCategory.habit,
+              icon: AppIcons.repeatOutlined,
+              label: 'Habit',
+              onSelect: onHabit,
+            ),
+            (
+              key: 'planner-add-exam',
+              category: AppCategory.preparation,
+              icon: AppIcons.schoolOutlined,
+              label: 'Exam',
+              onSelect: onExam,
+            ),
+            (
+              key: 'planner-add-assignment',
+              category: AppCategory.preparation,
+              icon: AppIcons.assignmentOutlined,
+              label: 'Assignment',
+              onSelect: onAssignment,
+            ),
+            (
+              key: 'planner-add-commitment',
+              category: AppCategory.fixedCommitment,
+              icon: AppIcons.eventBusyOutlined,
+              label: 'Fixed commitment',
+              onSelect: onCommitment,
+            ),
+          ];
       return SafeArea(
         child: SingleChildScrollView(
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                0,
-                AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Add new',
-                  style: Theme.of(sheetContext).textTheme.titleMedium,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Add new',
+                    style: Theme.of(sheetContext).textTheme.titleMedium,
+                  ),
                 ),
               ),
-            ),
-            for (final option in options)
-              ListTile(
-                key: ValueKey(option.key),
-                leading: CircleAvatar(
-                  backgroundColor: option.category.visual(sheetContext).background,
-                  foregroundColor: option.category.visual(sheetContext).foreground,
-                  child: Icon(option.icon),
+              for (final option in options)
+                ListTile(
+                  key: ValueKey(option.key),
+                  leading: CircleAvatar(
+                    backgroundColor: option.category
+                        .visual(sheetContext)
+                        .background,
+                    foregroundColor: option.category
+                        .visual(sheetContext)
+                        .foreground,
+                    child: Icon(option.icon),
+                  ),
+                  title: Text(option.label),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    option.onSelect();
+                  },
                 ),
-                title: Text(option.label),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  option.onSelect();
-                },
-              ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
+              const SizedBox(height: AppSpacing.sm),
+            ],
           ),
         ),
       );
@@ -375,54 +387,54 @@ class PlannerExamWeekOutlookSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => value.when(
-        loading: () => const AppCard(
-          key: ValueKey('planner-exam-week-outlook-loading'),
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: AppSpacing.md),
-              Expanded(child: Text('Checking the next exam window…')),
-            ],
+    loading: () => const AppCard(
+      key: ValueKey('planner-exam-week-outlook-loading'),
+      child: Row(
+        children: [
+          SizedBox.square(
+            dimension: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
-        ),
-        error: (_, __) => AppCard(
-          key: const ValueKey('planner-exam-week-outlook-error'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Exam outlook unavailable',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'Capacity and sleep context could not be read. Try loading the outlook again.',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              OutlinedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(AppIcons.refresh),
-                label: const Text('Retry outlook'),
-              ),
-            ],
+          SizedBox(width: AppSpacing.md),
+          Expanded(child: Text('Checking the next exam window…')),
+        ],
+      ),
+    ),
+    error: (_, __) => AppCard(
+      key: const ValueKey('planner-exam-week-outlook-error'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Exam outlook unavailable',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-        ),
-        data: (outlook) {
-          if (outlook == null || outlook.mode == 'inactive') {
-            return const SizedBox.shrink();
-          }
-          return _ExamWeekOutlookCard(
-            outlook: outlook,
-            onEveningCheckIn: onEveningCheckIn,
-            onReviewPlan: onReviewPlan,
-            onReplan: onReplan,
-            enabled: enabled,
-          );
-        },
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'Capacity and sleep context could not be read. Try loading the outlook again.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(AppIcons.refresh),
+            label: const Text('Retry outlook'),
+          ),
+        ],
+      ),
+    ),
+    data: (outlook) {
+      if (outlook == null || outlook.mode == 'inactive') {
+        return const SizedBox.shrink();
+      }
+      return _ExamWeekOutlookCard(
+        outlook: outlook,
+        onEveningCheckIn: onEveningCheckIn,
+        onReviewPlan: onReviewPlan,
+        onReplan: onReplan,
+        enabled: enabled,
       );
+    },
+  );
 }
 
 class _ExamWeekOutlookCard extends StatelessWidget {
@@ -443,7 +455,8 @@ class _ExamWeekOutlookCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final urgent = outlook.mode == 'overdue' ||
+    final urgent =
+        outlook.mode == 'overdue' ||
         {'high', 'critical'}.contains(outlook.riskLevel);
     final accent = urgent ? colors.error : colors.tertiary;
     final shortNights = outlook.recentSleepNights
@@ -458,40 +471,39 @@ class _ExamWeekOutlookCard extends StatelessWidget {
         shape: const Border(),
         collapsedShape: const Border(),
         title: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                outlook.mode == 'overdue'
-                    ? AppIcons.reportGmailerrorredOutlined
-                    : outlook.mode == 'exam_week'
-                        ? AppIcons.schoolOutlined
-                        : AppIcons.visibilityOutlined,
-                color: accent,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _outlookTitle(outlook.mode),
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(color: accent),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    _OutlookRiskChip(
-                      label: _riskLabel(outlook.riskLevel),
-                      color: accent,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          subtitle: Text(_outlookSummary(outlook)),
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Icon(
+              outlook.mode == 'overdue'
+                  ? AppIcons.reportGmailerrorredOutlined
+                  : outlook.mode == 'exam_week'
+                  ? AppIcons.schoolOutlined
+                  : AppIcons.visibilityOutlined,
+              color: accent,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _outlookTitle(outlook.mode),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: accent),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  _OutlookRiskChip(
+                    label: _riskLabel(outlook.riskLevel),
+                    color: accent,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        subtitle: Text(_outlookSummary(outlook)),
+        children: [
           const SizedBox(height: AppSpacing.md),
           Container(
             width: double.infinity,
@@ -550,9 +562,9 @@ class _ExamWeekOutlookCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 '$shortNights of the last ${outlook.recentSleepNights.length} valid nights were at least one hour below their saved target.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: accent,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: accent),
               ),
             ],
           ],
@@ -618,19 +630,19 @@ class _OutlookRiskChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(AppRadii.pill),
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.xs,
+    ),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(AppRadii.pill),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+    ),
+  );
 }
 
 class _OutlookExamRow extends StatelessWidget {
@@ -646,98 +658,102 @@ class _OutlookExamRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          border:
-              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-        ),
-        child: Column(
+    width: double.infinity,
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      borderRadius: BorderRadius.circular(AppRadii.lg),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: Text(exam.title, style: Theme.of(context).textTheme.titleMedium),
-                )),
-                IconButton(
-                  tooltip: 'Review plan',
-                  onPressed: onReview,
-                  icon: const Icon(AppIcons.visibilityOutlined, size: 20),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(
+                  exam.title,
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-                IconButton(
-                  tooltip: 'Replan remaining time',
-                  onPressed: onReplan,
-                  icon: const Icon(AppIcons.editCalendarOutlined, size: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '${_outlookDueLabel(exam)} · ${_minutes(exam.remainingMinutes)} remaining',
-            ),
-            if (exam.missedPreparationMinutes > 0)
-              Text(
-                '${_minutes(exam.missedPreparationMinutes)} missed and still uncredited',
               ),
-            if (exam.pendingPreviewSleepOverlap)
-              const Text(
-                'The staged preview overlaps the saved sleep window. It remains unconfirmed.',
-              ),
+            ),
+            IconButton(
+              tooltip: 'Review plan',
+              onPressed: onReview,
+              icon: const Icon(AppIcons.visibilityOutlined, size: 20),
+            ),
+            IconButton(
+              tooltip: 'Replan remaining time',
+              onPressed: onReplan,
+              icon: const Icon(AppIcons.editCalendarOutlined, size: 20),
+            ),
           ],
         ),
-      );
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '${_outlookDueLabel(exam)} · ${_minutes(exam.remainingMinutes)} remaining',
+        ),
+        if (exam.missedPreparationMinutes > 0)
+          Text(
+            '${_minutes(exam.missedPreparationMinutes)} missed and still uncredited',
+          ),
+        if (exam.pendingPreviewSleepOverlap)
+          const Text(
+            'The staged preview overlaps the saved sleep window. It remains unconfirmed.',
+          ),
+      ],
+    ),
+  );
 }
 
 String _outlookTitle(String mode) => switch (mode) {
-      'watch' => 'Exam watch · next 14 days',
-      'exam_week' => 'Exam week',
-      'overdue' => 'Exam plan overdue',
-      _ => 'Exam outlook',
-    };
+  'watch' => 'Exam watch · next 14 days',
+  'exam_week' => 'Exam week',
+  'overdue' => 'Exam plan overdue',
+  _ => 'Exam outlook',
+};
 
 String _outlookSummary(ExamWeekOutlook outlook) => switch (outlook.mode) {
-      'watch' =>
-        '${outlook.exams.length} upcoming exam${outlook.exams.length == 1 ? '' : 's'}',
-      'exam_week' =>
-        '${outlook.exams.length} exam${outlook.exams.length == 1 ? '' : 's'} falls within seven profile-local days.',
-      'overdue' =>
-        'At least one exam deadline has passed with preparation still remaining.',
-      _ => '',
-    };
+  'watch' =>
+    '${outlook.exams.length} upcoming exam${outlook.exams.length == 1 ? '' : 's'}',
+  'exam_week' =>
+    '${outlook.exams.length} exam${outlook.exams.length == 1 ? '' : 's'} falls within seven profile-local days.',
+  'overdue' =>
+    'At least one exam deadline has passed with preparation still remaining.',
+  _ => '',
+};
 
 String _riskLabel(String risk) => switch (risk) {
-      'on_track' => 'On track',
-      'attention' => 'Attention',
-      'high' => 'High risk',
-      'critical' => 'Critical',
-      _ => 'Unknown',
-    };
+  'on_track' => 'On track',
+  'attention' => 'Attention',
+  'high' => 'High risk',
+  'critical' => 'Critical',
+  _ => 'Unknown',
+};
 
 String _capacityLabel(String capacity) => switch (capacity) {
-      'fits_with_sleep_protected' => 'Remaining work fits with sleep protected',
-      'fits_only_using_sleep_window' =>
-        'Remaining work fits only by using the sleep window',
-      'does_not_fit_before_buffer' =>
-        'Remaining work does not fit before the warning buffer',
-      _ => 'Capacity is incomplete',
-    };
+  'fits_with_sleep_protected' => 'Remaining work fits with sleep protected',
+  'fits_only_using_sleep_window' =>
+    'Remaining work fits only by using the sleep window',
+  'does_not_fit_before_buffer' =>
+    'Remaining work does not fit before the warning buffer',
+  _ => 'Capacity is incomplete',
+};
 
 String _warningLabel(String code) => switch (code) {
-      'exam_overdue' => 'Exam overdue',
-      'missing_recommended_buffer' => 'Missing exam buffer',
-      'missed_preparation_blocks' => 'Missed preparation',
-      'remaining_work_does_not_fit' => 'Remaining work does not fit',
-      'sleep_capacity_tradeoff' => 'Sleep-capacity tradeoff',
-      'repeated_sleep_shortfall' => 'Repeated sleep shortfall',
-      'sleep_plan_missing' => 'Sleep plan missing',
-      'capacity_incomplete' => 'Capacity incomplete',
-      'pending_preview_sleep_overlap' => 'Preview overlaps sleep',
-      _ => code,
-    };
+  'exam_overdue' => 'Exam overdue',
+  'missing_recommended_buffer' => 'Missing exam buffer',
+  'missed_preparation_blocks' => 'Missed preparation',
+  'remaining_work_does_not_fit' => 'Remaining work does not fit',
+  'sleep_capacity_tradeoff' => 'Sleep-capacity tradeoff',
+  'repeated_sleep_shortfall' => 'Repeated sleep shortfall',
+  'sleep_plan_missing' => 'Sleep plan missing',
+  'capacity_incomplete' => 'Capacity incomplete',
+  'pending_preview_sleep_overlap' => 'Preview overlaps sleep',
+  _ => code,
+};
 
 String _outlookDueLabel(ExamWeekPlanOutlook plan) {
   if (plan.daysRemaining < 0) {
@@ -772,21 +788,33 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
     final healthItems = healthLoading || healthError
         ? const <ExamPlanHealthItem>[]
         : examPlanHealth.valueOrNull?.needsAttention ??
-            const <ExamPlanHealthItem>[];
-    final showEmpty = items.isEmpty &&
+              const <ExamPlanHealthItem>[];
+    final showEmpty =
+        items.isEmpty &&
         healthItems.isEmpty &&
         !healthLoading &&
         examPlanHealth.hasValue &&
         !healthError;
+    final healthPlanIds = healthItems.map((exam) => exam.planId).toSet();
+    final otherItems = items
+        .where(
+          (item) =>
+              item.kind != 'unscheduled' ||
+              !healthPlanIds.contains(item.planId),
+        )
+        .toList();
     return AppCard(
       key: const ValueKey('planner-needs-attention'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _PlannerSectionHeading(
-            title: 'Needs attention', icon: AppIcons.errorOutline,
+            title: 'Needs attention',
+            icon: AppIcons.errorOutline,
             color: context.visualTokens.danger,
-            count: healthLoading || healthError ? null : items.length + healthItems.length,
+            count: healthLoading || healthError
+                ? null
+                : otherItems.length + healthItems.length,
           ),
           const SizedBox(height: AppSpacing.sm),
           if (showEmpty)
@@ -797,27 +825,32 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
                 Expanded(child: Text('Nothing currently needs review.')),
               ],
             ),
-          for (final item in items)
+          for (final item in otherItems)
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(
                 item.kind == 'stale_preview'
                     ? AppIcons.updateOutlined
                     : item.kind == 'unscheduled'
-                        ? AppIcons.timerOffOutlined
-                        : AppIcons.warningAmberOutlined,
+                    ? AppIcons.timerOffOutlined
+                    : AppIcons.warningAmberOutlined,
                 color: Theme.of(context).colorScheme.error,
               ),
               title: Text(item.title),
-              subtitle: Text(item.detail),
+              subtitle: Text(
+                item.kind == 'unscheduled' && item.unplacedMinutes > 0
+                    ? '${_minutes(item.unplacedMinutes)} without a time block'
+                    : item.detail,
+              ),
               trailing: item.planId == null
                   ? (item.target == 'study_setup'
-                      ? const Icon(AppIcons.chevronRight)
-                      : item.unplacedMinutes > 0
-                          ? Text('${item.unplacedMinutes} min')
-                          : null)
+                        ? const Icon(AppIcons.chevronRight)
+                        : item.unplacedMinutes > 0
+                        ? Text('${item.unplacedMinutes} min')
+                        : null)
                   : const Icon(AppIcons.chevronRight),
-              onTap: !enabled ||
+              onTap:
+                  !enabled ||
                       item.planId == null && item.target != 'study_setup'
                   ? null
                   : () => onOpen(item),
@@ -836,10 +869,8 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
               key: const ValueKey('planner-exam-health-transport-error'),
               contentPadding: EdgeInsets.zero,
               leading: const Icon(AppIcons.syncProblemOutlined),
-              title: const Text('Exam Plan Health unavailable'),
-              subtitle: const Text(
-                'This is a connection or response error, not an Unknown capacity result.',
-              ),
+              title: const Text('Exam capacity unavailable'),
+              subtitle: const Text('Could not load. Try again.'),
               trailing: IconButton(
                 tooltip: 'Retry Exam Plan Health',
                 onPressed: onRetryExamHealth,
@@ -847,33 +878,68 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
               ),
             ),
           for (final exam in healthItems)
-            ListTile(
-              key: ValueKey('planner-exam-health-${exam.planId}'),
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                _plannerExamHealthIcon(exam.status),
-                color: _plannerExamHealthColor(context, exam.status),
-              ),
-              title: Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.xs,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(exam.title),
-                  AppStatusPill(
-                    label: _plannerExamHealthLabel(exam.status),
-                    icon: _plannerExamHealthIcon(exam.status),
-                    tone: _plannerExamHealthTone(exam.status),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ListTile(
+                  key: ValueKey('planner-exam-health-${exam.planId}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    _plannerExamHealthIcon(exam.status),
+                    color: _plannerExamHealthColor(context, exam.status),
                   ),
-                ],
-              ),
-              subtitle: Text(
-                '${_plannerExamHealthLabel(exam.status)} · '
-                '${exam.minutesToSchedule} min still to place · '
-                '${exam.reserveMinutes == null ? 'reserve unknown' : '${exam.reserveMinutes} min reserve'}',
-              ),
-              trailing: const Icon(AppIcons.chevronRight),
-              onTap: enabled ? () => onOpenExamHealth(exam.planId) : null,
+                  title: Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(exam.title),
+                      AppStatusPill(
+                        label: _plannerExamHealthLabel(exam.status),
+                        icon: _plannerExamHealthIcon(exam.status),
+                        tone: _plannerExamHealthTone(exam.status),
+                      ),
+                    ],
+                  ),
+                  subtitle: Text(
+                    '${_minutes(exam.minutesToSchedule)} without a time block',
+                  ),
+                  trailing: const Icon(AppIcons.chevronRight),
+                  onTap: enabled ? () => onOpenExamHealth(exam.planId) : null,
+                ),
+                ExpansionTile(
+                  key: ValueKey('planner-attention-details-${exam.planId}'),
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('Details'),
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        exam.reserveMinutes == null
+                            ? 'Spare time unknown'
+                            : exam.reserveMinutes! < 0
+                            ? '${_minutes(-exam.reserveMinutes!)} short'
+                            : '${_minutes(exam.reserveMinutes!)} spare',
+                      ),
+                    ),
+                    for (final item in items.where(
+                      (item) =>
+                          item.kind == 'unscheduled' &&
+                          item.planId == exam.planId,
+                    ))
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          item.kind == 'unscheduled' && item.unplacedMinutes > 0
+                              ? '${_minutes(item.unplacedMinutes)} unplaced in saved plan'
+                              : item.detail,
+                        ),
+                        trailing: const Icon(AppIcons.chevronRight),
+                        onTap: enabled ? () => onOpen(item) : null,
+                      ),
+                  ],
+                ),
+              ],
             ),
         ],
       ),
@@ -882,11 +948,11 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
 }
 
 String _plannerExamHealthLabel(ExamPlanHealthStatus status) => switch (status) {
-      ExamPlanHealthStatus.green => 'Healthy capacity',
-      ExamPlanHealthStatus.yellow => 'Plan soon',
-      ExamPlanHealthStatus.red => 'Capacity shortfall',
-      ExamPlanHealthStatus.unknown => 'Availability unknown',
-    };
+  ExamPlanHealthStatus.green => 'Healthy capacity',
+  ExamPlanHealthStatus.yellow => 'Plan soon',
+  ExamPlanHealthStatus.red => 'Not enough time',
+  ExamPlanHealthStatus.unknown => 'Availability unknown',
+};
 
 AppStatusTone _plannerExamHealthTone(ExamPlanHealthStatus status) =>
     switch (status) {
@@ -907,18 +973,19 @@ IconData _plannerExamHealthIcon(ExamPlanHealthStatus status) =>
 Color _plannerExamHealthColor(
   BuildContext context,
   ExamPlanHealthStatus status,
-) =>
-    switch (status) {
-      ExamPlanHealthStatus.green => Theme.of(context).colorScheme.primary,
-      ExamPlanHealthStatus.yellow => Theme.of(context).colorScheme.tertiary,
-      ExamPlanHealthStatus.red => Theme.of(context).colorScheme.error,
-      ExamPlanHealthStatus.unknown => Theme.of(context).colorScheme.secondary,
-    };
+) => switch (status) {
+  ExamPlanHealthStatus.green => Theme.of(context).colorScheme.primary,
+  ExamPlanHealthStatus.yellow => Theme.of(context).colorScheme.tertiary,
+  ExamPlanHealthStatus.red => Theme.of(context).colorScheme.error,
+  ExamPlanHealthStatus.unknown => Theme.of(context).colorScheme.secondary,
+};
 
 enum _SevenDayView { swipe, list }
 
 // Only a display preference; no saved account data is retained here.
-final _calendarViewProvider = StateProvider<_SevenDayView>((_) => _SevenDayView.swipe);
+final _calendarViewProvider = StateProvider<_SevenDayView>(
+  (_) => _SevenDayView.swipe,
+);
 
 class PlannerSevenDaySection extends ConsumerStatefulWidget {
   const PlannerSevenDaySection({
@@ -941,7 +1008,8 @@ class PlannerSevenDaySection extends ConsumerStatefulWidget {
   final bool enabled;
 
   @override
-  ConsumerState<PlannerSevenDaySection> createState() => _PlannerSevenDaySectionState();
+  ConsumerState<PlannerSevenDaySection> createState() =>
+      _PlannerSevenDaySectionState();
 }
 
 class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
@@ -950,7 +1018,8 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
   bool get wantKeepAlive => true;
 
   _SevenDayView get _view => ref.watch(_calendarViewProvider);
-  set _view(_SevenDayView value) => ref.read(_calendarViewProvider.notifier).state = value;
+  set _view(_SevenDayView value) =>
+      ref.read(_calendarViewProvider.notifier).state = value;
   late int _page;
 
   @override
@@ -972,68 +1041,86 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return LayoutBuilder(builder: (context, constraints) {
-    final wide = constraints.maxWidth >= 600 &&
-        MediaQuery.textScalerOf(context).scale(16) < 24;
-    final content = Column(
-      key: const ValueKey('planner-seven-days'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide =
+            constraints.maxWidth >= 600 &&
+            MediaQuery.textScalerOf(context).scale(16) < 24;
+        final content = Column(
+          key: const ValueKey('planner-seven-days'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Text(
-                'Next seven days',
-                style: wide ? Theme.of(context).textTheme.headlineSmall
-                    : Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            if (wide) TextButton(
-              onPressed: widget.days.isEmpty ? null : () => _goTo(_initialPage(widget.days)),
-              child: const Text('Today'),
-            ),
-            if (widget.onImportCalendar != null)
-              IconButton(
-                key: const ValueKey('planner-import-calendar'),
-                tooltip: 'Import calendar (.ics)',
-                onPressed: widget.onImportCalendar,
-                icon: const Icon(AppIcons.downloadOutlined),
-              ),
-            if (widget.showAddButton) ...[
-              OutlinedButton.icon(
-                key: const ValueKey('planner-add-new-button'),
-                onPressed: widget.onAdd,
-                icon: const Icon(AppIcons.add, size: 20),
-                label: const Text('Add'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                  visualDensity: VisualDensity.compact,
-                  shape: const StadiumBorder(),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Next seven days',
+                    style: wide
+                        ? Theme.of(context).textTheme.headlineSmall
+                        : Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-            ],
-            if (wide) ...[
-              IconButton(tooltip: 'Previous day',
-                onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
-                icon: const RotatedBox(quarterTurns: 2, child: Icon(AppIcons.chevronRight))),
-              IconButton(tooltip: 'Next day',
-                onPressed: _page < widget.days.length - 1 ? () => _goTo(_page + 1) : null,
-                icon: const Icon(AppIcons.chevronRight)),
-            ],
-            _sevenDayViewToggle(context),
+                if (wide)
+                  TextButton(
+                    onPressed: widget.days.isEmpty
+                        ? null
+                        : () => _goTo(_initialPage(widget.days)),
+                    child: const Text('Today'),
+                  ),
+                if (widget.onImportCalendar != null)
+                  IconButton(
+                    key: const ValueKey('planner-import-calendar'),
+                    tooltip: 'Import calendar (.ics)',
+                    onPressed: widget.onImportCalendar,
+                    icon: const Icon(AppIcons.downloadOutlined),
+                  ),
+                if (widget.showAddButton) ...[
+                  OutlinedButton.icon(
+                    key: const ValueKey('planner-add-new-button'),
+                    onPressed: widget.onAdd,
+                    icon: const Icon(AppIcons.add, size: 20),
+                    label: const Text('Add'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      shape: const StadiumBorder(),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
+                if (wide) ...[
+                  IconButton(
+                    tooltip: 'Previous day',
+                    onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
+                    icon: const RotatedBox(
+                      quarterTurns: 2,
+                      child: Icon(AppIcons.chevronRight),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Next day',
+                    onPressed: _page < widget.days.length - 1
+                        ? () => _goTo(_page + 1)
+                        : null,
+                    icon: const Icon(AppIcons.chevronRight),
+                  ),
+                ],
+                _sevenDayViewToggle(context),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            if (_view == _SevenDayView.list)
+              _sevenDayList()
+            else
+              _sevenDayPager(context, wide: wide),
           ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        if (_view == _SevenDayView.list)
-          _sevenDayList()
-        else
-          _sevenDayPager(context, wide: wide),
-      ],
+        );
+        return wide ? AppCard(child: content) : content;
+      },
     );
-    return wide ? AppCard(child: content) : content;
-    });
   }
 
   Widget _sevenDayViewToggle(BuildContext context) {
@@ -1082,10 +1169,7 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
       isSelected: selected,
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,
-      icon: Icon(
-        icon,
-        color: selected ? tokens.brand : tokens.textSecondary,
-      ),
+      icon: Icon(icon, color: selected ? tokens.brand : tokens.textSecondary),
       style: IconButton.styleFrom(
         backgroundColor: selected ? tokens.brand.withValues(alpha: 0.14) : null,
       ),
@@ -1121,91 +1205,148 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
 
   Widget _sevenDayPager(BuildContext context, {required bool wide}) {
     if (widget.days.isEmpty) {
-      return _dayViewport(context,
-        child: const Center(child: Text('No planned or fixed items.')));
+      return _dayViewport(
+        context,
+        child: const Center(child: Text('No planned or fixed items.')),
+      );
     }
     final day = widget.days[_page.clamp(0, widget.days.length - 1)];
     final tokens = context.visualTokens;
     return Column(
       children: [
         if (!wide)
-        Row(
-          children: [
-            IconButton(
-              tooltip: 'Previous day',
-              onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
-              icon: const RotatedBox(
-                quarterTurns: 2,
-                child: Icon(AppIcons.chevronRight),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Previous day',
+                onPressed: _page > 0 ? () => _goTo(_page - 1) : null,
+                icon: const RotatedBox(
+                  quarterTurns: 2,
+                  child: Icon(AppIcons.chevronRight),
+                ),
               ),
-            ),
-            Expanded(
-              child: Text(
-                DateFormat('EEEE, MMM d').format(day.localDate),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
+              Expanded(
+                child: Text(
+                  DateFormat('EEEE, MMM d').format(day.localDate),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: 'Next day',
-              onPressed: _page < widget.days.length - 1
-                  ? () => _goTo(_page + 1)
-                  : null,
-              icon: const Icon(AppIcons.chevronRight),
-            ),
-          ],
-        ),
-        LayoutBuilder(builder: (context, constraints) {
-          final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
-          final dayWidth = (constraints.maxWidth / widget.days.length)
-              .clamp(largeText ? 72.0 : 48.0, double.infinity);
-          final chips = Row(children: [
-              for (var index = 0; index < widget.days.length; index++)
-                SizedBox(width: dayWidth, child: Semantics(
-                  selected: index == _page,
-                  button: true,
-                  label: DateFormat('EEEE, MMMM d').format(widget.days[index].localDate),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: wide ? 4 : 0),
-                    child: InkWell(
-                      key: ValueKey('planner-day-chip-$index'),
-                      borderRadius: BorderRadius.circular(AppRadii.sm),
-                      onTap: () => _goTo(index),
-                      child: Container(
-                        constraints: const BoxConstraints(minHeight: 48),
-                        padding: EdgeInsets.symmetric(vertical: wide ? 12 : 10),
-                        decoration: wide ? BoxDecoration(
-                          color: index == _page ? tokens.brand.withValues(alpha: .12) : tokens.surfaceRaised,
+              IconButton(
+                tooltip: 'Next day',
+                onPressed: _page < widget.days.length - 1
+                    ? () => _goTo(_page + 1)
+                    : null,
+                icon: const Icon(AppIcons.chevronRight),
+              ),
+            ],
+          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+            final dayWidth = (constraints.maxWidth / widget.days.length).clamp(
+              largeText ? 72.0 : 48.0,
+              double.infinity,
+            );
+            final chips = Row(
+              children: [
+                for (var index = 0; index < widget.days.length; index++)
+                  SizedBox(
+                    width: dayWidth,
+                    child: Semantics(
+                      selected: index == _page,
+                      button: true,
+                      label: DateFormat(
+                        'EEEE, MMMM d',
+                      ).format(widget.days[index].localDate),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: wide ? 4 : 0),
+                        child: InkWell(
+                          key: ValueKey('planner-day-chip-$index'),
                           borderRadius: BorderRadius.circular(AppRadii.sm),
-                          border: Border.all(color: index == _page ? tokens.brand : tokens.outlineSoft),
-                        ) : BoxDecoration(border: Border(bottom: BorderSide(
-                          width: 2, color: index == _page ? tokens.brand : Colors.transparent,
-                        ))),
-                        child: Column(children: [
-                          Text(DateFormat('E').format(widget.days[index].localDate),
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: index == _page ? tokens.brand : tokens.textSecondary,
-                            )),
-                          if (wide) ...[
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(DateFormat.MMMd().format(widget.days[index].localDate),
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: index == _page ? tokens.brand : tokens.textSecondary)),
-                          ],
-                        ]),
+                          onTap: () => _goTo(index),
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            padding: EdgeInsets.symmetric(
+                              vertical: wide ? 12 : 10,
+                            ),
+                            decoration: wide
+                                ? BoxDecoration(
+                                    color: index == _page
+                                        ? tokens.brand.withValues(alpha: .12)
+                                        : tokens.surfaceRaised,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadii.sm,
+                                    ),
+                                    border: Border.all(
+                                      color: index == _page
+                                          ? tokens.brand
+                                          : tokens.outlineSoft,
+                                    ),
+                                  )
+                                : BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        width: 2,
+                                        color: index == _page
+                                            ? tokens.brand
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                  ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  DateFormat(
+                                    'E',
+                                  ).format(widget.days[index].localDate),
+                                  style: Theme.of(context).textTheme.labelLarge
+                                      ?.copyWith(
+                                        color: index == _page
+                                            ? tokens.brand
+                                            : tokens.textSecondary,
+                                      ),
+                                ),
+                                if (wide) ...[
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    DateFormat.MMMd().format(
+                                      widget.days[index].localDate,
+                                    ),
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: index == _page
+                                              ? tokens.brand
+                                              : tokens.textSecondary,
+                                        ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                )),
-            ]);
-          return dayWidth * widget.days.length <= constraints.maxWidth + .5
-              ? chips : SingleChildScrollView(scrollDirection: Axis.horizontal, child: chips);
-        }),
+              ],
+            );
+            return dayWidth * widget.days.length <= constraints.maxWidth + .5
+                ? chips
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: chips,
+                  );
+          },
+        ),
         const SizedBox(height: AppSpacing.md),
         if (wide) ...[
-          Align(alignment: Alignment.centerLeft,
-            child: Text(DateFormat('EEEE, MMMM d').format(day.localDate),
-              style: Theme.of(context).textTheme.titleLarge)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              DateFormat('EEEE, MMMM d').format(day.localDate),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
         ],
         GestureDetector(
@@ -1214,38 +1355,42 @@ class _PlannerSevenDaySectionState extends ConsumerState<PlannerSevenDaySection>
             if (velocity < -180) _goTo(_page + 1);
             if (velocity > 180) _goTo(_page - 1);
           },
-          child: _dayViewport(context,
+          child: _dayViewport(
+            context,
             child: day.items.isEmpty
-                ? const Center(child: Padding(
-                    padding: EdgeInsets.all(AppSpacing.md),
-                    child: Text('No planned or fixed items.', textAlign: TextAlign.center),
-                  ))
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(AppSpacing.md),
+                      child: Text(
+                        'No planned or fixed items.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
                 : AppScheduleDayCard(
-            timelineStyle: true,
-            localDate: day.localDate,
-            showDate: false,
-            items: day.items
-                .map(
-                  (item) => _plannerDayItemView(
-                    item,
-                    enabled: widget.enabled,
-                    timezone: widget.timezone,
+                    timelineStyle: true,
+                    localDate: day.localDate,
+                    showDate: false,
+                    items: day.items
+                        .map(
+                          (item) => _plannerDayItemView(
+                            item,
+                            enabled: widget.enabled,
+                            timezone: widget.timezone,
+                          ),
+                        )
+                        .toList(growable: false),
+                    emptyLabel: 'No planned or fixed items.',
+                    onItemTap: (view) =>
+                        widget.onItemTap(view.payload! as PlannerDayItem),
                   ),
-                )
-                .toList(growable: false),
-            emptyLabel: 'No planned or fixed items.',
-            onItemTap: (view) =>
-                widget.onItemTap(view.payload! as PlannerDayItem),
-            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _dayViewport(BuildContext context, {
-    required Widget child,
-  }) {
+  Widget _dayViewport(BuildContext context, {required Widget child}) {
     return Container(
       key: const ValueKey('planner-day-viewport'),
       constraints: const BoxConstraints(minHeight: 96),
@@ -1290,23 +1435,24 @@ AppScheduleDayItem _plannerDayItemView(
 }) {
   final visual = _visual(item.kind);
   String clock(DateTime instant) => DateFormat.Hm().format(
-        profileDateTimeAt(instant: instant, timezoneName: timezone),
-      );
+    profileDateTimeAt(instant: instant, timezoneName: timezone),
+  );
   final time = item.allDay
       ? 'All day'
       : item.recoveryMinutes > 0
-          ? '${clock(item.startsAt!)}–'
-              '${clock(item.endsAt!)} focus + '
-              '${item.recoveryMinutes} min recovery · reserved until '
-              '${clock(item.reservedEndsAt!)}'
-          : '${clock(item.startsAt!)}–${clock(item.endsAt!)}';
+      ? '${clock(item.startsAt!)}–'
+            '${clock(item.endsAt!)} focus + '
+            '${item.recoveryMinutes} min recovery · reserved until '
+            '${clock(item.reservedEndsAt!)}'
+      : '${clock(item.startsAt!)}–${clock(item.endsAt!)}';
   return AppScheduleDayItem(
     id: item.id,
     title: item.title,
     detail: time,
     category: visual.category,
     icon: visual.icon,
-    actionable: enabled &&
+    actionable:
+        enabled &&
         const {
           'manual_commitment',
           'task_block',
@@ -1333,34 +1479,37 @@ class PlannerPreparationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        key: const ValueKey('planner-ongoing-preparation'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _PlannerSectionHeading(title: 'Ongoing preparation',
-              icon: AppIcons.schoolOutlined, color: context.visualTokens.info,
-              count: plans.length),
-            const SizedBox(height: AppSpacing.sm),
-            if (plans.isEmpty)
-              const Text('No active exam or assignment preparation.')
-            else
-              for (final plan in plans)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(AppIcons.schoolOutlined),
-                  title: Text(plan.title),
-                  subtitle: Text(
-                    '${_minutes(plan.remainingMinutes)} remaining · '
-                    '${plan.nextBlockStartsAt == null ? 'no next block' : 'next ${DateFormat.MMMd().add_Hm().format(profileDateTimeAt(instant: plan.nextBlockStartsAt!, timezoneName: timezone))}'}',
-                  ),
-                  trailing: plan.hasPendingPreview
-                      ? const Chip(label: Text('Preview'))
-                      : const Icon(AppIcons.chevronRight),
-                  onTap: enabled ? () => onOpen(plan) : null,
-                ),
-          ],
+    key: const ValueKey('planner-ongoing-preparation'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PlannerSectionHeading(
+          title: 'Ongoing preparation',
+          icon: AppIcons.schoolOutlined,
+          color: context.visualTokens.info,
+          count: plans.length,
         ),
-      );
+        const SizedBox(height: AppSpacing.sm),
+        if (plans.isEmpty)
+          const Text('No active exam or assignment preparation.')
+        else
+          for (final plan in plans)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(AppIcons.schoolOutlined),
+              title: Text(plan.title),
+              subtitle: Text(
+                '${_minutes(plan.remainingMinutes)} remaining · '
+                '${plan.nextBlockStartsAt == null ? 'no next block' : 'next ${DateFormat.MMMd().add_Hm().format(profileDateTimeAt(instant: plan.nextBlockStartsAt!, timezoneName: timezone))}'}',
+              ),
+              trailing: plan.hasPendingPreview
+                  ? const Chip(label: Text('Preview'))
+                  : const Icon(AppIcons.chevronRight),
+              onTap: enabled ? () => onOpen(plan) : null,
+            ),
+      ],
+    ),
+  );
 }
 
 class PlannerPendingPreviewsSection extends StatelessWidget {
@@ -1377,38 +1526,35 @@ class PlannerPendingPreviewsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        key: const ValueKey('planner-pending-previews'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Pending previews',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            const Text(
-              'Review every staged Task or Habit change before confirmation.',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            for (final plan in plans)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  plan.targetKind == 'task'
-                      ? AppIcons.taskOutlined
-                      : AppIcons.repeatOutlined,
-                ),
-                title: Text(plan.pendingRevision!.targetTitle),
-                subtitle: Text(
-                  '${plan.targetKind == 'task' ? 'Task' : 'Habit'} preview · '
-                  '${plan.pendingRevision!.plannedMinutes} min placed',
-                ),
-                trailing: const Icon(AppIcons.chevronRight),
-                onTap: enabled ? () => onOpen(plan) : null,
-              ),
-          ],
+    key: const ValueKey('planner-pending-previews'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Pending previews', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: AppSpacing.xs),
+        const Text(
+          'Review every staged Task or Habit change before confirmation.',
         ),
-      );
+        const SizedBox(height: AppSpacing.sm),
+        for (final plan in plans)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              plan.targetKind == 'task'
+                  ? AppIcons.taskOutlined
+                  : AppIcons.repeatOutlined,
+            ),
+            title: Text(plan.pendingRevision!.targetTitle),
+            subtitle: Text(
+              '${plan.targetKind == 'task' ? 'Task' : 'Habit'} preview · '
+              '${plan.pendingRevision!.plannedMinutes} min placed',
+            ),
+            trailing: const Icon(AppIcons.chevronRight),
+            onTap: enabled ? () => onOpen(plan) : null,
+          ),
+      ],
+    ),
+  );
 }
 
 class PlannerHabitsSection extends StatelessWidget {
@@ -1416,24 +1562,29 @@ class PlannerHabitsSection extends StatelessWidget {
     super.key,
     required this.items,
     required this.onOpen,
+    this.onManage,
     this.enabled = true,
   });
 
   final List<PlannerHabitSummary> items;
   final ValueChanged<PlannerHabitSummary> onOpen;
+  final ValueChanged<PlannerHabitSummary>? onManage;
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final unplanned =
-        items.where((item) => item.planningStatus == 'unplanned').length;
+    final unplanned = items
+        .where((item) => item.planningStatus == 'unplanned')
+        .length;
     return AppCard(
       key: const ValueKey('planner-habits'),
       padding: EdgeInsets.zero,
       child: ExpansionTile(
         initiallyExpanded: false,
-        leading: _PlannerSummaryIcon(icon: AppIcons.repeatOutlined,
-          color: context.visualTokens.info),
+        leading: _PlannerSummaryIcon(
+          icon: AppIcons.repeatOutlined,
+          color: context.visualTokens.info,
+        ),
         title: Text('Habits', style: Theme.of(context).textTheme.titleLarge),
         subtitle: Text('${items.length} active · $unplanned unplanned'),
         children: [
@@ -1474,7 +1625,13 @@ class PlannerHabitsSection extends StatelessWidget {
                       ),
                   ],
                 ),
-                trailing: const Icon(AppIcons.chevronRight),
+                trailing: onManage == null
+                    ? const Icon(AppIcons.chevronRight)
+                    : IconButton(
+                        tooltip: 'Manage / remove habit',
+                        icon: const Icon(AppIcons.tune),
+                        onPressed: enabled ? () => onManage!(item) : null,
+                      ),
                 onTap: enabled ? () => onOpen(item) : null,
               ),
         ],
@@ -1578,32 +1735,37 @@ class PlannerHistorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        key: const ValueKey('planner-history'),
-        padding: EdgeInsets.zero,
-        child: ExpansionTile(
-          leading: _PlannerSummaryIcon(icon: AppIcons.archiveOutlined,
-            color: context.visualTokens.textSecondary),
-          title: Text('Completed and archived', style: Theme.of(context).textTheme.titleLarge),
-          subtitle: Text('${items.length} historical items'),
-          children: [
-            if (items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(AppSpacing.md),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('No history yet.'),
-                ),
-              )
-            else
-              for (final item in items)
-                ListTile(
-                  leading: const Icon(AppIcons.history),
-                  title: Text(item.title),
-                  subtitle: Text(item.kind == 'task' ? 'Task' : 'Habit'),
-                ),
-          ],
-        ),
-      );
+    key: const ValueKey('planner-history'),
+    padding: EdgeInsets.zero,
+    child: ExpansionTile(
+      leading: _PlannerSummaryIcon(
+        icon: AppIcons.archiveOutlined,
+        color: context.visualTokens.textSecondary,
+      ),
+      title: Text(
+        'Completed and archived',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      subtitle: Text('${items.length} historical items'),
+      children: [
+        if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('No history yet.'),
+            ),
+          )
+        else
+          for (final item in items)
+            ListTile(
+              leading: const Icon(AppIcons.history),
+              title: Text(item.title),
+              subtitle: Text(item.kind == 'task' ? 'Task' : 'Habit'),
+            ),
+      ],
+    ),
+  );
 }
 
 class _PlannerSummaryIcon extends StatelessWidget {
@@ -1614,15 +1776,22 @@ class _PlannerSummaryIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(color: color.withValues(alpha: .12),
-      borderRadius: BorderRadius.circular(AppRadii.sm)),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(AppRadii.sm),
+    ),
     child: Icon(icon, size: 22, color: color),
   );
 }
 
 class _PlannerSectionHeading extends StatelessWidget {
-  const _PlannerSectionHeading({required this.title, required this.icon,
-    required this.color, this.count, this.action});
+  const _PlannerSectionHeading({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.count,
+    this.action,
+  });
   final String title;
   final IconData icon;
   final Color color;
@@ -1630,19 +1799,27 @@ class _PlannerSectionHeading extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Row(children: [
-    _PlannerSummaryIcon(icon: icon, color: color),
-    const SizedBox(width: AppSpacing.sm),
-    Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
-    if (count != null) ...[
-      const SizedBox(width: AppSpacing.xs),
-      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: context.visualTokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(AppRadii.pill)),
-        child: Text('$count', style: Theme.of(context).textTheme.labelMedium)),
+  Widget build(BuildContext context) => Row(
+    children: [
+      _PlannerSummaryIcon(icon: icon, color: color),
+      const SizedBox(width: AppSpacing.sm),
+      Expanded(
+        child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+      ),
+      if (count != null) ...[
+        const SizedBox(width: AppSpacing.xs),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: context.visualTokens.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadii.pill),
+          ),
+          child: Text('$count', style: Theme.of(context).textTheme.labelMedium),
+        ),
+      ],
+      if (action != null) action!,
     ],
-    if (action != null) action!,
-  ]);
+  );
 }
 
 class PlannerMutationError extends StatelessWidget {
@@ -1661,44 +1838,44 @@ class PlannerMutationError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          exactRetryRequired
+              ? 'Result not confirmed'
+              : conflict
+              ? 'Planner changed'
+              : 'Could not save change',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          exactRetryRequired
+              ? 'Retry the exact submitted values, or reload before starting another change.'
+              : conflict
+              ? 'Reload current data and create a new preview. Active reservations were not changed.'
+              : 'Your entered values are retained on this page.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            Text(
-              exactRetryRequired
-                  ? 'Result not confirmed'
-                  : conflict
-                      ? 'Planner changed'
-                      : 'Could not save change',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              exactRetryRequired
-                  ? 'Retry the exact submitted values, or reload before starting another change.'
-                  : conflict
-                      ? 'Reload current data and create a new preview. Active reservations were not changed.'
-                      : 'Your entered values are retained on this page.',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                if (onRetryExact != null)
-                  FilledButton(
-                    onPressed: onRetryExact,
-                    child: const Text('Retry same change'),
-                  ),
-                OutlinedButton(
-                  onPressed: onReload,
-                  child: const Text('Reload Planner'),
-                ),
-              ],
+            if (onRetryExact != null)
+              FilledButton(
+                onPressed: onRetryExact,
+                child: const Text('Retry same change'),
+              ),
+            OutlinedButton(
+              onPressed: onReload,
+              child: const Text('Reload Planner'),
             ),
           ],
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class PlannerLoadError extends StatelessWidget {
@@ -1708,20 +1885,20 @@ class PlannerLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        child: Column(
-          children: [
-            const Text(
-              'Planner could not be loaded. Check your connection and try again.',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(AppIcons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
+    child: Column(
+      children: [
+        const Text(
+          'Planner could not be loaded. Check your connection and try again.',
         ),
-      );
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(AppIcons.refresh),
+          label: const Text('Retry'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BlockVisual {
@@ -1732,40 +1909,40 @@ class _BlockVisual {
 }
 
 _BlockVisual _visual(String kind) => switch (kind) {
-      'setup_commitment' => const _BlockVisual(
-          AppIcons.settingsSuggestOutlined,
-          AppCategory.setup,
-        ),
-      'manual_commitment' => const _BlockVisual(
-          AppIcons.eventBusyOutlined,
-          AppCategory.fixedCommitment,
-        ),
-      'task_block' =>
-        const _BlockVisual(AppIcons.taskOutlined, AppCategory.task),
-      'habit_slot' =>
-        const _BlockVisual(AppIcons.repeatOutlined, AppCategory.habit),
-      'preparation' =>
-        const _BlockVisual(AppIcons.schoolOutlined, AppCategory.preparation),
-      _ => const _BlockVisual(
-          AppIcons.calendarMonthOutlined,
-          AppCategory.calendar,
-        ),
-    };
+  'setup_commitment' => const _BlockVisual(
+    AppIcons.settingsSuggestOutlined,
+    AppCategory.setup,
+  ),
+  'manual_commitment' => const _BlockVisual(
+    AppIcons.eventBusyOutlined,
+    AppCategory.fixedCommitment,
+  ),
+  'task_block' => const _BlockVisual(AppIcons.taskOutlined, AppCategory.task),
+  'habit_slot' => const _BlockVisual(
+    AppIcons.repeatOutlined,
+    AppCategory.habit,
+  ),
+  'preparation' => const _BlockVisual(
+    AppIcons.schoolOutlined,
+    AppCategory.preparation,
+  ),
+  _ => const _BlockVisual(AppIcons.calendarMonthOutlined, AppCategory.calendar),
+};
 
 String _reason(String value) => switch (value) {
-      'released' => 'Future reservations were released. Create a new preview.',
-      'missing_scheduling_inputs' =>
-        'Duration, exact deadline, or session length is missing.',
-      'no_time_available' =>
-        'No time was available within the current planning limits.',
-      _ => 'No confirmed reservation.',
-    };
+  'released' => 'Future reservations were released. Create a new preview.',
+  'missing_scheduling_inputs' =>
+    'Duration, exact deadline, or session length is missing.',
+  'no_time_available' =>
+    'No time was available within the current planning limits.',
+  _ => 'No confirmed reservation.',
+};
 
 String _habitCadence(PlannerHabitSummary item) => switch (item.cadenceKind) {
-      'daily' => 'Daily',
-      'weekdays' => item.scheduledWeekdays.map(_weekdayShort).join(', '),
-      _ => '${item.weeklyTarget} times per week',
-    };
+  'daily' => 'Daily',
+  'weekdays' => item.scheduledWeekdays.map(_weekdayShort).join(', '),
+  _ => '${item.weeklyTarget} times per week',
+};
 
 String _weekdayShort(int value) =>
     const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][value - 1];

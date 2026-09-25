@@ -212,6 +212,9 @@ class InsightsSkillsetCard extends StatelessWidget {
             tilePadding: EdgeInsets.zero,
             leading: const Icon(AppIcons.tuneOutlined),
             title: Text('Dimensions (${readings.length})'),
+            subtitle: available.length < readings.length
+                ? Text('${available.length}/${readings.length} available')
+                : null,
             children: [
               for (final dimension in _dimensions)
                 CheckboxListTile(
@@ -228,6 +231,14 @@ class InsightsSkillsetCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (available.length < readings.length)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                'No data: ${readings.where((r) => r.value == null).map((r) => r.dimension.label).join(', ')}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
           if (chartView == SkillsetChartView.bars && available.isNotEmpty)
             Column(
               key: const Key('skillset-bars'),

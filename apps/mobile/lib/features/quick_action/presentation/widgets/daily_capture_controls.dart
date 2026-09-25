@@ -8,6 +8,8 @@ import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/core/widgets/app_info_disclosure.dart';
 
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/feedback/app_haptics.dart';
+import 'capture_leave_guard.dart';
 
 /// Non-persisted disclosure for explanatory Daily Capture copy.
 ///
@@ -168,6 +170,7 @@ class _CaptureChoiceControlState<T> extends State<CaptureChoiceControl<T>> {
                     : null,
                 surfaceTintColor: Colors.transparent,
                 onSelected: (_) {
+                  AppHaptics.selection(context);
                   if (connected && selected) {
                     setState(() => _detailExpanded = !_detailExpanded);
                   } else {
@@ -285,7 +288,10 @@ class _EqualChoiceButton<T> extends StatelessWidget {
         label: choice.semanticLabel ?? choice.label,
         child: ChoiceChip(
           selected: selected,
-          onSelected: (_) => onChanged(choice.value),
+          onSelected: (_) {
+            AppHaptics.selection(context);
+            onChanged(choice.value);
+          },
           label: ExcludeSemantics(
             child: SizedBox(
               width: double.infinity,
@@ -352,6 +358,7 @@ class _ChoiceInfoButtonState extends State<_ChoiceInfoButton> {
           child: ExcludeSemantics(
             child: IconButton(
               key: ValueKey('capture-choice-info-${widget.label}'),
+              color: tokens.textSecondary,
               onPressed: _showTooltip,
               focusNode: _focusNode,
               padding: EdgeInsets.zero,
@@ -362,7 +369,7 @@ class _ChoiceInfoButtonState extends State<_ChoiceInfoButton> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadii.sm),
                   border: Border.all(
-                    color: _focused ? tokens.focus : tokens.outlineSoft,
+                    color: _focused ? tokens.focus : Colors.transparent,
                     width: _focused ? 2 : 1,
                   ),
                 ),
@@ -455,17 +462,22 @@ class CaptureRatingControl extends StatelessWidget {
   Widget _ratingButton(BuildContext context, int rating) {
     final selected = rating == value;
     final tokens = context.visualTokens;
+    void choose() {
+      if (!selected) AppHaptics.selection(context);
+      onChanged(rating);
+    }
+
     return Semantics(
       button: true,
       selected: selected,
       label: '$semanticPrefix $rating of 10',
-      onTap: () => onChanged(rating),
+      onTap: choose,
       child: ExcludeSemantics(
         child: SizedBox.square(
           dimension: 44,
           child: selected
               ? FilledButton(
-                  onPressed: () => onChanged(rating),
+                  onPressed: choose,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.square(44),
                     padding: EdgeInsets.zero,
@@ -475,7 +487,7 @@ class CaptureRatingControl extends StatelessWidget {
                   child: Text('$rating'),
                 )
               : OutlinedButton(
-                  onPressed: () => onChanged(rating),
+                  onPressed: choose,
                   style:
                       OutlinedButton.styleFrom(
                         backgroundColor: Colors.transparent,
@@ -783,6 +795,7 @@ class CaptureFlowScaffold extends StatelessWidget {
     required this.onClose,
     required this.onBack,
     required this.onNext,
+    this.hasUnsavedChanges = false,
     this.statusMessage,
     this.errorMessage,
     this.loadErrorMessage,
@@ -812,171 +825,184 @@ class CaptureFlowScaffold extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onBack;
   final VoidCallback onNext;
+  final bool hasUnsavedChanges;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 620),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: colors.surfaceContainer,
-                    borderRadius: BorderRadius.circular(AppRadii.xl),
-                    border: Border.all(color: colors.outlineVariant),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            LinearProgressIndicator(value: progress),
-                            const SizedBox(height: AppSpacing.lg),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        eyebrow,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelLarge
-                                            ?.copyWith(color: colors.primary),
-                                      ),
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Text(
-                                        title,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.headlineMedium,
-                                      ),
-                                      if (subtitle != null) ...[
+    return CaptureLeaveGuard(
+      dirty: hasUnsavedChanges,
+      saving: isSaving,
+      onLeave: onClose,
+      builder: (requestClose) => Scaffold(
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 620),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainer,
+                      borderRadius: BorderRadius.circular(AppRadii.xl),
+                      border: Border.all(color: colors.outlineVariant),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              LinearProgressIndicator(value: progress),
+                              const SizedBox(height: AppSpacing.lg),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          eyebrow,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(color: colors.primary),
+                                        ),
                                         const SizedBox(height: AppSpacing.sm),
                                         Text(
-                                          subtitle!,
+                                          title,
                                           style: Theme.of(
                                             context,
-                                          ).textTheme.bodyLarge,
+                                          ).textTheme.headlineMedium,
                                         ),
+                                        if (subtitle != null) ...[
+                                          const SizedBox(height: AppSpacing.sm),
+                                          Text(
+                                            subtitle!,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodyLarge,
+                                          ),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
-                                ),
-                                IconButton(
-                                  key: const ValueKey('capture-flow-back'),
-                                  tooltip: 'Back',
-                                  onPressed: canGoBack ? onBack : onClose,
-                                  icon: const Icon(AppIcons.arrowBack),
-                                ),
-                              ],
-                            ),
-                            if (statusMessage != null) ...[
-                              const SizedBox(height: AppSpacing.md),
-                              CaptureInlineMessage(
-                                message: statusMessage!,
-                                isError: false,
-                              ),
-                            ],
-                            if (errorMessage != null) ...[
-                              const SizedBox(height: AppSpacing.md),
-                              CaptureInlineMessage(
-                                message: errorMessage!,
-                                isError: true,
-                              ),
-                            ],
-                            if (loadErrorMessage != null) ...[
-                              const SizedBox(height: AppSpacing.md),
-                              CaptureInlineMessage(
-                                message: loadErrorMessage!,
-                                isError: true,
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Wrap(
-                                spacing: AppSpacing.sm,
-                                runSpacing: AppSpacing.sm,
-                                children: [
-                                  if (onRetryLoad != null)
-                                    OutlinedButton.icon(
-                                      onPressed: isLoading ? null : onRetryLoad,
-                                      icon: const Icon(AppIcons.refresh),
-                                      label: const Text('Retry load'),
-                                    ),
-                                  if (secondaryLoadActionLabel != null &&
-                                      onSecondaryLoadAction != null)
-                                    TextButton(
-                                      onPressed: isLoading
-                                          ? null
-                                          : onSecondaryLoadAction,
-                                      child: Text(secondaryLoadActionLabel!),
-                                    ),
+                                  IconButton(
+                                    key: const ValueKey('capture-flow-back'),
+                                    tooltip: 'Back',
+                                    onPressed: isSaving
+                                        ? null
+                                        : canGoBack
+                                        ? onBack
+                                        : requestClose,
+                                    icon: const Icon(AppIcons.arrowBack),
+                                  ),
                                 ],
                               ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      Padding(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: isLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : child,
-                      ),
-                      const Divider(height: 1),
-                      Padding(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: canGoBack ? onBack : null,
-                                icon: const Icon(AppIcons.arrowBack),
-                                label: const Text('Back'),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: isLoading || isSaving || !canContinue
-                                    ? null
-                                    : onNext,
-                                icon: isSaving
-                                    ? const SizedBox.square(
-                                        dimension: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Icon(
-                                        isLastStep
-                                            ? AppIcons.check
-                                            : AppIcons.arrowForward,
+                              if (statusMessage != null) ...[
+                                const SizedBox(height: AppSpacing.md),
+                                CaptureInlineMessage(
+                                  message: statusMessage!,
+                                  isError: false,
+                                ),
+                              ],
+                              if (errorMessage != null) ...[
+                                const SizedBox(height: AppSpacing.md),
+                                CaptureInlineMessage(
+                                  message: errorMessage!,
+                                  isError: true,
+                                ),
+                              ],
+                              if (loadErrorMessage != null) ...[
+                                const SizedBox(height: AppSpacing.md),
+                                CaptureInlineMessage(
+                                  message: loadErrorMessage!,
+                                  isError: true,
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                Wrap(
+                                  spacing: AppSpacing.sm,
+                                  runSpacing: AppSpacing.sm,
+                                  children: [
+                                    if (onRetryLoad != null)
+                                      OutlinedButton.icon(
+                                        onPressed: isLoading
+                                            ? null
+                                            : onRetryLoad,
+                                        icon: const Icon(AppIcons.refresh),
+                                        label: const Text('Retry load'),
                                       ),
-                                label: Text(
-                                  isSaving
-                                      ? 'Saving...'
-                                      : isLastStep
-                                      ? saveLabel
-                                      : 'Next',
+                                    if (secondaryLoadActionLabel != null &&
+                                        onSecondaryLoadAction != null)
+                                      TextButton(
+                                        onPressed: isLoading
+                                            ? null
+                                            : onSecondaryLoadAction,
+                                        child: Text(secondaryLoadActionLabel!),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : child,
+                        ),
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: canGoBack ? onBack : null,
+                                  icon: const Icon(AppIcons.arrowBack),
+                                  label: const Text('Back'),
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed:
+                                      isLoading || isSaving || !canContinue
+                                      ? null
+                                      : onNext,
+                                  icon: isSaving
+                                      ? const SizedBox.square(
+                                          dimension: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Icon(
+                                          isLastStep
+                                              ? AppIcons.check
+                                              : AppIcons.arrowForward,
+                                        ),
+                                  label: Text(
+                                    isSaving
+                                        ? 'Saving...'
+                                        : isLastStep
+                                        ? saveLabel
+                                        : 'Next',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

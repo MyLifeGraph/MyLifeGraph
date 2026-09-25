@@ -18,18 +18,39 @@ class NotificationsSupabaseDataSource {
   final NotificationsSupabaseRowMapper mapper;
   final NotificationsClock clock;
 
-  Future<List<AppNotification>> getNotifications() async {
+  Future<List<AppNotification>> getNotifications() => getHistory();
+
+  Future<List<AppNotification>> getHistory({
+    bool dismissed = false,
+    int limit = 30,
+  }) async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final intent = NotificationsSupabaseQueryIntent.at(clock());
-    final rows = await _client
+    var query = _client
         .from(SupabaseTables.notifications)
         .select(NotificationsSupabaseQueryIntent.columns)
-        .eq('user_id', userId)
-        .isFilter(NotificationsSupabaseQueryIntent.dismissedAtColumn, null)
+        .eq('user_id', userId);
+    query = dismissed
+        ? query.not(
+            NotificationsSupabaseQueryIntent.dismissedAtColumn,
+            'is',
+            null,
+          )
+        : query.isFilter(
+            NotificationsSupabaseQueryIntent.dismissedAtColumn,
+            null,
+          );
+    final rows = await query
         .or(intent.dueAtFilter)
         .order('created_at', ascending: false)
-        .limit(30);
+        .order('id', ascending: false)
+        .limit(limit.clamp(30, 1000));
 
+    if (dismissed) {
+      return List<Map<String, dynamic>>.from(
+        rows as List,
+      ).map(mapper.fromRow).toList();
+    }
     return mapper.visibleFromRows(
       List<Map<String, dynamic>>.from(rows as List),
       now: intent.nowUtc,
@@ -100,29 +121,25 @@ class NotificationsSupabaseRowMapper {
   const NotificationsSupabaseRowMapper();
 
   AppNotification fromRow(Map<String, dynamic> row) {
-    requireNotificationExactKeys(
-      row,
-      const {
-        'id',
-        'title',
-        'message',
-        'type',
-        'priority',
-        'action_url',
-        'created_at',
-        'updated_at',
-        'is_read',
-        'read_at',
-        'dismissed_at',
-        'due_at',
-        'metadata',
-        'generation_key',
-        'generation_category',
-        'delivery_date',
-        'in_app_delivered_at',
-      },
-      'Notification row',
-    );
+    requireNotificationExactKeys(row, const {
+      'id',
+      'title',
+      'message',
+      'type',
+      'priority',
+      'action_url',
+      'created_at',
+      'updated_at',
+      'is_read',
+      'read_at',
+      'dismissed_at',
+      'due_at',
+      'metadata',
+      'generation_key',
+      'generation_category',
+      'delivery_date',
+      'in_app_delivered_at',
+    }, 'Notification row');
     final id = row['id'];
     final title = row['title'];
     final message = row['message'];
@@ -147,10 +164,14 @@ class NotificationsSupabaseRowMapper {
         'Notification row scalar fields are invalid.',
       );
     }
-    final createdAt =
-        requiredNotificationAwareDateTime(row['created_at'], 'created_at');
-    final updatedAt =
-        requiredNotificationAwareDateTime(row['updated_at'], 'updated_at');
+    final createdAt = requiredNotificationAwareDateTime(
+      row['created_at'],
+      'created_at',
+    );
+    final updatedAt = requiredNotificationAwareDateTime(
+      row['updated_at'],
+      'updated_at',
+    );
     final readAt = optionalNotificationAwareDateTime(row['read_at'], 'read_at');
     final dismissedAt = optionalNotificationAwareDateTime(
       row['dismissed_at'],
@@ -258,23 +279,19 @@ class NotificationsSupabaseRowMapper {
         'Generated notification row is invalid.',
       );
     }
-    requireNotificationExactKeys(
-      metadata,
-      const {
-        'contract_version',
-        'origin',
-        'category',
-        'reason_code',
-        'delivery_date',
-        'timezone',
-        'source_kind',
-        'source_id',
-        'source_generated_at',
-        'sensitive_copy_excluded',
-        'llm_used',
-      },
-      'Notification generation provenance',
-    );
+    requireNotificationExactKeys(metadata, const {
+      'contract_version',
+      'origin',
+      'category',
+      'reason_code',
+      'delivery_date',
+      'timezone',
+      'source_kind',
+      'source_id',
+      'source_generated_at',
+      'sensitive_copy_excluded',
+      'llm_used',
+    }, 'Notification generation provenance');
     final reasonCode = metadata['reason_code'];
     final timezone = metadata['timezone'];
     final sourceKind = metadata['source_kind'];
@@ -290,10 +307,7 @@ class NotificationsSupabaseRowMapper {
         timezone is! String ||
         timezone.isEmpty ||
         sourceKind is! String ||
-        !const {
-          'daily_state',
-          'weekly_review',
-        }.contains(sourceKind) ||
+        !const {'daily_state', 'weekly_review'}.contains(sourceKind) ||
         sourceId is! String ||
         sourceId.isEmpty) {
       throw const NotificationLifecycleContractException(

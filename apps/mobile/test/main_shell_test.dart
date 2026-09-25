@@ -420,7 +420,7 @@ void main() {
   });
 
   testWidgets(
-      'Space shell renders one navigation blur and opaque themes render none',
+      'glass themes render one navigation blur and opaque themes render none',
       (tester) async {
     final router = _router(initialLocation: AppRoutes.dashboard);
     addTearDown(router.dispose);
@@ -477,6 +477,14 @@ void main() {
       mobileSurface.color,
       spaceTokens.surface.withValues(alpha: 0.52),
     );
+
+    for (final size in [const Size(390, 844), const Size(1280, 960)]) {
+      await pump(AppTheme.liquidGlass, size);
+      expect(find.byType(BackdropFilter), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await pump(AppTheme.resolve(AppThemeId.liquidGlass, highContrast: true), size);
+      expect(find.byType(BackdropFilter), findsNothing);
+    }
 
     await pump(AppTheme.dark, const Size(390, 844));
     expect(find.byType(BackdropFilter), findsNothing);

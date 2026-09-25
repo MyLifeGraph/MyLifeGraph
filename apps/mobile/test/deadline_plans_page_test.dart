@@ -45,6 +45,24 @@ const _berlinProfile = AppProfile(
 );
 
 void main() {
+  testWidgets('Plan again creates a separate preview without restoring reservations', (tester) async {
+    final repository = _FakeDeadlinePlanRepository(useProposedIdentity: true, feeds: [DeadlinePlanFeed(plans: [_plan(status: 'cancelled')])]);
+    await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(currentTime: DateTime(2026, 7, 18, 9)));
+    await _tap(tester, find.text('History'));
+    await _tapPlanAction(tester, 'Plan again');
+    expect(repository.proposalDrafts, isEmpty);
+    expect(repository.confirmCalls, 0);
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.text('Create preview'));
+    final draft = repository.proposalDrafts.single;
+    expect(draft.planId, isNot(deadlinePlanId));
+    expect(draft.baseRevision, 0);
+    expect(draft.creditedPriorMinutes, 0);
+    expect(draft.sourceCalendarEventId, isNull);
+    expect(repository.confirmCalls, 0);
+  });
   final now = DateTime(2026, 7, 18, 10);
 
   testWidgets('Series retry stays visible while the plan feed loads or fails',
@@ -1464,7 +1482,7 @@ void main() {
       await _expandPlan(tester);
       await tester.ensureVisible(find.text('Edit plan'));
       await tester.pumpAndSettle();
-      final buttons = ['Edit plan', 'Complete', 'Cancel'].map((label) =>
+      final buttons = ['Edit plan', 'Complete', 'Remove'].map((label) =>
           find.ancestor(of: find.text(label), matching: find.byType(OutlinedButton)));
       final rects = buttons.map(tester.getRect).toList();
       for (final rect in rects) {
@@ -3165,6 +3183,7 @@ AppException _conflict(String detail) {
 
 class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   _FakeDeadlinePlanRepository({
+    this.useProposedIdentity = false,
     List<DeadlinePlanFeed>? feeds,
     List<DeadlinePlan>? proposalResults,
     List<Object>? proposalErrors,
@@ -3178,6 +3197,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
         proposalErrors = [...?proposalErrors];
 
   final List<DeadlinePlanFeed> feeds;
+  final bool useProposedIdentity;
   final List<DeadlinePlan> proposalResults;
   final List<Object> proposalErrors;
   final DeadlinePlan? confirmResult;
@@ -3230,6 +3250,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
     proposalDrafts.add(draft);
     if (proposalErrors.isNotEmpty) throw proposalErrors.removeAt(0);
     if (proposalResults.isNotEmpty) return proposalResults.removeAt(0);
+    if (useProposedIdentity) return _planWithIdentity(id: draft.planId, title: draft.title, status: 'draft');
     return _plan(status: 'draft');
   }
 

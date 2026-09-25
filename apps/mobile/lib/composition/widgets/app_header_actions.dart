@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/app_radii.dart';
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_icons.dart';
+import '../../core/theme/app_visual_tokens.dart';
+import '../../core/widgets/app_surface.dart';
 import '../../features/coach/application/coach_turn_notice.dart';
 import '../../features/coach/presentation/providers/coach_providers.dart';
 
@@ -21,11 +24,11 @@ class AppHeaderActions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notice = ref.watch(coachTurnNoticeProvider);
-    return Wrap(
+    final actions = Wrap(
       key: const ValueKey('global-header-actions'),
       alignment: WrapAlignment.end,
       crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: AppSpacing.xs,
+      spacing: 0,
       runSpacing: AppSpacing.xs,
       children: [
         ...pageActions.map(
@@ -44,7 +47,8 @@ class AppHeaderActions extends ConsumerWidget {
             key: const ValueKey('global-header-inbox'),
             tooltip: 'Inbox',
             onPressed: GoRouter.maybeOf(context) == null
-                ? null : () => context.push(AppRoutes.alerts),
+                ? null
+                : () => context.push(AppRoutes.alerts),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(width: 44, height: 44),
             icon: const Icon(AppIcons.inboxOutlined),
@@ -53,14 +57,43 @@ class AppHeaderActions extends ConsumerWidget {
         ],
       ],
     );
+    if (settingsSelected && notice == null && pageActions.isEmpty) {
+      return actions;
+    }
+    return AppSurface(
+      key: const ValueKey('header-action-island'),
+      variant: AppSurfaceVariant.raised,
+      radius: AppRadii.pill,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: 2,
+      ),
+      child: IconButtonTheme(
+        data: IconButtonThemeData(
+          style: (IconButtonTheme.of(context).style ?? const ButtonStyle())
+              .copyWith(
+                backgroundColor: const WidgetStatePropertyAll(
+                  Colors.transparent,
+                ),
+                // One shared glass surface, not a tiny glass tile per icon.
+                backgroundBuilder: (context, states, child) =>
+                    child ?? const SizedBox.shrink(),
+                shape: const WidgetStatePropertyAll(CircleBorder()),
+                side: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.focused)
+                      ? BorderSide(color: context.visualTokens.focus, width: 2)
+                      : BorderSide.none,
+                ),
+              ),
+        ),
+        child: actions,
+      ),
+    );
   }
 }
 
 class _CoachNoticeButton extends StatelessWidget {
-  const _CoachNoticeButton({
-    required this.notice,
-    required this.onPressed,
-  });
+  const _CoachNoticeButton({required this.notice, required this.onPressed});
 
   final CoachTurnNotice notice;
   final VoidCallback onPressed;
@@ -79,10 +112,7 @@ class _CoachNoticeButton extends StatelessWidget {
             key: const ValueKey('global-header-coach-notice'),
             onPressed: onPressed,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(
-              width: 44,
-              height: 44,
-            ),
+            constraints: const BoxConstraints.tightFor(width: 44, height: 44),
             icon: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -101,9 +131,7 @@ class _CoachNoticeButton extends StatelessWidget {
                         child: Center(
                           child: Text(
                             '!',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
+                            style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
                                   color: Theme.of(context).colorScheme.onError,
                                 ),
@@ -137,8 +165,8 @@ class _SettingsButton extends StatelessWidget {
       onPressed: selected
           ? () {}
           : router == null
-              ? null
-              : () => context.push(AppRoutes.settings),
+          ? null
+          : () => context.push(AppRoutes.settings),
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints.tightFor(width: 44, height: 44),
       style: selected
@@ -150,10 +178,7 @@ class _SettingsButton extends StatelessWidget {
       icon: Icon(selected ? AppIcons.settings : AppIcons.settingsOutlined),
     );
     if (!selected) return button;
-    return Semantics(
-      selected: true,
-      child: button,
-    );
+    return Semantics(selected: true, child: button);
   }
 }
 

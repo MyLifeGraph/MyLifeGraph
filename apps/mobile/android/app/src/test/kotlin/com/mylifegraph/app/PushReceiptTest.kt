@@ -12,6 +12,12 @@ class PushReceiptTest {
     @Test fun currentShortLivedReceiptIsAccepted() {
         assertTrue(PushReceipt.accepts(data, true, "owner", "session", "registration", 1000))
     }
+    @Test fun checkinsRequireTheirOwnDestination() {
+        for ((kind, route) in listOf("morning" to "/morning-calibration", "evening" to "/quick-mood-check-in")) {
+            assertTrue(PushReceipt.accepts(data + mapOf("kind" to kind, "destination" to route), true, "owner", "session", "registration", 1000))
+            assertFalse(PushReceipt.accepts(data + mapOf("kind" to kind), true, "owner", "session", "registration", 1000))
+        }
+    }
     @Test fun disabledAndChangedAccountCannotReceive() {
         assertFalse(PushReceipt.accepts(data, false, "owner", "session", "registration", 1000))
         assertFalse(PushReceipt.accepts(data, true, "other", "session", "registration", 1000))

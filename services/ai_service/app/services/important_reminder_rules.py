@@ -16,9 +16,9 @@ from app.models.sleep_recommendation import SleepRecommendationResponse
 
 @dataclass(frozen=True)
 class ImportantReminder:
-    kind: Literal["sleep", "deadlines", "pattern"]
+    kind: Literal["sleep", "deadlines", "pattern", "morning", "evening"]
     dedupe_key: str
-    destination: Literal["/insights", "/planner"]
+    destination: Literal["/insights", "/planner", "/morning-calibration", "/quick-mood-check-in"]
     title: str
     body: str
     expires_at: datetime
@@ -32,6 +32,10 @@ class ReminderPreferences:
     patterns: bool = True
     quiet_start: time = time(22)
     quiet_end: time = time(7)
+    morning: bool = False
+    evening: bool = False
+    morning_time: time = time(8)
+    evening_time: time = time(20)
 
 
 def important_reminders(
@@ -45,11 +49,14 @@ def important_reminders(
     sleep: SleepRecommendationResponse | None = None,
     patterns: PersonalPatternsResponse | None = None,
     last_pattern_reserved_at: datetime | None = None,
+    morning_saved: bool = True,
+    evening_saved: bool = True,
+    reserved_checkins: int = 0,
 ) -> list[ImportantReminder]:
-    """Choose at most two useful, short-lived reminders; no catch-up or LLM."""
+    """Choose up to two check-ins plus two other reminders; no catch-up or LLM."""
     if now.utcoffset() is None:
         raise ValueError("An aware evaluation time is required.")
-    if reserved_today < 0:
+    if reserved_today < 0 or reserved_checkins < 0:
         raise ValueError("Reservation count cannot be negative.")
     zone = ZoneInfo(timezone)
     local = now.astimezone(zone)
@@ -58,7 +65,7 @@ def important_reminders(
     quiet = start == end or (
         start <= clock < end if start < end else clock >= start or clock < end
     )
-    if not preferences.enabled or reserved_today >= 2 or quiet:
+    if not preferences.enabled or quiet:
         return []
     today = local.date()
     candidates: list[ImportantReminder] = []
@@ -147,11 +154,26 @@ def important_reminders(
                     expiry,
                 )
             )
-    return [
+    regular = [
         candidate
         for candidate in candidates
         if candidate.dedupe_key not in reserved_keys
-    ][: 2 - reserved_today]
+    ][: max(0, 2 - reserved_today)]
+    checkins = []
+    for kind, enabled, at, saved, route in (
+        ("morning", preferences.morning, preferences.morning_time, morning_saved, "/morning-calibration"),
+        ("evening", preferences.evening, preferences.evening_time, evening_saved, "/quick-mood-check-in"),
+    ):
+        instant = _local_instant(today, at, zone)
+        key = f"{kind}:{today}"
+        if (enabled and not saved and instant is not None
+                and instant <= now < instant + timedelta(minutes=15)
+                and key not in reserved_keys):
+            checkins.append(ImportantReminder(
+                kind, key, route, f"{kind.title()} check-in",
+                "Take a moment to record your day.", instant + timedelta(minutes=15),
+            ))
+    return checkins[:max(0, 2 - reserved_checkins)] + regular
 
 
 def _fresh(generated_at: datetime, now: datetime) -> bool:

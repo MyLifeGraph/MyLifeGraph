@@ -11,6 +11,7 @@ import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/feedback/app_haptics.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/app_theme_selection_provider.dart';
@@ -37,6 +38,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _isSavingPreparationBudget = false;
   bool _isExporting = false;
   bool _isDeleting = false;
+  bool _isSavingHaptics = false;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +55,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final profile = session?.profile;
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final themeSelection = ref.watch(appThemeSelectionProvider);
+    final haptics = ref.watch(appHapticsProvider);
     final androidFocusProtection = ref.watch(
       focusProtectionPlatformSupportedProvider,
     );
@@ -67,9 +70,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       compactHeader: true,
       actions: const [AppHeaderActions(settingsSelected: true)],
       children: [
-        const AppSectionHeader(
-          title: 'Profile',
-        ),
+        const AppSectionHeader(title: 'Profile'),
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,8 +83,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 value: session == null
                     ? null
                     : session.isGuestSession
-                        ? 'Local guest'
-                        : 'Synced account',
+                    ? 'Local guest'
+                    : 'Synced account',
                 isLast: true,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -118,9 +119,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ],
           ),
         ),
-        const AppSectionHeader(
-          title: 'Planning and learning',
-        ),
+        const AppSectionHeader(title: 'Planning and learning'),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
@@ -156,7 +155,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             title: const Text('Personal learning'),
             subtitle: Text(
               syncedAccount
-                  ? 'Control Focus reflection prompts, transparent pattern analysis, and optional new-plan timing.'
+                  ? 'Focus ratings · Study patterns · Planning'
                   : 'Available only for a synced account.',
             ),
             trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
@@ -181,8 +180,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               !syncedAccount
                   ? 'Available only for a synced account.'
                   : profile?.dailyPreparationBudgetMinutes == null
-                      ? 'Not set. Existing per-plan limits still apply.'
-                      : '${_formatMinutes(profile!.dailyPreparationBudgetMinutes!)} total per day across confirmed preparation plans.',
+                  ? 'Not set. Existing per-plan limits still apply.'
+                  : '${_formatMinutes(profile!.dailyPreparationBudgetMinutes!)} total per day across confirmed preparation plans.',
             ),
             trailing: syncedAccount && !_isSavingPreparationBudget
                 ? const Icon(AppIcons.editOutlined)
@@ -192,9 +191,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 : null,
           ),
         ),
-        const AppSectionHeader(
-          title: 'Tools and connections',
-        ),
+        const AppSectionHeader(title: 'Tools and connections'),
         if (syncedAccount) const HealthConnectSettingsEntry(),
         if (syncedAccount) const PushSettingsEntry(),
         AppCard(
@@ -225,9 +222,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: () => context.push(AppRoutes.calendarIntegration),
           ),
         ),
-        const AppSectionHeader(
-          title: 'Account and appearance',
-        ),
+        const AppSectionHeader(title: 'Account and appearance'),
         if (config?.isHostedEnvironment == true)
           AppCard(
             padding: EdgeInsets.zero,
@@ -321,6 +316,37 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: _chooseAppearance,
           ),
         ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: SwitchListTile.adaptive(
+            key: const ValueKey('haptic-feedback-setting'),
+            title: const Text('Haptic feedback'),
+            subtitle: Text(
+              haptics.hasError
+                  ? 'Could not load setting'
+                  : 'Subtle taps · This device',
+            ),
+            value: haptics.valueOrNull ?? true,
+            onChanged: _isSavingHaptics || !haptics.hasValue
+                ? null
+                : (enabled) async {
+                    setState(() => _isSavingHaptics = true);
+                    final controller = ref.read(appHapticsProvider.notifier);
+                    final saved = await controller.select(enabled);
+                    if (!mounted || !context.mounted) return;
+                    setState(() => _isSavingHaptics = false);
+                    if (!saved) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not save setting. Try again.'),
+                        ),
+                      );
+                    } else if (enabled) {
+                      controller.selection();
+                    }
+                  },
+          ),
+        ),
         if (config != null)
           AppCard(
             padding: EdgeInsets.zero,
@@ -331,7 +357,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               subtitle: Text(
                 '${config.environment} · '
                 '${config.appReleaseTag.isEmpty ? 'development' : config.appReleaseTag} · '
-                '${config.appBuildSha.isEmpty ? 'development' : config.appBuildSha.length <= 12 ? config.appBuildSha : config.appBuildSha.substring(0, 12)}',
+                '${config.appBuildSha.isEmpty
+                    ? 'development'
+                    : config.appBuildSha.length <= 12
+                    ? config.appBuildSha
+                    : config.appBuildSha.substring(0, 12)}',
               ),
             ),
           ),
@@ -439,7 +469,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           saved.minutes == null
               ? 'Account-wide preparation budget removed.'
               : 'Daily preparation budget set to '
-                  '${_formatMinutes(saved.minutes!)}.',
+                    '${_formatMinutes(saved.minutes!)}.',
         );
       }
     } on AccountPreparationBudgetRejectedException {
@@ -514,13 +544,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _confirmDeleteAccount() async {
-    final expectedUserId =
-        ref.read(authControllerProvider).valueOrNull?.profile.id;
+    final expectedUserId = ref
+        .read(authControllerProvider)
+        .valueOrNull
+        ?.profile
+        .id;
     if (expectedUserId == null) {
       _showMessage('Your account identity is unavailable. Sign in again.');
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (_) => const _DeleteAccountDialog(),
         ) ??
@@ -661,22 +695,25 @@ String _formatMinutes(int minutes) {
 }
 
 String _appearanceLabel(AppThemeId id) => switch (id) {
-      AppThemeId.dark => 'Dark',
-      AppThemeId.light => 'Light',
-      AppThemeId.space => 'Space',
-    };
+  AppThemeId.dark => 'Dark',
+  AppThemeId.light => 'Light',
+  AppThemeId.space => 'Space',
+  AppThemeId.liquidGlass => 'Liquid Glass',
+};
 
 String _appearanceDescription(AppThemeId id) => switch (id) {
-      AppThemeId.dark => 'Calm dark default',
-      AppThemeId.light => 'Bright neutral',
-      AppThemeId.space => 'Animated violet and cyan',
-    };
+  AppThemeId.dark => 'Calm dark default',
+  AppThemeId.light => 'Bright neutral',
+  AppThemeId.space => 'Animated violet and cyan',
+  AppThemeId.liquidGlass => 'Dark glass, soft light',
+};
 
 IconData _appearanceIcon(AppThemeId id) => switch (id) {
-      AppThemeId.dark => AppIcons.darkModeOutlined,
-      AppThemeId.light => AppIcons.lightModeOutlined,
-      AppThemeId.space => AppIcons.autoAwesomeRounded,
-    };
+  AppThemeId.dark => AppIcons.darkModeOutlined,
+  AppThemeId.light => AppIcons.lightModeOutlined,
+  AppThemeId.space => AppIcons.autoAwesomeRounded,
+  AppThemeId.liquidGlass => AppIcons.autoAwesomeRounded,
+};
 
 class _AppearanceDialog extends StatelessWidget {
   const _AppearanceDialog({required this.current});

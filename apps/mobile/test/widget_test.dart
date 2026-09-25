@@ -376,7 +376,8 @@ void main() {
     expect(morning, isNot(contains('day_shape')));
     expect(morning['estimated_sleep_minutes'], 330);
     expect(morning['sleep_target_minutes'], 480);
-    expect(morning['source_evening_capture_id'], evening['capture_id']);
+    // Tonight's Evening plan cannot be the source for the night ending today.
+    expect(morning['source_evening_capture_id'], isNull);
     expect(morning['branch_version'], dailyCaptureV5);
 
     await tester.tap(find.byIcon(AppIcons.add).last);

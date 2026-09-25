@@ -102,7 +102,7 @@ async def command_push(
                 params={
                     "p_user_id": principal.user_id,
                     "p_session_id": session_id,
-                    "p_request": command.model_dump(mode="json"),
+                    "p_request": command.rpc_payload(),
                 },
             ),
             request,

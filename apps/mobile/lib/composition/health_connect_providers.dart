@@ -7,6 +7,16 @@ import '../core/supabase/supabase_providers.dart';
 import '../features/health_connect/application/health_connect_controller.dart';
 import '../features/health_connect/data/health_connect_gateway.dart';
 import 'auth_providers.dart';
+import '../features/health_connect/domain/health_sleep_suggestion.dart';
+
+final healthSleepSuggestionProvider = FutureProvider.autoDispose
+    .family<HealthSleepSuggestion?, String>((ref, date) {
+      if (!ref.watch(appSurfaceCapabilitiesProvider).canUseSyncedExecution) {
+        return null;
+      }
+      ref.watch(healthConnectProvider);
+      return ref.read(healthConnectProvider.notifier).sleepSuggestion(date);
+    });
 
 final healthConnectProvider =
     StateNotifierProvider.autoDispose<

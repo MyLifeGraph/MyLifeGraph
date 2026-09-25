@@ -68,6 +68,13 @@ remaining entries. Empty current data and unavailable data are distinct.
 
 ## Check-In Streak
 
+The heading and count share one compact line (`Check-in streak · N days`);
+narrow phones shorten only the heading to `Streak`. Counts always remain days,
+including long runs. Enlarged accessibility text may wrap without clipping.
+The emphasized count is right-aligned with an extra 8px gap before the Info target.
+The quiet information action and heading long-press retain the completion rules.
+Today task/habit interaction haptics do not change completion or undo authority.
+
 Check-in buttons distinguish pending capture with an attention-tinted surface
 and saved capture with a success-tinted surface/check icon at all widths.
 Existing labels, edit/add actions and completion semantics are unchanged.
@@ -173,13 +180,13 @@ completed, and cancelled tasks also remain available in that expansion. Inline
 complete/undo and Focus actions reuse the existing Task/Focus contracts; no new
 write path is introduced. Creating a future or undated task expands the full
 list so the saved result does not appear to vanish.
-`Tasks due today` uses compact Habit-style rows: the leading circle invokes
+`Today & overdue` uses compact Habit-style rows: the leading circle invokes
 the existing completion action, while Focus and restore remain separate.
 Pending writes replace that circle with a spinner and disable row actions.
 The expanded full task list uses the same compact rows and a heading-adjacent
 `Open Planner` icon. Managed-plan navigation, Focus, restore, and all task
 commands and selection rules remain unchanged.
-`Tasks due today` places the `Open Planner` calendar icon beside its heading
+`Today & overdue` places the `Open Planner` calendar icon beside its heading
 when space permits; very narrow or large-text layouts stack it for readability.
 
 `Today's habits` includes active daily habits, selected-weekday habits scheduled
@@ -195,16 +202,19 @@ The primary Today order is:
 1. Today title with optional unread-Coach and Settings actions aligned
    top-right, then the profile-local date; no redundant account/source Info;
 2. Check-in streak with Morning and Evening save state/actions;
-3. green Today progress bar;
-4. `Today's schedule` vertical agenda;
-5. `Tasks due today`, followed by collapsed `All tasks`, with compact task rows
+3. `Today's schedule` vertical agenda;
+4. Today progress bar;
+5. `Today & overdue`, followed by collapsed `All tasks`, with compact task rows
    directly inside and a header-adjacent Planner icon, without a nested heading;
 6. `Habits for today`;
 7. a direct `Weekly review` navigation entry, followed by the independently
    collapsed `Full week` section. The Weekly Review entry is omitted when its
    existing capability is unavailable.
 
-The streak card includes a compact `Beat yesterday` inset. It independently
+The compact streak card puts directly visible `Last check-in` values below the
+streak heading, with the saved date in parentheses. Morning/Evening actions follow
+the values, preserving the original read-then-capture order.
+There is no expansion step; loading/empty/error states stay visible. It independently
 loads the latest saved check-in at or before the displayed profile-local Today
 date and shows that row's date plus only values actually present among Mood,
 Energy, Sleep duration, Sleep quality, and Stress. It calculates no delta,
@@ -224,7 +234,7 @@ behind compatibility UI.
 Explanatory copy is initially hidden behind an independent circled information
 control beside each affected heading. This applies to the normal streak
 explanation, the progress-inclusion explanation, `Today's schedule`,
-`Tasks due today`, `Habits for today`, and the Full-week accordion description.
+`Today & overdue`, `Habits for today`, and the Full-week accordion description.
 Today and All tasks have no information control or redundant descriptions.
 The direct `Weekly review` entry keeps its summary visible and has no
 information control. Each disclosure has local, non-persisted state; several
@@ -324,7 +334,7 @@ content width; Full week uses its existing day pager when seven columns cannot
 fit. Check-in button colors and outlined surfaces are shared across breakpoints,
 while mobile and desktop retain their respective content arrangements.
 
-The application-level projection coordinator invalidates `Beat yesterday`
+The application-level projection coordinator invalidates `Latest check-in`
 after a durable Daily Capture change. Habit outcome/definition, Today Task or
 Habit, generic Planner, Setup, Deadline Planner, Focus lifecycle,
 profile-timezone, Calendar, and preparation-budget impacts invalidate Full
@@ -387,6 +397,13 @@ Briefing/Planner/Workload/Outlook dependencies, but deliberately does not
 invalidate Today for these inline writes. Today owns exactly one repository
 reload so an automatic provider rebuild cannot consume or obscure the explicit
 stale-after-mutation result.
+
+Task complete/restore and Habit complete/skip/undo update their local display
+immediately, before awaiting the command port. A small Saving indicator and
+the existing global action lock distinguish pending work. An unconfirmed write
+failure restores only the provisional overlay and reports the failure. A proven
+write is never rolled back because a later projection refresh fails. Manual
+reload is blocked during a write; external invalidations wait for it to finish.
 
 Route disposal does not cancel an already accepted durable write. When its
 command port later proves the write committed, the captured app-lifespan

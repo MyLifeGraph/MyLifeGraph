@@ -30,6 +30,12 @@ class Verifier:
 
 
 class Service:
+    async def correct_time(self, **kwargs):
+        self.calls.append(("correct_time", kwargs))
+        if self.error:
+            raise self.error
+        return _session(status="completed")
+
     def __init__(self, *, error: Exception | None = None) -> None:
         self.error = error
         self.calls = []
@@ -106,6 +112,22 @@ async def _request(method, path, *, json=None, error=None, authenticated=True):
     ) as client:
         response = await client.request(method, path, headers=headers, json=json)
     return response, service
+
+
+def test_correction_requires_auth_and_derives_owner():
+    payload = {"request_id": str(BLOCK_ID), "expected_updated_at": NOW.isoformat(), "minutes": 20}
+    path = f"/v1/focus/sessions/{SESSION_ID}/correct-time"
+    response, service = asyncio.run(_request("POST", path, json=payload))
+    assert response.status_code == 200
+    assert service.calls[0][1]["user_id"] == USER_ID
+    for bad in [{**payload, "user_id": "other"}, {**payload, "minutes": -1}, {**payload, "minutes": True}]:
+        response, service = asyncio.run(_request("POST", path, json=bad))
+        assert response.status_code == 422
+        assert service.calls == []
+    response, _ = asyncio.run(_request("POST", path, json=payload, authenticated=False))
+    assert response.status_code == 401
+    response, _ = asyncio.run(_request("POST", path, json=payload, error=FocusConflictError("changed")))
+    assert response.status_code == 409
 
 
 def test_focus_context_and_start_derive_the_authenticated_owner() -> None:

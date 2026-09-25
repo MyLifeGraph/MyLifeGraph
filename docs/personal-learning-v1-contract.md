@@ -1,5 +1,15 @@
 # Personal Learning V1 Contract
 
+## Corrected Focus time
+
+Explicit completed-session correction changes the canonical elapsed interval
+and measured minutes together, not the reflection or target identity. Fresh
+learning/progress calculations consume that corrected value. Previously generated
+reports, Coach messages and immutable proposals are not silently rewritten.
+Flutter requests the normal snapshot refresh after the durable correction;
+refresh failure does not mean the correction was undone. See the
+[Focus contract](phase-3-executable-actions-contract.md).
+
 ## Purpose
 
 Personal Learning V1 adds a deterministic, user-controlled learning loop around
@@ -85,8 +95,8 @@ ledger is not user history and is omitted from Account Export.
 Settings exposes one `Personal learning` entry for these controls and the
 confirmed clear action. It does not create another primary navigation item.
 The switch summaries remain visible. Optional calculation methodology starts
-closed behind the independent standard information control `How pattern
-analysis works`; the analysis dependency, Planner pilot availability, sleep
+closed behind the independent standard information control `How it works`;
+the analysis dependency, Planner pilot availability, sleep
 non-effects, save/retry state, and confirmed clear consequence remain visible.
 
 ## Personal patterns
@@ -250,9 +260,10 @@ unchanged. Color indicates sign, not whether a health relationship is beneficial
 Discovered shows saved results independent of this window and has no selector.
 It is a read-only presentation of recorded observations in the selected window,
 not the legacy persisted Skillset profile or a personal-strength model.
-The default dimensions are Sleep, Sport, Energy, Social activity, Learning,
-and Concentration; Stress, Mood, Productivity, Motivation, and Discipline are
-optional. Selection filters only the Insights display; it never hides Capture
+All supported dimensions are selected by default: Sleep, Sport, Energy, Social
+activity, Learning, Concentration, Stress, Mood, Productivity, Motivation and
+Discipline. Existing saved selections, including empty ones, are preserved.
+Selection filters only the Insights display; it never hides Capture
 inputs or limits which values can be recorded. Dimensions and the compact
 Radar/Bar view choice persist on this device per account (guest separately),
 including across restarts. They are not cloud-synced. Writes are serialized;
@@ -294,6 +305,12 @@ out-of-range ratings never become zero. At least three measured selected
 dimensions are needed for a radar; fewer retain their values and empty guidance.
 Unavailable dimensions are omitted from the polygon. Demo reports stay labelled
 as examples; real accounts never fall back to the demo Skillset provider.
+
+Skillset also shows the available/selected count and short names of missing
+dimensions when coverage is incomplete. Compare's insufficient-data state
+offers `Longer period` until the existing 90-day maximum; it advances
+the shared window only and never promises that missing observations exist.
+
 Mood and stress now use their own valid Evening check-in values in this separate
 view. Legacy correlation semantics and the demo source are unchanged.
 

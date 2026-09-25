@@ -125,6 +125,11 @@ void main() {
       expect(restored.values, original.values);
       expect(restored.labels, original.labels);
       expect(find.text('Dimensions (6)'), findsOneWidget);
+      expect(find.text('3/6 available'), findsOneWidget);
+      expect(
+        find.text('No data: Social activity, Learning, Concentration'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
   }

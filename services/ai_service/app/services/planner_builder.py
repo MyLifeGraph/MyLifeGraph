@@ -110,7 +110,7 @@ def build_planner_overview(
     for detail in deadline_response.plans:
         projection = detail.active_revision or detail.pending_revision
         next_block: datetime | None = None
-        if detail.active_revision is not None:
+        if detail.plan.status == "active" and detail.active_revision is not None:
             upcoming = [
                 block
                 for block in detail.active_revision.blocks

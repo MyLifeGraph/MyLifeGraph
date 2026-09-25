@@ -1,5 +1,21 @@
 # Deadline Planner V1 Contract
 
+## Plan again from history
+
+Terminal cards with a retained revision offer `Plan again`. It opens the existing
+wizard with a new plan ID and base revision zero, prefilled title/kind/settings,
+and the old remaining estimate when at least 30 minutes remains. Otherwise an
+estimate is required. Previous credit resets to zero: historical work is not
+claimed again. The new source is manual, with no retained calendar fingerprint.
+Past deadlines must be corrected. Existing history, managed tasks and reservations
+are not reopened or modified; proposal and explicit confirmation still apply.
+
+Active plan cards label their cancellation action `Remove`, with an accessible
+`Remove plan from calendar` tooltip and confirmation. This uses existing plan
+cancellation: remove active planning/study blocks, retain Focus/history, and do
+not delete separately imported calendar events. Draft discard remains separate.
+This is not a hard-delete of historical analysis inputs.
+
 Deadline Planner V1 turns one explicit exam or assignment occurrence plus the
 user's own preparation estimate into a reviewable set of dated focus blocks.
 The additive `assignment-series-v1` boundary creates a finite weekly sequence

@@ -5,7 +5,8 @@ const notificationLifecycleContractVersion = 'notification-lifecycle-v1';
 enum NotificationLifecycleCommand {
   markRead('mark_read'),
   markUnread('mark_unread'),
-  dismiss('dismiss');
+  dismiss('dismiss'),
+  restore('restore');
 
   const NotificationLifecycleCommand(this.wireValue);
 
@@ -51,11 +52,11 @@ class NotificationLifecycleRequest {
   final DateTime expectedUpdatedAt;
 
   Map<String, dynamic> toJson() => {
-        'contract_version': notificationLifecycleContractVersion,
-        'request_id': requestId,
-        'command': command.wireValue,
-        'expected_updated_at': expectedUpdatedAt.toIso8601String(),
-      };
+    'contract_version': notificationLifecycleContractVersion,
+    'request_id': requestId,
+    'command': command.wireValue,
+    'expected_updated_at': expectedUpdatedAt.toIso8601String(),
+  };
 }
 
 class NotificationLifecycleResult {
@@ -70,20 +71,16 @@ class NotificationLifecycleResult {
   });
 
   factory NotificationLifecycleResult.fromJson(Map<String, dynamic> json) {
-    _requireExactKeys(
-      json,
-      const {
-        'contract_version',
-        'notification_id',
-        'command',
-        'is_read',
-        'read_at',
-        'dismissed_at',
-        'updated_at',
-        'replayed',
-      },
-      'Notification lifecycle response',
-    );
+    _requireExactKeys(json, const {
+      'contract_version',
+      'notification_id',
+      'command',
+      'is_read',
+      'read_at',
+      'dismissed_at',
+      'updated_at',
+      'replayed',
+    }, 'Notification lifecycle response');
     if (json['contract_version'] != notificationLifecycleContractVersion) {
       throw const NotificationLifecycleContractException(
         'Notification lifecycle contract version is invalid.',
@@ -104,8 +101,10 @@ class NotificationLifecycleResult {
       );
     }
     final readAt = _optionalAwareDateTime(json['read_at'], 'read_at');
-    final dismissedAt =
-        _optionalAwareDateTime(json['dismissed_at'], 'dismissed_at');
+    final dismissedAt = _optionalAwareDateTime(
+      json['dismissed_at'],
+      'dismissed_at',
+    );
     final updatedAt = _requiredAwareDateTime(json['updated_at'], 'updated_at');
     if (isRead != (readAt != null)) {
       throw const NotificationLifecycleContractException(
@@ -119,6 +118,12 @@ class NotificationLifecycleResult {
       );
     }
     switch (command) {
+      case NotificationLifecycleCommand.restore:
+        if (dismissedAt != null) {
+          throw const NotificationLifecycleContractException(
+            'Restore response is invalid.',
+          );
+        }
       case NotificationLifecycleCommand.markRead:
         if (!isRead || dismissedAt != null) {
           throw const NotificationLifecycleContractException(

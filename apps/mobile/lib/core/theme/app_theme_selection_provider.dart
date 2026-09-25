@@ -26,6 +26,7 @@ class SharedPreferencesAppThemeSelectionStore
       'dark' => AppThemeId.dark,
       'light' => AppThemeId.light,
       'space' => AppThemeId.space,
+      'liquidGlass' => AppThemeId.liquidGlass,
       _ => AppThemeId.dark,
     };
   }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../constants/app_spacing.dart';
 import '../constants/app_radii.dart';
 import '../theme/app_icons.dart';
+import '../theme/app_liquid_glass.dart';
 
 class AppPage extends StatelessWidget {
   const AppPage({
@@ -38,7 +39,7 @@ class AppPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    final content = SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
           final horizontalPadding = switch (constraints.maxWidth) {
@@ -173,6 +174,15 @@ class AppPage extends StatelessWidget {
         },
       ),
     );
+    // Keep the glass material inside this route, not through another page
+    // underneath it during an auxiliary push/back transition.
+    return Theme.of(context).extension<AppLiquidGlass>() == null
+        ? content
+        : DecoratedBox(
+      key: const ValueKey('liquid-glass-page-background'),
+      decoration: const BoxDecoration(gradient: AppLiquidGlass.backdrop),
+            child: LiquidGlassLightAccents(child: content),
+          );
   }
 }
 

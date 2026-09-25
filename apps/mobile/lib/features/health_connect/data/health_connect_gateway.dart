@@ -25,6 +25,15 @@ class HealthConnectGateway {
 
   Future<void> openSettings() => channel.invokeMethod<void>('openSettings');
 
+  Future<Map<String, dynamic>> readSleep(String date, String timezone) async =>
+      Map<String, dynamic>.from(
+        await channel.invokeMapMethod<String, dynamic>('readSleep', {
+              'date': date,
+              'timezone': timezone,
+            }) ??
+            {},
+      );
+
   Future<HealthConnectState> read() async => HealthConnectState.fromJson(
     await client.getJson('/v1/health-connect', headers: _headers()),
   );

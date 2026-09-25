@@ -71,23 +71,23 @@ class TodayCommandState {
     required Set<String> updatingTaskIds,
     required Set<String> updatingHabitIds,
     required Map<String, String?> habitOutcomeOverrides,
-  })  : completedTaskIds = Set.unmodifiable(completedTaskIds),
-        restoredTaskIds = Set.unmodifiable(restoredTaskIds),
-        deletedTaskIds = Set.unmodifiable(deletedTaskIds),
-        updatingTaskIds = Set.unmodifiable(updatingTaskIds),
-        updatingHabitIds = Set.unmodifiable(updatingHabitIds),
-        habitOutcomeOverrides = Map.unmodifiable(habitOutcomeOverrides);
+  }) : completedTaskIds = Set.unmodifiable(completedTaskIds),
+       restoredTaskIds = Set.unmodifiable(restoredTaskIds),
+       deletedTaskIds = Set.unmodifiable(deletedTaskIds),
+       updatingTaskIds = Set.unmodifiable(updatingTaskIds),
+       updatingHabitIds = Set.unmodifiable(updatingHabitIds),
+       habitOutcomeOverrides = Map.unmodifiable(habitOutcomeOverrides);
 
   factory TodayCommandState.initial() => TodayCommandState(
-        projectionStatus: TodayProjectionStatus.current,
-        displayedSnapshot: null,
-        completedTaskIds: const {},
-        restoredTaskIds: const {},
-        deletedTaskIds: const {},
-        updatingTaskIds: const {},
-        updatingHabitIds: const {},
-        habitOutcomeOverrides: const {},
-      );
+    projectionStatus: TodayProjectionStatus.current,
+    displayedSnapshot: null,
+    completedTaskIds: const {},
+    restoredTaskIds: const {},
+    deletedTaskIds: const {},
+    updatingTaskIds: const {},
+    updatingHabitIds: const {},
+    habitOutcomeOverrides: const {},
+  );
 
   final TodayProjectionStatus projectionStatus;
   final DashboardSnapshot? displayedSnapshot;
@@ -98,7 +98,10 @@ class TodayCommandState {
   final Set<String> updatingHabitIds;
   final Map<String, String?> habitOutcomeOverrides;
 
-  bool get canMutate => projectionStatus == TodayProjectionStatus.current;
+  bool get canMutate =>
+      projectionStatus == TodayProjectionStatus.current &&
+      updatingTaskIds.isEmpty &&
+      updatingHabitIds.isEmpty;
 
   TodayCommandState copyWith({
     TodayProjectionStatus? projectionStatus,
@@ -169,13 +172,13 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
     required TodayProjectionRefresh refreshAfterTask,
     required TodayProjectionRefresh refreshAfterHabit,
     required void Function() onTodayReloaded,
-  })  : _taskCommands = taskCommands,
-        _habitCommands = habitCommands,
-        _dashboardRepository = dashboardRepository,
-        _refreshAfterTask = refreshAfterTask,
-        _refreshAfterHabit = refreshAfterHabit,
-        _onTodayReloaded = onTodayReloaded,
-        super(TodayCommandState.initial());
+  }) : _taskCommands = taskCommands,
+       _habitCommands = habitCommands,
+       _dashboardRepository = dashboardRepository,
+       _refreshAfterTask = refreshAfterTask,
+       _refreshAfterHabit = refreshAfterHabit,
+       _onTodayReloaded = onTodayReloaded,
+       super(TodayCommandState.initial());
 
   final TodayTaskCommandPort? _taskCommands;
   final TodayHabitCommandPort? _habitCommands;
@@ -188,8 +191,10 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
   void externalProjectionChanged() {
     if (!mounted) return;
     if (state.displayedSnapshot == null &&
-        state.updatingTaskIds.isEmpty && state.updatingHabitIds.isEmpty &&
-        state.projectionStatus != TodayProjectionStatus.refreshingAfterMutation) {
+        state.updatingTaskIds.isEmpty &&
+        state.updatingHabitIds.isEmpty &&
+        state.projectionStatus !=
+            TodayProjectionStatus.refreshingAfterMutation) {
       return;
     }
     _externalRefreshPending = true;
@@ -201,7 +206,8 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         !_externalRefreshPending ||
         state.updatingTaskIds.isNotEmpty ||
         state.updatingHabitIds.isNotEmpty ||
-        state.projectionStatus == TodayProjectionStatus.refreshingAfterMutation) {
+        state.projectionStatus ==
+            TodayProjectionStatus.refreshingAfterMutation) {
       return;
     }
     _externalRefreshPending = false;
@@ -326,6 +332,8 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
 
   Future<bool> reloadToday() async {
     if (!mounted ||
+        state.updatingTaskIds.isNotEmpty ||
+        state.updatingHabitIds.isNotEmpty ||
         state.projectionStatus ==
             TodayProjectionStatus.refreshingAfterMutation) {
       return false;
@@ -347,12 +355,19 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         state.updatingHabitIds.contains(habitId)) {
       return const TodayCommandResult.ignored();
     }
+    final before = state.habitOutcomeOverrides;
     _setHabitUpdating(habitId, true);
     try {
       final commands = _habitCommands;
       if (commands == null) {
         throw const TodayHabitCommandFailure('Synced habits are unavailable.');
       }
+      state = state.copyWith(
+        habitOutcomeOverrides: {
+          ...state.habitOutcomeOverrides,
+          habitId: optimisticOutcome,
+        },
+      );
       await mutation(commands);
       if (mounted) {
         final overrides = Map<String, String?>.from(state.habitOutcomeOverrides)
@@ -368,6 +383,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
       );
       return TodayCommandResult.saved(projectionCurrent: projectionCurrent);
     } catch (error) {
+      if (mounted) state = state.copyWith(habitOutcomeOverrides: before);
       return TodayCommandResult.failed(error);
     } finally {
       if (mounted) _setHabitUpdating(habitId, false);
@@ -385,11 +401,15 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         state.updatingTaskIds.contains(taskId)) {
       return const TodayCommandResult.ignored();
     }
+    final before = state;
     _setTaskUpdating(taskId, true);
     try {
       final commands = _taskCommands;
       if (commands == null) {
         throw const TaskCommandException('Synced tasks are unavailable.');
+      }
+      if (optimisticStatus != null) {
+        _applyLocalTaskStatus(taskId, optimisticStatus, committed: false);
       }
       final value = await mutation(commands);
       if (mounted) {
@@ -410,6 +430,13 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         projectionCurrent: projectionCurrent,
       );
     } catch (error) {
+      if (mounted) {
+        state = state.copyWith(
+          completedTaskIds: before.completedTaskIds,
+          restoredTaskIds: before.restoredTaskIds,
+          deletedTaskIds: before.deletedTaskIds,
+        );
+      }
       return TodayCommandResult.failed(error);
     } finally {
       if (mounted) _setTaskUpdating(taskId, false);
@@ -489,7 +516,11 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
     if (!updating) _drainExternalRefresh();
   }
 
-  void _applyLocalTaskStatus(String taskId, String status) {
+  void _applyLocalTaskStatus(
+    String taskId,
+    String status, {
+    bool committed = true,
+  }) {
     final completed = Set<String>.from(state.completedTaskIds)..remove(taskId);
     final restored = Set<String>.from(state.restoredTaskIds)..remove(taskId);
     final deleted = Set<String>.from(state.deletedTaskIds)..remove(taskId);
@@ -502,7 +533,9 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         deleted.add(taskId);
     }
     state = state.copyWith(
-      projectionStatus: TodayProjectionStatus.refreshingAfterMutation,
+      projectionStatus: committed
+          ? TodayProjectionStatus.refreshingAfterMutation
+          : state.projectionStatus,
       completedTaskIds: completed,
       restoredTaskIds: restored,
       deletedTaskIds: deleted,

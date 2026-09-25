@@ -1,5 +1,26 @@
 # UI Language And Copy Contract
 
+The separate product website is fully EN/DE, English first. Its compact feature
+copy and FAQ must distinguish the scripted synthetic demo from real app data,
+Android-only features, optional sharing, review-before-save and noncausal
+patterns. Do not imply that the whole app interface is translated, that calendar
+import is live sync, or that unshipped reminder extensions are already available.
+
+## Reversible flow labels
+
+Use short controls: `Discard changes?`, `Keep editing`, `Discard`, `Plan again`,
+`Correct time`, `Dismissed`, `Restore`, `Load more`, and `Watch sleep / Use times`.
+Keep exact-retry/conflict errors visible. Do not claim browser draft recovery,
+automatic watch-to-Capture saving, additional learned hours, or live deployment.
+
+Appearance offers `Dark`, `Light`, `Space` and `Liquid Glass`. The latter uses
+the short description `Dark glass, soft light`. All choices remain device-local;
+changing appearance never changes content, language or data.
+
+Focus preparation is a brief reminder list, not a scored checklist. Use
+`Prepare to focus`, the saved item labels, `Cancel` and `Ready & start`, without
+per-item questions or repeated explanatory text.
+
 Gemini Coach uses a short `Model` dropdown with `Gemini 3.6 Flash`,
 `Gemini 3.7 Flash`, and `Gemini 3.8 Flash`. Invalid-key errors explicitly ask the
 user to check/replace the key; generic cloud errors never call it a local provider.
@@ -12,7 +33,12 @@ multilingual, not English-only variants. App-blocking rules use short labels
 overlap explanation in the editor. Actions retain accessible tooltips.
 
 `Push reminders` is an optional Settings surface. Use `Important reminders`,
-`Before bedtime`, `Today's deadlines`, `Important patterns` and `Quiet hours`.
+`Before bedtime`, `Today's deadlines`, `Important patterns`, `Morning check-in`,
+`Evening check-in` and `Quiet hours`. Check-in times are profile-local. Manual
+Capture uses `Today · Change date` and an explicit unsaved-answer confirmation.
+The selected date remains visible throughout review. Plan removal says
+`Remove plan from calendar`; reservation release remains a different action,
+and confirmation explicitly preserves Focus history and imported source events.
 The first opt-in explicitly names Google Firebase, device linkage and generic
 copy; never describe OS permission as Cloud consent. Keep opt-out, unavailable
 APK/server states and the two-per-24-hours / monthly-pattern limits clear.
@@ -230,6 +256,12 @@ must not infer completion while the current-day read is loading or unavailable.
 
 ## Today Copy
 
+Streak uses `Check-in streak` (or `Streak` at narrow widths) and `N day(s)`,
+without redundant `consecutive` copy or conversion to months. Its explanation
+retains the both-captures rule and grace for the unfinished current day.
+Optional information icons are quiet, not removed when they explain a rule.
+Settings names the local preference `Haptic feedback` / `Subtle taps · This device`.
+
 The primary Today surface uses these exact concepts:
 
 - `Check-in streak` for consecutive dates with both saved check-ins;
@@ -237,8 +269,8 @@ The primary Today surface uses these exact concepts:
 - `Today's schedule` for the vertical timed agenda;
 - `Setup commitment`, `Preparation`, `Calendar`, and `Focus` for agenda source
   categories;
-- `Tasks due today`, `All tasks`, and `Habits for today` for execution;
-- `Beat yesterday` for the compact latest-saved-check-in inset; and
+- `Today & overdue`, `All tasks`, and `Habits for today` for execution;
+- `Last check-in` for the compact latest-saved-check-in inset; and
 - `Weekly review` for the direct Weekly Review navigation entry; and
 - `Full week` for the independently lazy supporting accordion.
 
@@ -246,8 +278,8 @@ The former generic `Recommendations` and `Decision feedback history` labels are
 retired from Today. This does not rename the independent `Sleep Recommendation`
 surface in Insights or ordinary Coach advice.
 
-`Beat yesterday` names the existing compact inset but does not claim a delta or
-improvement. It labels only available Mood, Energy, Sleep duration, Sleep
+`Last check-in` names the directly visible dated values, without implying yesterday,
+a delta or improvement. It labels only available Mood, Energy, Sleep duration, Sleep
 quality, and Stress values and includes the saved date. Under
 `today-week-agenda-v1`, `Full week` is the profile-local `Monday–Sunday` agenda
 across `Setup`, `Preparation`, `Calendar`,
@@ -444,8 +476,13 @@ fixed, destination-specific copy without private capture details.
 Settings uses one entry titled `Personal learning`; it is not a primary
 navigation destination. The switches are `Ask after Focus sessions`,
 `Analyze my study patterns`, and
-`Prefer learned Focus times in new plans`. The last control must say that it is
+`Use learned Focus times`. The last control must say that it is
 optional, soft, applies only to new previews, and never moves existing plans.
+Compact summaries retain these limits; calculation details are under `How it works`.
+In-app reminders states its foreground-only limit once beside consent, with
+channel details behind Info. Calendar import keeps read-only/no-sync and original
+calendar safety visible, without repeating the file-picker instruction. Today
+omits redundant source subtitles and repeats no Setup commitment label per row.
 
 The Focus sheet asks `How focused did the session feel?` and
 `How much useful progress did you make?`, with plain-language anchors rather

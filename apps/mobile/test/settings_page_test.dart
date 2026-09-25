@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/feedback/app_haptics.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/theme/app_theme_selection_provider.dart';
 import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
@@ -9,8 +10,9 @@ import 'package:my_life_graph/features/settings/presentation/pages/settings_page
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('settings exposes only truthful session controls',
-      (tester) async {
+  testWidgets('settings exposes only truthful session controls', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({
       'auth_guest_active': true,
       'auth_guest_onboarding_done': true,
@@ -19,9 +21,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          appConfigProvider.overrideWithValue(_testConfig),
-        ],
+        overrides: [appConfigProvider.overrideWithValue(_testConfig)],
         child: const _ThemeAwareSettingsApp(),
       ),
     );
@@ -90,11 +90,20 @@ void main() {
 
     await _revealText(tester, 'Appearance', pageScrollable);
     expect(find.text('Dark · Saved on this device.'), findsOneWidget);
-    await _revealText(tester, 'Build identity', pageScrollable);
+    await _revealText(tester, 'Haptic feedback', pageScrollable);
+    final hapticSwitch = find.byKey(const ValueKey('haptic-feedback-setting'));
+    expect(tester.widget<SwitchListTile>(hapticSwitch).value, isTrue);
+    await tester.tap(find.text('Haptic feedback'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(hapticSwitch).value, isFalse);
     expect(
-      find.text('test · v0.1.0-pilot.0 · 0123456789ab'),
-      findsOneWidget,
+      (await SharedPreferences.getInstance()).getBool(
+        AppHapticsController.preferenceKey,
+      ),
+      isFalse,
     );
+    await _revealText(tester, 'Build identity', pageScrollable);
+    expect(find.text('test · v0.1.0-pilot.0 · 0123456789ab'), findsOneWidget);
 
     await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
@@ -107,9 +116,7 @@ void main() {
     expect(find.text('Space · Saved on this device.'), findsOneWidget);
     expect(
       Theme.of(
-        tester.element(
-          find.byKey(const ValueKey('appearance-setting-entry')),
-        ),
+        tester.element(find.byKey(const ValueKey('appearance-setting-entry'))),
       ).extension<AppVisualTokens>()?.background,
       AppVisualTokens.space.background,
     );
@@ -124,8 +131,9 @@ void main() {
     expect(preferences.getBool('auth_guest_active'), isFalse);
   });
 
-  testWidgets('appearance dialog fits 320 px at 200 percent text',
-      (tester) async {
+  testWidgets('appearance dialog fits 320 px at 200 percent text', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 4000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -138,15 +146,13 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          appConfigProvider.overrideWithValue(_testConfig),
-        ],
+        overrides: [appConfigProvider.overrideWithValue(_testConfig)],
         child: MaterialApp(
           theme: AppTheme.dark,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: SettingsPage()),
@@ -166,50 +172,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Choose appearance'), findsOneWidget);
-    for (final key in const ['dark', 'light', 'space']) {
+    for (final key in const ['dark', 'light', 'space', 'liquidGlass']) {
       expect(find.byKey(ValueKey('appearance-option-$key')), findsOneWidget);
     }
+    final glassOption = find.byKey(
+      const ValueKey('appearance-option-liquidGlass'),
+    );
+    await tester.ensureVisible(glassOption);
+    await tester.tap(glassOption);
+    await tester.pumpAndSettle();
+    expect(
+      (await SharedPreferences.getInstance()).getString('app_theme_mode'),
+      'liquidGlass',
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('failed appearance persistence rolls back and reports the error',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'auth_guest_active': true,
-      'auth_guest_onboarding_done': true,
-      'auth_guest_name': 'Review Guest',
-    });
+  testWidgets(
+    'failed appearance persistence rolls back and reports the error',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'auth_guest_active': true,
+        'auth_guest_onboarding_done': true,
+        'auth_guest_name': 'Review Guest',
+      });
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appConfigProvider.overrideWithValue(_testConfig),
-          appThemeSelectionStoreProvider.overrideWithValue(
-            const _FailingThemeSelectionStore(),
-          ),
-        ],
-        child: const _ThemeAwareSettingsApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final pageScrollable = find
-        .descendant(
-          of: find.byType(CustomScrollView),
-          matching: find.byType(Scrollable),
-        )
-        .first;
-    await _revealText(tester, 'Appearance', pageScrollable);
-    await tester.tap(find.text('Appearance'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('appearance-option-space')));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appConfigProvider.overrideWithValue(_testConfig),
+            appThemeSelectionStoreProvider.overrideWithValue(
+              const _FailingThemeSelectionStore(),
+            ),
+          ],
+          child: const _ThemeAwareSettingsApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final pageScrollable = find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await _revealText(tester, 'Appearance', pageScrollable);
+      await tester.tap(find.text('Appearance'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('appearance-option-space')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Dark · Saved on this device.'), findsOneWidget);
-    expect(
-      find.text('Could not save the appearance setting. Try again.'),
-      findsOneWidget,
-    );
-  });
+      expect(find.text('Dark · Saved on this device.'), findsOneWidget);
+      expect(
+        find.text('Could not save the appearance setting. Try again.'),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 const _testConfig = AppConfig(
@@ -257,9 +275,6 @@ Future<void> _revealText(
     await tester.pump();
   }
   expect(target, findsWidgets);
-  await Scrollable.ensureVisible(
-    tester.element(target.first),
-    alignment: 0.5,
-  );
+  await Scrollable.ensureVisible(tester.element(target.first), alignment: 0.5);
   await tester.pumpAndSettle();
 }

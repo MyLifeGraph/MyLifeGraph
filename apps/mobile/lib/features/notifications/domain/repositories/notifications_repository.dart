@@ -8,3 +8,10 @@ abstract interface class NotificationsRepository {
     NotificationLifecycleRequest request,
   );
 }
+
+abstract interface class NotificationHistoryRepository {
+  Future<List<AppNotification>> getNotificationHistory({
+    required bool dismissed,
+    required int limit,
+  });
+}

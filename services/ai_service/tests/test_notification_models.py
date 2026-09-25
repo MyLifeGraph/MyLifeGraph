@@ -20,6 +20,15 @@ NOTIFICATION_ID = UUID("22222222-2222-4222-8222-222222222222")
 UPDATED_AT = "2026-07-14T08:30:00+00:00"
 
 
+def test_restore_keeps_read_history_and_clears_dismissal():
+    payload = dict(contract_version="notification-lifecycle-v1", notification_id=NOTIFICATION_ID,
+        command="restore", is_read=True, read_at=datetime.fromisoformat(UPDATED_AT), dismissed_at=None,
+        updated_at=datetime.fromisoformat(UPDATED_AT), replayed=False)
+    assert NotificationLifecycleActionResponse(**payload).dismissed_at is None
+    with pytest.raises(ValidationError):
+        NotificationLifecycleActionResponse(**{**payload, "dismissed_at": UPDATED_AT})
+
+
 def test_notification_lifecycle_models_accept_only_the_strict_aware_contract() -> None:
     request = NotificationLifecycleActionRequest.model_validate_json(
         (

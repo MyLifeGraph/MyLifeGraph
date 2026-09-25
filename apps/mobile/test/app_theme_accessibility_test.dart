@@ -11,6 +11,7 @@ void main() {
     'dark': AppTheme.dark,
     'light': AppTheme.light,
     'space': AppTheme.space,
+    'liquidGlass': AppTheme.liquidGlass,
   }.entries) {
     test('${entry.key} theme keeps keyboard focus visibly highlighted', () {
       final theme = entry.value;

@@ -14,34 +14,64 @@ import 'package:my_life_graph/features/notifications/presentation/pages/notifica
 import 'package:my_life_graph/composition/notifications_providers.dart';
 
 void main() {
-  testWidgets('card opens its target but lifecycle controls never navigate',
-      (tester) async {
+  testWidgets('card opens its target but lifecycle controls never navigate', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(320, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     const id = '11111111-1111-4111-8111-111111111111';
-    final repository = _PageNotificationsRepository(items: [
-      _notification(
-        id: id,
-        title: 'Focus window approaching',
-        body: 'Open your planned Focus session.',
-        type: 'reminder',
-        priority: 'medium',
-        actionUrl: '/dashboard',
-        isRead: false,
-      ),
-    ], action: (_) async => throw _httpFailure(409));
-    final router = GoRouter(initialLocation: '/alerts', routes: [
-      GoRoute(path: '/alerts', builder: (_, _) => const Scaffold(body: NotificationsPage())),
-      GoRoute(path: '/dashboard', builder: (_, _) => const Scaffold(body: Text('Destination'))),
-    ]);
+    final repository = _PageNotificationsRepository(
+      items: [
+        _notification(
+          id: id,
+          title: 'Focus window approaching',
+          body: 'Open your planned Focus session.',
+          type: 'reminder',
+          priority: 'medium',
+          actionUrl: '/dashboard',
+          isRead: false,
+        ),
+      ],
+      action: (_) async => throw _httpFailure(409),
+    );
+    final router = GoRouter(
+      initialLocation: '/alerts',
+      routes: [
+        GoRoute(
+          path: '/alerts',
+          builder: (_, _) => const Scaffold(body: NotificationsPage()),
+        ),
+        GoRoute(
+          path: '/dashboard',
+          builder: (_, _) => const Scaffold(body: Text('Destination')),
+        ),
+      ],
+    );
     addTearDown(router.dispose);
-    await tester.pumpWidget(ProviderScope(overrides: [
-      notificationsRepositoryProvider.overrideWithValue(repository),
-      appSurfaceCapabilitiesProvider.overrideWithValue(
-        const AppSurfaceCapabilities(isLocalDemo: false, canUseSyncedHabits: false)),
-    ], child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationsRepositoryProvider.overrideWithValue(repository),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: false,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
     await tester.pumpAndSettle();
     final title = find.text('Focus window approaching');
+    final dated = find.byKey(const ValueKey('notification-date-$id'));
+    expect(tester.widget<Text>(dated).data, startsWith('Earlier · '));
+    expect(
+      tester.getTopLeft(dated).dy,
+      lessThan(
+        tester.getTopLeft(find.text('Open your planned Focus session.')).dy,
+      ),
+    );
     final read = find.byKey(const ValueKey('notification-read-toggle-$id'));
     await tester.ensureVisible(title);
     await tester.pumpAndSettle();
@@ -98,100 +128,99 @@ void main() {
     expect(repository.loadCalls, 2);
   });
 
-  testWidgets('shows original fields and source read state without fake claims',
-      (tester) async {
-    final items = [
-      _notification(
-        id: 'unread-safe',
-        title: 'Original deadline title',
-        body: 'Original deadline body.',
-        type: 'deadline',
-        priority: 'critical',
-        actionUrl: '/dashboard',
-        isRead: false,
-      ),
-      _notification(
-        id: 'read-unsafe',
-        title: 'Original external title',
-        body: 'Original external body.',
-        type: 'summary',
-        priority: 'low',
-        actionUrl: 'https://example.com/action',
-        isRead: true,
-      ),
-      _notification(
-        id: 'unfinished',
-        title: 'Original focus title',
-        body: 'Original focus body.',
-        type: 'reminder',
-        priority: 'high',
-        actionUrl: '/deep-work',
-        isRead: false,
-      ),
-    ];
-
-    await _pumpPage(tester, items: items, useDemoData: false);
-
-    expect(find.text('Original deadline title'), findsOneWidget);
-    expect(find.text('Original deadline body.'), findsOneWidget);
-    expect(find.text('Deadline approaching'), findsNothing);
-    expect(find.text('Sleep debt warning'), findsNothing);
-    expect(find.text('REMINDER AGENT'), findsNothing);
-    expect(find.text('Coaching'), findsNothing);
-    expect(find.text('Account data'), findsOneWidget);
-
-    expect(
-      find.byKey(const ValueKey('notification-open-unread-safe')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('notification-read-state-unread-safe'),
+  testWidgets(
+    'shows original fields and source read state without fake claims',
+    (tester) async {
+      final items = [
+        _notification(
+          id: 'unread-safe',
+          title: 'Original deadline title',
+          body: 'Original deadline body.',
+          type: 'deadline',
+          priority: 'critical',
+          actionUrl: '/dashboard',
+          isRead: false,
         ),
-        matching: find.text('Unread'),
-      ),
-      findsOneWidget,
-    );
-    _expectMetricValue(tester, 'notifications-unread-count', '2');
-    _expectMetricValue(tester, 'notifications-read-count', '1');
-    _expectMetricValue(tester, 'notifications-action-count', '1');
-
-    await tester.scrollUntilVisible(
-      find.text('Original external title'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Original external body.'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('notification-open-read-unsafe')),
-      findsNothing,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('notification-read-state-read-unsafe'),
+        _notification(
+          id: 'read-unsafe',
+          title: 'Original external title',
+          body: 'Original external body.',
+          type: 'summary',
+          priority: 'low',
+          actionUrl: 'https://example.com/action',
+          isRead: true,
         ),
-        matching: find.text('Read'),
-      ),
-      findsOneWidget,
-    );
+        _notification(
+          id: 'unfinished',
+          title: 'Original focus title',
+          body: 'Original focus body.',
+          type: 'reminder',
+          priority: 'high',
+          actionUrl: '/deep-work',
+          isRead: false,
+        ),
+      ];
 
-    await tester.scrollUntilVisible(
-      find.text('Original focus title'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Original focus body.'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('notification-open-unfinished')),
-      findsNothing,
-    );
-    expect(find.text('Done'), findsNothing);
-  });
+      await _pumpPage(tester, items: items, useDemoData: false);
 
-  testWidgets('labels guest content as demo and gates habit actions',
-      (tester) async {
+      expect(find.text('Original deadline title'), findsOneWidget);
+      expect(find.text('Original deadline body.'), findsOneWidget);
+      expect(find.text('Deadline approaching'), findsNothing);
+      expect(find.text('Sleep debt warning'), findsNothing);
+      expect(find.text('REMINDER AGENT'), findsNothing);
+      expect(find.text('Coaching'), findsNothing);
+      expect(find.text('Account data'), findsOneWidget);
+
+      expect(
+        find.byKey(const ValueKey('notification-open-unread-safe')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('notification-read-state-unread-safe')),
+          matching: find.text('Unread'),
+        ),
+        findsOneWidget,
+      );
+      _expectMetricValue(tester, 'notifications-unread-count', '2');
+      _expectMetricValue(tester, 'notifications-read-count', '1');
+      _expectMetricValue(tester, 'notifications-action-count', '1');
+
+      await tester.scrollUntilVisible(
+        find.text('Original external title'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Original external body.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('notification-open-read-unsafe')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('notification-read-state-read-unsafe')),
+          matching: find.text('Read'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Original focus title'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Original focus body.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('notification-open-unfinished')),
+        findsNothing,
+      );
+      expect(find.text('Done'), findsNothing);
+    },
+  );
+
+  testWidgets('labels guest content as demo and gates habit actions', (
+    tester,
+  ) async {
     final item = _notification(
       id: 'habit',
       title: 'Habit reminder',
@@ -210,10 +239,7 @@ void main() {
     );
 
     expect(find.text('Demo data'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('notification-open-habit')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('notification-open-habit')), findsNothing);
     expect(
       find.byKey(const ValueKey('notification-read-toggle-habit')),
       findsNothing,
@@ -242,80 +268,87 @@ void main() {
     _expectMetricValue(tester, 'notifications-action-count', '1');
   });
 
-  testWidgets('exposes labeled lifecycle controls and applies confirmed state',
-      (tester) async {
-    await tester.binding.setSurfaceSize(const Size(320, 700));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    const id = '11111111-1111-4111-8111-111111111111';
-    final repository = _PageNotificationsRepository(
-      items: [
-        _notification(
-          id: id,
-          title: 'Accessible reminder',
-          body: 'A durable account item.',
-          type: 'reminder',
-          priority: 'medium',
-          actionUrl: '/dashboard',
-          isRead: false,
+  testWidgets(
+    'exposes labeled lifecycle controls and applies confirmed state',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const id = '11111111-1111-4111-8111-111111111111';
+      final repository = _PageNotificationsRepository(
+        items: [
+          _notification(
+            id: id,
+            title: 'Accessible reminder',
+            body: 'A durable account item.',
+            type: 'reminder',
+            priority: 'medium',
+            actionUrl: '/dashboard',
+            isRead: false,
+          ),
+        ],
+      );
+      final semantics = tester.ensureSemantics();
+
+      await _pumpPage(tester, repository: repository, useDemoData: false);
+
+      expect(
+        find.bySemanticsLabel('Mark read notification Accessible reminder'),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel('Dismiss notification Accessible reminder'),
+        findsOneWidget,
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('notification-read-toggle-$id')),
+      );
+      await tester.pumpAndSettle();
+      final readRect = tester.getRect(
+        find.byKey(const ValueKey('notification-read-toggle-$id')),
+      );
+      final dismissRect = tester.getRect(
+        find.byKey(const ValueKey('notification-dismiss-$id')),
+      );
+      final openRect = tester.getRect(
+        find.byKey(const ValueKey('notification-open-$id')),
+      );
+      expect(readRect.top, dismissRect.top);
+      expect(readRect.top, openRect.top);
+      expect(readRect.width, greaterThanOrEqualTo(44));
+      expect(openRect.height, greaterThanOrEqualTo(44));
+      await tester.tap(
+        find.byKey(const ValueKey('notification-read-toggle-$id')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        repository.requests.single.command,
+        NotificationLifecycleCommand.markRead,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('notification-read-state-$id')),
+          matching: find.text('Read'),
         ),
-      ],
-    );
-    final semantics = tester.ensureSemantics();
+        findsOneWidget,
+      );
 
-    await _pumpPage(
-      tester,
-      repository: repository,
-      useDemoData: false,
-    );
+      await tester.tap(find.byKey(const ValueKey('notification-dismiss-$id')));
+      await tester.pumpAndSettle();
 
-    expect(
-      find.bySemanticsLabel('Mark read notification Accessible reminder'),
-      findsOneWidget,
-    );
-    expect(
-      find.bySemanticsLabel('Dismiss notification Accessible reminder'),
-      findsOneWidget,
-    );
+      expect(
+        repository.requests.last.command,
+        NotificationLifecycleCommand.dismiss,
+      );
+      expect(find.byKey(const ValueKey('notification-$id')), findsNothing);
+      semantics.dispose();
+    },
+  );
 
-    await tester.ensureVisible(find.byKey(const ValueKey('notification-read-toggle-$id')));
-    await tester.pumpAndSettle();
-    final readRect = tester.getRect(find.byKey(const ValueKey('notification-read-toggle-$id')));
-    final dismissRect = tester.getRect(find.byKey(const ValueKey('notification-dismiss-$id')));
-    final openRect = tester.getRect(find.byKey(const ValueKey('notification-open-$id')));
-    expect(readRect.top, dismissRect.top);
-    expect(readRect.top, openRect.top);
-    expect(readRect.width, greaterThanOrEqualTo(44));
-    expect(openRect.height, greaterThanOrEqualTo(44));
-    await tester.tap(
-      find.byKey(const ValueKey('notification-read-toggle-$id')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      repository.requests.single.command,
-      NotificationLifecycleCommand.markRead,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('notification-read-state-$id')),
-        matching: find.text('Read'),
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('notification-dismiss-$id')));
-    await tester.pumpAndSettle();
-
-    expect(
-      repository.requests.last.command,
-      NotificationLifecycleCommand.dismiss,
-    );
-    expect(find.byKey(const ValueKey('notification-$id')), findsNothing);
-    semantics.dispose();
-  });
-
-  testWidgets('shows honest row retry and keeps dismiss visible until success',
-      (tester) async {
+  testWidgets('shows honest row retry and keeps dismiss visible until success', (
+    tester,
+  ) async {
     const id = '11111111-1111-4111-8111-111111111111';
     var attempts = 0;
     final repository = _PageNotificationsRepository(
@@ -336,13 +369,11 @@ void main() {
         return _lifecycleResult(request);
       },
     );
-    await _pumpPage(
-      tester,
-      repository: repository,
-      useDemoData: false,
-    );
+    await _pumpPage(tester, repository: repository, useDemoData: false);
 
-    await tester.ensureVisible(find.byKey(const ValueKey('notification-dismiss-$id')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('notification-dismiss-$id')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('notification-dismiss-$id')));
     await tester.pumpAndSettle();
@@ -360,9 +391,7 @@ void main() {
     );
     final firstPayload = repository.requests.single.toJson();
 
-    final retry = find.byKey(
-      const ValueKey('notification-action-retry-$id'),
-    );
+    final retry = find.byKey(const ValueKey('notification-action-retry-$id'));
     await tester.ensureVisible(retry);
     await tester.pumpAndSettle();
     await tester.tap(retry);
@@ -373,8 +402,9 @@ void main() {
     expect(find.byKey(const ValueKey('notification-$id')), findsNothing);
   });
 
-  testWidgets('definitive 4xx offers reload only and blocks stale actions',
-      (tester) async {
+  testWidgets('definitive 4xx offers reload only and blocks stale actions', (
+    tester,
+  ) async {
     const id = '11111111-1111-4111-8111-111111111111';
     final semantics = tester.ensureSemantics();
     final repository = _PageNotificationsRepository(
@@ -391,13 +421,11 @@ void main() {
       ],
       action: (_) async => throw _httpFailure(409),
     );
-    await _pumpPage(
-      tester,
-      repository: repository,
-      useDemoData: false,
-    );
+    await _pumpPage(tester, repository: repository, useDemoData: false);
 
-    await tester.ensureVisible(find.byKey(const ValueKey('notification-read-toggle-$id')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('notification-read-toggle-$id')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('notification-read-toggle-$id')),
@@ -516,8 +544,9 @@ void main() {
     }
   });
 
-  testWidgets('distinguishes account load failure from an empty list',
-      (tester) async {
+  testWidgets('distinguishes account load failure from an empty list', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
     await _pumpPage(
       tester,
@@ -540,8 +569,9 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('uses an overflow-free compact summary at 320 pixels',
-      (tester) async {
+  testWidgets('uses an overflow-free compact summary at 320 pixels', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(320, 568));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -549,15 +579,19 @@ void main() {
 
     expect(find.text('Inbox'), findsOneWidget);
     expect(
-      find.text(
-        'Latest 30 items · counts cover this list.',
-      ),
+        find.text('Counts cover this list.'),
       findsOneWidget,
     );
     expect(find.text('Account data'), findsOneWidget);
-    final unread = tester.getRect(find.byKey(const ValueKey('notifications-unread-count')));
-    final read = tester.getRect(find.byKey(const ValueKey('notifications-read-count')));
-    final links = tester.getRect(find.byKey(const ValueKey('notifications-action-count')));
+    final unread = tester.getRect(
+      find.byKey(const ValueKey('notifications-unread-count')),
+    );
+    final read = tester.getRect(
+      find.byKey(const ValueKey('notifications-read-count')),
+    );
+    final links = tester.getRect(
+      find.byKey(const ValueKey('notifications-action-count')),
+    );
     expect(read.top, unread.top);
     expect(links.top, unread.top);
     expect(read.width, closeTo(unread.width, 0.1));
@@ -577,8 +611,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('uses compact summary at 390 pixels with 2x text',
-      (tester) async {
+  testWidgets('uses compact summary at 390 pixels with 2x text', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -597,9 +632,9 @@ void main() {
         ],
         child: MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: NotificationsPage()),
@@ -625,8 +660,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('notification card and actions do not overflow at 320px and 2x',
-      (tester) async {
+  testWidgets('notification card and actions do not overflow at 320px and 2x', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(320, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -683,7 +719,8 @@ Future<void> _pumpPage(
   ThemeData? theme,
   double textScale = 1,
 }) async {
-  final source = repository ??
+  final source =
+      repository ??
       _PageNotificationsRepository(items: items, loadError: loadError);
   await tester.pumpWidget(
     ProviderScope(
@@ -700,9 +737,9 @@ Future<void> _pumpPage(
       child: MaterialApp(
         theme: theme,
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(textScale),
-          ),
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
           child: child!,
         ),
         home: const Scaffold(body: NotificationsPage()),
@@ -746,16 +783,9 @@ AppNotification _notification({
   );
 }
 
-void _expectMetricValue(
-  WidgetTester tester,
-  String key,
-  String value,
-) {
+void _expectMetricValue(WidgetTester tester, String key, String value) {
   expect(
-    find.descendant(
-      of: find.byKey(ValueKey(key)),
-      matching: find.text(value),
-    ),
+    find.descendant(of: find.byKey(ValueKey(key)), matching: find.text(value)),
     findsOneWidget,
   );
 }
@@ -788,10 +818,7 @@ AppException _transportFailure() {
 AppException _httpFailure(int statusCode) {
   return AppException(
     'Network request failed',
-    cause: ApiFailure(
-      kind: ApiFailureKind.response,
-      statusCode: statusCode,
-    ),
+    cause: ApiFailure(kind: ApiFailureKind.response, statusCode: statusCode),
   );
 }
 
@@ -806,7 +833,8 @@ class _PageNotificationsRepository implements NotificationsRepository {
   final Object? loadError;
   final Future<NotificationLifecycleResult> Function(
     NotificationLifecycleRequest request,
-  )? action;
+  )?
+  action;
   final List<NotificationLifecycleRequest> requests = [];
   int loadCalls = 0;
 
@@ -824,8 +852,9 @@ class _PageNotificationsRepository implements NotificationsRepository {
   ) async {
     requests.add(request);
     final handler = action;
-    final result =
-        handler != null ? await handler(request) : _lifecycleResult(request);
+    final result = handler != null
+        ? await handler(request)
+        : _lifecycleResult(request);
     final index = items.indexWhere((item) => item.id == request.notificationId);
     if (index >= 0) {
       if (request.command == NotificationLifecycleCommand.dismiss) {

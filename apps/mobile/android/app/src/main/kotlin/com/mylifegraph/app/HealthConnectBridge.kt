@@ -7,6 +7,8 @@ import android.health.connect.AggregateRecordsRequest
 import android.health.connect.AggregateRecordsResponse
 import android.health.connect.HealthConnectException
 import android.health.connect.HealthConnectManager
+import android.health.connect.ReadRecordsRequestUsingFilters
+import android.health.connect.ReadRecordsResponse
 import android.health.connect.TimeInstantRangeFilter
 import android.health.connect.datatypes.SleepSessionRecord
 import android.health.connect.datatypes.StepsRecord
@@ -58,6 +60,14 @@ class HealthConnectBridge(private val activity: Activity) {
                     reading = true
                     readDay(zone, end.minusDays(6), end, now, mutableListOf(), result)
                 }
+                "readSleep" -> {
+                    check(granted()) { "Sleep access is required." }
+                    val zone = ZoneId.of(requireNotNull(call.argument<String>("timezone")))
+                    val day = LocalDate.parse(requireNotNull(call.argument<String>("date")))
+                    val today = Instant.now().atZone(zone).toLocalDate()
+                    check(!day.isAfter(today) && !day.isBefore(today.minusDays(7)))
+                    readSleep(zone, day, result)
+                }
                 else -> result.notImplemented()
             }
         } catch (_: Exception) {
@@ -94,6 +104,40 @@ class HealthConnectBridge(private val activity: Activity) {
         }
         return mapOf("supported" to (activity.getSystemService(HealthConnectManager::class.java) != null),
             "granted" to granted(), "device_id" to deviceId)
+    }
+
+    @TargetApi(34)
+    private fun readSleep(zone: ZoneId, day: LocalDate, result: MethodChannel.Result) {
+        val manager = activity.getSystemService(HealthConnectManager::class.java)
+            ?: return result.error("unavailable", "Health Connect unavailable.", null)
+        val now = Instant.now()
+        val range = TimeInstantRangeFilter.Builder()
+            .setStartTime(day.minusDays(1).atStartOfDay(zone).toInstant())
+            .setEndTime(minOf(day.plusDays(1).atStartOfDay(zone).toInstant(), now)).build()
+        val request = ReadRecordsRequestUsingFilters.Builder(SleepSessionRecord::class.java)
+            .setTimeRangeFilter(range).setPageSize(500).build()
+        manager.readRecords(request, activity.mainExecutor,
+            object : OutcomeReceiver<ReadRecordsResponse<SleepSessionRecord>, HealthConnectException> {
+                override fun onResult(response: ReadRecordsResponse<SleepSessionRecord>) {
+                    if (disposed) return
+                    // Do not select from a truncated set or combine overlapping sources.
+                    if (response.nextPageToken != -1L) {
+                        result.error("too_many_records", "Sleep history needs review.", null)
+                        return
+                    }
+                    val candidate = response.records.filter {
+                        it.endTime.atZone(zone).toLocalDate() == day && !it.endTime.isAfter(now) &&
+                            java.time.Duration.between(it.startTime, it.endTime).toMinutes() in 60..960
+                    }.sortedWith(compareByDescending<SleepSessionRecord> {
+                        java.time.Duration.between(it.startTime, it.endTime).toMillis()
+                    }.thenByDescending { it.endTime }).firstOrNull()
+                    result.success(if (candidate == null) emptyMap<String, String>() else mapOf(
+                        "started_at" to candidate.startTime.toString(), "woke_at" to candidate.endTime.toString()))
+                }
+                override fun onError(error: HealthConnectException) {
+                    if (!disposed) result.error("read_failed", "Sleep data unavailable.", null)
+                }
+            })
     }
 
     @TargetApi(34)

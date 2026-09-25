@@ -1,5 +1,26 @@
 # Daily Briefing Implementation Plan
 
+## Capture editing safeguards
+
+Morning and Evening track unsaved edits, including optional text and reviewed
+voice values. Leaving via the header/system Back or choosing a different date
+asks `Discard changes?`; saving blocks navigation. Internal step navigation keeps
+the draft. A confirmed Save resets the dirty baseline. This is a route guard,
+not browser-refresh/crash recovery or a draft Cloud autosave. Morning may offer
+explicit wearable sleep acceptance; see [Health Connect](health-connect-v1-contract.md).
+
+## Manual recent-day capture
+
+Morning and Evening offer a shared date picker for today and the previous seven
+profile-local calendar dates. Changing date confirms replacement of unsaved
+answers, loads that date's existing branch and retains the normal reviewed Save
+and compare-and-swap authority. Historical Morning never invents a wake time
+from the current clock; defaults may only come from an earlier Evening, not a
+future plan. Historical Focus reflections use the selected entry date. The
+existing projection-refresh command targets the written date. No missing ratings
+are fabricated and no correlation formula changes. Voice review remains bound
+to today's owner/date/timezone and does not expose the manual date picker.
+
 Evening's Sport and Social choices use the same equal-width buttons as stress
 controllability, retaining optional deselection. A first tap selects the stress
 source and shows a chevron; tapping that selected row again toggles its optional

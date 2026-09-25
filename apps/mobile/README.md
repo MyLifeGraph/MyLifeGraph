@@ -1,5 +1,59 @@
 # MyLifeGraph Mobile App
 
+## Reversible flows and wearable suggestions
+
+Morning/Evening warn before discarding unsaved edits through Back/date changes.
+This does not persist incomplete forms or protect browser refreshes. A connected
+Android device can offer `Watch sleep / Use times` when Morning opens. Acceptance
+is explicit; saved/manual/voice values are never silently replaced, and normal
+Save remains necessary. Health consent and device permissions are prerequisites.
+Inbox adds `Dismissed`, `Restore` and `Load more` (30-row increments, 1,000 ceiling).
+Focus history adds `Correct time` for completed sessions within their original
+recorded duration. Both commands require the new database/API rollout. History
+plans offer `Plan again` as a separate preview, never an automatic reactivation.
+
+Settings → Appearance offers Dark (default), Light, Space and Liquid Glass.
+Settings also offers `Haptic feedback`, default on, persisted on this device as
+`app_haptic_feedback`. Shared Capture choices/ratings, Today task/habit actions
+and optional-info heading long-press use restrained Android/iOS feedback. Web
+and desktop do not vibrate; no backend or account setting is changed.
+Shared information icons retain their 44px targets without a resting frame.
+Headings provide long-press help in addition to the visible information button.
+Long-press help uses a small anchored popover without a Close button; tap outside,
+Back or Escape to dismiss. Long explanations scroll; there is no reading timer.
+Today's streak combines heading and count in days; large text can wrap safely.
+Last check-in values are directly visible with their saved date in parentheses,
+above the Morning/Evening buttons.
+Today Task/Habit outcomes respond immediately with a small Saving indicator;
+unconfirmed failure restores the prior display, but a saved write survives a
+failed reload. Conflicting actions remain locked until reconciliation finishes.
+The count sits right-aligned with extra separation from Info. In all themes, header
+actions share a floating capsule with the theme's own colors. In Liquid Glass, timeline category colors are confined
+to their side accents so translucent cards remain readable over the backdrop.
+Island icons have no individual resting tiles; circular interaction feedback
+and a visible keyboard focus ring retain their accessible targets.
+Personal learning and In-app reminders use compact switch summaries; import and
+Today omit redundant instructions/category labels. Consent, warnings and state
+remain visible. Compare keeps its heading full-width, then places correlation values
+and insufficient-data status beside their explanation for every 7/14/30/90-day
+window on normal phone sizes, retaining stacked large-text layout. The action says
+`Longer period`. Skillset starts with all dimensions selected unless a saved choice
+exists. Overview copy is unchanged.
+Liquid Glass adds a dark graphite/silver material treatment across shared surfaces,
+navigation and Material menus/controls without moving content. The selection is
+device-local (`app_theme_mode=liquidGlass`); no cloud change is required.
+High Contrast uses opaque surfaces without decorative glass effects. See the
+[visual owner](../../docs/frontend-visual-system-v2.md#liquid-glass).
+
+Manual Morning/Evening supports today plus seven earlier calendar dates using
+the existing reviewed Capture save path. The date picker confirms discarding
+unsaved edits before loading another day; historical Morning needs explicit
+sleep times. Voice review remains today-bound. Focus's optional start reminders
+are a passive list with one Ready & start confirmation, never persisted/scored.
+Items remain editable in Settings → Setup → Focus setup. Planner distinguishes releasing time
+reservations from removing a Task/plan; Habit management remains ownership-aware.
+Historical Focus data and separately imported calendar events are preserved.
+
 Insights → Advanced → Past compares adjacent 7/14/30-day periods or aligned
 Monday–Sunday weeks. It reuses Personal Patterns with missing-data gaps and
 an exact-values disclosure; Learning/Discipline are labelled trailing summaries.
@@ -107,7 +161,9 @@ additive Cloud/API release; code presence alone does not prove availability.
 
 Settings also includes optional **Push reminders** (`android-push-v1`). Android
 asks explicit Cloud/device-delivery consent and OS permission; sleep, deadline,
-pattern and quiet-hour preferences remain independently editable. Web can turn
+pattern, Morning/Evening check-in times and quiet-hour preferences remain
+independently editable. Check-in switches default off and appear only with a
+supporting API. A saved check-in suppresses that day's reminder. Web can turn
 the account setting off, but does not register for browser push. Native data-only
 receipt checks the current owner/session/registration and expiry before showing
 fixed generic copy. Logout disables receipt before token cleanup; foreground
@@ -184,7 +240,7 @@ and includes the scrollable timeline and fixed bottom composer. It remains for
 empty and populated history; opening or refreshing history scrolls to the newest
 message. The empty state includes the no-saved notice and short static example.
 The model icon before the microphone opens the existing provider/key controls
-and Coach information in a dialog. Errors remain visible above the chat; the
+with Coach information in anchored popovers. Errors remain visible above the chat; the
 main page itself does not scroll.
 At very small remaining heights the composer joins the same chat scroller.
 This does not send a question or alter existing conversations.
@@ -354,7 +410,9 @@ progress, the Setup/Preparation/Calendar/Focus plus Planner
 Task/Habit/fixed-commitment agenda, Tasks, and Habits. The V1 route remains
 available for older clients.
 The latest saved check-in is loaded separately into the compact
-`Beat yesterday` streak inset. `Review your week` is a direct
+`Last check-in` inset with its date and recorded values directly visible.
+Capture actions and the agenda precede supporting progress.
+`Today & overdue` retains the existing Task selection. `Review your week` is a direct
 capability-gated navigation entry. The current profile-local
 Monday-through-Sunday week is an independent, initially closed supporting
 accordion and loads only while that accordion is open. The retired generic
@@ -791,7 +849,7 @@ authenticated transport and performs zero balance calls.
 
 Student-facing category treatment is shared between Today and Planner: Task
 and Setup use brand, Habit and Preparation use information, Calendar uses
-attention, Focus uses violet, and fixed commitments use danger. Preparation
+attention, Focus uses violet, and fixed commitments use neutral accents. Preparation
 plans are grouped as `Open plans` and compact `History`; only the selected or
 newly previewed accordion is expanded. In-page navigation pushes route history,
 while shell destinations replace it. The shared top back control pops real
@@ -916,7 +974,7 @@ title and the full-width input above its model/microphone/Send toolbar.
 The composer is one shared surface: its unframed input grows upward from one
 to five lines, then scrolls internally without moving the toolbar out of reach.
 Its model control opens a bottom sheet with Standard/OpenAI/Gemini immediately
-selectable and independent per-option Info dialogs. Personal-key options retain
+selectable and independent per-option Info popovers. Personal-key options retain
 key testing, replacement and deletion; Settings keeps its existing dropdown.
 These layout changes retain existing callbacks, eligibility and data sources.
 Real-account Insights loads `personal-patterns-v1` and
@@ -1111,6 +1169,12 @@ setup and recovery boundaries live in `android/RELEASE_SIGNING.md`; repository
 source is not positive signing or installed-device evidence.
 
 ## Visual presentation
+
+Inbox places the saved date before its original message, marking older items
+`Earlier` without changing lifecycle or implying expiry. Planner groups matching
+Exam capacity/unplaced-work notices while retaining Details and both review
+destinations; stale/source warnings stay visible. Skillset names missing selected
+dimensions and Compare offers a longer existing window when samples are sparse.
 
 Student-facing presentation follows
 [`docs/frontend-visual-system-v2.md`](../../docs/frontend-visual-system-v2.md).

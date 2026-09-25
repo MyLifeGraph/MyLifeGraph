@@ -8,8 +8,42 @@ import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/core/widgets/app_schedule_day_card.dart';
 
 void main() {
-  testWidgets('whole actionable row owns status semantics and hit target',
-      (tester) async {
+  testWidgets('glass timeline uses category only as a side accent', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      theme: AppTheme.liquidGlass,
+      timelineStyle: true,
+      items: const [
+        AppScheduleDayItem(
+          id: 'glass',
+          title: 'Recovery walk',
+          detail: '16:00–16:30',
+          category: AppCategory.setup,
+          actionable: false,
+        ),
+      ],
+    );
+    final decoration =
+        tester
+                .widget<Container>(
+                  find.byKey(const ValueKey('schedule-day-item-glass')),
+                )
+                .decoration
+            as BoxDecoration;
+    expect(decoration.color, isNull);
+    expect((decoration.border! as Border).left.width, 3);
+    expect((decoration.border! as Border).right.width, 0);
+    final material = tester.widget<Material>(
+      find.byKey(const ValueKey('schedule-day-item-material-glass')),
+    );
+    expect(material.color!.a, lessThan(0.5));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('whole actionable row owns status semantics and hit target', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
     var taps = 0;
     await _pump(
@@ -47,9 +81,7 @@ void main() {
       );
     }
 
-    await tester.tap(
-      find.byKey(const ValueKey('schedule-status-fullyRated')),
-    );
+    await tester.tap(find.byKey(const ValueKey('schedule-status-fullyRated')));
     expect(taps, 1, reason: 'The status box belongs to the row action.');
     await tester.tap(find.text('fullyRated'));
     expect(taps, 2);
@@ -66,8 +98,9 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('rows expose one exact action or static-fact semantics node',
-      (tester) async {
+  testWidgets('rows expose one exact action or static-fact semantics node', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
     var tappedId = '';
     await _pump(
@@ -97,9 +130,7 @@ void main() {
     expect(find.bySemanticsLabel(staticLabel), findsOneWidget);
     expect(
       tester.getSemantics(
-        find.byKey(
-          const ValueKey('schedule-day-item-semantics-actionable'),
-        ),
+        find.byKey(const ValueKey('schedule-day-item-semantics-actionable')),
       ),
       isSemantics(
         label: actionableLabel,
@@ -125,8 +156,9 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('keyboard focus shows a two-pixel ring and Enter activates',
-      (tester) async {
+  testWidgets('keyboard focus shows a two-pixel ring and Enter activates', (
+    tester,
+  ) async {
     var tappedId = '';
     await _pump(
       tester,
@@ -153,9 +185,7 @@ void main() {
     await tester.pump();
 
     final focusedMaterial = tester.widget<Material>(
-      find.byKey(
-        const ValueKey('schedule-day-item-material-keyboard-action'),
-      ),
+      find.byKey(const ValueKey('schedule-day-item-material-keyboard-action')),
     );
     final focusedShape = focusedMaterial.shape! as RoundedRectangleBorder;
     expect(focusedShape.side.width, 2);
@@ -170,8 +200,9 @@ void main() {
     expect(tappedId, 'keyboard-action');
   });
 
-  testWidgets('completed is neutral and fully rated uses category tokens',
-      (tester) async {
+  testWidgets('completed is neutral and fully rated uses category tokens', (
+    tester,
+  ) async {
     for (final theme in [AppTheme.dark, AppTheme.light, AppTheme.space]) {
       await _pump(
         tester,
@@ -219,8 +250,9 @@ void main() {
     }
   });
 
-  testWidgets('an item-specific icon preserves source identity',
-      (tester) async {
+  testWidgets('an item-specific icon preserves source identity', (
+    tester,
+  ) async {
     await _pump(
       tester,
       items: const [
@@ -239,8 +271,9 @@ void main() {
     expect(find.byIcon(AppIcons.eventRepeatOutlined), findsNothing);
   });
 
-  testWidgets('day rows remain scrollable at 320 pixels and 200 percent text',
-      (tester) async {
+  testWidgets('day rows remain scrollable at 320 pixels and 200 percent text', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 600);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -271,6 +304,7 @@ Future<void> _pump(
   WidgetTester tester, {
   required List<AppScheduleDayItem> items,
   ThemeData? theme,
+  bool timelineStyle = false,
   TextScaler textScaler = TextScaler.noScaling,
   ValueChanged<AppScheduleDayItem>? onTap,
 }) async {
@@ -285,6 +319,7 @@ Future<void> _pump(
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: AppScheduleDayCard(
+            timelineStyle: timelineStyle,
             localDate: DateTime(2026, 8, 5),
             items: items,
             emptyLabel: 'Nothing planned.',

@@ -360,6 +360,11 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       PlannerHabitsSection(
         items: overview.habits,
         onOpen: (item) => _openHabit(item, overview),
+        onManage: (item) => context.push(
+          item.ownership == 'setup'
+              ? '${AppRoutes.onboarding}?edit=1'
+              : AppRoutes.habitManagement,
+        ),
         enabled: state.canMutate,
       ),
     );
@@ -508,13 +513,20 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
   Future<void> _finishUnscheduledTask(
     PlannerUnscheduledTask task, {
     required bool remove,
+  }) =>
+      _finishTask(task.id, task.title, remove: remove);
+
+  Future<void> _finishTask(
+    String taskId,
+    String title, {
+    required bool remove,
   }) async {
     final state = ref.read(plannerControllerProvider);
     final commands = ref.read(taskCommandPortProvider);
     if (!state.canMutate ||
         state.overview == null ||
         commands == null ||
-        _updatingTaskIds.contains(task.id)) {
+        _updatingTaskIds.contains(taskId)) {
       return;
     }
     if (remove) {
@@ -522,7 +534,9 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Remove task?'),
-          content: Text(task.title),
+          content: Text(
+            '$title\nFuture reservations are released. Focus history is kept.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -539,13 +553,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     }
     final refresh = ref.read(projectionRefreshCoordinatorProvider);
     final controller = ref.read(plannerControllerProvider.notifier);
-    setState(() => _updatingTaskIds.add(task.id));
+    setState(() => _updatingTaskIds.add(taskId));
     bool saved = false;
     try {
       if (remove) {
-        await commands.cancelTask(task.id);
+        await commands.cancelTask(taskId);
       } else {
-        await commands.completeTask(task.id);
+        await commands.completeTask(taskId);
       }
       saved = true;
       try {
@@ -571,7 +585,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         );
       }
     } finally {
-      if (mounted) setState(() => _updatingTaskIds.remove(task.id));
+      if (mounted) setState(() => _updatingTaskIds.remove(taskId));
     }
   }
 
@@ -1516,7 +1530,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1686,7 +1700,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
 
   Future<bool> _openActionPlan(PlannerActionPlan plan) async {
     if (!ref.read(plannerControllerProvider).canMutate) return false;
-    final execute = await showModalBottomSheet<bool>(
+    final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -1704,12 +1718,12 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
               ),
               const SizedBox(height: AppSpacing.sm),
               const Text(
-                'The target remains authoritative. Cancelling releases future reservations only.',
+                'Release time slots, or remove the item itself. History is kept.',
               ),
               const SizedBox(height: AppSpacing.md),
               if (plan.activeRevision != null)
                 FilledButton.tonalIcon(
-                  onPressed: () => Navigator.pop(context, true),
+                  onPressed: () => Navigator.pop(context, 'start'),
                   icon: Icon(
                     plan.targetKind == 'task'
                         ? AppIcons.playArrow
@@ -1724,19 +1738,50 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
               const SizedBox(height: AppSpacing.sm),
               OutlinedButton.icon(
                 key: const ValueKey('planner-cancel-reservations'),
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () => Navigator.pop(context, 'release'),
                 icon: const Icon(AppIcons.eventBusyOutlined),
                 label: const Text('Cancel reservations'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context, 'remove'),
+                icon: const Icon(AppIcons.deleteOutline),
+                label: Text(
+                  plan.targetKind == 'task'
+                      ? 'Remove task'
+                      : 'Manage / remove habit',
+                ),
               ),
             ],
           ),
         ),
       ),
     );
+    if (mounted &&
+        action == 'remove' &&
+        ref.read(plannerControllerProvider).canMutate) {
+      if (plan.targetKind == 'task') {
+        await _finishTask(
+          plan.targetId,
+          plan.activeRevision?.targetTitle ?? 'Task',
+          remove: true,
+        );
+      } else {
+        final habit = ref
+            .read(plannerControllerProvider)
+            .overview
+            ?.habits
+            .where((item) => item.id == plan.targetId)
+            .firstOrNull;
+        context.push(habit?.ownership == 'setup'
+            ? '${AppRoutes.onboarding}?edit=1'
+            : AppRoutes.habitManagement);
+      }
+      return false;
+    }
     if (!mounted ||
         !ref.read(plannerControllerProvider).canMutate ||
-        execute != false) {
-      return execute == true && ref.read(plannerControllerProvider).canMutate;
+        action != 'release') {
+      return action == 'start' && ref.read(plannerControllerProvider).canMutate;
     }
     final confirmed = await showDialog<bool>(
           context: context,

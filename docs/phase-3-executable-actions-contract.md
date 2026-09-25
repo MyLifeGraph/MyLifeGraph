@@ -197,17 +197,30 @@ timezone never triggers that fallback.
 
 The database enforces the planned-duration bounds, single-active-session
 invariant, exact lifecycle shape, linked-target ownership/availability,
-immutable start and terminal history, and restricted target deletion. Target
+immutable start and terminal identity, and restricted target deletion. Target
 validation locks the selected task or habit row so availability cannot change
 between validation and the focus write. Application validation provides a
 recoverable error before a write whenever possible.
+
+Completed Focus history offers `Correct time`. POST
+`/v1/focus/sessions/{session_id}/correct-time` accepts `request_id`, aware
+`expected_updated_at`, and nonnegative integer `minutes`. The verified owner may
+shorten or restore duration within the original interval, never extend it, move
+the start/day/target, reopen a session or change an abandoned session. Canonical
+`ended_at` and `actual_minutes` change together; original times and audit remain.
+Existing duration/plan-credit readers use the corrected row, not an extra event.
+Saved proposals remain historical; allocation changes need an explicit preview.
+Flutter refreshes the affected snapshot; projection failure does not undo the
+durable correction. The editor locks submitted values for exact retry after an
+uncertain response. The new migration and API must precede the client rollout.
 
 Study Setup V1 extends only Focus start defaults and metadata, not the Phase 3
 command set or lifecycle. A selected Planner/Preparation block duration takes
 priority, followed by the saved Study duration, the latest terminal session,
 and the 25-minute fallback. Saved active preparation items appear as a
-transient Ready/Not-needed checklist with an explicit skip; choices are never
-stored. A manual session may override its duration once.
+passive reminder list with a single `Ready & start` confirmation. There are no
+per-item choices, persisted acknowledgements or inputs to correlations.
+A manual session may override its duration once.
 
 Scheduled Focus uses the additive `focus-start-v2` backend path. A session may
 retain one immutable `focus_session_schedule_sources` row pointing to its
@@ -338,6 +351,10 @@ between a Multi-Exam digest check and its atomic commit.
   committed-versus-unconfirmed results, and stale/reload-only state; the
   Dashboard widget does not construct or invoke either concrete Supabase data
   source.
+- Today status overlays appear before the command returns, with pending feedback
+  and a global Task/Habit lock. Unconfirmed failure removes the provisional
+  overlay; committed refresh failure retains it. No offline command queue or
+  optimistic permission/consent change is introduced.
 - Standalone Today Habits and Habit management resolve their concrete data
   sources through app composition providers. Their presentation pages do not
   import or construct the Supabase source, map read/write failures to retained-
@@ -387,7 +404,7 @@ envelopes, user scoping, idempotency, snapshot
 refresh, and guest/mock locality.
 
 Study Focus coverage additionally proves duration priority, configured and
-empty checklists, partial/all/remaining skip, absence of ritual history, manual
+empty reminder lists, cancellation/single confirmation, absence of ritual history, manual
 duration override, strict recovery metadata, completed-only countdown,
 restoration, expiry, and explicit skip.
 

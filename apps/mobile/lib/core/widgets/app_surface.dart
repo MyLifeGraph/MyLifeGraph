@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_radii.dart';
 import '../constants/app_spacing.dart';
 import '../theme/app_motion_tokens.dart';
+import '../theme/app_liquid_glass.dart';
 import '../theme/app_theme_effects.dart';
 import '../theme/app_visual_tokens.dart';
 
@@ -51,6 +52,15 @@ class _AppSurfaceState extends State<AppSurface> {
     final motion = context.motionTokens;
     final effects = context.themeEffects;
     final surfaceMaterial = effects.surfaceMaterial;
+    final glass = Theme.of(context).extension<AppLiquidGlass>();
+    // Supporting content inside glass needs separation, not another glass rim.
+    final quietInset =
+        glass != null &&
+        context.findAncestorWidgetOfExactType<AppSurface>() != null &&
+        !widget.selected &&
+        widget.onTap == null &&
+        (widget.variant == AppSurfaceVariant.plain ||
+            widget.variant == AppSurfaceVariant.subtle);
     final interactive =
         widget.onTap != null || widget.variant == AppSurfaceVariant.interactive;
     final background = switch (widget.variant) {
@@ -58,40 +68,44 @@ class _AppSurfaceState extends State<AppSurface> {
       AppSurfaceVariant.subtle => surfaceMaterial.subtle(tokens.surfaceSubtle),
       AppSurfaceVariant.raised => surfaceMaterial.raised(tokens.surfaceRaised),
       AppSurfaceVariant.interactive => surfaceMaterial.interactive(
-          _hovered || _pressed ? tokens.surfaceRaised : tokens.surfaceSubtle,
-          hovered: _hovered,
-          pressed: _pressed,
-        ),
+        _hovered || _pressed ? tokens.surfaceRaised : tokens.surfaceSubtle,
+        hovered: _hovered,
+        pressed: _pressed,
+      ),
       AppSurfaceVariant.accent when surfaceMaterial.enabled => Color.alphaBlend(
-          tokens.brand.withValues(alpha: 0.10),
-          surfaceMaterial.subtle(tokens.surfaceSubtle),
-        ),
+        tokens.brand.withValues(alpha: 0.10),
+        surfaceMaterial.subtle(tokens.surfaceSubtle),
+      ),
       AppSurfaceVariant.accent => tokens.brand.withValues(
-          alpha: effects.accentSurfaceOpacity,
-        ),
-      AppSurfaceVariant.warning =>
-        surfaceMaterial.semantic(tokens.attentionSurface),
-      AppSurfaceVariant.danger =>
-        surfaceMaterial.semantic(tokens.dangerSurface),
+        alpha: effects.accentSurfaceOpacity,
+      ),
+      AppSurfaceVariant.warning => surfaceMaterial.semantic(
+        tokens.attentionSurface,
+      ),
+      AppSurfaceVariant.danger => surfaceMaterial.semantic(
+        tokens.dangerSurface,
+      ),
     };
-    final hasAmbientOutline = effects.surfaceOutlineColor.a > 0 &&
+    final hasAmbientOutline =
+        effects.surfaceOutlineColor.a > 0 &&
         widget.variant != AppSurfaceVariant.warning &&
         widget.variant != AppSurfaceVariant.danger;
-    final hasSemanticBorder = widget.selected ||
+    final hasSemanticBorder =
+        widget.selected ||
         _focused ||
         widget.variant == AppSurfaceVariant.warning ||
         widget.variant == AppSurfaceVariant.danger;
     final borderColor = _focused
         ? tokens.focus
         : widget.selected
-            ? tokens.brand
-            : widget.variant == AppSurfaceVariant.warning
-                ? tokens.attention
-                : widget.variant == AppSurfaceVariant.danger
-                    ? tokens.danger
-                    : interactive && _hovered
-                        ? effects.surfaceHoverOutlineColor
-                        : effects.surfaceOutlineColor;
+        ? tokens.brand
+        : widget.variant == AppSurfaceVariant.warning
+        ? tokens.attention
+        : widget.variant == AppSurfaceVariant.danger
+        ? tokens.danger
+        : interactive && _hovered
+        ? effects.surfaceHoverOutlineColor
+        : effects.surfaceOutlineColor;
 
     final shadows = <BoxShadow>[
       if (widget.variant == AppSurfaceVariant.raised)
@@ -118,14 +132,16 @@ class _AppSurfaceState extends State<AppSurface> {
     final hoverLift = interactive && _hovered && !_pressed
         ? effects.interactiveSurfaceHoverLift
         : 0.0;
-    final showsHudFrame = surfaceMaterial.hudFrameEnabled &&
+    final showsHudFrame =
+        surfaceMaterial.hudFrameEnabled &&
         widget.variant != AppSurfaceVariant.accent &&
         widget.variant != AppSurfaceVariant.warning &&
         widget.variant != AppSurfaceVariant.danger;
     final content = AnimatedContainer(
       key: const ValueKey('app-surface-visual'),
-      duration:
-          _pressed ? motion.selectionFor(context) : motion.stateFor(context),
+      duration: _pressed
+          ? motion.selectionFor(context)
+          : motion.stateFor(context),
       curve: motion.curve,
       transform: effects.interactiveSurfaceHoverLift > 0
           ? Matrix4.translationValues(0, -hoverLift, 0)
@@ -133,8 +149,9 @@ class _AppSurfaceState extends State<AppSurface> {
       transformAlignment: Alignment.center,
       decoration: BoxDecoration(
         color: background,
+        gradient: quietInset ? null : glass?.surfaceGradient(background),
         borderRadius: BorderRadius.circular(widget.radius),
-        border: hasSemanticBorder || hasAmbientOutline
+        border: hasSemanticBorder || (hasAmbientOutline && glass == null)
             ? Border.all(color: borderColor, width: _focused ? 2 : 1)
             : null,
         boxShadow: shadows.isEmpty ? null : shadows,
@@ -156,7 +173,8 @@ class _AppSurfaceState extends State<AppSurface> {
                     key: const ValueKey('app-surface-hud-frame'),
                     painter: _AppSurfaceHudPainter(
                       radius: widget.radius,
-                      emphasized: widget.variant == AppSurfaceVariant.raised ||
+                      emphasized:
+                          widget.variant == AppSurfaceVariant.raised ||
                           widget.variant == AppSurfaceVariant.interactive,
                       primaryColor: _pressed
                           ? tokens.focus.withValues(alpha: 0.78)
@@ -164,6 +182,19 @@ class _AppSurfaceState extends State<AppSurface> {
                               alpha: _hovered ? 0.82 : 0.72,
                             ),
                       secondaryColor: tokens.dataViolet.withValues(alpha: 0.60),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (glass != null && !hasSemanticBorder && !quietInset)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const ValueKey('liquid-glass-surface-rim'),
+                  decoration: ShapeDecoration(
+                    shape: LiquidGlassBorder(
+                      borderRadius: BorderRadius.circular(widget.radius),
                     ),
                   ),
                 ),
@@ -179,8 +210,9 @@ class _AppSurfaceState extends State<AppSurface> {
       selected: widget.selected,
       label: widget.semanticLabel,
       child: FocusableActionDetector(
-        mouseCursor:
-            widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+        mouseCursor: widget.onTap == null
+            ? MouseCursor.defer
+            : SystemMouseCursors.click,
         onShowFocusHighlight: (value) => setState(() => _focused = value),
         onShowHoverHighlight: (value) => setState(() => _hovered = value),
         child: Material(
@@ -352,9 +384,9 @@ class AppStatusPill extends StatelessWidget {
               child: Text(
                 label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: foreground,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: foreground,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -391,10 +423,7 @@ class AppMetric extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.labelMedium),
         if (supportingText != null) ...[
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            supportingText!,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text(supportingText!, style: Theme.of(context).textTheme.bodySmall),
         ],
       ],
     );

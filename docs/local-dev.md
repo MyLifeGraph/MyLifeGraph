@@ -1,5 +1,13 @@
 # Local Development
 
+## Standalone product website
+
+The optional static product site lives in `apps/website`; it is not part of the
+Flutter startup or app deployment. Run `python -m http.server 7360 --bind 127.0.0.1
+--directory apps/website/public` as one command from the root, then open
+`http://127.0.0.1:7360`. Its demo is synthetic and has no cloud access. See the
+[website workflow](../apps/website/README.md) for isolated checks and publishing.
+
 For the current local changes and the full Cloud/service map, start with the
 [development handoff](development-handoff.md). The personal laptop Cloud
 workflow is [documented below](#personal-windows-browser-with-existing-cloud-accounts);

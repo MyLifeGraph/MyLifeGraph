@@ -18,35 +18,64 @@ import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 import 'support/dashboard_full_week_fixture.dart';
 
 void main() {
-  testWidgets('All tasks filters dated and undated without changing saved tasks', (tester) async {
-    final dated = PlanItem(id: 'dated', title: 'Dated task', priority: 'low', isCompleted: false, status: 'todo', source: 'manual',
-      deadline: DateTime(2026, 8, 1));
-    const undated = PlanItem(id: 'undated', title: 'Undated task', priority: 'low', isCompleted: false, status: 'todo', source: 'manual');
-    await _pumpDashboard(tester, snapshot: _todaySnapshot(allTasks: [dated, undated]));
-    await _tapExpansion(tester, const ValueKey('today-all-tasks'));
-    expect(find.text('Dated task'), findsOneWidget);
-    expect(find.text('Undated task'), findsOneWidget);
-    await tester.ensureVisible(find.widgetWithText(FilterChip, 'Dated'));
-    await tester.tap(find.widgetWithText(FilterChip, 'Dated'));
-    await tester.pumpAndSettle();
-    expect(find.text('Dated task'), findsNothing);
-    expect(find.text('Undated task'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilterChip, 'Dated'));
-    await tester.tap(find.widgetWithText(FilterChip, 'Undated'));
-    await tester.pumpAndSettle();
-    expect(find.text('Dated task'), findsOneWidget);
-    expect(find.text('Undated task'), findsNothing);
-  });
-  testWidgets('desktop Today supporting cards share the main content width',
-      (tester) async {
-    await _pumpDashboard(tester, size: const Size(1800, 2200),
+  testWidgets(
+    'All tasks filters dated and undated without changing saved tasks',
+    (tester) async {
+      final dated = PlanItem(
+        id: 'dated',
+        title: 'Dated task',
+        priority: 'low',
+        isCompleted: false,
+        status: 'todo',
+        source: 'manual',
+        deadline: DateTime(2026, 8, 1),
+      );
+      const undated = PlanItem(
+        id: 'undated',
+        title: 'Undated task',
+        priority: 'low',
+        isCompleted: false,
+        status: 'todo',
+        source: 'manual',
+      );
+      await _pumpDashboard(
+        tester,
+        snapshot: _todaySnapshot(allTasks: [dated, undated]),
+      );
+      await _tapExpansion(tester, const ValueKey('today-all-tasks'));
+      expect(find.text('Dated task'), findsOneWidget);
+      expect(find.text('Undated task'), findsOneWidget);
+      await tester.ensureVisible(find.widgetWithText(FilterChip, 'Dated'));
+      await tester.tap(find.widgetWithText(FilterChip, 'Dated'));
+      await tester.pumpAndSettle();
+      expect(find.text('Dated task'), findsNothing);
+      expect(find.text('Undated task'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilterChip, 'Dated'));
+      await tester.tap(find.widgetWithText(FilterChip, 'Undated'));
+      await tester.pumpAndSettle();
+      expect(find.text('Dated task'), findsOneWidget);
+      expect(find.text('Undated task'), findsNothing);
+    },
+  );
+  testWidgets('desktop Today supporting cards share the main content width', (
+    tester,
+  ) async {
+    await _pumpDashboard(
+      tester,
+      size: const Size(1800, 2200),
       capabilities: const AppSurfaceCapabilities(
-        isLocalDemo: false, canUseSyncedHabits: true,
-        canUseSyncedExecution: true, canUseWeeklyReview: true,
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+        canUseWeeklyReview: true,
       ),
     );
-    final streak = find.ancestor(
-      of: find.text('Check-in streak'), matching: find.byType(AppCard)).first;
+    final streak = find
+        .ancestor(
+          of: find.text('Check-in streak'),
+          matching: find.byType(AppCard),
+        )
+        .first;
     final expected = tester.getRect(streak);
     expect(expected.width, 1080);
     for (final key in ['dashboard-weekly-review', 'dashboard-full-week']) {
@@ -76,8 +105,9 @@ void main() {
     expect(find.byKey(const ValueKey('today-exam-plan-health')), findsNothing);
   });
 
-  testWidgets('Today uses streak, progress, agenda, tasks, and habits order',
-      (tester) async {
+  testWidgets('Today uses streak, progress, agenda, tasks, and habits order', (
+    tester,
+  ) async {
     await _pumpDashboard(
       tester,
       snapshot: _todaySnapshot(),
@@ -95,7 +125,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("Today's decision"), findsNothing);
     expect(find.text('Check-in streak'), findsOneWidget);
-    expect(find.text('6 consecutive days'), findsOneWidget);
+    expect(find.text('6 days', findRichText: true), findsOneWidget);
     expect(find.text("Today's progress"), findsOneWidget);
     expect(find.text('4/7 completed'), findsOneWidget);
     expect(find.text("Today's schedule"), findsOneWidget);
@@ -103,7 +133,7 @@ void main() {
     expect(find.text('Preparation'), findsOneWidget);
     expect(find.text('Calendar'), findsNWidgets(2));
     expect(find.text('Focus'), findsOneWidget);
-    expect(find.text('Tasks due today'), findsOneWidget);
+    expect(find.text('Today & overdue'), findsOneWidget);
     expect(find.text('Habits for today'), findsOneWidget);
     expect(find.text('More'), findsNothing);
     expect(find.text('Weekly review'), findsOneWidget);
@@ -115,163 +145,159 @@ void main() {
     );
     expect(find.text('Full week'), findsOneWidget);
     expect(find.text('7-day preparation load'), findsNothing);
-    expect(find.text('Beat yesterday'), findsOneWidget);
+    expect(find.text('Last check-in'), findsOneWidget);
 
     final streakY = tester.getTopLeft(find.text('Check-in streak')).dy;
     final progressY = tester.getTopLeft(find.text("Today's progress")).dy;
     final agendaY = tester.getTopLeft(find.text("Today's schedule")).dy;
-    final tasksY = tester.getTopLeft(find.text('Tasks due today')).dy;
+    final tasksY = tester.getTopLeft(find.text('Today & overdue')).dy;
     final habitsY = tester.getTopLeft(find.text('Habits for today')).dy;
     final weeklyReviewY = tester.getTopLeft(find.text('Weekly review')).dy;
     final fullWeekY = tester.getTopLeft(find.text('Full week')).dy;
-    expect(streakY, lessThan(progressY));
-    expect(progressY, lessThan(agendaY));
-    expect(agendaY, lessThan(tasksY));
+    expect(streakY, lessThan(agendaY));
+    expect(agendaY, lessThan(progressY));
+    expect(progressY, lessThan(tasksY));
     expect(tasksY, lessThan(habitsY));
     expect(habitsY, lessThan(weeklyReviewY));
     expect(weeklyReviewY, lessThan(fullWeekY));
   });
 
   testWidgets(
-      'accordion descriptions start hidden and each disclosure opens and closes independently',
-      (tester) async {
-    await _pumpDashboard(
-      tester,
-      snapshot: _todaySnapshot(),
-      capabilities: const AppSurfaceCapabilities(
-        isLocalDemo: false,
-        canUseSyncedHabits: true,
-        canUseSyncedExecution: true,
-        canUseWeeklyReview: true,
-      ),
-    );
+    'accordion descriptions start hidden and each disclosure opens and closes independently',
+    (tester) async {
+      await _pumpDashboard(
+        tester,
+        snapshot: _todaySnapshot(),
+        capabilities: const AppSurfaceCapabilities(
+          isLocalDemo: false,
+          canUseSyncedHabits: true,
+          canUseSyncedExecution: true,
+          canUseWeeklyReview: true,
+        ),
+      );
 
-    const disclosures = <String, String>{
-      'Check-in streak':
-          'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
-      'Today\'s progress':
-          'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
-      'Today\'s schedule':
-          'Today\'s scheduled time blocks, in order.',
-      'Tasks due today':
-          'Due, overdue, in progress or completed today.',
-      'Habits for today':
-          'Repeating activities for today.',
-      'Full week':
-          'Your Monday–Sunday schedule in your account timezone.',
-    };
+      const disclosures = <String, String>{
+        'Check-in streak':
+            'Both check-ins count as one day. Complete them anytime today; your streak stays until the day ends.',
+        'Today\'s progress':
+            'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
+        'Today\'s schedule': 'Today\'s scheduled time blocks, in order.',
+        'Today & overdue': 'Due, overdue, in progress or completed today.',
+        'Habits for today': 'Repeating activities for today.',
+        'Full week': 'Your Monday–Sunday schedule in your account timezone.',
+      };
 
-    for (final description in disclosures.values) {
-      expect(find.text(description), findsNothing);
-    }
-    expect(
-      find.text(
-        'Look back at last week.',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('today-info-control-Weekly review')),
-      findsNothing,
-    );
+      for (final description in disclosures.values) {
+        expect(find.text(description), findsNothing);
+      }
+      expect(find.text('Look back at last week.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('today-info-control-Weekly review')),
+        findsNothing,
+      );
 
-    for (final entry in disclosures.entries) {
-      await _tapInfo(tester, entry.key);
-      expect(find.text(entry.value), findsOneWidget, reason: entry.key);
-      await _tapInfo(tester, entry.key);
-      expect(find.text(entry.value), findsNothing, reason: entry.key);
-    }
+      for (final entry in disclosures.entries) {
+        await _tapInfo(tester, entry.key);
+        expect(find.text(entry.value), findsOneWidget, reason: entry.key);
+        await _tapInfo(tester, entry.key);
+        expect(find.text(entry.value), findsNothing, reason: entry.key);
+      }
 
-    expect(find.text('Future task'), findsNothing);
-    await _tapExpansion(tester, const ValueKey('today-all-tasks'));
-    expect(find.text('All tasks'), findsOneWidget);
-    expect(find.text('Tasks'), findsNothing);
-    for (final topic in ['Today', 'All tasks', 'Tasks']) {
-      expect(find.byKey(ValueKey('today-info-control-$topic')), findsNothing);
-    }
+      expect(find.text('Future task'), findsNothing);
+      await _tapExpansion(tester, const ValueKey('today-all-tasks'));
+      expect(find.text('All tasks'), findsOneWidget);
+      expect(find.text('Tasks'), findsNothing);
+      for (final topic in ['Today', 'All tasks', 'Tasks']) {
+        expect(find.byKey(ValueKey('today-info-control-$topic')), findsNothing);
+      }
 
-    await _tapInfo(tester, 'Check-in streak');
-    await _tapInfo(tester, 'Today\'s progress');
-    expect(find.text(disclosures['Check-in streak']!), findsOneWidget);
-    expect(find.text(disclosures['Today\'s progress']!), findsOneWidget);
-    await _tapInfo(tester, 'Check-in streak');
-    expect(find.text(disclosures['Check-in streak']!), findsNothing);
-    expect(find.text(disclosures['Today\'s progress']!), findsOneWidget);
-  });
+      await _tapInfo(tester, 'Check-in streak');
+      await _tapInfo(tester, 'Today\'s progress');
+      expect(find.text(disclosures['Check-in streak']!), findsOneWidget);
+      expect(find.text(disclosures['Today\'s progress']!), findsOneWidget);
+      await _tapInfo(tester, 'Check-in streak');
+      expect(find.text(disclosures['Check-in streak']!), findsNothing);
+      expect(find.text(disclosures['Today\'s progress']!), findsOneWidget);
+    },
+  );
 
   testWidgets(
-      'supporting info clicks neither open accordions nor start lazy reads',
-      (tester) async {
-    var fullWeekLoads = 0;
-    await _pumpDashboard(
-      tester,
-      snapshot: _todaySnapshot(),
-      capabilities: const AppSurfaceCapabilities(
-        isLocalDemo: false,
-        canUseSyncedHabits: true,
-        canUseSyncedExecution: true,
-        canUseWeeklyReview: true,
-      ),
-      onFullWeekLoad: () => fullWeekLoads += 1,
-    );
+    'supporting info clicks neither open accordions nor start lazy reads',
+    (tester) async {
+      var fullWeekLoads = 0;
+      await _pumpDashboard(
+        tester,
+        snapshot: _todaySnapshot(),
+        capabilities: const AppSurfaceCapabilities(
+          isLocalDemo: false,
+          canUseSyncedHabits: true,
+          canUseSyncedExecution: true,
+          canUseWeeklyReview: true,
+        ),
+        onFullWeekLoad: () => fullWeekLoads += 1,
+      );
 
-    await _ensureExpansionVisible(
-      tester,
-      const ValueKey('dashboard-full-week'),
-    );
-    await _tapInfo(tester, 'Full week');
+      await _ensureExpansionVisible(
+        tester,
+        const ValueKey('dashboard-full-week'),
+      );
+      await _tapInfo(tester, 'Full week');
 
-    expect(find.text('Weekly review'), findsOneWidget);
-    expect(fullWeekLoads, 0);
+      expect(find.text('Weekly review'), findsOneWidget);
+      expect(fullWeekLoads, 0);
 
-    await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
+      await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
 
-    expect(fullWeekLoads, 1);
-  });
+      expect(fullWeekLoads, 1);
+    },
+  );
 
-  testWidgets('Full week lazy failure retries only its own provider generation',
-      (tester) async {
-    var fullWeekLoads = 0;
-    await _pumpDashboard(
-      tester,
-      snapshot: _todaySnapshot(),
-      fullWeekLoader: () async {
-        fullWeekLoads += 1;
-        if (fullWeekLoads == 1) throw StateError('week offline');
-        return dashboardFullWeekFixture(
-          localToday: DateTime.utc(2026, 7, 21),
-        );
-      },
-      capabilities: const AppSurfaceCapabilities(
-        isLocalDemo: false,
-        canUseSyncedHabits: true,
-        canUseSyncedExecution: true,
-      ),
-    );
+  testWidgets(
+    'Full week lazy failure retries only its own provider generation',
+    (tester) async {
+      var fullWeekLoads = 0;
+      await _pumpDashboard(
+        tester,
+        snapshot: _todaySnapshot(),
+        fullWeekLoader: () async {
+          fullWeekLoads += 1;
+          if (fullWeekLoads == 1) throw StateError('week offline');
+          return dashboardFullWeekFixture(
+            localToday: DateTime.utc(2026, 7, 21),
+          );
+        },
+        capabilities: const AppSurfaceCapabilities(
+          isLocalDemo: false,
+          canUseSyncedHabits: true,
+          canUseSyncedExecution: true,
+        ),
+      );
 
-    expect(fullWeekLoads, 0);
-    await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
-    expect(fullWeekLoads, 1);
-    expect(find.text('Full week unavailable'), findsOneWidget);
+      expect(fullWeekLoads, 0);
+      await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
+      expect(fullWeekLoads, 1);
+      expect(find.text('Full week unavailable'), findsOneWidget);
 
-    final retry = find.descendant(
-      of: find.byKey(const ValueKey('dashboard-full-week')),
-      matching: find.widgetWithText(TextButton, 'Retry'),
-    );
-    await tester.ensureVisible(retry);
-    await tester.tap(retry);
-    await tester.pumpAndSettle();
+      final retry = find.descendant(
+        of: find.byKey(const ValueKey('dashboard-full-week')),
+        matching: find.widgetWithText(TextButton, 'Retry'),
+      );
+      await tester.ensureVisible(retry);
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
 
-    expect(fullWeekLoads, 2);
-    expect(find.text('Full week unavailable'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('dashboard-full-week-day-pager')),
-      findsOneWidget,
-    );
-  });
+      expect(fullWeekLoads, 2);
+      expect(find.text('Full week unavailable'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('dashboard-full-week-day-pager')),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('Full week Habit action fails closed after profile midnight',
-      (tester) async {
+  testWidgets('Full week Habit action fails closed after profile midnight', (
+    tester,
+  ) async {
     final habitAction = DashboardFullWeekAction(
       kind: DashboardFullWeekActionKind.openHabit,
       targetId: 'habit-1',
@@ -302,16 +328,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(
-        'The day changed. Reload Full week before opening this habit.',
-      ),
+      find.text('The day changed. Reload Full week before opening this habit.'),
       findsOneWidget,
     );
     expect(find.text('Habit completion'), findsNothing);
   });
 
-  testWidgets('progress failure is honest while the usable agenda remains',
-      (tester) async {
+  testWidgets('progress failure is honest while the usable agenda remains', (
+    tester,
+  ) async {
     final snapshot = _todaySnapshot(
       progress: null,
       sourceStates: _sourceStates(
@@ -331,7 +356,7 @@ void main() {
     await _pumpDashboard(tester, snapshot: snapshot);
 
     expect(find.text('Progress unavailable'), findsOneWidget);
-    expect(find.text('Streak unavailable'), findsOneWidget);
+    expect(find.text('Unavailable'), findsOneWidget);
     expect(find.text('Check-ins could not be loaded.'), findsOneWidget);
     expect(find.text('Tasks unavailable'), findsOneWidget);
     expect(find.text('Lecture'), findsOneWidget);
@@ -349,8 +374,9 @@ void main() {
     );
   });
 
-  testWidgets('Full week remains lazy and independent from weekly review',
-      (tester) async {
+  testWidgets('Full week remains lazy and independent from weekly review', (
+    tester,
+  ) async {
     await _pumpDashboard(
       tester,
       snapshot: _todaySnapshot(),
@@ -388,7 +414,7 @@ void main() {
 
     expect(find.text('Weekly review'), findsOneWidget);
     expect(find.text('Full-week lecture'), findsNothing);
-    expect(find.text('Beat yesterday'), findsOneWidget);
+    expect(find.text('Last check-in'), findsOneWidget);
     expect(find.textContaining('Sleep duration'), findsOneWidget);
     expect(find.text('7-day preparation load'), findsNothing);
 
@@ -401,8 +427,9 @@ void main() {
     expect(find.text('Full-week lecture'), findsOneWidget);
   });
 
-  testWidgets('All tasks reveals future and planner-managed tasks',
-      (tester) async {
+  testWidgets('All tasks reveals future and planner-managed tasks', (
+    tester,
+  ) async {
     await _pumpDashboard(tester, snapshot: _todaySnapshot());
 
     expect(find.text('Future task'), findsNothing);
@@ -415,65 +442,68 @@ void main() {
     expect(find.text('Managed by a preparation plan'), findsOneWidget);
   });
 
-  testWidgets('Planner blocks stay agenda-only and keep unique target progress',
-      (tester) async {
-    await _pumpDashboard(
-      tester,
-      snapshot: _todaySnapshot(
-        timeline: [
-          TodayTimelineItem(
-            kind: TodayTimelineKind.taskBlock,
-            id: '90000000-0000-4000-8000-000000000001',
-            title: 'Due task',
-            allDay: false,
-            startsAt: DateTime(2026, 7, 21, 9),
-            endsAt: DateTime(2026, 7, 21, 9, 30),
-            plannedMinutes: 30,
-            taskId: '10000000-0000-4000-8000-000000000001',
-          ),
-          TodayTimelineItem(
-            kind: TodayTimelineKind.taskBlock,
-            id: '90000000-0000-4000-8000-000000000002',
-            title: 'Due task',
-            allDay: false,
-            startsAt: DateTime(2026, 7, 21, 10),
-            endsAt: DateTime(2026, 7, 21, 10, 30),
-            plannedMinutes: 30,
-            taskId: '10000000-0000-4000-8000-000000000001',
-          ),
-          TodayTimelineItem(
-            kind: TodayTimelineKind.habitSlot,
-            id: '90000000-0000-4000-8000-000000000003',
-            title: 'Read',
-            allDay: false,
-            startsAt: DateTime(2026, 7, 21, 11),
-            endsAt: DateTime(2026, 7, 21, 11, 20),
-            plannedMinutes: 20,
-            habitId: '80000000-0000-4000-8000-000000000001',
-          ),
-          TodayTimelineItem(
-            kind: TodayTimelineKind.manualCommitment,
-            id: '90000000-0000-4000-8000-000000000004',
-            title: 'Tutoring',
-            allDay: false,
-            startsAt: DateTime(2026, 7, 21, 12),
-            endsAt: DateTime(2026, 7, 21, 13),
-            commitmentId: '90000000-0000-4000-8000-000000000004',
-          ),
-        ],
-      ),
-    );
+  testWidgets(
+    'Planner blocks stay agenda-only and keep unique target progress',
+    (tester) async {
+      await _pumpDashboard(
+        tester,
+        snapshot: _todaySnapshot(
+          timeline: [
+            TodayTimelineItem(
+              kind: TodayTimelineKind.taskBlock,
+              id: '90000000-0000-4000-8000-000000000001',
+              title: 'Due task',
+              allDay: false,
+              startsAt: DateTime(2026, 7, 21, 9),
+              endsAt: DateTime(2026, 7, 21, 9, 30),
+              plannedMinutes: 30,
+              taskId: '10000000-0000-4000-8000-000000000001',
+            ),
+            TodayTimelineItem(
+              kind: TodayTimelineKind.taskBlock,
+              id: '90000000-0000-4000-8000-000000000002',
+              title: 'Due task',
+              allDay: false,
+              startsAt: DateTime(2026, 7, 21, 10),
+              endsAt: DateTime(2026, 7, 21, 10, 30),
+              plannedMinutes: 30,
+              taskId: '10000000-0000-4000-8000-000000000001',
+            ),
+            TodayTimelineItem(
+              kind: TodayTimelineKind.habitSlot,
+              id: '90000000-0000-4000-8000-000000000003',
+              title: 'Read',
+              allDay: false,
+              startsAt: DateTime(2026, 7, 21, 11),
+              endsAt: DateTime(2026, 7, 21, 11, 20),
+              plannedMinutes: 20,
+              habitId: '80000000-0000-4000-8000-000000000001',
+            ),
+            TodayTimelineItem(
+              kind: TodayTimelineKind.manualCommitment,
+              id: '90000000-0000-4000-8000-000000000004',
+              title: 'Tutoring',
+              allDay: false,
+              startsAt: DateTime(2026, 7, 21, 12),
+              endsAt: DateTime(2026, 7, 21, 13),
+              commitmentId: '90000000-0000-4000-8000-000000000004',
+            ),
+          ],
+        ),
+      );
 
-    await _expandSchedule(tester);
-    expect(find.text('Task'), findsNWidgets(2));
-    expect(find.text('Habit'), findsOneWidget);
-    expect(find.text('Fixed commitment'), findsNWidgets(2));
-    expect(find.text('4/7 completed'), findsOneWidget);
-    expect(find.text('Due task'), findsNWidgets(3));
-  });
+      await _expandSchedule(tester);
+      expect(find.text('Task'), findsNWidgets(2));
+      expect(find.text('Habit'), findsOneWidget);
+      expect(find.text('Fixed commitment'), findsNWidgets(2));
+      expect(find.text('4/7 completed'), findsOneWidget);
+      expect(find.text('Due task'), findsNWidgets(3));
+    },
+  );
 
-  testWidgets('small width and 200 percent text keep Today scrollable',
-      (tester) async {
+  testWidgets('small width and 200 percent text keep Today scrollable', (
+    tester,
+  ) async {
     await _pumpDashboard(
       tester,
       snapshot: _todaySnapshot(),
@@ -481,7 +511,7 @@ void main() {
       textScaler: const TextScaler.linear(2),
     );
 
-    await _tapInfo(tester, 'Tasks due today');
+    await _tapInfo(tester, 'Today & overdue');
     await _tapExpansion(tester, const ValueKey('today-all-tasks'));
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
@@ -492,76 +522,77 @@ void main() {
   });
 
   testWidgets(
-      'durable Today task write locks stale projection and retry only reloads',
-      (tester) async {
-    final snapshot = _todaySnapshot();
-    final taskCommands = _RecordingTaskCommands();
-    final refresh = _RecordingProjectionRefresh();
-    final repository = _FailOnceDashboardRepository(snapshot);
+    'durable Today task write locks stale projection and retry only reloads',
+    (tester) async {
+      final snapshot = _todaySnapshot();
+      final taskCommands = _RecordingTaskCommands();
+      final refresh = _RecordingProjectionRefresh();
+      final repository = _FailOnceDashboardRepository(snapshot);
 
-    await _pumpDashboard(
-      tester,
-      snapshot: snapshot,
-      taskCommands: taskCommands,
-      projectionRefresh: refresh,
-      dashboardRepository: repository,
-    );
-    await tester.tap(find.byTooltip('Complete task Due task'));
-    await tester.pumpAndSettle();
+      await _pumpDashboard(
+        tester,
+        snapshot: snapshot,
+        taskCommands: taskCommands,
+        projectionRefresh: refresh,
+        dashboardRepository: repository,
+      );
+      await tester.tap(find.byTooltip('Complete task Due task'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Saved; Today could not reload.'), findsWidgets);
-    expect(taskCommands.completeCalls, 1);
-    expect(refresh.targetDates, ['2026-07-21']);
-    expect(
-      find.byTooltip('Complete task Due task'),
-      findsNothing,
-    );
+      expect(find.text('Saved; Today could not reload.'), findsWidgets);
+      expect(taskCommands.completeCalls, 1);
+      expect(refresh.targetDates, ['2026-07-21']);
+      expect(find.byTooltip('Complete task Due task'), findsNothing);
 
-    await tester.tap(find.text('Reload Today'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Reload Today'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Reload Today'), findsNothing);
-    expect(taskCommands.completeCalls, 1);
-    expect(repository.calls, 2);
-  });
+      expect(find.text('Reload Today'), findsNothing);
+      expect(taskCommands.completeCalls, 1);
+      expect(repository.calls, 2);
+    },
+  );
 
-  testWidgets('embedded habit write and refresh use the displayed profile date',
-      (tester) async {
-    final snapshot = _todaySnapshot(
-      todayHabits: const [
-        TodayHabit(
-          id: '80000000-0000-4000-8000-000000000003',
-          title: 'Profile-day habit',
-          cadence: 'daily',
-          cadenceLabel: 'Daily',
-          weeklyCompleted: 0,
-          weeklyTarget: 1,
-          setupManaged: false,
-        ),
-      ],
-    );
-    final habitCommands = _RecordingHabitCommands();
-    final refresh = _RecordingProjectionRefresh();
+  testWidgets(
+    'embedded habit write and refresh use the displayed profile date',
+    (tester) async {
+      final snapshot = _todaySnapshot(
+        todayHabits: const [
+          TodayHabit(
+            id: '80000000-0000-4000-8000-000000000003',
+            title: 'Profile-day habit',
+            cadence: 'daily',
+            cadenceLabel: 'Daily',
+            weeklyCompleted: 0,
+            weeklyTarget: 1,
+            setupManaged: false,
+          ),
+        ],
+      );
+      final habitCommands = _RecordingHabitCommands();
+      final refresh = _RecordingProjectionRefresh();
 
-    await _pumpDashboard(
-      tester,
-      snapshot: snapshot,
-      habitCommands: habitCommands,
-      projectionRefresh: refresh,
-      dashboardRepository: _StaticDashboardRepository(snapshot),
-    );
-    final complete = find.byTooltip('Complete');
-    await tester.ensureVisible(complete);
-    await tester.pumpAndSettle();
-    await tester.tap(complete);
-    await tester.pumpAndSettle();
+      await _pumpDashboard(
+        tester,
+        snapshot: snapshot,
+        habitCommands: habitCommands,
+        projectionRefresh: refresh,
+        dashboardRepository: _StaticDashboardRepository(snapshot),
+      );
+      final complete = find.byTooltip('Complete');
+      await tester.ensureVisible(complete);
+      await tester.pumpAndSettle();
+      await tester.tap(complete);
+      await tester.pumpAndSettle();
 
-    expect(habitCommands.targetDates.map(habitDateKey), ['2026-07-21']);
-    expect(refresh.targetDates, ['2026-07-21']);
-  });
+      expect(habitCommands.targetDates.map(habitDateKey), ['2026-07-21']);
+      expect(refresh.targetDates, ['2026-07-21']);
+    },
+  );
 
-  testWidgets('dashboard load error never substitutes example content',
-      (tester) async {
+  testWidgets('dashboard load error never substitutes example content', (
+    tester,
+  ) async {
     await _pumpDashboard(
       tester,
       snapshotFuture: Future<DashboardSnapshot>(
@@ -584,9 +615,7 @@ Future<void> _expandSchedule(WidgetTester tester) async {
 Future<void> _tapExpansion(WidgetTester tester, ValueKey<String> key) async {
   await _ensureExpansionVisible(tester, key);
   final title = _expansionTitle(key);
-  final control = find.byKey(
-    ValueKey('dashboard-expansion-control-$title'),
-  );
+  final control = find.byKey(ValueKey('dashboard-expansion-control-$title'));
   await tester.tap(control);
   await tester.pumpAndSettle();
 }
@@ -596,9 +625,7 @@ Future<void> _ensureExpansionVisible(
   ValueKey<String> key,
 ) async {
   final title = _expansionTitle(key);
-  final control = find.byKey(
-    ValueKey('dashboard-expansion-control-$title'),
-  );
+  final control = find.byKey(ValueKey('dashboard-expansion-control-$title'));
   await tester.scrollUntilVisible(
     control,
     300,
@@ -655,32 +682,29 @@ Future<void> _pumpDashboard(
   });
   final value = snapshotFuture ?? Future.value(snapshot ?? _todaySnapshot());
   final displayedDate = snapshot?.localDate ?? DateTime(2026, 7, 21);
-  final commandRepository = dashboardRepository ??
+  final commandRepository =
+      dashboardRepository ??
       _StaticDashboardRepository(snapshot ?? _todaySnapshot());
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
-        profileLocalDateSourceProvider.overrideWithValue(
-          profileDateSource,
-        ),
+        profileLocalDateSourceProvider.overrideWithValue(profileDateSource),
         dashboardSnapshotProvider.overrideWith((ref) => value),
         examPlanHealthProvider.overrideWith((ref) async {
           onHealthLoad?.call();
           return null;
         }),
-        dashboardLatestCheckInProvider(displayedDate).overrideWith(
-          (ref) => Future.value(latestCheckIn),
-        ),
-        dashboardFullWeekProvider(displayedDate).overrideWith(
-          (ref) {
-            onFullWeekLoad?.call();
-            return fullWeekLoader?.call() ??
-                Future.value(
-                  fullWeek ?? DashboardFullWeekProjection.empty(displayedDate),
-                );
-          },
-        ),
+        dashboardLatestCheckInProvider(
+          displayedDate,
+        ).overrideWith((ref) => Future.value(latestCheckIn)),
+        dashboardFullWeekProvider(displayedDate).overrideWith((ref) {
+          onFullWeekLoad?.call();
+          return fullWeekLoader?.call() ??
+              Future.value(
+                fullWeek ?? DashboardFullWeekProjection.empty(displayedDate),
+              );
+        }),
         todayCommandControllerProvider.overrideWith(
           (ref) => TodayCommandController(
             taskCommands: taskCommands,
@@ -790,7 +814,8 @@ DashboardSnapshot _todaySnapshot({
     ),
     progress: progress,
     todayTasks: selected,
-    timeline: timeline ??
+    timeline:
+        timeline ??
         [
           TodayTimelineItem(
             kind: TodayTimelineKind.calendarEvent,
@@ -843,7 +868,8 @@ DashboardSnapshot _todaySnapshot({
             actualMinutes: 30,
           ),
         ],
-    todayHabits: todayHabits ??
+    todayHabits:
+        todayHabits ??
         const [
           TodayHabit(
             id: '80000000-0000-4000-8000-000000000001',
@@ -914,22 +940,19 @@ class _RecordingTaskCommands implements TodayTaskCommandPort {
   Future<ExecutableTask> createTask({
     required String taskId,
     required ExecutableTaskDraft draft,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<ExecutableTask> editTask({
     required String taskId,
     required ExecutableTaskDraft draft,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<TaskUndoToken> postponeTask({
     required String taskId,
     required DateTime newDeadline,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<ExecutableTask> restoreTask(String taskId) =>

@@ -30,6 +30,51 @@ CaptureDraftProposal _proposal(String branch, Map<String, Object?> fields) =>
     }, ownerId: 'owner-one');
 
 void main() {
+  for (final clocks in [
+    {'sleep_start': '00:30', 'wake_time': '08:00'},
+    {'sleep_start': '00:30'},
+    {'wake_time': '08:00'},
+  ]) {
+    testWidgets('new spoken clocks replace saved clocks: $clocks', (
+      tester,
+    ) async {
+      final saved =
+          _proposal('morning', {
+            'sleep_start': '23:00',
+            'wake_time': '07:00',
+            'sleep_quality': 7,
+            'current_energy': 4,
+          }).applyToMorning(
+            MorningCalibrationDraft.empty(
+              DateTime(2026, 9, 14),
+            ).copyWith(sleepTargetMinutes: 480),
+            allowSkillset: true,
+          );
+      final proposal = _proposal('morning', clocks);
+      final store = _Store(
+        initial: DailyCaptureEntry(entryDate: saved.entryDate, morning: saved),
+      );
+      await _pump(tester, store, proposal);
+      final controls = tester
+          .widgetList<CaptureClockControl>(find.byType(CaptureClockControl))
+          .toList();
+      expect(controls[0].value, clocks['sleep_start'] ?? '23:00');
+      expect(controls[1].value, clocks['wake_time'] ?? '07:00');
+      await _tap(tester, 'Next');
+      await _tap(tester, 'Save');
+      final written = store.morningWrites.single;
+      expect(
+        proposal.clockForInstant(written.estimatedSleepStartedAt!),
+        clocks['sleep_start'] ?? '23:00',
+      );
+      expect(
+        proposal.clockForInstant(written.wokeAt!),
+        clocks['wake_time'] ?? '07:00',
+      );
+      expect(written.sleepQuality, 7);
+      expect(written.energy, 4);
+    });
+  }
   testWidgets(
     'voice load retry keeps edits when the saved branch is unchanged',
     (tester) async {
@@ -96,9 +141,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Save'),
-          )
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
           .onPressed,
       isNull,
     );
@@ -222,9 +265,7 @@ void main() {
     await _tap(tester, 'Next');
     expect(
       tester
-          .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Save'),
-          )
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
           .onPressed,
       isNull,
     );
@@ -262,9 +303,7 @@ void main() {
       expect(find.text('Sport today'), findsOneWidget);
       expect(
         tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Save'),
-            )
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
             .onPressed,
         isNull,
       );

@@ -1,5 +1,24 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
+## Separate Produktwebseite
+
+`apps/website` stellt das Produkt auf Englisch (Standard) und Deutsch vor.
+Die anklickbare Today-/Insights-/Planner-/Coach-Demo verwendet ausschließlich
+erfundene Daten und vorgefertigte Antworten, ohne Konto oder Datenbankzugriff.
+Sie ist eine vereinfachte Vorschau, nicht die eingebettete echte App. Links führen
+zur bestehenden Web-App und den Android-Releases; die Hosting-Projekte bleiben
+getrennt. Details: [Website](../apps/website/README.md).
+
+## Editing and undo
+
+Morning/Evening ask before discarding unsaved edits on Back or date changes.
+Connected Android sleep can be reviewed with `Use times`; it remains editable
+and is saved only with the check-in. Inbox shows dismissed items and can restore
+them or load more history. Completed Focus history offers time correction within
+the recorded interval. Terminal preparation plans can start a separate preview
+with `Plan again`, keeping their history. Restore/time correction need the
+prepared database/API release; see verification for current deployment evidence.
+
 Status: Beschreibung des tatsächlich implementierten aktuellen Checkouts.
 Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap. Die
 verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
@@ -174,10 +193,16 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
    - beide dürfen jederzeit und in beliebiger Reihenfolge gespeichert werden;
    - ein noch unvollständiger heutiger Tag beendet die bis gestern vollständige
      Serie nicht;
-   - `Beat yesterday` zeigt kompakt das Datum und nur vorhandene Mood-, Energy-,
+   - `Latest check-in` zeigt kompakt das Datum und nur vorhandene Mood-, Energy-,
      Sleep-duration-, Sleep-quality- und Stress-Werte des letzten gespeicherten
      Check-ins, ohne Delta oder Bewertung.
-2. **Today's progress**
+2. **Today's schedule**
+   - vertikale, chronologische Tagesagenda;
+   - verschieden bezeichnete und gefärbte `Setup commitment`, `Preparation`,
+     `Calendar` und `Focus`-Einträge;
+   - ganztägige Events zuerst, überlappende Einträge separat;
+   - Preparation kann den Plan öffnen oder Focus auf dem Managed Task starten.
+3. **Today's progress**
    - dynamisches `x/y completed` statt einer festen Schrittzahl;
    - zählt die zwei Check-ins, heutige Tasks, heutige Habits und bestätigte
      Preparation Blocks dieses Tages;
@@ -185,13 +210,7 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
      keine automatisch zu erledigenden Schritte;
    - wenn eine gezählte Quelle ausfällt, steht dort ehrlich `Progress
      unavailable`.
-3. **Today's schedule**
-   - vertikale, chronologische Tagesagenda;
-   - verschieden bezeichnete und gefärbte `Setup commitment`, `Preparation`,
-     `Calendar` und `Focus`-Einträge;
-   - ganztägige Events zuerst, überlappende Einträge separat;
-   - Preparation kann den Plan öffnen oder Focus auf dem Managed Task starten.
-4. **Tasks due today**
+4. **Today & overdue**
    - überfällige/heute fällige, alle laufenden und heute erledigte manuelle
      Tasks;
    - inline erledigen, wiederherstellen, bearbeiten und Focus starten;
@@ -937,7 +956,7 @@ dabei lediglich lesbar.
    `x/y`-Arithmetik, alle vier Agenda-Kategorien sowie Today/All Tasks und Today
    Habits prüfen. Danach den bewusst offenen heutigen Evening-Check-in
    ausfüllen und kontrollieren, dass Morning erhalten bleibt.
-2. In der Streak-Karte `Beat yesterday` mit Datum und ausschließlich vorhandenen
+2. In der Streak-Karte `Latest check-in` mit Datum und ausschließlich vorhandenen
    fünf Kernwerten prüfen. Danach `Review your week` direkt öffnen und Full week
    aufklappen; dort alle sieben Tage, sieben Kategorien,
    Teilquellenstatus, Day-Snap und datumssichere Aktionen prüfen.

@@ -10,28 +10,118 @@ import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
 void main() {
+  testWidgets('action island fits every theme and keeps touch targets', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final theme in [
+      AppTheme.dark,
+      AppTheme.light,
+      AppTheme.space,
+      AppTheme.liquidGlass,
+    ]) {
+      for (final scale in [1.0, 2.0]) {
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: theme,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(
+                body: AppPage(
+                  title: 'Planner',
+                  compactHeader: true,
+                  actions: [
+                    AppHeaderActions(
+                      pageActions: [
+                        IconButton(
+                          onPressed: () {},
+                          tooltip: 'Reload',
+                          icon: const Icon(Icons.refresh),
+                        ),
+                        IconButton(
+                          onPressed: () {},
+                          tooltip: 'Import',
+                          icon: const Icon(Icons.download),
+                        ),
+                      ],
+                    ),
+                  ],
+                  children: const [],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final island = tester.getRect(
+          find.byKey(const ValueKey('header-action-island')),
+        );
+        expect(island.right, lessThanOrEqualTo(320));
+        final reload = find.byTooltip('Reload');
+        final iconStyle = IconButtonTheme.of(tester.element(reload)).style!;
+        expect(iconStyle.shape!.resolve({}), isA<CircleBorder>());
+        expect(iconStyle.side!.resolve({}), BorderSide.none);
+        expect(iconStyle.side!.resolve({WidgetState.focused})!.width, 2);
+        const content = SizedBox(key: ValueKey('unframed-island-icon'));
+        expect(
+          iconStyle.backgroundBuilder!(tester.element(reload), {}, content),
+          same(content),
+        );
+        expect(
+          iconStyle.overlayColor!.resolve({WidgetState.pressed})!.a,
+          greaterThan(0),
+        );
+        for (final key in ['global-header-inbox', 'global-header-settings']) {
+          final rect = tester.getRect(find.byKey(ValueKey(key)));
+          expect(rect.width, greaterThanOrEqualTo(44));
+          expect(rect.height, greaterThanOrEqualTo(44));
+          expect(island.contains(rect.center), isTrue);
+        }
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
   for (final title in ['Planner', 'Coach']) {
-    testWidgets('$title header stays fixed while Settings opens and returns',
-        (tester) async {
+    testWidgets('$title header stays fixed while Settings opens and returns', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final router = GoRouter(routes: [
-        GoRoute(path: '/', builder: (_, _) => AppPage(
-          title: title,
-          compactHeader: true,
-          actions: const [Icon(Icons.refresh), Icon(Icons.inbox), Icon(Icons.settings)],
-          children: const [],
-        )),
-        GoRoute(path: '/settings', builder: (_, _) => const AppPage(
-          title: 'Settings', children: [],
-        )),
-      ]);
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => AppPage(
+              title: title,
+              compactHeader: true,
+              actions: const [
+                Icon(Icons.refresh),
+                Icon(Icons.inbox),
+                Icon(Icons.settings),
+              ],
+              children: const [],
+            ),
+          ),
+          GoRoute(
+            path: '/settings',
+            builder: (_, _) => const AppPage(title: 'Settings', children: []),
+          ),
+        ],
+      );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(
-        theme: AppTheme.dark, routerConfig: router,
-      ));
+      await tester.pumpWidget(
+        MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+      );
       await tester.pumpAndSettle();
       final titleFinder = find.text(title, skipOffstage: false);
       final original = tester.getRect(titleFinder);
@@ -39,10 +129,19 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 40));
       expect(tester.getRect(titleFinder).size, original.size);
-      expect(find.descendant(
-        of: find.ancestor(of: titleFinder, matching: find.byType(AppPage, skipOffstage: false)),
-        matching: find.byKey(const ValueKey('app-page-back'), skipOffstage: false),
-      ), findsNothing);
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: titleFinder,
+            matching: find.byType(AppPage, skipOffstage: false),
+          ),
+          matching: find.byKey(
+            const ValueKey('app-page-back'),
+            skipOffstage: false,
+          ),
+        ),
+        findsNothing,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('app-page-back')));
       await tester.pumpAndSettle();
@@ -52,47 +151,59 @@ void main() {
     });
   }
 
-  testWidgets('compact main headers align Settings at mobile and large text',
-      (tester) async {
+  testWidgets('compact main headers align Settings at mobile and large text', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
     for (final scale in [1.0, 2.0]) {
       tester.view.physicalSize = Size(scale == 1 ? 390 : 320, 844);
       for (final title in ['Today', 'Insights', 'Planner', 'Coach']) {
-        await tester.pumpWidget(ProviderScope(
-          child: MaterialApp(
-            theme: AppTheme.dark,
-            home: MediaQuery(
-              data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-              child: Scaffold(body: AppPage(
-                title: title,
-                compactHeader: true,
-                actions: const [AppHeaderActions()],
-                children: const [Text('Content')],
-              )),
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: AppTheme.dark,
+              home: MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: Scaffold(
+                  body: AppPage(
+                    title: title,
+                    compactHeader: true,
+                    actions: const [AppHeaderActions()],
+                    children: const [Text('Content')],
+                  ),
+                ),
+              ),
             ),
           ),
-        ));
+        );
         await tester.pumpAndSettle();
         final settings = tester.getRect(
-            find.byKey(const ValueKey('global-header-settings')));
-        expect(settings.top, 16);
-        expect(settings.right, tester.view.physicalSize.width - 16);
+          find.byKey(const ValueKey('global-header-settings')),
+        );
+        expect(settings.top, 18);
+        expect(settings.right, tester.view.physicalSize.width - 20);
         expect(settings.width, greaterThanOrEqualTo(44));
         expect(settings.height, greaterThanOrEqualTo(44));
-        final inbox = tester.getRect(find.byKey(const ValueKey('global-header-inbox')));
-        expect(inbox.right, lessThan(settings.left));
+        final inbox = tester.getRect(
+          find.byKey(const ValueKey('global-header-inbox')),
+        );
+        expect(inbox.right, lessThanOrEqualTo(settings.left));
         expect(inbox.top, settings.top);
         expect(tester.takeException(), isNull);
       }
     }
   });
 
-  testWidgets('header Inbox opens and returns to its originating page', (tester) async {
+  testWidgets('header Inbox opens and returns to its originating page', (
+    tester,
+  ) async {
     final router = _pageRouter();
     addTearDown(router.dispose);
-    await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('global-header-inbox')));
     await tester.pumpAndSettle();
@@ -103,15 +214,32 @@ void main() {
   });
 
   for (final origin in [AppRoutes.settings, AppRoutes.planner]) {
-    testWidgets('native settings-style page returns to actual origin $origin', (tester) async {
-      final router = GoRouter(initialLocation: origin, routes: [
-        GoRoute(path: origin, builder: (context, state) => AppPage(
-          title: 'Origin', children: [TextButton(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(body: AppPage(title: 'Integration', children: [])),
-            )), child: const Text('Open integration'))],
-        )),
-      ]);
+    testWidgets('native settings-style page returns to actual origin $origin', (
+      tester,
+    ) async {
+      final router = GoRouter(
+        initialLocation: origin,
+        routes: [
+          GoRoute(
+            path: origin,
+            builder: (context, state) => AppPage(
+              title: 'Origin',
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const Scaffold(
+                        body: AppPage(title: 'Integration', children: []),
+                      ),
+                    ),
+                  ),
+                  child: const Text('Open integration'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
       addTearDown(router.dispose);
       await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       await tester.pumpAndSettle();
@@ -127,8 +255,9 @@ void main() {
     });
   }
 
-  testWidgets('Today push to Planner returns through actual history',
-      (tester) async {
+  testWidgets('Today push to Planner returns through actual history', (
+    tester,
+  ) async {
     final router = _pageRouter();
     addTearDown(router.dispose);
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
@@ -160,8 +289,9 @@ void main() {
     expect(find.byKey(const ValueKey('app-page-back')), findsNothing);
   });
 
-  testWidgets('shell push returns through the nearest active Navigator',
-      (tester) async {
+  testWidgets('shell push returns through the nearest active Navigator', (
+    tester,
+  ) async {
     final router = _shellRouter();
     addTearDown(router.dispose);
     await tester.pumpWidget(
@@ -190,8 +320,9 @@ void main() {
     expect(find.text('Today shell page'), findsOneWidget);
   });
 
-  testWidgets('direct Preparation deep link uses its Planner fallback',
-      (tester) async {
+  testWidgets('direct Preparation deep link uses its Planner fallback', (
+    tester,
+  ) async {
     final router = _pageRouter(initialLocation: AppRoutes.preparationPlans);
     addTearDown(router.dispose);
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
@@ -205,35 +336,34 @@ void main() {
   });
 
   testWidgets(
-      'bottom navigation replaces history and leaves Planner root clean',
-      (tester) async {
-    final router = _shellRouter();
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appSurfaceCapabilitiesProvider.overrideWithValue(
-            const AppSurfaceCapabilities(
-              isLocalDemo: false,
-              canUseSyncedHabits: true,
-              canShowCoachSurface: true,
+    'bottom navigation replaces history and leaves Planner root clean',
+    (tester) async {
+      final router = _shellRouter();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appSurfaceCapabilitiesProvider.overrideWithValue(
+              const AppSurfaceCapabilities(
+                isLocalDemo: false,
+                canUseSyncedHabits: true,
+                canShowCoachSurface: true,
+              ),
             ),
-          ),
-        ],
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
-    await tester.pumpAndSettle();
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('main-nav-planner-control')),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('main-nav-planner-control')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Planner shell page'), findsOneWidget);
-    expect(find.byKey(const ValueKey('app-page-back')), findsNothing);
-    expect(router.canPop(), isFalse);
-  });
+      expect(find.text('Planner shell page'), findsOneWidget);
+      expect(find.byKey(const ValueKey('app-page-back')), findsNothing);
+      expect(router.canPop(), isFalse);
+    },
+  );
 }
 
 GoRouter _pageRouter({String initialLocation = AppRoutes.dashboard}) {
@@ -255,7 +385,8 @@ GoRouter _pageRouter({String initialLocation = AppRoutes.dashboard}) {
       ),
       GoRoute(
         path: AppRoutes.alerts,
-        builder: (context, state) => const AppPage(title: 'Inbox page', children: []),
+        builder: (context, state) =>
+            const AppPage(title: 'Inbox page', children: []),
       ),
       GoRoute(
         path: AppRoutes.planner,
@@ -283,10 +414,8 @@ GoRouter _shellRouter() {
     initialLocation: AppRoutes.dashboard,
     routes: [
       ShellRoute(
-        builder: (context, state, child) => MainShell(
-          currentPath: state.uri.path,
-          child: child,
-        ),
+        builder: (context, state, child) =>
+            MainShell(currentPath: state.uri.path, child: child),
         routes: [
           GoRoute(
             path: AppRoutes.dashboard,

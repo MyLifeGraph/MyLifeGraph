@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/navigation/app_router.dart';
+import 'core/feedback/app_haptics.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_theme_selection_provider.dart';
 import 'core/widgets/app_backdrop.dart';
@@ -18,6 +19,7 @@ class PersonalOptimizationApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     final themeSelection = ref.watch(appThemeSelectionProvider);
+    ref.watch(appHapticsProvider);
     final config = ref.watch(appConfigProvider);
 
     return MaterialApp.router(
@@ -26,12 +28,15 @@ class PersonalOptimizationApp extends ConsumerWidget {
       theme: AppTheme.resolve(themeSelection),
       routerConfig: router,
       builder: (context, child) {
-        final content = AppBackdrop(
-          child: HostedEnvironmentBanner(
-            environment: config.environment,
-            child: HealthConnectSyncHost(
-              child: OfflineStatusBanner(
-                child: PushSyncHost(child: child ?? const SizedBox.shrink()),
+        final content = AppHaptics(
+          onSelection: () => ref.read(appHapticsProvider.notifier).selection(),
+          child: AppBackdrop(
+            child: HostedEnvironmentBanner(
+              environment: config.environment,
+              child: HealthConnectSyncHost(
+                child: OfflineStatusBanner(
+                  child: PushSyncHost(child: child ?? const SizedBox.shrink()),
+                ),
               ),
             ),
           ),

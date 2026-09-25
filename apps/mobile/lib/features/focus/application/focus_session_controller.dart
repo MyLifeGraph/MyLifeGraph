@@ -11,10 +11,8 @@ typedef FocusClock = DateTime Function();
 typedef FocusRequestIdFactory = String Function();
 typedef FocusProjectionRefresh = Future<void> Function(String targetDate);
 typedef FocusReflectionProjectionRefresh = Future<void> Function();
-typedef FocusTerminalHandoff = Future<void> Function(
-  FocusSession session,
-  bool protectionConfirmed,
-);
+typedef FocusTerminalHandoff =
+    Future<void> Function(FocusSession session, bool protectionConfirmed);
 
 abstract interface class FocusSessionLifecyclePort {
   Future<FocusSession?> fetchActiveSession();
@@ -50,6 +48,14 @@ abstract interface class FocusSessionLifecyclePort {
   Future<void> deleteReflection(FocusReflection reflection);
 }
 
+abstract interface class FocusTimeCorrectionPort {
+  Future<FocusSession> correctTime({
+    required FocusSession session,
+    required int minutes,
+    required String requestId,
+  });
+}
+
 class FocusSessionLaunch {
   const FocusSessionLaunch({
     this.initialTargetKind,
@@ -82,14 +88,14 @@ class FocusSessionLaunch {
 
   @override
   int get hashCode => Object.hash(
-        initialTargetKind,
-        initialTargetId,
-        initialPlannedMinutes,
-        initialRecoveryMinutes,
-        initialSourceKind,
-        initialSourceBlockId,
-        initialSessionId,
-      );
+    initialTargetKind,
+    initialTargetId,
+    initialPlannedMinutes,
+    initialRecoveryMinutes,
+    initialSourceKind,
+    initialSourceBlockId,
+    initialSessionId,
+  );
 }
 
 enum StudySetupLoadStatus { configured, notConfigured, unavailable }
@@ -117,9 +123,9 @@ class FocusSessionState {
     required this.startConflictMessage,
     required this.protectionStatus,
     required this.isChangingProtection,
-  })  : recent = List.unmodifiable(recent),
-        reflections = Map.unmodifiable(reflections),
-        targets = List.unmodifiable(targets);
+  }) : recent = List.unmodifiable(recent),
+       reflections = Map.unmodifiable(reflections),
+       targets = List.unmodifiable(targets);
 
   factory FocusSessionState.initial({
     required FocusSessionLaunch launch,
@@ -134,7 +140,8 @@ class FocusSessionState {
       reflectionDataAvailable: true,
       targets: const [],
       selectedTargetValue: null,
-      plannedMinutes: requestedMinutes != null &&
+      plannedMinutes:
+          requestedMinutes != null &&
               requestedMinutes >= 5 &&
               requestedMinutes <= 240
           ? requestedMinutes
@@ -260,8 +267,9 @@ class FocusSessionState {
       clockNow: clockNow ?? this.clockNow,
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
-      loadError:
-          identical(loadError, _unset) ? this.loadError : loadError as String?,
+      loadError: identical(loadError, _unset)
+          ? this.loadError
+          : loadError as String?,
       scheduledContext: identical(scheduledContext, _unset)
           ? this.scheduledContext
           : scheduledContext as FocusStartContext?,
@@ -290,9 +298,9 @@ class FocusStartResult {
   const FocusStartResult.ignored() : this._(FocusStartOutcome.ignored);
   const FocusStartResult.started() : this._(FocusStartOutcome.started);
   const FocusStartResult.anotherSessionActive()
-      : this._(FocusStartOutcome.anotherSessionActive);
+    : this._(FocusStartOutcome.anotherSessionActive);
   FocusStartResult.failed(Object error)
-      : this._(FocusStartOutcome.failed, error: error);
+    : this._(FocusStartOutcome.failed, error: error);
 
   final FocusStartOutcome outcome;
   final Object? error;
@@ -307,13 +315,13 @@ class FocusTerminalResult {
   });
 
   const FocusTerminalResult.ignored()
-      : this._(accepted: false, committed: false);
+    : this._(accepted: false, committed: false);
 
   FocusTerminalResult.saved(FocusSession session)
-      : this._(accepted: true, committed: true, session: session);
+    : this._(accepted: true, committed: true, session: session);
 
   FocusTerminalResult.failed(Object error)
-      : this._(accepted: true, committed: false, error: error);
+    : this._(accepted: true, committed: false, error: error);
 
   final bool accepted;
   final bool committed;
@@ -328,17 +336,40 @@ class FocusEmergencyReleaseResult {
   });
 
   const FocusEmergencyReleaseResult.ignored()
-      : this._(accepted: false, released: false);
+    : this._(accepted: false, released: false);
   const FocusEmergencyReleaseResult.released()
-      : this._(accepted: true, released: true);
+    : this._(accepted: true, released: true);
   const FocusEmergencyReleaseResult.failed()
-      : this._(accepted: true, released: false);
+    : this._(accepted: true, released: false);
 
   final bool accepted;
   final bool released;
 }
 
 class FocusSessionController extends StateNotifier<FocusSessionState> {
+  Future<void> correctTime({
+    required FocusSession session,
+    required int minutes,
+    required String requestId,
+  }) async {
+    final source = _source;
+    if (source is! FocusTimeCorrectionPort || state.isSaving) {
+      throw const FocusCommandException('Time correction unavailable.');
+    }
+    state = state.copyWith(isSaving: true);
+    try {
+      final saved = await (source as FocusTimeCorrectionPort).correctTime(
+        session: session,
+        minutes: minutes,
+        requestId: requestId,
+      );
+      await _refreshAfterTerminalWrite(saved);
+      if (mounted) await load();
+    } finally {
+      if (mounted) state = state.copyWith(isSaving: false);
+    }
+  }
+
   FocusSessionController({
     required FocusSessionLaunch launch,
     required FocusSessionLifecyclePort? source,
@@ -350,23 +381,23 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
     required FocusRequestIdFactory requestIdFactory,
     required bool useMockData,
     FocusClock? clock,
-  })  : _launch = launch,
-        _source = source,
-        _studySource = studySource,
-        _protection = protection,
-        _recoveryStore = recoveryStore,
-        _refreshProjection = refreshProjection,
-        _refreshReflectionProjection =
-            refreshReflectionProjection ?? _ignoreReflectionRefresh,
-        _requestIdFactory = requestIdFactory,
-        _useMockData = useMockData,
-        _clock = clock ?? DateTime.now,
-        super(
-          FocusSessionState.initial(
-            launch: launch,
-            now: (clock ?? DateTime.now)(),
-          ),
-        );
+  }) : _launch = launch,
+       _source = source,
+       _studySource = studySource,
+       _protection = protection,
+       _recoveryStore = recoveryStore,
+       _refreshProjection = refreshProjection,
+       _refreshReflectionProjection =
+           refreshReflectionProjection ?? _ignoreReflectionRefresh,
+       _requestIdFactory = requestIdFactory,
+       _useMockData = useMockData,
+       _clock = clock ?? DateTime.now,
+       super(
+         FocusSessionState.initial(
+           launch: launch,
+           now: (clock ?? DateTime.now)(),
+         ),
+       );
 
   final FocusSessionLaunch _launch;
   final FocusSessionLifecyclePort? _source;
@@ -409,14 +440,12 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       final exactSessionFuture = requestedSessionId == null
           ? Future<FocusSession?>.value()
           : requestedSessionId == active?.id
-              ? Future<FocusSession?>.value(active)
-              : active == null
-                  ? source.fetchSessionById(requestedSessionId)
-                  : _fetchExactSessionWithoutHidingActive(
-                      source,
-                      requestedSessionId,
-                    );
-      final scheduledContextFuture = active != null ||
+          ? Future<FocusSession?>.value(active)
+          : active == null
+          ? source.fetchSessionById(requestedSessionId)
+          : _fetchExactSessionWithoutHidingActive(source, requestedSessionId);
+      final scheduledContextFuture =
+          active != null ||
               _launch.initialSourceKind == null ||
               _launch.initialSourceBlockId == null
           ? Future<FocusStartContext?>.value()
@@ -434,8 +463,9 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       final exactSession = results[3] as FocusSession?;
       final recent = <FocusSession>[
         if (exactSession != null) exactSession,
-        ...(results[0] as List<FocusSession>)
-            .where((session) => session.id != exactSession?.id),
+        ...(results[0] as List<FocusSession>).where(
+          (session) => session.id != exactSession?.id,
+        ),
       ];
       final scheduledContext = results[4] as FocusStartContext?;
       final loadedTargets = results[1] as List<FocusTargetOption>;
@@ -492,7 +522,8 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       var plannedMinutes = state.plannedMinutes;
       if (scheduledContext != null) {
         final previous = state.scheduledContext;
-        final contextChanged = previous == null ||
+        final contextChanged =
+            previous == null ||
             previous.sourceKind != scheduledContext.sourceKind ||
             previous.blockId != scheduledContext.blockId ||
             previous.target.value != scheduledContext.target.value;
@@ -519,7 +550,8 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         plannedMinutes = studyResult.settings?.focusMinutes ?? 25;
       }
       final requestedRecovery = _launch.initialRecoveryMinutes;
-      final recoveryMinutes = scheduledContext?.recoveryMinutes ??
+      final recoveryMinutes =
+          scheduledContext?.recoveryMinutes ??
           (requestedRecovery != null &&
                   (requestedRecovery == 0 ||
                       requestedRecovery >= 5 &&
@@ -527,8 +559,9 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
                           requestedRecovery.remainder(5) == 0)
               ? requestedRecovery
               : studyResult.settings?.recoveryMinutes ?? 0);
-      final recoveryEndsAt =
-          active == null ? await _restoreRecoveryCountdown(recent) : null;
+      final recoveryEndsAt = active == null
+          ? await _restoreRecoveryCountdown(recent)
+          : null;
       if (!isCurrent()) return const FocusLoadResult();
       state = state.copyWith(
         active: active,
@@ -601,8 +634,8 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       plannedMinutes: terminal.isNotEmpty
           ? terminal.first.plannedMinutes
           : (state.plannedMinutes >= 5 && state.plannedMinutes <= 240
-              ? state.plannedMinutes
-              : 25),
+                ? state.plannedMinutes
+                : 25),
       recoveryMinutes: 0,
     );
   }
@@ -615,10 +648,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         )) {
       return;
     }
-    state = state.copyWith(
-      plannedMinutes: value,
-      startConflictMessage: null,
-    );
+    state = state.copyWith(plannedMinutes: value, startConflictMessage: null);
   }
 
   void selectTarget(String? value) {
@@ -701,19 +731,13 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
   Future<FocusTerminalResult> finish({
     required FocusTerminalHandoff onCommitted,
   }) {
-    return _runTerminal(
-      finish: true,
-      onCommitted: onCommitted,
-    );
+    return _runTerminal(finish: true, onCommitted: onCommitted);
   }
 
   Future<FocusTerminalResult> abandon({
     required FocusTerminalHandoff onCommitted,
   }) {
-    return _runTerminal(
-      finish: false,
-      onCommitted: onCommitted,
-    );
+    return _runTerminal(finish: false, onCommitted: onCommitted);
   }
 
   Future<void> skipRecovery() async {
@@ -891,10 +915,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
   Future<_StudySettingsResult> _fetchStudySettings() async {
     final source = _studySource;
     if (source == null) {
-      return const _StudySettingsResult(
-        StudySetupLoadStatus.unavailable,
-        null,
-      );
+      return const _StudySettingsResult(StudySetupLoadStatus.unavailable, null);
     }
     try {
       final settings = await source.fetchStudyFocusSettings();
@@ -905,10 +926,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         settings,
       );
     } catch (_) {
-      return const _StudySettingsResult(
-        StudySetupLoadStatus.unavailable,
-        null,
-      );
+      return const _StudySettingsResult(StudySetupLoadStatus.unavailable, null);
     }
   }
 
@@ -944,9 +962,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
     }
   }
 
-  Future<DateTime?> _restoreRecoveryCountdown(
-    List<FocusSession> recent,
-  ) async {
+  Future<DateTime?> _restoreRecoveryCountdown(List<FocusSession> recent) async {
     final completedRecoveryIds = recent
         .where(
           (session) =>
@@ -1006,10 +1022,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
 
 Future<void> _ignoreReflectionRefresh() async {}
 
-bool _validPlannedMinutes(
-  int value, {
-  FocusStartContext? scheduledContext,
-}) {
+bool _validPlannedMinutes(int value, {FocusStartContext? scheduledContext}) {
   return value >= 5 &&
       value <= 240 &&
       (scheduledContext == null || value <= scheduledContext.remainingMinutes);

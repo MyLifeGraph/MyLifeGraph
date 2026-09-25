@@ -52,14 +52,14 @@ class _NotificationSettingsPageState
     if (settings == null) {
       return _NotificationSettingsLoadError(onRetry: controller.load);
     }
-    final controlsEnabled = !state.isSaving &&
+    final controlsEnabled =
+        !state.isSaving &&
         !state.isLoading &&
         !state.requiresExactRetry &&
         !state.requiresReload;
 
     return AppPage(
       title: 'In-app reminders',
-      subtitle: 'Banners only while the app is open',
       backFallback: AppRoutes.settings,
       children: [
         AppCard(
@@ -72,20 +72,18 @@ class _NotificationSettingsPageState
                 value: _deliveryEnabled,
                 onChanged: controlsEnabled
                     ? (value) => setState(() {
-                          _deliveryEnabled = value;
-                          _dirty = true;
-                        })
+                        _deliveryEnabled = value;
+                        _dirty = true;
+                      })
                     : null,
                 title: const Text('Allow in-app banners'),
-                subtitle: const Text(
-                  'Shows a banner only while MyLifeGraph is open. Categories and quiet hours do not grant consent.',
-                ),
+                subtitle: const Text('Only while the app is open.'),
               ),
               const SizedBox(height: AppSpacing.sm),
               const AppInfoSectionDisclosure(
                 heading: 'Delivery details',
                 description:
-                    'These banners appear only while the app is open. Android push is configured separately in Push reminders. Reminder text never includes private check-in details.',
+                    'Android push is separate (Push reminders). Categories and quiet hours do not enable delivery. Banners never include private check-in details.',
                 keyPrefix: 'notification-info',
               ),
               if (settings.consentedAt != null) ...[
@@ -112,24 +110,19 @@ class _NotificationSettingsPageState
               const SizedBox(height: AppSpacing.sm),
               _categorySwitch(
                 key: 'notification-category-recovery',
-                title: 'Recovery prompt',
-                subtitle: 'Only when Today is in recovery mode.',
+                title: 'Recovery mode',
+                subtitle: 'When Today suggests recovery.',
                 value: _recoveryPrompt,
                 enabled: controlsEnabled,
-                onChanged: (value) => _setDraft(
-                  () => _recoveryPrompt = value,
-                ),
+                onChanged: (value) => _setDraft(() => _recoveryPrompt = value),
               ),
               _categorySwitch(
                 key: 'notification-category-weekly',
-                title: 'Weekly review summary',
-                subtitle:
-                    'Only for the last completed week, prepared on Monday.',
+                title: 'Weekly review',
+                subtitle: 'Mondays · Previous week',
                 value: _weeklySummary,
                 enabled: controlsEnabled,
-                onChanged: (value) => _setDraft(
-                  () => _weeklySummary = value,
-                ),
+                onChanged: (value) => _setDraft(() => _weeklySummary = value),
               ),
             ],
           ),
@@ -143,9 +136,7 @@ class _NotificationSettingsPageState
                 contentPadding: EdgeInsets.zero,
                 value: _quietHoursEnabled,
                 onChanged: controlsEnabled
-                    ? (value) => _setDraft(
-                          () => _quietHoursEnabled = value,
-                        )
+                    ? (value) => _setDraft(() => _quietHoursEnabled = value)
                     : null,
                 title: const Text('Quiet hours'),
                 subtitle: const Text('Uses your saved profile timezone.'),
@@ -327,7 +318,9 @@ class _NotificationSettingsPageState
       );
       if (confirmed != true || !mounted) return;
     }
-    final saved = await ref.read(notificationSettingsProvider.notifier).save(
+    final saved = await ref
+        .read(notificationSettingsProvider.notifier)
+        .save(
           inAppDeliveryEnabled: _deliveryEnabled,
           categories: NotificationCategories(
             focusPrompt: _focusPrompt,

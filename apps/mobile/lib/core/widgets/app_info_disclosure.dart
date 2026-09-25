@@ -2,16 +2,39 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_radii.dart';
 import '../constants/app_spacing.dart';
+import '../feedback/app_haptics.dart';
 import '../theme/app_icons.dart';
 import '../theme/app_motion_tokens.dart';
 import '../theme/app_visual_tokens.dart';
 
-typedef AppInfoHeaderBuilder = Widget Function(
-  BuildContext context,
-  Widget infoButton,
-);
+typedef AppInfoHeaderBuilder =
+    Widget Function(BuildContext context, Widget infoButton);
 
 enum AppInfoDisclosureLayout { standard, compact }
+
+/// Apply only to a heading, never a card containing other controls.
+/// Visible information buttons remain the primary, discoverable access.
+class AppInfoHeading extends StatelessWidget {
+  const AppInfoHeading({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final disclosure = context
+        .findAncestorStateOfType<_AppInfoDisclosureState>();
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: disclosure == null
+          ? null
+          : () {
+              AppHaptics.selection(context);
+              disclosure._showDetails(context);
+            },
+      child: child,
+    );
+  }
+}
 
 /// Standard section heading with the shared 44-pixel information control.
 class AppInfoSectionDisclosure extends StatelessWidget {
@@ -45,12 +68,15 @@ class AppInfoSectionDisclosure extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                heading,
-                style: headingStyle ??
-                    (compactHeading
-                        ? Theme.of(context).textTheme.titleMedium
-                        : Theme.of(context).textTheme.titleLarge),
+              child: AppInfoHeading(
+                child: Text(
+                  heading,
+                  style:
+                      headingStyle ??
+                      (compactHeading
+                          ? Theme.of(context).textTheme.titleMedium
+                          : Theme.of(context).textTheme.titleLarge),
+                ),
               ),
             ),
           ),
@@ -96,7 +122,9 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
 
   bool _expanded = false;
   bool _focused = false;
+  bool _dialogOpen = false;
   final _focusNode = FocusNode();
+  final _infoAnchorKey = GlobalKey();
 
   @override
   void initState() {
@@ -157,7 +185,8 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
                     child: Text(
                       widget.description,
-                      style: widget.descriptionStyle ??
+                      style:
+                          widget.descriptionStyle ??
                           Theme.of(context).textTheme.bodyMedium,
                     ),
                   )
@@ -185,8 +214,9 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
         onTap: _toggle,
         child: ExcludeSemantics(
           child: IconButton(
+            key: _infoAnchorKey,
             tooltip: actionLabel,
-            color: Theme.of(context).colorScheme.primary,
+            color: tokens.textSecondary,
             onPressed: _toggle,
             focusNode: _focusNode,
             padding: EdgeInsets.zero,
@@ -201,15 +231,13 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadii.sm),
                 border: Border.all(
-                  color: _focused ? tokens.focus : tokens.outlineSoft,
+                  color: _focused ? tokens.focus : Colors.transparent,
                   width: _focused ? 2 : 1,
                 ),
               ),
               child: Center(
                 child: SizedBox.square(
-                  key: ValueKey(
-                    '${widget.keyPrefix}-icon-${widget.topic}',
-                  ),
+                  key: ValueKey('${widget.keyPrefix}-icon-${widget.topic}'),
                   dimension: _iconSize,
                   child: const Icon(AppIcons.infoOutline, size: _iconSize),
                 ),
@@ -226,18 +254,58 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
       setState(() => _expanded = !_expanded);
       return;
     }
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(widget.topic),
-        scrollable: true,
-        content: Text(widget.description, style: widget.descriptionStyle),
-        actions: [TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        )],
-      ),
-    );
+    _showDetails(_infoAnchorKey.currentContext ?? context);
+  }
+
+  Future<void> _showDetails(BuildContext anchorContext) async {
+    if (_dialogOpen) return;
+    final overlay =
+        Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
+    RelativeRect position() {
+      final anchor = anchorContext.mounted
+          ? anchorContext.findRenderObject()
+          : null;
+      if (anchor is! RenderBox || !anchor.attached) return RelativeRect.fill;
+      final origin = anchor.localToGlobal(Offset.zero, ancestor: overlay);
+      return RelativeRect.fromRect(
+        Rect.fromLTWH(
+          origin.dx,
+          origin.dy + anchor.size.height + AppSpacing.xs,
+          anchor.size.width,
+          0,
+        ),
+        Offset.zero & overlay.size,
+      );
+    }
+
+    _dialogOpen = true;
+    try {
+      await showMenu<void>(
+        context: context,
+        semanticLabel: widget.topic,
+        positionBuilder: (_, _) => position(),
+        constraints: const BoxConstraints(maxWidth: 300),
+        menuPadding: EdgeInsets.zero,
+        popUpAnimationStyle: AnimationStyle(
+          duration: context.motionTokens.stateFor(context),
+          reverseDuration: context.motionTokens.stateFor(context),
+        ),
+        items: [
+          PopupMenuItem<void>(
+            enabled: false,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              widget.description,
+              style:
+                  widget.descriptionStyle ??
+                  Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      );
+    } finally {
+      _dialogOpen = false;
+    }
   }
 
   void _handleFocus() {

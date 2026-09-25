@@ -18,6 +18,10 @@ class FocusPersistenceNotFound(RuntimeError):
 
 
 class FocusRepository(Protocol):
+    async def correct_time(self, *, user_id: str, session_id: UUID,
+                           request_id: UUID, expected_updated_at: datetime,
+                           minutes: int) -> dict[str, Any]: ...
+
     async def get_start_context(
         self,
         *,
@@ -56,6 +60,15 @@ class FocusRepository(Protocol):
 class SupabaseFocusRepository:
     def __init__(self, client: SupabaseRestClient) -> None:
         self._client = client
+
+    async def correct_time(self, *, user_id: str, session_id: UUID,
+                           request_id: UUID, expected_updated_at: datetime,
+                           minutes: int) -> dict[str, Any]:
+        return await self._rpc("correct_focus_time_v1", params={
+            "p_user_id": user_id, "p_session_id": str(session_id),
+            "p_request_id": str(request_id),
+            "p_expected_updated_at": expected_updated_at.isoformat(), "p_minutes": minutes,
+        })
 
     async def get_start_context(
         self,

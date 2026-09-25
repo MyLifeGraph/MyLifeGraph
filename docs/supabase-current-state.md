@@ -8,7 +8,32 @@ migration is recorded in [Verification](verification.md#current-verified-baselin
 including the post-apply function identity and permission checks. Inspect live
 history before future rollout; repository inventory alone is not live evidence.
 
-The latest repository migration is `20260915182801_coach_gemini_model_selection.sql`.
+The latest repository migration is `20260925164043_reversible_notification_and_focus_correction.sql`.
+It extends the notification ledger/RPC with `restore` and adds service-only
+`correct_focus_time_v1(uuid,uuid,uuid,timestamptz,integer)` plus
+`private.focus_time_corrections`. This forced-RLS audit/replay ledger has no
+client or direct service-role write grants. Owner/session foreign keys cascade
+on account deletion; original end times are retained in exported Focus metadata.
+Completed durations may change only within their original recorded interval.
+Identity, start, status, source and target remain immutable; the terminal trigger
+accepts only the exact ledger-authorized transaction. Owner-first locks, expected
+update CAS and request replay apply. Historical migrations are unchanged.
+This migration is local, **not applied to Cloud**. Release database, then API,
+then client. Older deployments reject the new commands. See
+[verification](verification.md#current-verified-baseline).
+
+The preceding migration is `20260925104758_checkin_push_reminders.sql`.
+It extends private push attempt kinds with `morning` and `evening`, adds the
+service-role-only `private.checkin_push_due_v1` helper, and replaces existing
+push settings/reservation/final-check functions without changing their ACLs,
+signatures, owner locks or retry identity. Optional flags default off; old
+settings commands preserve the extension. Live Capture branches suppress sends.
+Two check-in attempts and two existing-category attempts are separately capped
+per rolling 24 hours. It does not rewrite Capture data or change RLS.
+This migration is prepared locally, not evidence of live application. See
+[Notification Delivery](notification-delivery-v1-contract.md) for rollout order.
+
+The preceding repository migration is `20260915182801_coach_gemini_model_selection.sql`.
 It adds exactly `gemini-3.7-flash` to the existing 3.6/3.8 claim and response
 allowlists. Drift-guarded replacements preserve function OIDs, ACLs, lock order,
 budgets, and model-bound retry identities. No rows, tables, RLS or RPC signatures

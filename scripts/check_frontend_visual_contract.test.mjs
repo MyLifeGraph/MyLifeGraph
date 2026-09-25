@@ -18,7 +18,7 @@ test('visual guard rejects uncontrolled route styling', () => {
     writeFixture(
       root,
       'apps/mobile/lib/features/example/presentation/example.dart',
-      'final x = Icons.star; final c = Color(0xFF123456); BackdropFilter(filter: ImageFilter.blur());',
+      'final x = Icons.star; final c = Color(0xFF123456); LinearGradient(); BackdropFilter(filter: ImageFilter.blur());',
     );
     writeFixture(
       root,
@@ -68,6 +68,11 @@ test('visual guard rejects uncontrolled route styling', () => {
     const errors = findVisualContractErrors(root);
     assert.ok(errors.some((error) => error.includes('Material Icons')));
     assert.ok(errors.some((error) => error.includes('hard color')));
+    assert.ok(errors.some((error) => error.includes('gradient definitions')));
+    writeFixture(root,
+      'apps/mobile/lib/core/theme/app_liquid_glass.dart',
+      'final sheen = LinearGradient();',
+    );
     assert.ok(
       errors.some((error) => error.includes('only production BackdropFilter')),
     );

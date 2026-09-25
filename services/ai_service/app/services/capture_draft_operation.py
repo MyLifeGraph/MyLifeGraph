@@ -95,7 +95,15 @@ def _value_is_supported(key: str, value: object, excerpt: str) -> bool:
                 given_hour = given_hour % 12 + (12 if match[3] == "pm" else 0)
             if (given_hour, given_minute) == (hour, minute):
                 return True
-        return minute == 0 and re.search(rf"(?<!\d)0?{hour}\s*uhr\b", text) is not None
+        for match in re.finditer(r"(?<![\d:.])(\d{1,2})\s*(am|pm)\b", text):
+            if 1 <= int(match[1]) <= 12 and minute == 0:
+                converted = int(match[1]) % 12 + (12 if match[2] == "pm" else 0)
+                if converted == hour:
+                    return True
+        for match in re.finditer(r"(?<!\d)(\d{1,2})\s*uhr(?:\s+(\d{1,2})(?!\d))?\b", text):
+            if (int(match[1]), int(match[2] or 0)) == (hour, minute):
+                return True
+        return False
     if key == "sleep_target_minutes":
         if re.search(r"\b(?:target|aim|goal|want|schlafziel|ziel\w*|möchte|will)\b", text) is None:
             return False
@@ -175,8 +183,12 @@ means sleep_quality=7, and 'Energie sieben von zehn' means current_energy=7 in
 Morning or energy=7 in Evening. 'Schlaf sieben' is ambiguous and stays null.
 Keep canonical field names and enum values unchanged; evidence stays verbatim.
 Feeling good, being productive, or completing tasks never implies a rating.
-Use explicit unambiguous local clocks HH:mm only. A duration alone cannot supply
-sleep start or wake time; never anchor it on the current clock. Do not translate
+Use explicit unambiguous local clocks only. Output clocks as HH:mm, also when
+spoken as '7 am' or '23 Uhr 30'. If the
+speaker explicitly corrects a value, use their final clear correction and quote
+that correction as evidence. Do not silently omit an explicitly stated clock.
+A duration alone cannot supply sleep start or wake time; never anchor it on
+the current clock. Do not translate
 'yesterday' facts into today's rating. Evening records today, Morning the night
 ending today. If the day is ambiguous leave the field null.
 The sleep target must be explicitly described as a target, not measured duration.

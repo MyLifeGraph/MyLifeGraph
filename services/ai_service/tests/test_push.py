@@ -82,6 +82,18 @@ def test_settings_fail_closed(changes):
         PushCommand.model_validate(command(**changes))
 
 
+def test_checkin_extension_is_complete_optional_and_preserves_legacy_retry_shape():
+    old = PushCommand.model_validate(command()).rpc_payload()
+    assert not any(key in old for key in ('morning', 'evening', 'morning_time', 'evening_time'))
+    assert 'token' in old and old['token'] is None  # old null keys still retained
+    extension = dict(morning=True, evening=False, morning_time='08:30', evening_time='20:00')
+    new = PushCommand.model_validate(command(request_id=old['request_id'], **extension)).rpc_payload()
+    assert new == old | extension
+    for change in (dict(morning=True), extension | {'morning_time': '25:00'}, extension | {'morning': 'true'}):
+        with pytest.raises(ValidationError):
+            PushCommand.model_validate(command(**change))
+
+
 def test_enabled_requires_timestamped_explicit_consent():
     assert PushSettings.model_validate(preferences()).enabled
     for changes in (

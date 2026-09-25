@@ -38,8 +38,7 @@ class _AdvancedPaneTabsState extends State<_AdvancedPaneTabs> {
     final before = overflows && position.extentBefore > 1;
     // Removing the end arrow returns its width to the last tab. Do not ask
     // for another click when that reclaimed space already reveals the end.
-    final after =
-        overflows && position.extentAfter > (_hasAfter ? 48 : 0) + 1;
+    final after = overflows && position.extentAfter > (_hasAfter ? 48 : 0) + 1;
     if (before != _hasBefore || after != _hasAfter) {
       setState(() {
         _hasBefore = before;
@@ -188,9 +187,9 @@ class _AdvancedPaneChip extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: foreground,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    ),
+                  color: foreground,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                ),
               ),
             ],
           ),
@@ -350,9 +349,9 @@ class _WindowPill extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? tokens.onBrand : tokens.textSecondary,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
+              color: selected ? tokens.onBrand : tokens.textSecondary,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -405,7 +404,8 @@ class _MetricPicker extends StatelessWidget {
           .map(
             (metric) => DropdownMenuItem(
               value: metric.id,
-              enabled: metric.id == value ||
+              enabled:
+                  metric.id == value ||
                   (metric.id != blockedWithMetricId &&
                       !const CorrelationPairPolicy().isBlocked(
                         metric.id,
@@ -475,7 +475,8 @@ class _TrendOverlayCard extends StatelessWidget {
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.sm,
                 ),
-                onChanged: !selectedMetricIds.contains(metric.id) &&
+                onChanged:
+                    !selectedMetricIds.contains(metric.id) &&
                         selectedMetricIds.any(
                           (selected) => const CorrelationPairPolicy().isBlocked(
                             selected,
@@ -521,9 +522,9 @@ class _TrendOverlayCard extends StatelessWidget {
           'Previous-night sleep is placed on the local wake and Focus day. '
           'Focus values include rated sessions only. Each line is normalized '
           'relative to its own range.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
       ],
     );
@@ -558,44 +559,48 @@ class _TrendOverlayCard extends StatelessWidget {
     List<CorrelationMetric> metrics,
     Brightness brightness,
   ) {
-    return metrics.map((metric) {
-      final rawValues = points
-          .map((point) {
-            final value = point.values[metric.id];
-            if (value == null || !value.isFinite) {
-              return null;
-            }
-            return _TrendPoint(date: point.date, rawValue: value);
-          })
-          .nonNulls
-          .toList(growable: false);
+    return metrics
+        .map((metric) {
+          final rawValues = points
+              .map((point) {
+                final value = point.values[metric.id];
+                if (value == null || !value.isFinite) {
+                  return null;
+                }
+                return _TrendPoint(date: point.date, rawValue: value);
+              })
+              .nonNulls
+              .toList(growable: false);
 
-      if (rawValues.isEmpty) {
-        return _TrendSeries(
-          metric: metric,
-          color: _trendColorForMetric(metric.id, brightness),
-          points: const [],
-        );
-      }
+          if (rawValues.isEmpty) {
+            return _TrendSeries(
+              metric: metric,
+              color: _trendColorForMetric(metric.id, brightness),
+              points: const [],
+            );
+          }
 
-      final minValue =
-          rawValues.map((point) => point.rawValue).reduce(math.min);
-      final maxValue =
-          rawValues.map((point) => point.rawValue).reduce(math.max);
-      final range = math.max(maxValue - minValue, 1);
+          final minValue = rawValues
+              .map((point) => point.rawValue)
+              .reduce(math.min);
+          final maxValue = rawValues
+              .map((point) => point.rawValue)
+              .reduce(math.max);
+          final range = math.max(maxValue - minValue, 1);
 
-      return _TrendSeries(
-        metric: metric,
-        color: _trendColorForMetric(metric.id, brightness),
-        points: rawValues
-            .map(
-              (point) => point.copyWith(
-                normalizedValue: (point.rawValue - minValue) / range * 100,
-              ),
-            )
-            .toList(growable: false),
-      );
-    }).toList(growable: false);
+          return _TrendSeries(
+            metric: metric,
+            color: _trendColorForMetric(metric.id, brightness),
+            points: rawValues
+                .map(
+                  (point) => point.copyWith(
+                    normalizedValue: (point.rawValue - minValue) / range * 100,
+                  ),
+                )
+                .toList(growable: false),
+          );
+        })
+        .toList(growable: false);
   }
 }
 
@@ -607,16 +612,13 @@ class _TrendOverlayHeading extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Trend overlay',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        Text('Trend overlay', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: AppSpacing.xs),
         Text(
           'Lines are scaled separately, not to the same units.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -653,6 +655,7 @@ class _CorrelationCard extends StatelessWidget {
     required this.result,
     required this.values,
     required this.isMobile,
+    this.onExpandWindow,
   });
 
   final CorrelationMetric metricA;
@@ -660,6 +663,7 @@ class _CorrelationCard extends StatelessWidget {
   final CorrelationResult? result;
   final List<MetricPairValues> values;
   final bool isMobile;
+  final VoidCallback? onExpandWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -668,24 +672,28 @@ class _CorrelationCard extends StatelessWidget {
     final olderPointColor = colors.onSurfaceVariant;
     final useStackedContent =
         isMobile || MediaQuery.textScalerOf(context).scale(14) > 18;
-    final heading = Column(
+    final compactHeader = MediaQuery.textScalerOf(context).scale(14) <= 18;
+    final description = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${metricA.label} vs ${metricB.label}',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
           activeResult?.summary ?? 'Choose two different signals to compare.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1.4,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            height: 1.4,
+          ),
         ),
+        if (activeResult?.status == CorrelationStatus.notEnoughData &&
+            onExpandWindow != null)
+          TextButton.icon(
+            onPressed: onExpandWindow,
+            icon: const Icon(AppIcons.history),
+            label: const Text('Longer period'),
+          ),
       ],
     );
     final badge = _CorrelationBadge(
+      compact: compactHeader,
       result: activeResult,
       metricA: metricA,
       metricB: metricB,
@@ -695,15 +703,21 @@ class _CorrelationCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (useStackedContent) ...[
-            heading,
+          Text(
+            '${metricA.label} vs ${metricB.label}',
+            key: const ValueKey('compare-correlation-heading'),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (!compactHeader) ...[
+            description,
             const SizedBox(height: AppSpacing.md),
             badge,
           ] else
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: heading),
+                Expanded(child: description),
                 const SizedBox(width: AppSpacing.md),
                 badge,
               ],
@@ -717,8 +731,12 @@ class _CorrelationCard extends StatelessWidget {
                 metricA: metricA,
                 metricB: metricB,
                 color: colors.primary,
-                trendColor:
-                    _resultColor(context, activeResult, metricA, metricB),
+                trendColor: _resultColor(
+                  context,
+                  activeResult,
+                  metricA,
+                  metricB,
+                ),
                 axisColor: colors.outline,
                 gridColor: colors.outlineVariant,
                 labelColor: colors.onSurfaceVariant,
@@ -729,10 +747,7 @@ class _CorrelationCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          _PointLegend(
-            olderColor: olderPointColor,
-            newerColor: colors.primary,
-          ),
+          _PointLegend(olderColor: olderPointColor, newerColor: colors.primary),
           const SizedBox(height: AppSpacing.sm),
           if (useStackedContent)
             Column(
@@ -746,8 +761,8 @@ class _CorrelationCard extends StatelessWidget {
                 Text(
                   '${activeResult?.sampleSize ?? values.length} shared days',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
@@ -769,8 +784,8 @@ class _CorrelationCard extends StatelessWidget {
                 Text(
                   '${activeResult?.sampleSize ?? values.length} shared days',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -793,11 +808,13 @@ class _CorrelationBadge extends StatelessWidget {
     required this.result,
     required this.metricA,
     required this.metricB,
+    this.compact = false,
   });
 
   final CorrelationResult? result;
   final CorrelationMetric metricA;
   final CorrelationMetric metricB;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -805,8 +822,9 @@ class _CorrelationBadge extends StatelessWidget {
     final caption = result?.strengthLabel ?? 'No pair';
     final color = _resultColor(context, result, metricA, metricB);
     return Container(
-      width: 112,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      key: const ValueKey('compare-correlation-badge'),
+      width: compact ? 92 : 112,
+      padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.md),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(AppRadii.lg),
@@ -814,10 +832,7 @@ class _CorrelationBadge extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text(label, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: AppSpacing.xs),
           Text(
             caption,
@@ -831,10 +846,7 @@ class _CorrelationBadge extends StatelessWidget {
 }
 
 class _PointLegend extends StatelessWidget {
-  const _PointLegend({
-    required this.olderColor,
-    required this.newerColor,
-  });
+  const _PointLegend({required this.olderColor, required this.newerColor});
 
   final Color olderColor;
   final Color newerColor;
@@ -851,8 +863,8 @@ class _PointLegend extends StatelessWidget {
         Text(
           'Each dot is one day',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -860,10 +872,7 @@ class _PointLegend extends StatelessWidget {
 }
 
 class _LegendDot extends StatelessWidget {
-  const _LegendDot({
-    required this.color,
-    required this.label,
-  });
+  const _LegendDot({required this.color, required this.label});
 
   final Color color;
   final String label;
@@ -878,10 +887,7 @@ class _LegendDot extends StatelessWidget {
         Container(
           width: 11,
           height: 11,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
@@ -890,10 +896,7 @@ class _LegendDot extends StatelessWidget {
 }
 
 class _TopPatternsCard extends StatelessWidget {
-  const _TopPatternsCard({
-    required this.report,
-    required this.isMobile,
-  });
+  const _TopPatternsCard({required this.report, required this.isMobile});
 
   final CorrelationReport report;
   final bool isMobile;
@@ -912,8 +915,8 @@ class _TopPatternsCard extends StatelessWidget {
           Text(
             'Strongest pairs in this window.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           if (topResults.isEmpty)
@@ -935,10 +938,7 @@ class _TopPatternsCard extends StatelessWidget {
 }
 
 class _TopPatternTile extends StatelessWidget {
-  const _TopPatternTile({
-    required this.report,
-    required this.result,
-  });
+  const _TopPatternTile({required this.report, required this.result});
 
   final CorrelationReport report;
   final CorrelationResult result;
@@ -988,17 +988,17 @@ class _TopPatternTile extends StatelessWidget {
                 Text(
                   result.strengthLabel,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
           Text(
             result.coefficientLabel,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: color,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: color),
           ),
         ],
       ),
@@ -1093,49 +1093,52 @@ class _CorrelationMatrixCard extends StatelessWidget {
                       (rowMetric) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                         child: Row(
-                          children: report.metrics.map((columnMetric) {
-                            final result = report.resultFor(
-                              rowMetric.id,
-                              columnMetric.id,
-                            );
-                            final color = _resultColor(
-                              context,
-                              result,
-                              rowMetric,
-                              columnMetric,
-                            );
-                            final selected = _isSelectedPair(
-                              rowMetric.id,
-                              columnMetric.id,
-                            );
-                            final overlapping =
-                                const CorrelationPairPolicy().isBlocked(
-                              rowMetric.id,
-                              columnMetric.id,
-                            );
-                            final disabled =
-                                rowMetric.id == columnMetric.id || overlapping;
-                            return _MatrixCell(
-                              cellKey: ValueKey(
-                                'insights-matrix-cell-${rowMetric.id}-${columnMetric.id}',
-                              ),
-                              rowLabel: rowMetric.label,
-                              columnLabel: columnMetric.label,
-                              result: result,
-                              color: color,
-                              selected: selected && !disabled,
-                              disabled: disabled,
-                              overlappingSignals: overlapping,
-                              width: cellWidth,
-                              height: rowHeight,
-                              onTap: disabled
-                                  ? null
-                                  : () => onPairSelected(
-                                        rowMetric.id,
-                                        columnMetric.id,
-                                      ),
-                            );
-                          }).toList(growable: false),
+                          children: report.metrics
+                              .map((columnMetric) {
+                                final result = report.resultFor(
+                                  rowMetric.id,
+                                  columnMetric.id,
+                                );
+                                final color = _resultColor(
+                                  context,
+                                  result,
+                                  rowMetric,
+                                  columnMetric,
+                                );
+                                final selected = _isSelectedPair(
+                                  rowMetric.id,
+                                  columnMetric.id,
+                                );
+                                final overlapping =
+                                    const CorrelationPairPolicy().isBlocked(
+                                      rowMetric.id,
+                                      columnMetric.id,
+                                    );
+                                final disabled =
+                                    rowMetric.id == columnMetric.id ||
+                                    overlapping;
+                                return _MatrixCell(
+                                  cellKey: ValueKey(
+                                    'insights-matrix-cell-${rowMetric.id}-${columnMetric.id}',
+                                  ),
+                                  rowLabel: rowMetric.label,
+                                  columnLabel: columnMetric.label,
+                                  result: result,
+                                  color: color,
+                                  selected: selected && !disabled,
+                                  disabled: disabled,
+                                  overlappingSignals: overlapping,
+                                  width: cellWidth,
+                                  height: rowHeight,
+                                  onTap: disabled
+                                      ? null
+                                      : () => onPairSelected(
+                                          rowMetric.id,
+                                          columnMetric.id,
+                                        ),
+                                );
+                              })
+                              .toList(growable: false),
                         ),
                       ),
                     ),
@@ -1161,8 +1164,8 @@ class _CorrelationMatrixCard extends StatelessWidget {
           Text(
             'Tap a cell to inspect that pair.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           grid,
@@ -1284,8 +1287,8 @@ class _MatrixCell extends StatelessWidget {
     final semanticLabel = overlappingSignals
         ? '$rowLabel and $columnLabel. Not compared · overlapping signals'
         : disabled
-            ? '$rowLabel, same metric'
-            : '$rowLabel and $columnLabel correlation. $resultDescription';
+        ? '$rowLabel, same metric'
+        : '$rowLabel and $columnLabel correlation. $resultDescription';
     return Padding(
       padding: const EdgeInsets.only(right: AppSpacing.xs),
       child: Semantics(
@@ -1316,14 +1319,13 @@ class _MatrixCell extends StatelessWidget {
                 overlappingSignals
                     ? 'Not compared\n· overlapping signals'
                     : disabled
-                        ? '·'
-                        : result?.coefficientLabel ?? '--',
+                    ? '·'
+                    : result?.coefficientLabel ?? '--',
                 maxLines: 4,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color:
-                          disabled ? colors.onSurfaceVariant : colors.onSurface,
-                    ),
+                  color: disabled ? colors.onSurfaceVariant : colors.onSurface,
+                ),
               ),
             ),
           ),
@@ -1370,9 +1372,8 @@ class _DiscoveredPatternsCard extends StatelessWidget {
                     Text(
                       'Stored insights and previous notes',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -1434,9 +1435,7 @@ class InsightsPatternTile extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     _ConfidenceBadge(
-                      key: ValueKey(
-                        'insight-pattern-confidence-${insight.id}',
-                      ),
+                      key: ValueKey('insight-pattern-confidence-${insight.id}'),
                       label: insight.confidenceLabel,
                     ),
                   ],
@@ -1445,9 +1444,9 @@ class InsightsPatternTile extends StatelessWidget {
                 Text(
                   insight.summary,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        height: 1.45,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
                 ),
               ],
             )
@@ -1466,11 +1465,9 @@ class InsightsPatternTile extends StatelessWidget {
                       Text(
                         insight.summary,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              height: 1.45,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.45,
+                        ),
                       ),
                     ],
                   ),
@@ -1568,10 +1565,7 @@ class _ScatterPlotPainter extends CustomPainter {
       axisPaint,
     );
 
-    final labelStyle = TextStyle(
-      color: labelColor,
-      fontSize: 10,
-    );
+    final labelStyle = TextStyle(color: labelColor, fontSize: 10);
     final titleStyle = TextStyle(
       color: labelColor,
       fontSize: 11,
@@ -1650,8 +1644,9 @@ class _ScatterPlotPainter extends CustomPainter {
       ..strokeWidth = 1.4;
     for (var index = 0; index < sortedValues.length; index++) {
       final value = sortedValues[index];
-      final recency =
-          sortedValues.length == 1 ? 1.0 : index / (sortedValues.length - 1);
+      final recency = sortedValues.length == 1
+          ? 1.0
+          : index / (sortedValues.length - 1);
       final pointPaint = Paint()
         ..color = _pointColorForRecency(recency, color, olderPointColor)
         ..style = PaintingStyle.fill;
@@ -1687,11 +1682,13 @@ class _ScatterPlotPainter extends CustomPainter {
   }
 
   _TrendLine? _trendLine(List<MetricPairValues> values) {
-    final meanX = values
+    final meanX =
+        values
             .map((value) => value.metricAValue)
             .reduce((value, element) => value + element) /
         values.length;
-    final meanY = values
+    final meanY =
+        values
             .map((value) => value.metricBValue)
             .reduce((value, element) => value + element) /
         values.length;
@@ -1833,10 +1830,7 @@ class _TrendOverlayPainter extends CustomPainter {
       axisPaint,
     );
 
-    final labelStyle = TextStyle(
-      color: labelColor,
-      fontSize: 10,
-    );
+    final labelStyle = TextStyle(color: labelColor, fontSize: 10);
     for (var index = 0; index <= 4; index++) {
       final progress = index / 4;
       final y = plotBottom - progress * plotHeight;
@@ -1873,7 +1867,8 @@ class _TrendOverlayPainter extends CustomPainter {
     final totalDays = math.max(lastDate.difference(firstDate).inDays, 1);
 
     Offset pointFor(_TrendPoint point) {
-      final x = plotLeft +
+      final x =
+          plotLeft +
           point.date.difference(firstDate).inDays / totalDays * plotWidth;
       final y = plotBottom - point.normalizedValue / 100 * plotHeight;
       return Offset(x, y);
@@ -2018,10 +2013,7 @@ class _TrendPoint {
 }
 
 class _TrendLine {
-  const _TrendLine({
-    required this.slope,
-    required this.intercept,
-  });
+  const _TrendLine({required this.slope, required this.intercept});
 
   final double slope;
   final double intercept;
@@ -2071,7 +2063,8 @@ Color _resultColor(
   final bothPositive = metricA.higherIsPositive && metricB.higherIsPositive;
   final bothRisk = !metricA.higherIsPositive && !metricB.higherIsPositive;
   final mixedValence = metricA.higherIsPositive != metricB.higherIsPositive;
-  final supportive = (bothPositive && coefficient > 0) ||
+  final supportive =
+      (bothPositive && coefficient > 0) ||
       (mixedValence && coefficient < 0) ||
       (bothRisk && coefficient < 0);
 
@@ -2086,11 +2079,7 @@ Color _pointColorForRecency(
   Color newestColor,
   Color olderPointColor,
 ) {
-  final middle = Color.lerp(
-    olderPointColor,
-    const Color(0xFF4968B8),
-    recency,
-  );
+  final middle = Color.lerp(olderPointColor, const Color(0xFF4968B8), recency);
   return Color.lerp(middle, newestColor, recency * 0.7) ?? newestColor;
 }
 

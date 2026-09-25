@@ -37,6 +37,8 @@ class NotificationsState {
     required this.loadError,
     required this.rowActions,
     required this.canManageLifecycle,
+    this.dismissed = false,
+    this.limit = 30,
   });
 
   factory NotificationsState.initial({required bool canManageLifecycle}) {
@@ -54,6 +56,8 @@ class NotificationsState {
   final Object? loadError;
   final Map<String, NotificationRowActionState> rowActions;
   final bool canManageLifecycle;
+  final bool dismissed;
+  final int limit;
 
   bool get hasPendingAction =>
       rowActions.values.any((operation) => operation.isPending);
@@ -68,6 +72,8 @@ class NotificationsState {
     Object? loadError = _unset,
     Map<String, NotificationRowActionState>? rowActions,
     bool? canManageLifecycle,
+    bool? dismissed,
+    int? limit,
   }) {
     return NotificationsState(
       isLoading: isLoading ?? this.isLoading,
@@ -75,6 +81,8 @@ class NotificationsState {
       loadError: identical(loadError, _unset) ? this.loadError : loadError,
       rowActions: rowActions ?? this.rowActions,
       canManageLifecycle: canManageLifecycle ?? this.canManageLifecycle,
+      dismissed: dismissed ?? this.dismissed,
+      limit: limit ?? this.limit,
     );
   }
 }
@@ -84,17 +92,30 @@ class NotificationsController extends StateNotifier<NotificationsState> {
     required NotificationsRepository repository,
     required bool canManageLifecycle,
     bool autoLoad = true,
-  })  : _repository = repository,
-        super(
-          NotificationsState.initial(
-            canManageLifecycle: canManageLifecycle,
-          ),
-        ) {
+  }) : _repository = repository,
+       super(
+         NotificationsState.initial(canManageLifecycle: canManageLifecycle),
+       ) {
     if (autoLoad) Future<void>.microtask(load);
   }
 
   final NotificationsRepository _repository;
   bool _disposed = false;
+
+  bool get supportsHistory => _repository is NotificationHistoryRepository;
+  bool get canBrowse => !state.isLoading && state.rowActions.isEmpty;
+
+  Future<void> showDismissed(bool value) async {
+    if (!supportsHistory || !canBrowse || state.dismissed == value) return;
+    state = state.copyWith(dismissed: value, limit: 30, items: const []);
+    await load();
+  }
+
+  Future<void> loadMore() async {
+    if (!supportsHistory || !canBrowse || state.limit >= 1000) return;
+    state = state.copyWith(limit: (state.limit + 30).clamp(30, 1000));
+    await load();
+  }
 
   Future<void> load() async {
     if (state.hasPendingAction) return;
@@ -104,7 +125,14 @@ class NotificationsController extends StateNotifier<NotificationsState> {
   Future<bool> _reloadInbox({required bool clearRowActionsOnSuccess}) async {
     state = state.copyWith(isLoading: true, loadError: null);
     try {
-      final items = await _repository.getNotifications();
+      final repository = _repository;
+      final items = repository is NotificationHistoryRepository
+          ? await (repository as NotificationHistoryRepository)
+                .getNotificationHistory(
+                  dismissed: state.dismissed,
+                  limit: state.limit,
+                )
+          : await repository.getNotifications();
       if (_disposed) return false;
       if (clearRowActionsOnSuccess &&
           !_matchesCommittedResults(items, state.rowActions)) {
@@ -170,7 +198,8 @@ class NotificationsController extends StateNotifier<NotificationsState> {
     if (exactRequest != null && exactRequest.command != command) return false;
 
     final notification = state.items[index];
-    final request = exactRequest ??
+    final request =
+        exactRequest ??
         NotificationLifecycleRequest(
           notificationId: notification.id,
           requestId: newClientUuid(),
@@ -191,8 +220,9 @@ class NotificationsController extends StateNotifier<NotificationsState> {
       result.requireMatches(request);
       if (_disposed) return false;
       if (!result.replayed) {
-        final currentIndex =
-            state.items.indexWhere((item) => item.id == notificationId);
+        final currentIndex = state.items.indexWhere(
+          (item) => item.id == notificationId,
+        );
         if (currentIndex < 0) return false;
         final current = state.items[currentIndex];
         if (current.updatedAt != request.expectedUpdatedAt) {
@@ -225,8 +255,9 @@ class NotificationsController extends StateNotifier<NotificationsState> {
       return _reloadInbox(clearRowActionsOnSuccess: true);
     } catch (error) {
       if (_disposed) return false;
-      final requiresExactRetry =
-          notificationLifecycleFailureRequiresExactRetry(error);
+      final requiresExactRetry = notificationLifecycleFailureRequiresExactRetry(
+        error,
+      );
       _setRowAction(
         notificationId,
         NotificationRowActionState(
@@ -248,7 +279,10 @@ class NotificationsController extends StateNotifier<NotificationsState> {
       final result = entry.value.committedResult;
       if (!entry.value.committedRequiresReload || result == null) continue;
       final matching = items.where((item) => item.id == entry.key).toList();
-      if (result.command == NotificationLifecycleCommand.dismiss) {
+      if ((result.command == NotificationLifecycleCommand.dismiss &&
+              !state.dismissed) ||
+          (result.command == NotificationLifecycleCommand.restore &&
+              state.dismissed)) {
         if (matching.isNotEmpty) return false;
         continue;
       }

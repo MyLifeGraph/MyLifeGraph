@@ -152,10 +152,12 @@ start context revalidates that explicit duration and replaces the selected
 target with the source-owned target. A current remainder below five minutes is
 not replaced by a Study default; it is an explicit non-startable source state.
 
-Before start, every active preparation item is shown in order. Each can be
-marked `Ready` or `Not needed today`; the student may also choose
-`Skip remaining and start`. These transient choices are neither persisted nor
-evaluated. Only the saved item definitions and active states belong to Setup.
+Before start, every active preparation item is shown in order as a passive
+reminder list. One `Ready & start` action acknowledges the whole list and starts
+Focus; `Cancel` shares the same compact action row. There are no per-item
+decisions, saved acknowledgements or correlation inputs. Only the
+saved item definitions, order and active states belong to Settings → Setup →
+Focus setup, where students can edit, add, reorder or remove them.
 
 At Focus creation, the chosen recovery duration is stored as
 `metadata.recovery_minutes` on the existing `focus_sessions` row. A completed
@@ -269,7 +271,7 @@ Focused coverage must prove:
   custom ritual entries, and new-commitment-only semester prefill;
 - atomic projection, replay, omission, stale revision, forced-RLS ownership,
   direct-write denial, rollback, export, and deletion boundaries;
-- duration priority, transient checklist decisions, manual overrides, Focus
+- duration priority, single reminder confirmation, manual overrides, Focus
   metadata, completed-only local recovery, restoration, and skip;
 - exact Study blocks, final short remainder, honest unscheduled minutes,
   recovery conflicts, unchanged active-minute/budget arithmetic, Planner Task

@@ -12,325 +12,389 @@ void main() {
   const taskId = '10000000-0000-4000-8000-000000000001';
   final targetDate = DateTime(2026, 7, 21);
 
-  test('external Planner changes refresh a retained Today command snapshot', () async {
-    final first = _snapshot(targetDate);
-    final second = _snapshot(targetDate.add(const Duration(days: 1)));
-    final repository = _SequenceDashboardRepository([first, second]);
-    final controller = TodayCommandController(
-      taskCommands: _FakeTaskCommands(), habitCommands: _FakeHabitCommands(),
-      dashboardRepository: repository, refreshAfterTask: (_) async {},
-      refreshAfterHabit: (_) async {}, onTodayReloaded: () {},
-    );
-    addTearDown(controller.dispose);
-    await controller.completeTask(taskId: taskId, targetDate: targetDate);
-    expect(controller.state.displayedSnapshot, same(first));
-    controller.externalProjectionChanged();
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.state.displayedSnapshot, same(second));
-    expect(repository.calls, 2);
-  });
-
-  test('durable task write becomes stale and reload never repeats the command',
+  for (final habit in [false, true]) {
+    test(
+      'pending ${habit ? 'habit' : 'task'} updates immediately and rolls back on failure',
       () async {
-    final tasks = _FakeTaskCommands();
-    final repository = _SequenceDashboardRepository([
-      StateError('first Today reload failed'),
-      _snapshot(targetDate),
-    ]);
-    final refreshedDates = <DateTime>[];
-    var supportingReloads = 0;
-    final controller = TodayCommandController(
-      taskCommands: tasks,
-      habitCommands: _FakeHabitCommands(),
-      dashboardRepository: repository,
-      refreshAfterTask: (date) async => refreshedDates.add(date),
-      refreshAfterHabit: (_) async {},
-      onTodayReloaded: () => supportingReloads += 1,
+        final taskRelease = Completer<TaskUndoToken>();
+        final habitRelease = Completer<void>();
+        final repository = _SequenceDashboardRepository([
+          _snapshot(targetDate),
+        ]);
+        final controller = TodayCommandController(
+          taskCommands: _FakeTaskCommands(completeResult: taskRelease.future),
+          habitCommands: _FakeHabitCommands(outcomeResult: habitRelease.future),
+          dashboardRepository: repository,
+          refreshAfterTask: (_) async {},
+          refreshAfterHabit: (_) async {},
+          onTodayReloaded: () {},
+        );
+        addTearDown(controller.dispose);
+        final pending = habit
+            ? controller.setHabitOutcome(
+                habitId: 'habit-1',
+                outcome: HabitOutcome.skipped,
+                targetDate: targetDate,
+              )
+            : controller.completeTask(taskId: taskId, targetDate: targetDate);
+        expect(controller.state.canMutate, isFalse);
+        expect(await controller.reloadToday(), isFalse);
+        if (habit) {
+          expect(controller.state.habitOutcomeOverrides['habit-1'], 'skipped');
+          habitRelease.completeError(StateError('offline'));
+        } else {
+          expect(controller.state.completedTaskIds, {taskId});
+          taskRelease.completeError(StateError('offline'));
+        }
+        final result = await pending;
+        expect(result.committed, isFalse);
+        expect(controller.state.completedTaskIds, isEmpty);
+        expect(controller.state.habitOutcomeOverrides, isEmpty);
+        expect(controller.state.canMutate, isTrue);
+        expect(repository.calls, 0);
+      },
     );
-    addTearDown(controller.dispose);
-
-    final result = await controller.completeTask(
-      taskId: taskId,
-      targetDate: targetDate,
-    );
-
-    expect(result.committed, isTrue);
-    expect(result.projectionCurrent, isFalse);
-    expect(tasks.completeCalls, 1);
-    expect(refreshedDates, [targetDate]);
-    expect(
-      controller.state.projectionStatus,
-      TodayProjectionStatus.staleAfterMutation,
-    );
-    expect(controller.state.completedTaskIds, {taskId});
-    expect(controller.state.updatingTaskIds, isEmpty);
-
-    expect(await controller.reloadToday(), isTrue);
-    expect(tasks.completeCalls, 1);
-    expect(repository.calls, 2);
-    expect(supportingReloads, 1);
-    expect(
-      controller.state.projectionStatus,
-      TodayProjectionStatus.current,
-    );
-    expect(controller.state.completedTaskIds, isEmpty);
-    expect(controller.state.displayedSnapshot?.localDate, targetDate);
-  });
+  }
 
   test(
-      'unconfirmed task failure stays uncommitted and leaves projection usable',
-      () async {
-    final tasks = _FakeTaskCommands(
-      completeError: const TaskCommandException(
-        'Task result could not be confirmed.',
-      ),
-    );
-    final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
-    var refreshCalls = 0;
-    final controller = TodayCommandController(
-      taskCommands: tasks,
-      habitCommands: _FakeHabitCommands(),
-      dashboardRepository: repository,
-      refreshAfterTask: (_) async => refreshCalls += 1,
-      refreshAfterHabit: (_) async {},
-      onTodayReloaded: () {},
-    );
-    addTearDown(controller.dispose);
+    'external Planner changes refresh a retained Today command snapshot',
+    () async {
+      final first = _snapshot(targetDate);
+      final second = _snapshot(targetDate.add(const Duration(days: 1)));
+      final repository = _SequenceDashboardRepository([first, second]);
+      final controller = TodayCommandController(
+        taskCommands: _FakeTaskCommands(),
+        habitCommands: _FakeHabitCommands(),
+        dashboardRepository: repository,
+        refreshAfterTask: (_) async {},
+        refreshAfterHabit: (_) async {},
+        onTodayReloaded: () {},
+      );
+      addTearDown(controller.dispose);
+      await controller.completeTask(taskId: taskId, targetDate: targetDate);
+      expect(controller.state.displayedSnapshot, same(first));
+      controller.externalProjectionChanged();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.state.displayedSnapshot, same(second));
+      expect(repository.calls, 2);
+    },
+  );
 
-    final result = await controller.completeTask(
-      taskId: taskId,
-      targetDate: targetDate,
-    );
+  test(
+    'durable task write becomes stale and reload never repeats the command',
+    () async {
+      final tasks = _FakeTaskCommands();
+      final repository = _SequenceDashboardRepository([
+        StateError('first Today reload failed'),
+        _snapshot(targetDate),
+      ]);
+      final refreshedDates = <DateTime>[];
+      var supportingReloads = 0;
+      final controller = TodayCommandController(
+        taskCommands: tasks,
+        habitCommands: _FakeHabitCommands(),
+        dashboardRepository: repository,
+        refreshAfterTask: (date) async => refreshedDates.add(date),
+        refreshAfterHabit: (_) async {},
+        onTodayReloaded: () => supportingReloads += 1,
+      );
+      addTearDown(controller.dispose);
 
-    expect(result.accepted, isTrue);
-    expect(result.committed, isFalse);
-    expect(result.error, isA<TaskCommandException>());
-    expect(tasks.completeCalls, 1);
-    expect(refreshCalls, 0);
-    expect(repository.calls, 0);
-    expect(controller.state.projectionStatus, TodayProjectionStatus.current);
-    expect(controller.state.completedTaskIds, isEmpty);
-    expect(controller.state.updatingTaskIds, isEmpty);
-  });
+      final result = await controller.completeTask(
+        taskId: taskId,
+        targetDate: targetDate,
+      );
 
-  test('duplicate task command is ignored while the first write is in flight',
-      () async {
-    final release = Completer<TaskUndoToken>();
-    final tasks = _FakeTaskCommands(completeResult: release.future);
-    final controller = TodayCommandController(
-      taskCommands: tasks,
-      habitCommands: _FakeHabitCommands(),
-      dashboardRepository:
-          _SequenceDashboardRepository([_snapshot(targetDate)]),
-      refreshAfterTask: (_) async {},
-      refreshAfterHabit: (_) async {},
-      onTodayReloaded: () {},
-    );
-    addTearDown(controller.dispose);
+      expect(result.committed, isTrue);
+      expect(result.projectionCurrent, isFalse);
+      expect(tasks.completeCalls, 1);
+      expect(refreshedDates, [targetDate]);
+      expect(
+        controller.state.projectionStatus,
+        TodayProjectionStatus.staleAfterMutation,
+      );
+      expect(controller.state.completedTaskIds, {taskId});
+      expect(controller.state.updatingTaskIds, isEmpty);
 
-    final first = controller.completeTask(
-      taskId: taskId,
-      targetDate: targetDate,
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.state.updatingTaskIds, {taskId});
+      expect(await controller.reloadToday(), isTrue);
+      expect(tasks.completeCalls, 1);
+      expect(repository.calls, 2);
+      expect(supportingReloads, 1);
+      expect(controller.state.projectionStatus, TodayProjectionStatus.current);
+      expect(controller.state.completedTaskIds, isEmpty);
+      expect(controller.state.displayedSnapshot?.localDate, targetDate);
+    },
+  );
 
-    final duplicate = await controller.completeTask(
-      taskId: taskId,
-      targetDate: targetDate,
-    );
-    expect(duplicate.accepted, isFalse);
-    expect(tasks.completeCalls, 1);
+  test(
+    'unconfirmed task failure stays uncommitted and leaves projection usable',
+    () async {
+      final tasks = _FakeTaskCommands(
+        completeError: const TaskCommandException(
+          'Task result could not be confirmed.',
+        ),
+      );
+      final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
+      var refreshCalls = 0;
+      final controller = TodayCommandController(
+        taskCommands: tasks,
+        habitCommands: _FakeHabitCommands(),
+        dashboardRepository: repository,
+        refreshAfterTask: (_) async => refreshCalls += 1,
+        refreshAfterHabit: (_) async {},
+        onTodayReloaded: () {},
+      );
+      addTearDown(controller.dispose);
 
-    release.complete(_undoToken(taskId));
-    expect((await first).projectionCurrent, isTrue);
-    expect(controller.state.updatingTaskIds, isEmpty);
-  });
+      final result = await controller.completeTask(
+        taskId: taskId,
+        targetDate: targetDate,
+      );
 
-  test('committed task refreshes shared projections after Today is disposed',
-      () async {
-    final release = Completer<TaskUndoToken>();
-    final tasks = _FakeTaskCommands(completeResult: release.future);
-    final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
-    final refreshedDates = <DateTime>[];
-    var supportingReloads = 0;
-    final controller = TodayCommandController(
-      taskCommands: tasks,
-      habitCommands: _FakeHabitCommands(),
-      dashboardRepository: repository,
-      refreshAfterTask: (date) async => refreshedDates.add(date),
-      refreshAfterHabit: (_) async {},
-      onTodayReloaded: () => supportingReloads += 1,
-    );
+      expect(result.accepted, isTrue);
+      expect(result.committed, isFalse);
+      expect(result.error, isA<TaskCommandException>());
+      expect(tasks.completeCalls, 1);
+      expect(refreshCalls, 0);
+      expect(repository.calls, 0);
+      expect(controller.state.projectionStatus, TodayProjectionStatus.current);
+      expect(controller.state.completedTaskIds, isEmpty);
+      expect(controller.state.updatingTaskIds, isEmpty);
+    },
+  );
 
-    final command = controller.completeTask(
-      taskId: taskId,
-      targetDate: targetDate,
-    );
-    await Future<void>.delayed(Duration.zero);
-    controller.dispose();
-    release.complete(_undoToken(taskId));
+  test(
+    'duplicate task command is ignored while the first write is in flight',
+    () async {
+      final release = Completer<TaskUndoToken>();
+      final tasks = _FakeTaskCommands(completeResult: release.future);
+      final controller = TodayCommandController(
+        taskCommands: tasks,
+        habitCommands: _FakeHabitCommands(),
+        dashboardRepository: _SequenceDashboardRepository([
+          _snapshot(targetDate),
+        ]),
+        refreshAfterTask: (_) async {},
+        refreshAfterHabit: (_) async {},
+        onTodayReloaded: () {},
+      );
+      addTearDown(controller.dispose);
 
-    final result = await command;
-    expect(result.committed, isTrue);
-    expect(result.projectionCurrent, isFalse);
-    expect(refreshedDates, [targetDate]);
-    expect(repository.calls, 0);
-    expect(supportingReloads, 0);
-  });
+      final first = controller.completeTask(
+        taskId: taskId,
+        targetDate: targetDate,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.state.updatingTaskIds, {taskId});
 
-  test('every Today task command delegates through the narrow task port',
-      () async {
-    final tasks = _FakeTaskCommands();
-    final repository = _SequenceDashboardRepository(
-      List<Object>.filled(6, _snapshot(targetDate)),
-    );
-    final refreshedDates = <DateTime>[];
-    final controller = TodayCommandController(
-      taskCommands: tasks,
-      habitCommands: _FakeHabitCommands(),
-      dashboardRepository: repository,
-      refreshAfterTask: (date) async => refreshedDates.add(date),
-      refreshAfterHabit: (_) async {},
-      onTodayReloaded: () {},
-    );
-    addTearDown(controller.dispose);
-    final draft = ExecutableTaskDraft(title: 'Typed task');
-    final deadline = DateTime(2026, 7, 23, 17);
+      final duplicate = await controller.completeTask(
+        taskId: taskId,
+        targetDate: targetDate,
+      );
+      expect(duplicate.accepted, isFalse);
+      expect(tasks.completeCalls, 1);
 
-    await controller.createTask(
-      taskId: taskId,
-      draft: draft,
-      targetDate: targetDate,
-    );
-    await controller.editTask(
-      taskId: taskId,
-      draft: draft,
-      targetDate: targetDate,
-    );
-    await controller.cancelTask(taskId: taskId, targetDate: targetDate);
-    await controller.postponeTask(
-      taskId: taskId,
-      newDeadline: deadline,
-      targetDate: targetDate,
-    );
-    await controller.restoreTask(taskId: taskId, targetDate: targetDate);
-    await controller.undoTask(
-      token: _undoToken(taskId),
-      targetDate: targetDate,
-    );
+      release.complete(_undoToken(taskId));
+      expect((await first).projectionCurrent, isTrue);
+      expect(controller.state.updatingTaskIds, isEmpty);
+    },
+  );
 
-    expect(tasks.calls, [
-      'create:$taskId',
-      'edit:$taskId',
-      'cancel:$taskId',
-      'postpone:$taskId:${deadline.toIso8601String()}',
-      'restore:$taskId',
-      'undo:$taskId',
-    ]);
-    expect(refreshedDates, List<DateTime>.filled(6, targetDate));
-    expect(repository.calls, 6);
-    expect(controller.state.projectionStatus, TodayProjectionStatus.current);
-  });
+  test(
+    'committed task refreshes shared projections after Today is disposed',
+    () async {
+      final release = Completer<TaskUndoToken>();
+      final tasks = _FakeTaskCommands(completeResult: release.future);
+      final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
+      final refreshedDates = <DateTime>[];
+      var supportingReloads = 0;
+      final controller = TodayCommandController(
+        taskCommands: tasks,
+        habitCommands: _FakeHabitCommands(),
+        dashboardRepository: repository,
+        refreshAfterTask: (date) async => refreshedDates.add(date),
+        refreshAfterHabit: (_) async {},
+        onTodayReloaded: () => supportingReloads += 1,
+      );
 
-  test('habit write retains its optimistic outcome when Today reload fails',
-      () async {
-    final habits = _FakeHabitCommands();
-    final repository = _SequenceDashboardRepository([
-      StateError('Today failed'),
-    ]);
-    final refreshedDates = <DateTime>[];
-    final controller = TodayCommandController(
-      taskCommands: _FakeTaskCommands(),
-      habitCommands: habits,
-      dashboardRepository: repository,
-      refreshAfterTask: (_) async {},
-      refreshAfterHabit: (date) async => refreshedDates.add(date),
-      onTodayReloaded: () {},
-    );
-    addTearDown(controller.dispose);
+      final command = controller.completeTask(
+        taskId: taskId,
+        targetDate: targetDate,
+      );
+      await Future<void>.delayed(Duration.zero);
+      controller.dispose();
+      release.complete(_undoToken(taskId));
 
-    final result = await controller.setHabitOutcome(
-      habitId: 'habit-1',
-      outcome: HabitOutcome.skipped,
-      targetDate: targetDate,
-    );
+      final result = await command;
+      expect(result.committed, isTrue);
+      expect(result.projectionCurrent, isFalse);
+      expect(refreshedDates, [targetDate]);
+      expect(repository.calls, 0);
+      expect(supportingReloads, 0);
+    },
+  );
 
-    expect(result.committed, isTrue);
-    expect(result.projectionCurrent, isFalse);
-    expect(habits.outcomeCalls, 1);
-    expect(habits.targetDates, [targetDate]);
-    expect(refreshedDates, [targetDate]);
-    expect(controller.state.habitOutcomeOverrides, {
-      'habit-1': HabitOutcome.skipped.code,
-    });
-    expect(
-      controller.state.projectionStatus,
-      TodayProjectionStatus.staleAfterMutation,
-    );
-  });
+  test(
+    'every Today task command delegates through the narrow task port',
+    () async {
+      final tasks = _FakeTaskCommands();
+      final repository = _SequenceDashboardRepository(
+        List<Object>.filled(6, _snapshot(targetDate)),
+      );
+      final refreshedDates = <DateTime>[];
+      final controller = TodayCommandController(
+        taskCommands: tasks,
+        habitCommands: _FakeHabitCommands(),
+        dashboardRepository: repository,
+        refreshAfterTask: (date) async => refreshedDates.add(date),
+        refreshAfterHabit: (_) async {},
+        onTodayReloaded: () {},
+      );
+      addTearDown(controller.dispose);
+      final draft = ExecutableTaskDraft(title: 'Typed task');
+      final deadline = DateTime(2026, 7, 23, 17);
 
-  test('committed habit refreshes shared projections after Today is disposed',
-      () async {
-    final release = Completer<void>();
-    final habits = _FakeHabitCommands(outcomeResult: release.future);
-    final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
-    final refreshedDates = <DateTime>[];
-    var supportingReloads = 0;
-    final controller = TodayCommandController(
-      taskCommands: _FakeTaskCommands(),
-      habitCommands: habits,
-      dashboardRepository: repository,
-      refreshAfterTask: (_) async {},
-      refreshAfterHabit: (date) async => refreshedDates.add(date),
-      onTodayReloaded: () => supportingReloads += 1,
-    );
+      await controller.createTask(
+        taskId: taskId,
+        draft: draft,
+        targetDate: targetDate,
+      );
+      await controller.editTask(
+        taskId: taskId,
+        draft: draft,
+        targetDate: targetDate,
+      );
+      await controller.cancelTask(taskId: taskId, targetDate: targetDate);
+      await controller.postponeTask(
+        taskId: taskId,
+        newDeadline: deadline,
+        targetDate: targetDate,
+      );
+      await controller.restoreTask(taskId: taskId, targetDate: targetDate);
+      await controller.undoTask(
+        token: _undoToken(taskId),
+        targetDate: targetDate,
+      );
 
-    final command = controller.setHabitOutcome(
-      habitId: 'habit-1',
-      outcome: HabitOutcome.completed,
-      targetDate: targetDate,
-    );
-    await Future<void>.delayed(Duration.zero);
-    controller.dispose();
-    release.complete();
+      expect(tasks.calls, [
+        'create:$taskId',
+        'edit:$taskId',
+        'cancel:$taskId',
+        'postpone:$taskId:${deadline.toIso8601String()}',
+        'restore:$taskId',
+        'undo:$taskId',
+      ]);
+      expect(refreshedDates, List<DateTime>.filled(6, targetDate));
+      expect(repository.calls, 6);
+      expect(controller.state.projectionStatus, TodayProjectionStatus.current);
+    },
+  );
 
-    final result = await command;
-    expect(result.committed, isTrue);
-    expect(result.projectionCurrent, isFalse);
-    expect(refreshedDates, [targetDate]);
-    expect(repository.calls, 0);
-    expect(supportingReloads, 0);
-  });
+  test(
+    'habit write retains its optimistic outcome when Today reload fails',
+    () async {
+      final habits = _FakeHabitCommands();
+      final repository = _SequenceDashboardRepository([
+        StateError('Today failed'),
+      ]);
+      final refreshedDates = <DateTime>[];
+      final controller = TodayCommandController(
+        taskCommands: _FakeTaskCommands(),
+        habitCommands: habits,
+        dashboardRepository: repository,
+        refreshAfterTask: (_) async {},
+        refreshAfterHabit: (date) async => refreshedDates.add(date),
+        onTodayReloaded: () {},
+      );
+      addTearDown(controller.dispose);
 
-  test('missing command ports fail explicitly without touching read state',
-      () async {
-    final controller = TodayCommandController(
-      taskCommands: null,
-      habitCommands: null,
-      dashboardRepository:
-          _SequenceDashboardRepository([_snapshot(targetDate)]),
-      refreshAfterTask: (_) async {},
-      refreshAfterHabit: (_) async {},
-      onTodayReloaded: () {},
-    );
-    addTearDown(controller.dispose);
+      final result = await controller.setHabitOutcome(
+        habitId: 'habit-1',
+        outcome: HabitOutcome.skipped,
+        targetDate: targetDate,
+      );
 
-    final taskResult = await controller.restoreTask(
-      taskId: taskId,
-      targetDate: targetDate,
-    );
-    final habitResult = await controller.undoHabitOutcome(
-      habitId: 'habit-1',
-      targetDate: targetDate,
-    );
+      expect(result.committed, isTrue);
+      expect(result.projectionCurrent, isFalse);
+      expect(habits.outcomeCalls, 1);
+      expect(habits.targetDates, [targetDate]);
+      expect(refreshedDates, [targetDate]);
+      expect(controller.state.habitOutcomeOverrides, {
+        'habit-1': HabitOutcome.skipped.code,
+      });
+      expect(
+        controller.state.projectionStatus,
+        TodayProjectionStatus.staleAfterMutation,
+      );
+    },
+  );
 
-    expect(taskResult.error, isA<TaskCommandException>());
-    expect(habitResult.error, isA<TodayHabitCommandFailure>());
-    expect(controller.state.projectionStatus, TodayProjectionStatus.current);
-    expect(controller.state.updatingTaskIds, isEmpty);
-    expect(controller.state.updatingHabitIds, isEmpty);
-  });
+  test(
+    'committed habit refreshes shared projections after Today is disposed',
+    () async {
+      final release = Completer<void>();
+      final habits = _FakeHabitCommands(outcomeResult: release.future);
+      final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
+      final refreshedDates = <DateTime>[];
+      var supportingReloads = 0;
+      final controller = TodayCommandController(
+        taskCommands: _FakeTaskCommands(),
+        habitCommands: habits,
+        dashboardRepository: repository,
+        refreshAfterTask: (_) async {},
+        refreshAfterHabit: (date) async => refreshedDates.add(date),
+        onTodayReloaded: () => supportingReloads += 1,
+      );
+
+      final command = controller.setHabitOutcome(
+        habitId: 'habit-1',
+        outcome: HabitOutcome.completed,
+        targetDate: targetDate,
+      );
+      await Future<void>.delayed(Duration.zero);
+      controller.dispose();
+      release.complete();
+
+      final result = await command;
+      expect(result.committed, isTrue);
+      expect(result.projectionCurrent, isFalse);
+      expect(refreshedDates, [targetDate]);
+      expect(repository.calls, 0);
+      expect(supportingReloads, 0);
+    },
+  );
+
+  test(
+    'missing command ports fail explicitly without touching read state',
+    () async {
+      final controller = TodayCommandController(
+        taskCommands: null,
+        habitCommands: null,
+        dashboardRepository: _SequenceDashboardRepository([
+          _snapshot(targetDate),
+        ]),
+        refreshAfterTask: (_) async {},
+        refreshAfterHabit: (_) async {},
+        onTodayReloaded: () {},
+      );
+      addTearDown(controller.dispose);
+
+      final taskResult = await controller.restoreTask(
+        taskId: taskId,
+        targetDate: targetDate,
+      );
+      final habitResult = await controller.undoHabitOutcome(
+        habitId: 'habit-1',
+        targetDate: targetDate,
+      );
+
+      expect(taskResult.error, isA<TaskCommandException>());
+      expect(habitResult.error, isA<TodayHabitCommandFailure>());
+      expect(controller.state.projectionStatus, TodayProjectionStatus.current);
+      expect(controller.state.updatingTaskIds, isEmpty);
+      expect(controller.state.updatingHabitIds, isEmpty);
+    },
+  );
 
   test('reload rejects a non-account projection and remains stale', () async {
     final controller = TodayCommandController(
@@ -356,19 +420,21 @@ void main() {
     expect(controller.state.displayedSnapshot, isNull);
   });
 
-  test('Dashboard presentation has no concrete Task or Habit data dependency',
-      () {
-    final source = File(
-      'lib/features/dashboard/presentation/pages/dashboard_page.dart',
-    ).readAsStringSync();
+  test(
+    'Dashboard presentation has no concrete Task or Habit data dependency',
+    () {
+      final source = File(
+        'lib/features/dashboard/presentation/pages/dashboard_page.dart',
+      ).readAsStringSync();
 
-    expect(source, isNot(contains('/data/')));
-    expect(source, isNot(contains('TaskSupabaseDataSource')));
-    expect(source, isNot(contains('HabitCompletionSupabaseDataSource')));
-    expect(source, isNot(contains('dashboardTaskDataSourceProvider')));
-    expect(source, isNot(contains('dashboardHabitDataSourceProvider')));
-    expect(source, contains('todayCommandControllerProvider'));
-  });
+      expect(source, isNot(contains('/data/')));
+      expect(source, isNot(contains('TaskSupabaseDataSource')));
+      expect(source, isNot(contains('HabitCompletionSupabaseDataSource')));
+      expect(source, isNot(contains('dashboardTaskDataSourceProvider')));
+      expect(source, isNot(contains('dashboardHabitDataSourceProvider')));
+      expect(source, contains('todayCommandControllerProvider'));
+    },
+  );
 }
 
 DashboardSnapshot _snapshot(DateTime localDate) {
@@ -406,10 +472,7 @@ ExecutableTask _task(String taskId) {
 }
 
 class _FakeTaskCommands implements TodayTaskCommandPort {
-  _FakeTaskCommands({
-    this.completeError,
-    this.completeResult,
-  });
+  _FakeTaskCommands({this.completeError, this.completeResult});
 
   final Object? completeError;
   final Future<TaskUndoToken>? completeResult;

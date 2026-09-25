@@ -35,6 +35,12 @@ register and unregister, deriving both owner and verified Auth session from the
 bearer. Device tokens never appear in responses or validation errors. Private
 service-role RPCs own consent revisions, session binding, dedupe and dispatch
 caps; the existing foreground notifications contract is unchanged.
+Settings additionally accept the complete optional group `morning`, `evening`,
+`morning_time`, `evening_time`; times use profile-local `HH:mm`. Omitting the
+group preserves it, while a partial group is rejected. Both flags default off.
+Check-in reminders consult saved Capture branches during reservation and the
+final dispatch check. Apply migration `20260925104758_checkin_push_reminders.sql`
+before activating this API version. Native receipt support requires an updated APK.
 `PUSH_DELIVERY_ENABLED` defaults off. When explicitly enabled after migration,
 the existing API lifespan runs a bounded five-minute FCM sender using
 `FCM_PROJECT_ID` and backend-only `FCM_CREDENTIALS_JSON` (redacted in configuration
@@ -195,6 +201,8 @@ open.
   authenticated `GET /v1/focus/capabilities`,
   `GET /v1/focus/start-context/{source_kind}/{block_id}`, and
   `POST /v1/focus/sessions/start`,
+  `POST /v1/focus/sessions/{session_id}/correct-time` (completed elapsed time,
+  owner-derived identity, expected-update CAS and exact request replay),
   `POST /v1/focus/sessions/{session_id}/finish`, and
   `POST /v1/focus/sessions/{session_id}/abandon`. Manual starts remain
   compatible; scheduled starts bind one immutable Planner/Deadline block

@@ -109,22 +109,36 @@ class _InsightsHome extends ConsumerStatefulWidget {
   ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
 }
 
-enum _AdvancedPane { compare, topPatterns, trend, skillset, past, matrix, discovered }
+enum _AdvancedPane {
+  compare,
+  topPatterns,
+  trend,
+  skillset,
+  past,
+  matrix,
+  discovered,
+}
 
 enum _InsightsView { overview, advanced }
 
 // UI-only choices for this app session, like the shared Insights window.
 // No account data or authentication dependency belongs in these preferences.
-final _insightsViewProvider = StateProvider<_InsightsView>((_) => _InsightsView.overview);
-final _advancedPaneProvider = StateProvider<_AdvancedPane>((_) => _AdvancedPane.compare);
+final _insightsViewProvider = StateProvider<_InsightsView>(
+  (_) => _InsightsView.overview,
+);
+final _advancedPaneProvider = StateProvider<_AdvancedPane>(
+  (_) => _AdvancedPane.compare,
+);
 
 class _InsightsHomeState extends ConsumerState<_InsightsHome> {
   _InsightsView get _view => ref.watch(_insightsViewProvider);
-  set _view(_InsightsView value) => ref.read(_insightsViewProvider.notifier).state = value;
+  set _view(_InsightsView value) =>
+      ref.read(_insightsViewProvider.notifier).state = value;
   String _metricAId = 'sleep_hours';
   String _metricBId = 'useful_progress';
   _AdvancedPane get _advancedPane => ref.watch(_advancedPaneProvider);
-  set _advancedPane(_AdvancedPane value) => ref.read(_advancedPaneProvider.notifier).state = value;
+  set _advancedPane(_AdvancedPane value) =>
+      ref.read(_advancedPaneProvider.notifier).state = value;
   final Set<String> _trendMetricIds = {'sleep_hours', 'useful_progress'};
 
   @override
@@ -147,7 +161,10 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         advancedPane: _advancedPane,
         onPaneSelected: (pane) => setState(() => _advancedPane = pane),
         skillsetCard: _skillsetCard(),
-        windowSelector: _windowSelector(isMobile: isMobile, windowDays: windowDays),
+        windowSelector: _windowSelector(
+          isMobile: isMobile,
+          windowDays: windowDays,
+        ),
         isMobile: isMobile,
         report: widget.report,
         observation: observation,
@@ -283,8 +300,12 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         onSelected: (pane) => setState(() => _advancedPane = pane),
       ),
       const SizedBox(height: AppSpacing.md),
-      if (const {_AdvancedPane.topPatterns, _AdvancedPane.trend, _AdvancedPane.skillset, _AdvancedPane.matrix}
-          .contains(_advancedPane)) ...[
+      if (const {
+        _AdvancedPane.topPatterns,
+        _AdvancedPane.trend,
+        _AdvancedPane.skillset,
+        _AdvancedPane.matrix,
+      }.contains(_advancedPane)) ...[
         _windowSelector(isMobile: isMobile, windowDays: windowDays),
         const SizedBox(height: AppSpacing.md),
       ],
@@ -299,6 +320,12 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
               result: activeResult,
               values: values,
               isMobile: isMobile,
+              onExpandWindow: windowDays >= maximumInsightsWindowDays
+                  ? null
+                  : () => ref.read(insightsWindowDaysProvider.notifier).state =
+                        insightsWindowDayOptions.firstWhere(
+                          (days) => days > windowDays,
+                        ),
             ),
           ],
         ),
@@ -322,7 +349,8 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
       _WindowSelector(
         value: windowDays,
         compact: isMobile,
-        onChanged: (days) => ref.read(insightsWindowDaysProvider.notifier).state = days,
+        onChanged: (days) =>
+            ref.read(insightsWindowDaysProvider.notifier).state = days,
       );
 
   Widget _skillsetCard() => InsightsSkillsetCard(
@@ -351,9 +379,13 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
   Future<void> _saveSkillsetDisplay(Future<bool> save) async {
     final saved = await save;
     if (!mounted || saved) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Selection changed, but could not be saved on this device.'),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Selection changed, but could not be saved on this device.',
+        ),
+      ),
+    );
   }
 
   Widget _controlsPanel({required bool isMobile, required int windowDays}) {

@@ -9,8 +9,9 @@ import 'package:my_life_graph/features/learning/presentation/pages/personal_lear
 import 'package:my_life_graph/features/learning/presentation/providers/learning_providers.dart';
 
 void main() {
-  testWidgets('analysis disables learned planning and saves the full state',
-      (tester) async {
+  testWidgets('analysis disables learned planning and saves the full state', (
+    tester,
+  ) async {
     final repository = _LearningRepository(
       preferences: LearningPreferences(
         revision: 2,
@@ -25,9 +26,7 @@ void main() {
     expect(
       tester
           .widget<SwitchListTile>(
-            find.byKey(
-              const ValueKey('learned-focus-planning-setting'),
-            ),
+            find.byKey(const ValueKey('learned-focus-planning-setting')),
           )
           .value,
       isTrue,
@@ -39,22 +38,15 @@ void main() {
     expect(
       tester
           .widget<SwitchListTile>(
-            find.byKey(
-              const ValueKey('learned-focus-planning-setting'),
-            ),
+            find.byKey(const ValueKey('learned-focus-planning-setting')),
           )
           .value,
       isFalse,
     );
 
-    await tester.drag(
-      find.byType(CustomScrollView),
-      const Offset(0, -700),
-    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('personal-learning-save')),
-    );
+    await tester.tap(find.byKey(const ValueKey('personal-learning-save')));
     await tester.pumpAndSettle();
     expect(repository.updates, hasLength(1));
     final update = repository.updates.single;
@@ -64,8 +56,9 @@ void main() {
     expect(update.learnedFocusPlanningEnabled, isFalse);
   });
 
-  testWidgets('learned planning stays unavailable outside the pilot',
-      (tester) async {
+  testWidgets('learned planning stays unavailable outside the pilot', (
+    tester,
+  ) async {
     final repository = _LearningRepository();
     await _pumpPage(tester, repository: repository, pilotEnabled: false);
 
@@ -74,16 +67,12 @@ void main() {
     );
     expect(tile.value, isFalse);
     expect(tile.onChanged, isNull);
-    expect(
-      find.text(
-        'This optional Planner pilot is not enabled in this build.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Unavailable in this build.'), findsOneWidget);
   });
 
-  testWidgets('pattern methodology starts closed and expands on demand',
-      (tester) async {
+  testWidgets('pattern methodology starts closed and expands on demand', (
+    tester,
+  ) async {
     await _pumpPage(
       tester,
       repository: _LearningRepository(),
@@ -92,18 +81,15 @@ void main() {
 
     expect(find.textContaining('up to 90 days'), findsNothing);
     await tester.tap(
-      find.byKey(
-        const ValueKey(
-          'learning-info-control-How pattern analysis works',
-        ),
-      ),
+      find.byKey(const ValueKey('learning-info-control-How it works')),
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('up to 90 days'), findsOneWidget);
   });
 
-  testWidgets('clear uses confirmation and preserves finished sessions copy',
-      (tester) async {
+  testWidgets('clear uses confirmation and preserves finished sessions copy', (
+    tester,
+  ) async {
     final repository = _LearningRepository();
     final invalidations = <ProductProjection>[];
     await _pumpPage(
@@ -113,10 +99,7 @@ void main() {
       invalidations: invalidations,
     );
 
-    await tester.drag(
-      find.byType(CustomScrollView),
-      const Offset(0, -600),
-    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('clear-focus-reflection-history')),
@@ -141,44 +124,46 @@ void main() {
     expect(invalidations, isEmpty);
   });
 
-  testWidgets('exact clear retry leaves the rating-free week agenda untouched',
-      (tester) async {
-    final repository = _LearningRepository(unknownClearAttempts: 1);
-    final invalidations = <ProductProjection>[];
-    await _pumpPage(
-      tester,
-      repository: repository,
-      pilotEnabled: true,
-      invalidations: invalidations,
-    );
+  testWidgets(
+    'exact clear retry leaves the rating-free week agenda untouched',
+    (tester) async {
+      final repository = _LearningRepository(unknownClearAttempts: 1);
+      final invalidations = <ProductProjection>[];
+      await _pumpPage(
+        tester,
+        repository: repository,
+        pilotEnabled: true,
+        invalidations: invalidations,
+      );
 
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('clear-focus-reflection-history')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('confirm-clear-focus-reflections')),
-    );
-    await tester.pumpAndSettle();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('clear-focus-reflection-history')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-clear-focus-reflections')),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Retry unchanged'), findsOneWidget);
-    expect(invalidations, isEmpty);
-    expect(repository.clearRequests, hasLength(1));
+      expect(find.text('Retry unchanged'), findsOneWidget);
+      expect(invalidations, isEmpty);
+      expect(repository.clearRequests, hasLength(1));
 
-    await tester.tap(find.text('Retry unchanged'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Retry unchanged'));
+      await tester.pumpAndSettle();
 
-    expect(repository.clearRequests, hasLength(2));
-    expect(
-      repository.clearRequests[1].requestId,
-      repository.clearRequests[0].requestId,
-    );
-    expect(invalidations, isEmpty);
-    expect(find.text('3 reflections cleared.'), findsOneWidget);
-    expect(find.text('Focus reflection history cleared.'), findsOneWidget);
-  });
+      expect(repository.clearRequests, hasLength(2));
+      expect(
+        repository.clearRequests[1].requestId,
+        repository.clearRequests[0].requestId,
+      );
+      expect(invalidations, isEmpty);
+      expect(find.text('3 reflections cleared.'), findsOneWidget);
+      expect(find.text('Focus reflection history cleared.'), findsOneWidget);
+    },
+  );
 
   testWidgets('page fits 320 pixels at 200 percent text', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 568));
@@ -190,10 +175,7 @@ void main() {
       pilotEnabled: true,
       textScale: 2,
     );
-    await tester.drag(
-      find.byType(CustomScrollView),
-      const Offset(0, -400),
-    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
     await tester.pumpAndSettle();
     expect(find.text('Analyze my study patterns'), findsOneWidget);
     expect(find.byType(SwitchListTile), findsNWidgets(3));
@@ -232,9 +214,9 @@ Future<void> _pumpPage(
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(textScale),
-          ),
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
           child: child!,
         ),
         home: const Scaffold(body: PersonalLearningPage()),
@@ -248,14 +230,15 @@ class _LearningRepository implements LearningRepository {
   _LearningRepository({
     LearningPreferences? preferences,
     this.unknownClearAttempts = 0,
-  }) : _preferences = preferences ??
-            const LearningPreferences(
-              revision: 0,
-              focusReflectionPromptEnabled: true,
-              personalPatternAnalysisEnabled: true,
-              learnedFocusPlanningEnabled: false,
-              updatedAt: null,
-            );
+  }) : _preferences =
+           preferences ??
+           const LearningPreferences(
+             revision: 0,
+             focusReflectionPromptEnabled: true,
+             personalPatternAnalysisEnabled: true,
+             learnedFocusPlanningEnabled: false,
+             updatedAt: null,
+           );
 
   LearningPreferences _preferences;
   final int unknownClearAttempts;
