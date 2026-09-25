@@ -31,7 +31,7 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
-### Consolidated release candidate (2026-09-25, in progress)
+### Consolidated release preparation (2026-09-25)
 
 - Task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; accumulated work is
   on `codex/checkin-reminders-history-focus`, PR #26. Initial full CI run
@@ -45,6 +45,12 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   Follow-up run `36190215655` passed all 649 pgTAP assertions, then exposed
   the same stale migration identity in the PG17 source-restore fixture guard.
   Its exact head/count expectation is updated; restore assertions stay intact.
+  That run also passed 1,378 Flutter tests, Android JVM/lint, 1,959 backend
+  tests (two explicit skips) and all eight browser journeys. Final aggregate
+  success still requires the corrected restore guard's complete rerun.
+  Final candidate checks and the tagged deployment handoff are tracked on
+  [PR #26](https://github.com/MyLifeGraph/MyLifeGraph/pull/26); do not infer
+  installed-device results from those automated gates.
 - Website motion now removes scroll rotation, retains hover tilt and floats on
   an eight-second loop only while visible. Reduced motion keeps it static.
   Production `dpl_AUYdoDZbDgr1WyzU31DXkLPQGj1g` is READY. Live browser confirms
