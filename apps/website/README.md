@@ -26,8 +26,8 @@ Public copy follows `docs/current-product-guide.md`,
 `docs/ui-language-and-copy-contract.md` and `docs/frontend-visual-system-v2.md`.
 It distinguishes Android-only capabilities, optional imports/permissions,
 review-before-save, correlation versus causation and the English app interface
-versus bilingual Coach/voice guides. It does not advertise the pending local
-Morning/Evening push migration as deployed. This is a simplified product tour,
+versus bilingual Coach/voice guides. Reminder copy stays limited to the named
+bedtime, deadline and pattern categories. This is a simplified product tour,
 not a pixel-identical embedded Flutter build.
 
 ## Design and accessibility

@@ -42,15 +42,27 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   are corrected without weakening authority or changing product behavior.
 - The two focused Flutter copy tests and local documentation consistency pass.
   Full CI is being repeated; this entry is not release or all-tests-pass evidence.
+  Follow-up run `36190215655` passed all 649 pgTAP assertions, then exposed
+  the same stale migration identity in the PG17 source-restore fixture guard.
+  Its exact head/count expectation is updated; restore assertions stay intact.
 - Website motion now removes scroll rotation, retains hover tilt and floats on
   an eight-second loop only while visible. Reduced motion keeps it static.
   Production `dpl_AUYdoDZbDgr1WyzU31DXkLPQGj1g` is READY. Live browser confirms
   the loop, no phone scroll animation and the offscreen pause. No app rollout yet.
 - Local affected verification cannot launch Bash in this PowerShell environment;
   hosted Linux CI is the full-release gate. Linux golden baselines stay unchanged.
-- Read-only Production Supabase inspection found 77 migrations through
-  `20260915182801`; dry-run lists exactly the two September 25 additions.
-  Neither new migration has been applied by this release task yet.
+- Production Supabase `oscrunlndfrecjilojja` initially had 77 migrations through
+  `20260915182801`; dry-run listed exactly the two September 25 additions.
+  Both were applied through CLI `db push --skip-vault` on 2026-09-25 after
+  successful pgTAP assertions. No reset, seed or Vault mutation was performed.
+  Post-apply dry-run is empty; attestation is 79 migrations, head
+  `20260925164043_reversible_notification_and_focus_correction.sql`, digest
+  `9e39cab2679601e92a6579248f934015361588bfab0c1785efde26a73bb0d00a`.
+  All six affected RPC/helper signatures are service-only (anon/authenticated
+  denied); the correction ledger has forced RLS and no direct service insert
+  or authenticated read. The existing public API remains HTTP 200 healthy/ready.
+  Its strict release-helper comparison now detects the newer database head
+  until API promotion. This is not evidence of the new API/client rollout.
 
 ### Product phone motion polish
 

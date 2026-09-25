@@ -1,8 +1,8 @@
 # Notification Lifecycle V1 Contract
 
 This document defines the first durable lifecycle boundary for stored Inbox
-items. It covers reading visible rows, marking them read or unread, and
-dismissing them. It does not itself define notification generation, scheduling,
+items. It covers reading visible/dismissed rows, marking them read or unread,
+dismissing and restoring them. It does not itself define notification generation, scheduling,
 or permission consent; the later local foreground boundary is specified
 separately in `docs/notification-delivery-v1-contract.md`.
 

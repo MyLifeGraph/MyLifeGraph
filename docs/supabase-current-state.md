@@ -18,8 +18,9 @@ Completed durations may change only within their original recorded interval.
 Identity, start, status, source and target remain immutable; the terminal trigger
 accepts only the exact ledger-authorized transaction. Owner-first locks, expected
 update CAS and request replay apply. Historical migrations are unchanged.
-This migration is local, **not applied to Cloud**. Release database, then API,
-then client. Older deployments reject the new commands. See
+Production application and permission checks are recorded in Verification.
+Release order remains database, then API, then client; database installation
+alone does not enable commands on an older API. See
 [verification](verification.md#current-verified-baseline).
 
 The preceding migration is `20260925104758_checkin_push_reminders.sql`.
@@ -30,7 +31,8 @@ signatures, owner locks or retry identity. Optional flags default off; old
 settings commands preserve the extension. Live Capture branches suppress sends.
 Two check-in attempts and two existing-category attempts are separately capped
 per rolling 24 hours. It does not rewrite Capture data or change RLS.
-This migration is prepared locally, not evidence of live application. See
+Production application is recorded in Verification; this source inventory alone
+is not proof of active native delivery. See
 [Notification Delivery](notification-delivery-v1-contract.md) for rollout order.
 
 The preceding repository migration is `20260915182801_coach_gemini_model_selection.sql`.
