@@ -5,7 +5,7 @@
 `apps/website` is a standalone static EN/DE product site, deployed to a separate
 Vercel project. Its four-tab tour uses only invented in-memory data; it has no
 product API, authentication, database or Coach-provider connection. Only its
-language preference uses local storage. Links open the existing app or GitHub
+language and appearance preferences use local storage. Links open the existing app or GitHub
 releases. Its CSP explicitly denies network connections and form submissions.
 See [website ownership and workflow](../apps/website/README.md). Flutter hosting,
 Cloud data authority and existing app routes are unchanged.

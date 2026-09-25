@@ -101,6 +101,9 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
   expect(openHitTargetBounds).not.toBeNull();
   expect(openHitTargetBounds.width).toBe(44);
   expect(openHitTargetBounds.height).toBe(44);
-  await expectFlutterText(page, 'Beat yesterday');
+  await expectFlutterText(page, "Today's progress");
+  await expectFlutterText(page, 'Mood: 7/10');
+  await expectFlutterText(page, 'Energy: 6/10');
+  await expectFlutterText(page, 'Stress: 3/10');
   await expectFlutterText(page, 'Edit Evening check-in');
 });

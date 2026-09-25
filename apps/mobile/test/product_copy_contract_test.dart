@@ -26,13 +26,19 @@ void main() {
       );
       for (final file in presentationSources) {
         var englishSource = file.readAsStringSync();
-        if (file.path.replaceAll('\\', '/').endsWith(
-            '/quick_action/presentation/pages/ultra_quick_check_in_page.dart')) {
+        if (file.path
+            .replaceAll('\\', '/')
+            .endsWith(
+              '/quick_action/presentation/pages/ultra_quick_check_in_page.dart',
+            )) {
           expect(germanGuide.allMatches(englishSource), hasLength(1));
           englishSource = englishSource.replaceFirst(germanGuide, '');
         }
-        expect(englishSource, isNot(matches(RegExp(r'[äöüÄÖÜß]'))),
-            reason: file.path);
+        expect(
+          englishSource,
+          isNot(matches(RegExp(r'[äöüÄÖÜß]'))),
+          reason: file.path,
+        );
       }
 
       const retiredVisiblePhrases = <String>[
@@ -74,15 +80,15 @@ void main() {
     final notifications = File(
       'lib/features/notifications/presentation/pages/notification_settings_page.dart',
     ).readAsStringSync();
+    expect(notifications, contains('Only while the app is open.'));
     expect(
       notifications,
-      contains('These banners appear only while the app is open.'),
+      contains('Android push is separate (Push reminders).'),
     );
     expect(
       notifications,
-      contains('Android push is configured separately in Push reminders.'),
+      contains('Banners never include private check-in details.'),
     );
-    expect(notifications, contains('never includes private check-in details'));
 
     final coach = File(
       'lib/features/coach/presentation/pages/coach_page.dart',

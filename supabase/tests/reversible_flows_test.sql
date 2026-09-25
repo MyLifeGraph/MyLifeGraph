@@ -40,9 +40,9 @@ select throws_ok($$select public.correct_focus_time_v1(
   'f9000000-0000-4000-8000-000000000005','2026-09-20T10:30:00Z',10)$$,
   'PT404','Focus session unavailable.','another owner cannot correct a session');
 
-insert into public.notifications(id,user_id,title,message,type,updated_at)
+insert into public.notifications(id,user_id,title,message,type,created_at,updated_at)
 values('f9000000-0000-4000-8000-000000000006','f9000000-0000-4000-8000-000000000001',
-  'Reminder','Test','reminder','2026-09-20T10:00:00Z');
+  'Reminder','Test','reminder','2026-09-20T10:00:00Z','2026-09-20T10:00:00Z');
 create temporary table dismissal as select public.apply_notification_action_v1(
   'f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000006',
   'f9000000-0000-4000-8000-000000000007','dismiss','2026-09-20T10:00:00Z') as result;

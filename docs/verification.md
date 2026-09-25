@@ -31,6 +31,27 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Consolidated release candidate (2026-09-25, in progress)
+
+- Task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; accumulated work is
+  on `codex/checkin-reminders-history-focus`, PR #26. Initial full CI run
+  `36189081853` passed source/docs, backend and web build. It found stale
+  migration head/count/digest assertions, a notification fixture with creation
+  after its update, pre-shortening reminder copy expectations and the retired
+  Today heading in one browser journey (seven others passed). These tests
+  are corrected without weakening authority or changing product behavior.
+- The two focused Flutter copy tests and local documentation consistency pass.
+  Full CI is being repeated; this entry is not release or all-tests-pass evidence.
+- Website motion now removes scroll rotation, retains hover tilt and floats on
+  an eight-second loop only while visible. Reduced motion keeps it static.
+  Production `dpl_AUYdoDZbDgr1WyzU31DXkLPQGj1g` is READY. Live browser confirms
+  the loop, no phone scroll animation and the offscreen pause. No app rollout yet.
+- Local affected verification cannot launch Bash in this PowerShell environment;
+  hosted Linux CI is the full-release gate. Linux golden baselines stay unchanged.
+- Read-only Production Supabase inspection found 77 migrations through
+  `20260915182801`; dry-run lists exactly the two September 25 additions.
+  Neither new migration has been applied by this release task yet.
+
 ### Product phone motion polish
 
 - Same task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`. Eight website
