@@ -1,5 +1,27 @@
 # Frontend Visual System V2
 
+The separate `apps/website` product tour defaults to Liquid Glass, with saved
+Dark, Light and Space alternatives in a compact icon dropdown. It retains the
+canonical brand mark. Responsive synthetic panels follow the app's desktop
+sidebar and mobile bottom navigation, but remain labelled as a simplified demo,
+not the actual Flutter UI. The hero has a decorative CSS-3D phone
+with synthetic Today content and floating glass accents, not a video player.
+It uses all four palettes. A separate wrapper provides a five-pixel/eight-second
+float, paused offscreen/in background tabs, plus fine-pointer hover tilt.
+There is no scroll rotation. Reduced motion disables both additions; missing
+visibility observation keeps the loop paused. App themes/layouts are unchanged.
+
+Today shows last check-in metrics directly, with a small parenthesized saved date
+and no disclosure arrow. Task/Habit outcome icons update immediately; a small
+trailing Saving indicator distinguishes pending persistence without replacing
+the new outcome icon. Existing error recovery and action locks remain.
+
+Manual Capture date selection is a compact text/icon control; the selected date
+stays visible and changing it confirms draft replacement. Focus preparation
+uses a compact passive bullet list without per-item controls and a single
+Cancel/Ready & start action row. Long lists scroll inside the dialog.
+Plan removal keeps existing compact action styling and accessible descriptions.
+
 Mobile Auth shows a larger brand heading and one short encouraging sentence,
 with email fields directly visible. The page centers its content vertically
 when it fits and scrolls when needed for smaller screens, keyboard, enlarged
@@ -53,7 +75,7 @@ while scrolled above the latest message; it never displaces the composer.
 message cards retain their existing styling. Empty-state typography is unchanged.
 The frame retains an 8px top inset even while its timeline scrolls. The composer
 model icon remains available when capability loading fails; errors stay above.
-Optional Coach explanations open in a scrollable dialog instead of expanding
+Optional Coach explanations open in a bounded, scrollable popover instead of expanding
 the fixed panels, retaining access at large text sizes.
 
 The Coach provider/key controls use the existing Settings card, field,
@@ -99,20 +121,21 @@ same hierarchy on desktop at 1280×960.
 
 This contract changes presentation only. It does not change navigation,
 student-facing capability truth, product copy, data contracts, persistence,
-backend APIs, or mutation authority. Dark remains the default. Light and Space
+backend APIs, or mutation authority. Dark remains the default. Light, Space and Liquid Glass
 remain persisted, device-local manual choices rather than system-theme modes.
 Space is a dark violet/cyan theme; it has no separate light variant.
 
-The interface uses no code-generated gradients, shimmer loops, confetti,
+Outside the opt-in Liquid Glass theme, the interface uses no code-generated gradients, shimmer loops, confetti,
 illustrative scene decoration, or general-purpose blur-heavy glass system.
-Space is the only bounded clear-material exception: it combines tinted
+Space is a bounded clear-material exception: it combines tinted
 translucent surfaces and sparse HUD strokes with one of two approved local,
 photorealistic deep-field WebP backdrops, a restrained looping star overlay,
 and minimal closed-path camera drift on the photograph. Actual backdrop blur
 is restricted to the one currently visible shell-navigation surface. Both
 depth layers are presentation-only and change no content or layout; Reduced
 Motion freezes them at the same deterministic phase. Brand mint in Dark/Light
-and brand cyan in Space are the only solid call-to-action colors. Information
+and brand cyan in Space remain their solid call-to-action colors; Liquid Glass
+uses muted steel blue. Information
 blue, attention amber, danger red, and supporting data colors never replace a
 visible icon or text label.
 
@@ -214,7 +237,7 @@ definition review uses labelled readable text with one semantics group; it does
 not encode immutable values as disabled form controls. Only duration remains a
 normal editable field.
 
-Normal content surfaces have no outline. An outline is reserved for inputs,
+Outside the Space/Liquid Glass material edge, normal content surfaces have no outline. An outline is reserved for inputs,
 keyboard focus, selected state, a conflict/warning/danger state, or a genuine
 interactive boundary. Shadows are quiet, low-spread depth cues on raised
 surfaces only.
@@ -374,8 +397,10 @@ the consequence of a mutation, current/stale/error state, unavailable source
 truth, required provenance, and the action needed to continue remain visible.
 Several disclosures may stay open independently.
 
-Every layout uses the global 44×44 hit/focus/semantics target around a visible
-24×24 frame containing a 20×20 `AppIcons.infoOutline` icon. Daily Capture,
+Every layout uses the global 44×44 hit/focus/semantics target around a
+24×24 container containing a quiet 20×20 `AppIcons.infoOutline` icon. The
+container is frameless at rest; its two-pixel focus outline remains visible.
+Daily Capture,
 Today, Calendar import, Reminder settings, Personal learning, Weekly review,
 and Preparation-plan explanations share that geometry. Section headings use
 theme typography, including the compact `titleMedium` role where the disclosure
@@ -386,6 +411,22 @@ wrap rather than overflow at 320 logical pixels and 200-percent text. The
 accordion button and every actionable shared schedule row expose the same
 two-pixel `AppVisualTokens.focus` keyboard ring; static schedule facts remain
 outside keyboard traversal.
+
+Shared section headings and Today headings additionally open the same explanation
+in a compact anchored popover on long press. It has no repeated title or Close
+button; outside tap, Back or Escape dismisses it without triggering underlying
+actions. It stays readable without a timer and scrolls if text is long. This is applied only to the heading, not surrounding
+cards or actions. The visible information button remains available to touch,
+keyboard and assistive technology. Useful rules are retained, not hidden solely
+behind an undiscoverable gesture.
+
+Settings offers device-local `Haptic feedback`, default on. Deliberate Capture
+choices/ratings, Today task/habit check-offs and heading long-press may produce
+one subtle selection pulse on Android/iOS. No pulses run during scrolling,
+preference restoration, or on web/desktop. Repeated pulses are bounded to one
+per 100ms; hardware failure never blocks an action. This is interaction feedback,
+not a guarantee of a successful backend save. The switch controls this app's
+added feedback, not operating-system keyboard or accessibility feedback.
 
 Evening stress-source selection first highlights the row and reveals a chevron.
 The header uses a subtle brand tint; its chevron uses primary text contrast
@@ -411,9 +452,9 @@ Primary shell destinations do not show a meaningless fallback back button.
 
 ## Material Coverage
 
-`AppThemeId.dark`, `.light`, and `.space` are resolved through
-`AppTheme.resolve`; `AppTheme.dark`, `.light`, and `.space` remain direct test
-and component entry points. All three fully define:
+`AppThemeId.dark`, `.light`, `.space`, and `.liquidGlass` are resolved through
+`AppTheme.resolve`; corresponding `AppTheme` properties remain direct test
+and component entry points. All four fully define:
 
 - app bars, cards, dividers, list rows, and scrollbars;
 - inputs and validation;
@@ -425,11 +466,12 @@ and component entry points. All three fully define:
 
 Settings exposes one `Appearance` row and a vertically scrollable
 `Choose appearance` dialog: Dark — `Calm dark default`, Light —
-`Bright neutral`, and Space — `Animated violet and cyan`. Each choice has a
+`Bright neutral`, Space — `Animated violet and cyan`, and Liquid Glass —
+`Dark glass, soft light`. Each choice has a
 visible icon and three palette swatches and remains usable at 320 logical
 pixels with 200-percent text. Selection closes the dialog and changes the theme
 optimistically. The device-local `app_theme_mode` preference accepts exactly
-`dark`, `light`, or `space`; missing or unknown values resolve to Dark. Writes
+`dark`, `light`, `space`, or `liquidGlass`; missing or unknown values resolve to Dark. Writes
 remain ordered, and a failed latest write rolls back to the last confirmed
 selection and reports the existing appearance-save failure.
 
@@ -490,6 +532,61 @@ Image and painter layers are pointer-ignoring, semantics-free
 the conservative luminance bound for every possible backdrop pixel.
 
 ## Responsive And Accessibility Gates
+
+### Liquid Glass
+
+Liquid Glass is an additional dark, graphite/silver Flutter appearance inspired
+by optical glass, not Apple's native rendering API. Existing Dark, Light and
+Space definitions, component geometry, typography, navigation and content remain
+unchanged. Palette ownership remains `AppVisualTokens.liquidGlass` (background
+`#080A0E`, surface `#10141B`, primary text `#E5E9EF`, secondary text `#ADB7C4`,
+brand `#A5B8CF`). All Material controls, overlays and pickers use that palette.
+Content is near-black rather than frosted gray; steel-blue actions avoid large
+white fills. Attention uses muted champagne `#CDBE9E` over `#211F1B`, not bright
+orange. Success/error remain distinct and retain their visible labels/icons.
+
+`core/theme/app_liquid_glass.dart` alone owns static gradient definitions:
+a dark graphite/charcoal backdrop, localized cool highlights fading toward a
+nearly unlit center, and a one-pixel rim with alternating light and quiet edges.
+Two stationary, diffuse blue/violet light pools sit behind content. The shared
+paint-only accent wrapper is used by both the app backdrop and opaque page
+backing; cards reveal these lights through their tint as content scrolls.
+Surface lighting is blended with the actual semantic tint. Shared surfaces and Material
+overlay shapes consume these without changing content padding or touch targets.
+Warning, danger, selection and keyboard-focus boundaries take precedence over
+decorative edges; status labels and colors remain meaningful.
+Glass AppPage routes paint their own opaque backdrop so auxiliary navigation
+does not expose the previous page's text through the new page's material.
+
+Plain/subtle content alpha is 0.56/0.60; raised 0.76; interactive 0.62/0.74/0.84
+(idle/hover/pressed); dense controls 0.92; semantic surfaces 0.94; overlays 0.97.
+Menus/dialogs deliberately remain nearly opaque for readable overlapping content.
+Navigation uses alpha 0.62 and the existing single clipped sigma-8 blur. There
+are no per-card backdrop filters, new dependencies, remote assets or continuous
+animations. High Contrast removes glass lighting, rim and blur, using opaque
+surfaces. Reduced Motion retains existing immediate state transitions.
+
+Nested plain/subtle glass surfaces omit their second decorative rim and sheen;
+interactive/selected/focus/warning edges remain intact. Planner's timeline rows
+use a quiet translucent tint without an extra inner outline in Liquid Glass.
+Category color paints only the narrow left accent, never a full opaque layer
+under that translucent row; primary/secondary text retains its dark-surface contrast.
+Shared header actions form one rounded, softly raised glass island in Liquid Glass,
+with clear individual icons and unchanged 44px targets, focus and navigation.
+Inside the island, icons omit individual sheen/background tiles and resting
+borders. Circular press/hover feedback and a two-pixel keyboard focus ring
+identify the active control without adding permanent dividers or a white wash.
+Dark, Light and Space share the rounded island geometry and frameless icons,
+using their own unchanged palette and surface effects. Backdrops and light pools
+are unchanged. Compare's heading spans the card width. Below it, correlation
+values and insufficient-data status sit beside the explanation/action for every
+7/14/30/90-day window on normal phone sizes; large text stacks without clipping.
+Fixed commitments use a neutral category accent, not the error palette, in all
+themes; actual conflicts retain their status color and text.
+
+This bounded gradient exception does not permit decorative gradients in feature
+pages or change the existing Space rendering contract. Mobile and desktop keep
+their existing layout and controls.
 
 Coach recording uses compact theme-colored PCM-level bars plus remaining seconds
 between Discard and Stop/Send. Display-only logarithmic scaling makes normal
@@ -570,7 +667,8 @@ npm run verify:visual
 `scripts/check_frontend_visual_contract.mjs` rejects:
 
 - Material icons in presentation code;
-- gradients, shader decoration, and shimmer;
+- gradients outside the exact Liquid Glass theme owner, shader decoration in
+  feature/shared-widget code, and shimmer;
 - raw numeric radii;
 - uncontrolled named or hard colors outside the two documented exceptions;
 - route-local fonts;

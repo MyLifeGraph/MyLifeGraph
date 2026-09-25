@@ -7,7 +7,10 @@ results belong in [Verification](verification.md#current-verified-baseline).
 
 ## Current delivery boundary
 
-- The source contains the follow-ups prepared on `fix/coach-german-completion`.
+- The source contains the consolidated follow-ups on
+  `codex/checkin-reminders-history-focus`, including the isolated product website,
+  Liquid Glass, recent-day Capture, check-in push settings, wearable suggestions
+  and reversible Inbox/Focus corrections.
   Inspect GitHub release/commit identities and Verification before equating a
   checkout with Vercel, the VPS or an installed APK.
 - The last recorded release already includes English/German Coach, Ultra Quick
@@ -23,6 +26,10 @@ results belong in [Verification](verification.md#current-verified-baseline).
 - Historical installation procedures below are not instructions to bootstrap an
   already running host again. Current release maintenance uses immutable bundles,
   reviewed additive migrations and the existing signing identity.
+- The check-in push and reversible-command database additions have recorded
+  Production application. They still require the corresponding API/client
+  release; consult Verification for exact rollout progress rather than infer it
+  from their presence here. Existing accounts are not automatically opted in.
 
 ## Feature and interface map
 

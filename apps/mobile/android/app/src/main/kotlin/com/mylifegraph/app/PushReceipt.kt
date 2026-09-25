@@ -12,6 +12,8 @@ internal object PushReceipt {
         val expectedRoute = when (data["kind"]) {
             "sleep", "pattern" -> "/insights"
             "deadlines" -> "/planner"
+            "morning" -> "/morning-calibration"
+            "evening" -> "/quick-mood-check-in"
             else -> return false
         }
         if (data["destination"] != expectedRoute) return false

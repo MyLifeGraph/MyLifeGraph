@@ -19,12 +19,29 @@ import 'package:my_life_graph/features/quick_action/presentation/pages/quick_moo
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
 import 'package:my_life_graph/features/quick_action/presentation/widgets/optional_skillset_controls.dart';
+import 'package:my_life_graph/features/quick_action/presentation/widgets/capture_date_picker.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  testWidgets('Evening backfill writes only the selected date', (tester) async {
+    final store = _RecordingCaptureStore();
+    await _pumpEveningPage(tester, store, currentInstant: DateTime(2026, 9, 25, 21));
+    tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker)).onChanged(DateTime(2026, 9, 23));
+    await tester.pumpAndSettle();
+    for (final label in ['evening mood 7 of 10', 'evening energy 6 of 10', 'evening stress 3 of 10']) {
+      await _tapVisible(tester, find.bySemanticsLabel(label));
+    }
+    await _tapVisible(tester, find.text('Next'));
+    tester.widget<CaptureClockControl>(find.byType(CaptureClockControl)).onChanged('23:00');
+    await tester.pump();
+    await _tapVisible(tester, find.text('Next'));
+    await _tapVisible(tester, find.text('Save'));
+    expect(store.eveningAttempts.single.entryDate, '2026-09-23');
+    expect(store.eveningAttempts.single.mood, 7);
+  });
   testWidgets('context choices share dimensions and blocker stays with its source', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -32,9 +49,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final store = _RecordingCaptureStore();
     await _pumpEveningPage(tester, store, skillsetEnabled: true);
-    await tester.tap(find.bySemanticsLabel('evening mood 2 of 10'));
-    await tester.tap(find.bySemanticsLabel('evening energy 9 of 10'));
-    await tester.tap(find.bySemanticsLabel('evening stress 8 of 10'));
+    await _tapVisible(tester, find.bySemanticsLabel('evening mood 2 of 10'));
+    await _tapVisible(tester, find.bySemanticsLabel('evening energy 9 of 10'));
+    await _tapVisible(tester, find.bySemanticsLabel('evening stress 8 of 10'));
     await tester.pump();
     await _tapVisible(tester, find.text('Next'));
     await _tapVisible(tester, find.text('Next'));
@@ -756,7 +773,7 @@ class _RecordingCaptureStore implements QuickCheckInStore {
 
   @override
   Future<EveningShutdownDraft?> loadLatestEvening() async =>
-      initial?.evening ?? _eveningDraft();
+      initial?.evening ?? _eveningDraft().copyWith(entryDate: '2026-01-01');
 
   @override
   Future<void> saveEvening(EveningShutdownDraft draft) async {

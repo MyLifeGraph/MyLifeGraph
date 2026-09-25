@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_radii.dart';
 import 'app_motion_tokens.dart';
+import 'app_liquid_glass.dart';
 import 'app_theme_effects.dart';
 import 'app_visual_tokens.dart';
 
-enum AppThemeId { dark, light, space }
+enum AppThemeId { dark, light, space, liquidGlass }
 
 class AppTheme {
   const AppTheme._();
@@ -16,6 +17,12 @@ class AppTheme {
 
   static final ThemeData space = _build(_AppThemeDefinition.space);
 
+  static final ThemeData liquidGlass = _build(_AppThemeDefinition.liquidGlass);
+  static final ThemeData _liquidGlassHighContrast = _build(
+    _AppThemeDefinition.liquidGlass,
+    surfaceMaterialOverride: AppSurfaceMaterial.disabled,
+  );
+
   static final ThemeData _spaceHighContrast = _build(
     _AppThemeDefinition.space,
     surfaceMaterialOverride: AppSurfaceMaterial.disabled,
@@ -23,10 +30,14 @@ class AppTheme {
 
   static ThemeData resolve(AppThemeId id, {bool highContrast = false}) {
     if (highContrast && id == AppThemeId.space) return _spaceHighContrast;
+    if (highContrast && id == AppThemeId.liquidGlass) {
+      return _liquidGlassHighContrast;
+    }
     return switch (id) {
       AppThemeId.dark => dark,
       AppThemeId.light => light,
       AppThemeId.space => space,
+      AppThemeId.liquidGlass => liquidGlass,
     };
   }
 
@@ -69,6 +80,11 @@ class AppTheme {
             surfaceMaterial: surfaceMaterialOverride,
           );
     final surfaceMaterial = effects.surfaceMaterial;
+    final glass = definition.isLiquidGlass && surfaceMaterial.enabled;
+    RoundedRectangleBorder surfaceShape(double radius, AppThemeEffects effects) =>
+        glass
+            ? LiquidGlassBorder(borderRadius: BorderRadius.circular(radius))
+            : _surfaceShape(radius, effects);
     final plainSurface = surfaceMaterial.plain(tokens.surface);
     final subtleSurface = surfaceMaterial.subtle(tokens.surfaceSubtle);
     final raisedSurface = surfaceMaterial.raised(tokens.surfaceRaised);
@@ -121,6 +137,17 @@ class AppTheme {
       effects.controlOverlay,
     );
     final controlForegroundBuilder = _controlForegroundBuilder(effects);
+    final ButtonLayerBuilder? glassControlBackground = glass
+        ? (context, states, child) => DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: states.contains(WidgetState.disabled)
+                    ? null
+                    : const AppLiquidGlass().sheen,
+                borderRadius: BorderRadius.circular(AppRadii.md),
+              ),
+              child: child,
+            )
+        : null;
 
     final base = ThemeData(
       useMaterial3: true,
@@ -142,6 +169,7 @@ class AppTheme {
         const AppMotionTokens(),
         tokens,
         effects,
+        if (glass) const AppLiquidGlass(),
       ],
     );
 
@@ -163,7 +191,7 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
-        shape: _surfaceShape(AppRadii.md, effects),
+        shape: surfaceShape(AppRadii.md, effects),
       ),
       dividerTheme: DividerThemeData(
         color: tokens.outlineSoft,
@@ -272,6 +300,7 @@ class AppTheme {
           animationDuration: const Duration(milliseconds: 120),
           splashFactory: effects.splashFactory,
           foregroundBuilder: controlForegroundBuilder,
+          backgroundBuilder: glassControlBackground,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -346,6 +375,7 @@ class AppTheme {
           animationDuration: const Duration(milliseconds: 120),
           splashFactory: effects.splashFactory,
           foregroundBuilder: controlForegroundBuilder,
+          backgroundBuilder: glassControlBackground,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -370,6 +400,7 @@ class AppTheme {
           animationDuration: const Duration(milliseconds: 120),
           splashFactory: effects.splashFactory,
           foregroundBuilder: controlForegroundBuilder,
+          backgroundBuilder: glassControlBackground,
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -436,6 +467,7 @@ class AppTheme {
               : null,
           splashFactory: effects.splashFactory,
           foregroundBuilder: controlForegroundBuilder,
+          backgroundBuilder: glassControlBackground,
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -445,7 +477,7 @@ class AppTheme {
         focusElevation: 0,
         hoverElevation: 1,
         highlightElevation: 0,
-        shape: _surfaceShape(AppRadii.lg, effects),
+        shape: surfaceShape(AppRadii.lg, effects),
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 72,
@@ -594,7 +626,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: tokens.shadow,
-        shape: _surfaceShape(AppRadii.lg, effects),
+        shape: surfaceShape(AppRadii.lg, effects),
         titleTextStyle: textTheme.headlineSmall,
         contentTextStyle: textTheme.bodyLarge,
       ),
@@ -606,7 +638,9 @@ class AppTheme {
         showDragHandle: true,
         elevation: 0,
         modalElevation: 0,
-        shape: RoundedRectangleBorder(
+        shape: glass ? const LiquidGlassBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.xl)),
+        ) : RoundedRectangleBorder(
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(AppRadii.xl),
           ),
@@ -622,7 +656,7 @@ class AppTheme {
         actionTextColor: definition.snackAction,
         elevation: 0,
         insetPadding: const EdgeInsets.all(16),
-        shape: _surfaceShape(AppRadii.md, effects),
+        shape: surfaceShape(AppRadii.md, effects),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: tokens.brand,
@@ -647,7 +681,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         textStyle: textTheme.bodyLarge,
-        shape: _surfaceShape(AppRadii.md, effects),
+        shape: surfaceShape(AppRadii.md, effects),
       ),
       menuTheme: MenuThemeData(
         style: MenuStyle(
@@ -656,7 +690,7 @@ class AppTheme {
           ),
           surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
           elevation: const WidgetStatePropertyAll(0),
-          shape: WidgetStatePropertyAll(_surfaceShape(AppRadii.md, effects)),
+          shape: WidgetStatePropertyAll(surfaceShape(AppRadii.md, effects)),
         ),
       ),
       datePickerTheme: DatePickerThemeData(
@@ -676,7 +710,7 @@ class AppTheme {
               ? tokens.brand
               : Colors.transparent,
         ),
-        shape: _surfaceShape(AppRadii.lg, effects),
+        shape: surfaceShape(AppRadii.lg, effects),
       ),
       timePickerTheme: TimePickerThemeData(
         backgroundColor: overlaySurface,
@@ -688,7 +722,7 @@ class AppTheme {
         dialHandColor: tokens.brand,
         dialTextColor: tokens.textPrimary,
         entryModeIconColor: tokens.textSecondary,
-        shape: _surfaceShape(AppRadii.lg, effects),
+        shape: surfaceShape(AppRadii.lg, effects),
       ),
       scrollbarTheme: ScrollbarThemeData(
         radius: const Radius.circular(AppRadii.pill),
@@ -870,6 +904,7 @@ class _AppThemeDefinition {
     required this.tooltipBackground,
     required this.tooltipForeground,
     required this.effects,
+    this.isLiquidGlass = false,
   });
 
   final Brightness brightness;
@@ -892,6 +927,7 @@ class _AppThemeDefinition {
   final Color tooltipBackground;
   final Color tooltipForeground;
   final AppThemeEffects effects;
+  final bool isLiquidGlass;
 
   static final dark = _AppThemeDefinition(
     brightness: Brightness.dark,
@@ -1026,6 +1062,55 @@ class _AppThemeDefinition {
         maxVerticalDrift: 4,
         baseScale: 1.04,
         scaleAmplitude: 0.004,
+      ),
+    ),
+  );
+
+  static final liquidGlass = _AppThemeDefinition(
+    isLiquidGlass: true,
+    brightness: Brightness.dark,
+    tokens: AppVisualTokens.liquidGlass,
+    primaryContainer: const Color(0xFF253344),
+    onPrimaryContainer: const Color(0xFFD4E0EF),
+    onSecondary: AppVisualTokens.liquidGlass.infoSurface,
+    onTertiary: AppVisualTokens.liquidGlass.attentionSurface,
+    onError: AppVisualTokens.liquidGlass.dangerSurface,
+    scrim: const Color(0xFF030710),
+    inverseSurface: AppVisualTokens.liquidGlass.textPrimary,
+    onInverseSurface: AppVisualTokens.liquidGlass.background,
+    inversePrimary: AppVisualTokens.liquidGlass.brand,
+    scaffoldBackground: Colors.transparent,
+    snackBackground: AppVisualTokens.liquidGlass.surfaceRaised,
+    snackForeground: AppVisualTokens.liquidGlass.textPrimary,
+    snackAction: AppVisualTokens.liquidGlass.brand,
+    valueIndicatorBackground: AppVisualTokens.liquidGlass.surfaceRaised,
+    valueIndicatorForeground: AppVisualTokens.liquidGlass.textPrimary,
+    tooltipBackground: AppVisualTokens.liquidGlass.surfaceRaised,
+    tooltipForeground: AppVisualTokens.liquidGlass.textPrimary,
+    effects: _standardEffects(
+      tokens: AppVisualTokens.liquidGlass,
+      focusOpacity: 0.28,
+      accentSurfaceOpacity: 0.12,
+    ).copyWith(
+      splashFactory: InkRipple.splashFactory,
+      splashColor: AppVisualTokens.liquidGlass.textPrimary.withValues(alpha: 0.08),
+      surfaceOutlineColor: AppVisualTokens.liquidGlass.textPrimary.withValues(alpha: 0.10),
+      surfaceHoverOutlineColor: AppVisualTokens.liquidGlass.brand.withValues(alpha: 0.32),
+      raisedSurfaceGlowColor: AppVisualTokens.liquidGlass.info.withValues(alpha: 0.06),
+      surfaceMaterial: const AppSurfaceMaterial(
+        enabled: true,
+        hudFrameEnabled: false,
+        plainOpacity: 0.56,
+        subtleOpacity: 0.60,
+        raisedOpacity: 0.76,
+        interactiveOpacity: 0.62,
+        interactiveHoverOpacity: 0.74,
+        interactivePressedOpacity: 0.84,
+        denseOpacity: 0.92,
+        semanticOpacity: 0.94,
+        overlayOpacity: 0.97,
+        navigationOpacity: 0.62,
+        navigationBlurSigma: 8,
       ),
     ),
   );

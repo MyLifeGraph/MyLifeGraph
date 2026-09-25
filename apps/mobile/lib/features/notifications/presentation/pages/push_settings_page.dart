@@ -34,6 +34,12 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
           'sleep',
           'deadlines',
           'patterns',
+          if (cloud.settings.containsKey('morning')) ...[
+            'morning',
+            'evening',
+            'morning_time',
+            'evening_time',
+          ],
           'quiet_start',
           'quiet_end',
         ])
@@ -99,11 +105,26 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
                   'sleep': 'Before bedtime',
                   'deadlines': "Today's deadlines",
                   'patterns': 'Important patterns',
+                  if (draft.containsKey('morning')) ...{
+                    'morning': 'Morning check-in',
+                    'evening': 'Evening check-in',
+                  },
                 }.entries)
                   CheckboxListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    title: Text(entry.value),
+                    title: Row(
+                      children: [
+                        Expanded(child: Text(entry.value)),
+                        if (entry.key == 'morning' || entry.key == 'evening')
+                          TextButton(
+                            onPressed: editable
+                                ? () => _pickTime('${entry.key}_time')
+                                : null,
+                            child: Text(draft['${entry.key}_time'] as String),
+                          ),
+                      ],
+                    ),
                     value: draft[entry.key] == true,
                     onChanged: editable
                         ? (value) => setState(() {
@@ -128,8 +149,10 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
                     ),
                   ],
                 ),
-                const Text(
-                  'At most 2 per 24 hours. Patterns at most once per 30 days. No delayed catch-up.',
+                Text(
+                  draft.containsKey('morning')
+                      ? 'Up to 2 check-in reminders plus 2 other reminders per 24 hours. Patterns once per 30 days. Saved check-ins are skipped.'
+                      : 'Up to 2 reminders per 24 hours. Patterns once per 30 days.',
                 ),
                 const SizedBox(height: 12),
                 Wrap(

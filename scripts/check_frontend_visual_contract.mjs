@@ -88,6 +88,10 @@ export function findVisualContractErrors(root = repositoryRoot) {
 
   for (const file of productionFiles) {
     const text = readFileSync(join(root, file), 'utf8');
+    if (/\b(?:Linear|Radial|Sweep)Gradient\b/.test(text) &&
+        file !== 'apps/mobile/lib/core/theme/app_liquid_glass.dart') {
+      errors.push(`${file}: gradient definitions belong only to the Liquid Glass theme owner`);
+    }
     for (const _match of text.matchAll(/\bBackdropFilter\s*\(/g)) {
       backdropFilterUses.push(file);
     }

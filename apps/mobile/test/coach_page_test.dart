@@ -159,10 +159,11 @@ void main() {
       await tester.tap(find.byTooltip('Show information about Standard (provided)'));
       await tester.pumpAndSettle();
       expect(find.textContaining('No automatic provider fallback'), findsOneWidget);
-      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Close'), findsNothing);
       expect(credentials.state.provider, CoachProviderName.operatorCodexPilot);
       expect(repository.capabilityCalls, 1);
-      await tester.tap(find.text('Close'));
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       await tester.tap(find.text('OpenAI (your key)').hitTestable());
       await tester.pumpAndSettle();

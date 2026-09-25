@@ -1,22 +1,20 @@
 enum SkillsetChartView { radar, bars }
 
-const defaultSkillsetDimensions = {
+const supportedSkillsetDimensions = {
   'sleep',
   'sport',
   'energy',
   'social',
   'learning',
   'concentration',
-};
-
-const supportedSkillsetDimensions = {
-  ...defaultSkillsetDimensions,
   'stress',
   'mood',
   'productivity',
   'motivation',
   'discipline',
 };
+
+const defaultSkillsetDimensions = supportedSkillsetDimensions;
 
 class SkillsetDisplayPreferences {
   SkillsetDisplayPreferences({

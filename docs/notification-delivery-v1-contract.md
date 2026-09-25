@@ -5,7 +5,8 @@
 This additive transport is independent of the existing foreground V1 contract.
 `android-push-v1` uses `GET/POST /v1/push`, verified bearer owner/session identity,
 and explicit `android-push-consent-v1` consent. Settings exposes **Push reminders**:
-master opt-in/out, sleep/deadline/pattern switches and quiet hours. Nothing enables
+master opt-in/out, sleep/deadline/pattern and Morning/Evening switches, check-in
+times and quiet hours. Nothing enables
 push by default. Android permission is required separately. Web can disable the
 account setting but does not register a browser or native device.
 
@@ -15,6 +16,15 @@ a fresh reliable learned bedtime, and a rare stable Focus-timing observation wit
 stronger existing evidence. Draft plans do not count. Analysis failures skip that
 category, never invent data. No LLM runs, source facts change, or private free text
 leaves the API. Fifteen-minute windows expire without catch-up.
+
+Morning and Evening are independently opt-in (initially off), with editable
+profile-local `HH:mm` times defaulting to 08:00 and 20:00. A saved branch in that
+day's `daily_logs.metadata.captures` suppresses its reminder. The owner-locked
+reservation and final pre-send check both query this fact; cached missing data
+never authorizes delivery. Date-and-branch dedupe prevents repeats. Missing DST
+times are skipped; a repeated clock cannot duplicate the day's reminder.
+New receipt routes are `/morning-calibration` and `/quick-mood-check-in`.
+This adds no Inbox rows and does not change foreground notification generation.
 
 `PUSH_DELIVERY_ENABLED=false` is the server default. Explicit activation starts a
 bounded, keyset-paged, five-minute worker inside the existing API lifespan. The
@@ -36,8 +46,10 @@ the consent command. Revision conflicts require reload; ambiguous commands are n
 blindly retried. Old sessions cannot register, update or receive new sends.
 
 Owner-locked SQL reservations recheck consent/category, session, pending deletion,
-timezone/revision, quiet hours, owner-unique dedupe and a rolling **2 per 24 hours**
-cap. Pattern attempts additionally have a **30-day** cooldown. Attempts count even
+timezone/revision, quiet hours, owner-unique dedupe and separate rolling caps:
+**2 check-in reminders plus 2 other reminders per 24 hours**. Check-ins cannot
+consume the existing recommendation/deadline budget or vice versa. Pattern
+attempts additionally have a **30-day** cooldown. Attempts count even
 after send failure, opt-out or timezone changes. A final read rechecks the reserved
 attempt immediately before dispatch. Ambiguous/network-failed sends are never
 retried. FCM acceptance is not device-delivery evidence. Invalid tokens are removed
@@ -46,12 +58,19 @@ only when they still match the owner's registered token.
 Android receives data-only messages with zero queue lifetime, short expiry and
 owner/session/registration identities. Native receipt rechecks all identities,
 local enablement, OS permission and duplicate attempt ID; only fixed generic text
-and allowlisted Planner/Insights routes are displayed. Logout first disables local
+and allowlisted Planner/Insights/check-in routes are displayed. Logout first disables local
 receipt and removes this feature's notifications, then deletes the Firebase token.
 Foreground/resume refreshes registration. An already dispatched message cannot be
 recalled after a remote settings change; local opt-out/account switch rejects it.
 OS force-stop, offline state, token rotation while closed and platform delivery
 limits can prevent delivery. No browser/iOS push or unconditional delivery promise.
+
+Rollout order: migration `20260925104758_checkin_push_reminders.sql`, API, then
+Android APK. New fields are additive under `android-push-v1`; old clients omitting
+all four fields preserve stored check-in preferences. New clients hide these
+controls when the old API omits them. New API defaults alone are not proof that
+the migration has been applied. Older APKs reject the new receipt kinds and must
+be updated before check-in push delivery can be used. No automatic opt-in occurs.
 
 Both automatic Main and tagged signed APK workflows require and inject public
 client configuration through the protected

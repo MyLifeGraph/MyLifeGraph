@@ -15,6 +15,8 @@ import '../../domain/quick_check_in.dart';
 import '../../domain/capture_draft_proposal.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
+import '../widgets/capture_leave_guard.dart';
+import '../widgets/capture_date_picker.dart';
 import '../../../../composition/skillset_providers.dart';
 import '../../domain/skillset_signals.dart';
 import '../widgets/optional_skillset_controls.dart';
@@ -34,6 +36,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   final _blockerController = TextEditingController();
 
   late EveningShutdownDraft _draft;
+  EveningShutdownDraft? _cleanDraft;
+  String _cleanReflection = '';
+  String _cleanBlocker = '';
   var _stepIndex = 0;
   var _isLoading = true;
   var _safeCaptureLoaded = false;
@@ -73,6 +78,12 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       entryDate: ref.read(profileLocalDateSourceProvider).dateKeyAt(capturedAt),
     );
     Future<void>.microtask(_loadToday);
+    _reflectionController.addListener(_textChanged);
+    _blockerController.addListener(_textChanged);
+  }
+
+  void _textChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -94,7 +105,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       subtitle: widget.proposal == null
           ? null
           : _revisingSavedCapture
-          ? 'Review suggestions. Saving updates today\'s Evening check-in.'
+          ? 'Review suggestions. Unmentioned answers stay unchanged. Saving updates today\'s Evening check-in.'
           : 'Review suggestions and fill any gaps before saving.',
       progress: (_stepIndex + 1) / _steps.length,
       canGoBack: _stepIndex > 0,
@@ -104,6 +115,11 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save',
+      hasUnsavedChanges:
+          _cleanDraft != null &&
+          (!identical(_draft, _cleanDraft) ||
+              _reflectionController.text != _cleanReflection ||
+              _blockerController.text != _cleanBlocker),
       errorMessage: _saveError,
       loadErrorMessage: !_proposalMatchesContext
           ? 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
@@ -114,7 +130,19 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       onBack: _previousStep,
       onNext: _nextStep,
       child: proposalOwnerMatches
-          ? _buildStep(step.kind)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.proposal == null)
+                  CaptureDatePicker(
+                    date: DateTime.parse(_draft.entryDate),
+                    today: ref.read(profileLocalDateSourceProvider).today(),
+                    enabled: !_isLoading && !_isSaving,
+                    onChanged: _changeDate,
+                  ),
+                _buildStep(step.kind),
+              ],
+            )
           : const SizedBox.shrink(),
     );
   }
@@ -413,6 +441,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     try {
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveEvening(draft);
+      _cleanDraft = _draft;
+      _cleanReflection = _reflectionController.text;
+      _cleanBlocker = _blockerController.text;
       await ref
           .read(projectionRefreshCoordinatorProvider)
           .dailyCaptureChanged(
@@ -462,12 +493,23 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     }
     try {
       final store = ref.read(quickCheckInStoreProvider);
-      final targetDate = ref.read(profileLocalDateSourceProvider).today();
+      final targetDate = DateTime.parse(_draft.entryDate);
       final entry = await store.loadToday(targetDate);
       _safeCaptureLoaded = true;
       EveningShutdownDraft? sleepPlan;
       try {
-        sleepPlan = await store.loadLatestEvening();
+        if (_draft.entryDate ==
+            ref.read(profileLocalDateSourceProvider).todayKey()) {
+          sleepPlan = await store.loadLatestEvening();
+        }
+        if (_draft.entryDate !=
+                ref.read(profileLocalDateSourceProvider).todayKey() ||
+            (sleepPlan != null &&
+                sleepPlan.entryDate.compareTo(_draft.entryDate) >= 0)) {
+          sleepPlan = (await store.loadToday(
+            captureDayOffset(targetDate, -1),
+          ))?.evening;
+        }
       } catch (_) {
         // A prior Evening value is only a convenience here. The current
         // branch read above is the required CAS baseline.
@@ -510,6 +552,16 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         }
         setState(() {
           _draft = next;
+          _cleanDraft = widget.proposal == null
+              ? next
+              : saved ??
+                    _cleanDraft ??
+                    EveningShutdownDraft.empty(
+                      next.capturedAt,
+                      entryDate: next.entryDate,
+                    );
+          _cleanReflection = next.reflectionNote;
+          _cleanBlocker = next.specificBlocker;
           _revisingSavedCapture = saved != null;
           if (saved != null || widget.proposal != null) {
             _reflectionController.text = next.reflectionNote;
@@ -526,7 +578,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         setState(() {
           _safeCaptureLoaded = false;
           _loadError =
-              'Today\'s saved capture could not be loaded. Saving is blocked because its current branch version is unknown. Your draft is still here.';
+              'This day’s saved check-in could not be loaded. Retry before saving. Your draft is still here.';
         });
       }
     } finally {
@@ -547,6 +599,32 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           branch: 'evening',
         ) &&
         proposal.entryDate == _draft.entryDate;
+  }
+
+  Future<void> _changeDate(DateTime date) async {
+    if (_isLoading || _isSaving || widget.proposal != null) return;
+    if (dailyCaptureEntryDate(date) == _draft.entryDate) return;
+    if (_cleanDraft != null &&
+        (!identical(_draft, _cleanDraft) ||
+            _reflectionController.text != _cleanReflection ||
+            _blockerController.text != _cleanBlocker)) {
+      if (!await confirmCaptureDiscard(context) || !mounted || _isSaving) {
+        return;
+      }
+    }
+    setState(() {
+      _draft = EveningShutdownDraft.empty(
+        ref.read(currentInstantProvider)(),
+        entryDate: dailyCaptureEntryDate(date),
+      );
+      _reflectionController.clear();
+      _blockerController.clear();
+      _stepIndex = 0;
+      _cleanDraft = null;
+      _safeCaptureLoaded = false;
+      _saveError = null;
+    });
+    _loadToday();
   }
 
   Future<_TodayFocusReflectionData?> _loadTodayFocusReflections(

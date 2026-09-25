@@ -14,17 +14,46 @@ typedef FocusNowProvider = DateTime Function();
 typedef FocusEntryDateProvider = String Function(DateTime instant);
 typedef FocusAccessTokenProvider = Future<String?> Function();
 
-class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
+class FocusSessionSupabaseDataSource
+    implements FocusSessionLifecyclePort, FocusTimeCorrectionPort {
+  @override
+  Future<FocusSession> correctTime({
+    required FocusSession session,
+    required int minutes,
+    required String requestId,
+  }) async {
+    if (_apiClient == null) {
+      throw const FocusCommandException('Time correction unavailable.');
+    }
+    final result = FocusSession.fromV2Json(
+      await _apiClient.postJson(
+        '/v1/focus/sessions/${session.id}/correct-time',
+        headers: {'Authorization': 'Bearer ${await _requireAccessToken()}'},
+        body: {
+          'request_id': requestId,
+          'expected_updated_at': session.updatedAt.toUtc().toIso8601String(),
+          'minutes': minutes,
+        },
+      ),
+    );
+    if (result.id != session.id ||
+        result.actualMinutes != minutes ||
+        result.status != FocusSessionStatus.completed) {
+      throw const FocusCommandException('Time correction not confirmed.');
+    }
+    return result;
+  }
+
   FocusSessionSupabaseDataSource(
     this._client, {
     FocusNowProvider? nowProvider,
     FocusEntryDateProvider? entryDateProvider,
     ApiClient? apiClient,
     FocusAccessTokenProvider? accessTokenProvider,
-  })  : _nowProvider = nowProvider ?? DateTime.now,
-        _entryDateProvider = entryDateProvider,
-        _apiClient = apiClient,
-        _accessTokenProvider = accessTokenProvider;
+  }) : _nowProvider = nowProvider ?? DateTime.now,
+       _entryDateProvider = entryDateProvider,
+       _apiClient = apiClient,
+       _accessTokenProvider = accessTokenProvider;
 
   static const _columns =
       'id,status,started_at,ended_at,planned_minutes,actual_minutes,label,'
@@ -62,9 +91,9 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
         .eq('user_id', userId)
         .order('started_at', ascending: false)
         .limit(limit);
-    return List<Map<String, dynamic>>.from(rows as List)
-        .map(FocusSession.fromRow)
-        .toList();
+    return List<Map<String, dynamic>>.from(
+      rows as List,
+    ).map(FocusSession.fromRow).toList();
   }
 
   @override
@@ -179,9 +208,7 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
             })
             .select(_reflectionColumns)
             .single();
-        final saved = FocusReflection.fromRow(
-          Map<String, dynamic>.from(row),
-        );
+        final saved = FocusReflection.fromRow(Map<String, dynamic>.from(row));
         if (!saved.matches(draft)) {
           throw const FocusCommandException(
             'Focus reflection save returned a mismatched result.',
@@ -189,10 +216,7 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
         }
         return saved;
       } catch (error) {
-        final current = await _fetchReflection(
-          session.id,
-          userId: userId,
-        );
+        final current = await _fetchReflection(session.id, userId: userId);
         if (current?.matches(draft) == true) return current!;
         if (current != null) {
           throw const FocusReflectionConflictException(
@@ -299,9 +323,9 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
           .limit(50),
     ]);
     final targets = <FocusTargetOption>[
-      ...List<Map<String, dynamic>>.from(results[0] as List).map(
-        (row) => _targetFromRow(row, FocusTargetKind.task),
-      ),
+      ...List<Map<String, dynamic>>.from(
+        results[0] as List,
+      ).map((row) => _targetFromRow(row, FocusTargetKind.task)),
       ...List<Map<String, dynamic>>.from(results[1] as List)
           .where(_isExecutableHabit)
           .map((row) => _targetFromRow(row, FocusTargetKind.habit)),
@@ -333,9 +357,7 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
     required FocusStartDraft draft,
   }) async {
     if (!isClientUuid(sessionId)) {
-      throw const FocusCommandException(
-        'Focus request identity is invalid.',
-      );
+      throw const FocusCommandException('Focus request identity is invalid.');
     }
     if (_apiClient != null && await fetchFocusV2Availability()) {
       return _startV2(
@@ -379,45 +401,42 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
     final now = _timestamp(startedAt);
     final row = await _client
         .from(SupabaseTables.focusSessions)
-        .upsert(
-          {
-            'id': sessionId,
-            'user_id': userId,
-            'status': FocusSessionStatus.active.code,
-            'started_at': now,
-            'planned_minutes': draft.plannedMinutes,
-            'label': draft.label,
-            'task_id': draft.targetKind == FocusTargetKind.task
-                ? draft.targetId
-                : null,
-            'habit_id': draft.targetKind == FocusTargetKind.habit
-                ? draft.targetId
-                : null,
-            'metadata': {
-              'source': 'flutter-focus-v1',
-              'contract_version': 'focus-session-v1',
-              'entry_date': entryDate,
-              if (draft.recoveryMinutes > 0)
-                'recovery_minutes': draft.recoveryMinutes,
-              'action_target': {
-                'contract_version': executableActionContractVersion,
-                'id': 'start_focus:$sessionId',
-                'kind': 'focus',
-                'command': 'start_focus',
-                'target_id': draft.targetId,
-                'estimated_minutes': draft.plannedMinutes,
-                'metadata': {
-                  'focus_minutes': draft.plannedMinutes,
-                  'source': 'focus_session',
-                  if (draft.targetKind != null)
-                    'target_kind': draft.targetKind!.code,
-                },
+        .upsert({
+          'id': sessionId,
+          'user_id': userId,
+          'status': FocusSessionStatus.active.code,
+          'started_at': now,
+          'planned_minutes': draft.plannedMinutes,
+          'label': draft.label,
+          'task_id': draft.targetKind == FocusTargetKind.task
+              ? draft.targetId
+              : null,
+          'habit_id': draft.targetKind == FocusTargetKind.habit
+              ? draft.targetId
+              : null,
+          'metadata': {
+            'source': 'flutter-focus-v1',
+            'contract_version': 'focus-session-v1',
+            'entry_date': entryDate,
+            if (draft.recoveryMinutes > 0)
+              'recovery_minutes': draft.recoveryMinutes,
+            'action_target': {
+              'contract_version': executableActionContractVersion,
+              'id': 'start_focus:$sessionId',
+              'kind': 'focus',
+              'command': 'start_focus',
+              'target_id': draft.targetId,
+              'estimated_minutes': draft.plannedMinutes,
+              'metadata': {
+                'focus_minutes': draft.plannedMinutes,
+                'source': 'focus_session',
+                if (draft.targetKind != null)
+                  'target_kind': draft.targetKind!.code,
               },
             },
-            'updated_at': now,
           },
-          onConflict: 'id',
-        )
+          'updated_at': now,
+        }, onConflict: 'id')
         .select(_columns)
         .single();
     return FocusSession.fromRow(Map<String, dynamic>.from(row));
@@ -472,18 +491,12 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
 
   @override
   Future<FocusSession> finishSession(String sessionId) {
-    return _endSession(
-      sessionId,
-      terminalStatus: FocusSessionStatus.completed,
-    );
+    return _endSession(sessionId, terminalStatus: FocusSessionStatus.completed);
   }
 
   @override
   Future<FocusSession> abandonSession(String sessionId) {
-    return _endSession(
-      sessionId,
-      terminalStatus: FocusSessionStatus.abandoned,
-    );
+    return _endSession(sessionId, terminalStatus: FocusSessionStatus.abandoned);
   }
 
   Future<FocusSession> _endSession(
@@ -493,8 +506,9 @@ class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
     final apiClient = _apiClient;
     if (apiClient != null && await fetchFocusV2Availability()) {
       final token = await _requireAccessToken();
-      final operation =
-          terminalStatus == FocusSessionStatus.completed ? 'finish' : 'abandon';
+      final operation = terminalStatus == FocusSessionStatus.completed
+          ? 'finish'
+          : 'abandon';
       final json = await apiClient.postJson(
         '/v1/focus/sessions/$sessionId/$operation',
         headers: {'Authorization': 'Bearer $token'},

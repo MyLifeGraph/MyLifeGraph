@@ -31,6 +31,12 @@ class Gateway extends HealthConnectGateway {
   bool failRead = false;
   int nativeReads = 0;
   int deviceReads = 0;
+  int sleepReads = 0;
+  @override
+  Future<Map<String, dynamic>> readSleep(String date, String timezone) async {
+    sleepReads++;
+    return {'started_at': '2026-09-13T21:00:00Z', 'woke_at': '2026-09-14T05:00:00Z'};
+  }
   final commands = <String>[];
   Completer<Map<String, dynamic>>? pending;
 
@@ -68,6 +74,22 @@ class Gateway extends HealthConnectGateway {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('watch suggestion requires consent, platform, permission and bound device', () async {
+    final gateway = Gateway();
+    final controller = HealthConnectController(gateway, android: true);
+    addTearDown(controller.dispose);
+    gateway.current = cloud(enabled: false);
+    expect(await controller.sleepSuggestion('2026-09-14'), isNull);
+    gateway.current = cloud(); gateway.granted = false;
+    expect(await controller.sleepSuggestion('2026-09-14'), isNull);
+    gateway.granted = true; gateway.current = cloud(device: 'other');
+    expect(await controller.sleepSuggestion('2026-09-14'), isNull);
+    expect(gateway.sleepReads, 0);
+    gateway.current = cloud();
+    expect(await controller.sleepSuggestion('2026-09-14'), isNotNull);
+    expect(gateway.sleepReads, 1);
+    expect(gateway.commands, isEmpty);
+  });
 
   testWidgets(
     'foreground host leaves guest accounts alone',

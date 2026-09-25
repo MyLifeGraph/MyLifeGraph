@@ -141,7 +141,7 @@ class PushBridge(private val activity: Activity) {
         }
         fun captureIntent(context: Context, intent: Intent?) {
             val route = intent?.getStringExtra("mylifegraph_push_route") ?: return
-            if (route in setOf("/planner", "/insights")) preferences(context).edit().putString("route", route).apply()
+            if (route in setOf("/planner", "/insights", "/morning-calibration", "/quick-mood-check-in")) preferences(context).edit().putString("route", route).apply()
             intent.removeExtra("mylifegraph_push_route")
         }
     }

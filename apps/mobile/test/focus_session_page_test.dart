@@ -357,7 +357,7 @@ void main() {
   });
 
   testWidgets(
-      'study default beats recent duration and checklist stays ephemeral',
+      'study default beats recent duration and reminders need one confirmation',
       (tester) async {
     final source = _StudyFocusSource();
     final snapshotRefresh = _CountingSnapshotRefresh();
@@ -404,28 +404,22 @@ void main() {
             find.byKey(const ValueKey('focus-preparation-start')),
           )
           .onPressed,
-      isNull,
-    );
-
-    await tester.tap(find.text('Ready').first);
-    await tester.pump();
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey('focus-preparation-start')),
-          )
-          .onPressed,
-      isNull,
-    );
-    await tester.tap(find.text('Not needed today').last);
-    await tester.pump();
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey('focus-preparation-start')),
-          )
-          .onPressed,
       isNotNull,
+    );
+    expect(find.text('Ready & start'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(ChoiceChip),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(Checkbox),
+      ),
+      findsNothing,
     );
     await tester.tap(
       find.byKey(const ValueKey('focus-preparation-start')),
@@ -547,8 +541,12 @@ void main() {
     expect(find.text('Focus active'), findsOneWidget);
   });
 
-  testWidgets('skip remaining starts without persisting ritual choices',
+  testWidgets('reminders can be cancelled and confirmed once on a small screen',
       (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final source = _StudyFocusSource();
 
     await tester.pumpWidget(
@@ -574,10 +572,17 @@ void main() {
     );
     await tester.tap(find.text('Start focus session'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ready').first);
-    await tester.pump();
+    final cancel = find.widgetWithText(TextButton, 'Cancel');
+    final start = find.byKey(const ValueKey('focus-preparation-start'));
+    expect(tester.getCenter(cancel).dy, tester.getCenter(start).dy);
+    expect(tester.takeException(), isNull);
+    await tester.tap(cancel);
+    await tester.pumpAndSettle();
+    expect(source.startCalls, 0);
+    await tester.tap(find.text('Start focus session'));
+    await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(const ValueKey('focus-skip-preparation')),
+      find.byKey(const ValueKey('focus-preparation-start')),
     );
     await tester.pumpAndSettle();
 

@@ -57,6 +57,20 @@ Coach answers are not rewritten; full account deletion remains separate.
 
 ## Verification and rollout
 
+Opening an unsaved manual Morning check-in offers `Watch sleep` with `Use times`
+and dismiss actions, only on the consented, permission-granted bound device.
+It does not request permission, upload or save a Capture merely on opening.
+The bridge reads up to 500 sleep sessions across the previous/current day,
+rejects truncated responses, and proposes the longest 1–16 hour session ending
+on the selected profile-local date (latest end breaks ties). Only start/end
+timestamps reach Flutter, not raw notes or stages. Acceptance and the normal
+final Save are required. Saved captures and reviewed voice drafts are never
+replaced; manual clock edits, acceptance or dismissal suppress further offers
+for that draft. Accepted times remain editable. Missing/invalid data leaves
+manual entry available. Daily aggregate totals are never guessed into overnight
+times. Web/older Android remain manual. No health Cloud schema change is needed.
+
+
 Deploy the additive migration before the new API. An older API lacks this route:
 the new Settings surface reports unavailable instead of fabricating success.
 Repository tests cannot prove Garmin output, Android permission behavior, actual

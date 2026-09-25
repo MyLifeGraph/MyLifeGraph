@@ -11,6 +11,7 @@ import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 import 'dashboard_section_widgets.dart';
 
@@ -28,8 +29,7 @@ class TodayOverviewActions {
   final ValueChanged<String> onStartPreparationFocus;
 }
 
-/// Owns the stable Today summary sequence: capture streak, progress, and
-/// agenda. Task and Habit commands deliberately belong to separate sections.
+/// Capture actions and the agenda precede supporting progress information.
 class TodayOverviewSections extends StatelessWidget {
   const TodayOverviewSections({
     super.key,
@@ -56,14 +56,14 @@ class TodayOverviewSections extends StatelessWidget {
           onAddEvening: actions.onAddEvening,
         ),
         const SizedBox(height: AppSpacing.md),
-        _TodayProgressCard(snapshot: snapshot),
-        const SizedBox(height: AppSpacing.lg),
         _TodayAgenda(
           snapshot: snapshot,
           canExecute: canExecute,
           onOpenPreparationPlan: actions.onOpenPreparationPlan,
           onStartPreparationFocus: actions.onStartPreparationFocus,
         ),
+        const SizedBox(height: AppSpacing.md),
+        _TodayProgressCard(snapshot: snapshot),
       ],
     );
   }
@@ -94,49 +94,79 @@ class _CheckInStreakCard extends StatelessWidget {
           TodayInfoDisclosure(
             topic: 'Check-in streak',
             description:
-                'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
+                'Both check-ins count as one day. Complete them anytime today; your streak stays until the day ends.',
             headerBuilder: (context, infoButton) => Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: Icon(
-                    AppIcons.localFireDepartmentOutlined,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 30,
-                  ),
+                Icon(
+                  AppIcons.localFireDepartmentOutlined,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Flexible(
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                top: AppSpacing.sm,
-                              ),
-                              child: Text(
-                                'Check-in streak',
-                                style: Theme.of(context).textTheme.titleLarge,
+                  child: AppInfoHeading(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final theme = Theme.of(context).textTheme;
+                        final days = checkIns?.completedDaysStreak ?? 0;
+                        final label = Text(
+                          constraints.maxWidth < 340
+                              ? 'Streak'
+                              : 'Check-in streak',
+                          style: theme.titleMedium,
+                        );
+                        final count = unavailable
+                            ? Text('Unavailable', style: theme.bodySmall)
+                            : Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '$days',
+                                      style: theme.headlineSmall,
+                                    ),
+                                    TextSpan(
+                                      text: days == 1 ? ' day' : ' days',
+                                      style: theme.bodyMedium,
+                                    ),
+                                  ],
+                                ),
+                              );
+                        // Normal phone sizes stay on one line. Enlarged type
+                        // wraps rather than shrinking or clipping information.
+                        if (MediaQuery.textScalerOf(context).scale(16) > 20 ||
+                            constraints.maxWidth < 180) {
+                          return Wrap(
+                            spacing: AppSpacing.md,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [label, count],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: label),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  right: AppSpacing.sm,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: count,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          infoButton,
-                        ],
-                      ),
-                      Text(
-                        unavailable
-                            ? 'Streak unavailable'
-                            : '${checkIns?.completedDaysStreak ?? 0} consecutive ${checkIns?.completedDaysStreak == 1 ? 'day' : 'days'}',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                    ],
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
+                infoButton,
               ],
             ),
           ),
@@ -149,7 +179,7 @@ class _CheckInStreakCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.md),
-          _BeatYesterdayInset(
+          _LatestCheckInInset(
             value: latestCheckIn ?? AsyncData(snapshot.latestCheckIn),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -194,110 +224,78 @@ class _CheckInStreakCard extends StatelessWidget {
   }
 }
 
-class _BeatYesterdayInset extends StatelessWidget {
-  const _BeatYesterdayInset({required this.value});
+class _LatestCheckInInset extends StatelessWidget {
+  const _LatestCheckInInset({required this.value});
 
   final AsyncValue<DashboardCheckIn?> value;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      key: const ValueKey('beat-yesterday'),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadii.md),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: Column(
+    final checkIn = value.valueOrNull;
+    final content = value.when(
+      loading: () => const Text('Loading latest check-in…'),
+      error: (_, __) => const Text('Latest check-in unavailable.'),
+      data: (checkIn) => checkIn == null
+          ? const Text('No saved check-in yet.')
+          : _latestValues(context, checkIn),
+    );
+    if (value.isLoading || value.hasError || checkIn == null) {
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Beat yesterday',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          value.when(
-            loading: () => const Row(
-              children: [
-                SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                Expanded(child: Text('Loading your latest saved check-in…')),
-              ],
+        children: [const Text('Last check-in'), content],
+      );
+    }
+    return Column(
+      key: const ValueKey('beat-yesterday'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('Last check-in'),
+            Text(
+              '(${DateFormat.yMMMd().format(checkIn.entryDate)})',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            error: (_, __) => const Text(
-              'Latest saved check-in details are unavailable. Your streak and check-in actions still work.',
-            ),
-            data: (checkIn) {
-              if (checkIn == null) {
-                return const Text('No saved check-in values yet.');
-              }
-              final metrics = _beatYesterdayMetrics(checkIn);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Latest saved · ${DateFormat.yMMMd().format(checkIn.entryDate)}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  if (metrics.isEmpty)
-                    const Text('No core values were saved in this check-in.')
-                  else
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final compact = constraints.maxWidth < 600;
-                        if (!compact) {
-                          return Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.sm,
-                            children: [
-                              for (final metric in metrics)
-                                _BeatYesterdayMetric(metric: metric),
-                            ],
-                          );
-                        }
-                        final tileWidth =
-                            (constraints.maxWidth - AppSpacing.xs) / 2;
-                        return Wrap(
-                          spacing: AppSpacing.xs,
-                          runSpacing: AppSpacing.xs,
-                          children: [
-                            for (final metric in metrics)
-                              SizedBox(
-                                width: tileWidth,
-                                child: _BeatYesterdayMetric(
-                                  metric: metric,
-                                  expanded: true,
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        content,
+      ],
+    );
+  }
+
+  Widget _latestValues(BuildContext context, DashboardCheckIn checkIn) {
+    final metrics = _beatYesterdayMetrics(checkIn);
+    if (metrics.isEmpty) return const Text('No core values saved.');
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 600;
+        final tileWidth = (constraints.maxWidth - AppSpacing.xs) / 2;
+        return Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final metric in metrics)
+              if (compact)
+                SizedBox(
+                  width: tileWidth,
+                  child: _BeatYesterdayMetric(metric: metric, expanded: true),
+                )
+              else
+                _BeatYesterdayMetric(metric: metric),
+          ],
+        );
+      },
     );
   }
 }
 
 class _BeatYesterdayMetric extends StatelessWidget {
-  const _BeatYesterdayMetric({
-    required this.metric,
-    this.expanded = false,
-  });
+  const _BeatYesterdayMetric({required this.metric, this.expanded = false});
 
   final ({String label, String value}) metric;
   final bool expanded;
@@ -309,20 +307,20 @@ class _BeatYesterdayMetric extends StatelessWidget {
       'Mood' => (AppIcons.moodOutlined, tokens.brand, tokens.successSurface),
       'Energy' => (AppIcons.boltOutlined, tokens.info, tokens.infoSurface),
       'Sleep duration' => (
-          AppIcons.bedtimeOutlined,
-          tokens.dataViolet,
-          tokens.surfaceSubtle,
-        ),
+        AppIcons.bedtimeOutlined,
+        tokens.dataViolet,
+        tokens.surfaceSubtle,
+      ),
       'Sleep quality' => (
-          AppIcons.nightsStayOutlined,
-          tokens.success,
-          tokens.successSurface,
-        ),
+        AppIcons.nightsStayOutlined,
+        tokens.success,
+        tokens.successSurface,
+      ),
       'Stress' => (
-          AppIcons.warningAmberOutlined,
-          tokens.attention,
-          tokens.attentionSurface,
-        ),
+        AppIcons.warningAmberOutlined,
+        tokens.attention,
+        tokens.attentionSurface,
+      ),
       _ => (AppIcons.infoOutline, tokens.textSecondary, tokens.surfaceSubtle),
     };
     final textTheme = Theme.of(context).textTheme;
@@ -449,10 +447,7 @@ class _CheckInButton extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            saved ? AppIcons.checkCircleOutline : icon,
-            size: 18,
-          ),
+          Icon(saved ? AppIcons.checkCircleOutline : icon, size: 18),
           const SizedBox(height: 2),
           Text(
             compactLabel ?? label,
@@ -507,9 +502,11 @@ class _TodayProgressCard extends StatelessWidget {
                 Flexible(
                   child: Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.sm),
-                    child: Text(
-                      'Today\'s progress',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    child: AppInfoHeading(
+                      child: Text(
+                        'Today\'s progress',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
                   ),
                 ),
@@ -540,8 +537,9 @@ class _TodayProgressCard extends StatelessWidget {
                     minHeight: 12,
                     borderRadius: BorderRadius.circular(AppRadii.pill),
                     color: context.visualTokens.success,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                   ),
                 ),
               ),
@@ -580,14 +578,14 @@ class _TodayAgendaState extends State<_TodayAgenda> {
   bool _showCompleted = false;
 
   Widget _item(TodayTimelineItem item) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: _AgendaItem(
-          item: item,
-          canExecute: widget.canExecute,
-          onOpenPreparationPlan: widget.onOpenPreparationPlan,
-          onStartPreparationFocus: widget.onStartPreparationFocus,
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+    child: _AgendaItem(
+      item: item,
+      canExecute: widget.canExecute,
+      onOpenPreparationPlan: widget.onOpenPreparationPlan,
+      onStartPreparationFocus: widget.onStartPreparationFocus,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -599,7 +597,8 @@ class _TodayAgendaState extends State<_TodayAgenda> {
     final active = snapshot.timeline
         .where((item) => !const {'completed', 'done'}.contains(item.state))
         .toList(growable: false);
-    final sourceErrors = snapshot.sourceStates?.timelineStates
+    final sourceErrors =
+        snapshot.sourceStates?.timelineStates
             .where((state) => state.status == TodaySourceStatus.unavailable)
             .map((state) => state.message)
             .whereType<String>()
@@ -610,9 +609,7 @@ class _TodayAgendaState extends State<_TodayAgenda> {
       children: [
         DashboardSectionTitle(
           title: 'Today\'s schedule',
-          caption: 'Timed blocks from your calendar and plans',
-          subtitle:
-              'Today\'s scheduled time blocks, in order.',
+          subtitle: 'Today\'s scheduled time blocks, in order.',
           icon: AppIcons.schedule,
         ),
         if (sourceErrors.isNotEmpty) ...[
@@ -635,7 +632,9 @@ class _TodayAgendaState extends State<_TodayAgenda> {
             TextButton.icon(
               onPressed: () => setState(() => _showAll = !_showAll),
               icon: Icon(_showAll ? AppIcons.expandLess : AppIcons.expandMore),
-              label: Text(_showAll ? 'Show less' : 'Show all (${active.length})'),
+              label: Text(
+                _showAll ? 'Show less' : 'Show all (${active.length})',
+              ),
             ),
           if (completed.isNotEmpty)
             DashboardInlineExpansionCard(
@@ -677,133 +676,146 @@ class _AgendaItem extends StatelessWidget {
       child: Opacity(
         opacity: isPast ? 0.62 : 1,
         child: Material(
-        color: appearance.background,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.sm),
-          side: BorderSide(
-            color: appearance.foreground.withValues(alpha: .3),
-          ),
-        ),
-        child: InkWell(
-          onTap: rowAction,
-          borderRadius: BorderRadius.circular(AppRadii.sm),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 64,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [Text(
-                    _agendaTime(item),
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: appearance.foreground,
-                        ),
-                  ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Icon(appearance.icon, color: appearance.foreground, size: 21),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        appearance.label,
-                        style:
-                            Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: appearance.foreground,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        item.title,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: appearance.foreground,
-                                ),
-                      ),
-                      if (detail != null) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          detail,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: appearance.foreground,
-                                  ),
-                        ),
-                      ],
-                      if (item.location != null) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          item.location!,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: appearance.foreground,
-                                  ),
-                        ),
-                      ],
-                      if (canExecute &&
-                          item.kind == TodayTimelineKind.habitSlot &&
-                          item.habitId != null) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        FilledButton.tonalIcon(
-                          onPressed: () =>
-                              context.push(AppRoutes.habitCompletion),
-                          icon: const Icon(AppIcons.checkCircleOutline),
-                          label: const Text('Log habit'),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (item.kind == TodayTimelineKind.focusSession)
-                  IconButton(
-                    tooltip: item.state == 'active' ? 'Open Focus timer' : 'Review Focus session',
-                    onPressed: _rowAction(context),
-                    icon: const Icon(AppIcons.timerOutlined, size: 20),
-                  ),
-                if ((item.kind == TodayTimelineKind.preparation &&
-                        item.planId != null) ||
-                    (canExecute && item.kind == TodayTimelineKind.taskBlock))
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (item.kind == TodayTimelineKind.preparation &&
-                          item.planId != null)
-                        IconButton(
-                          tooltip: 'Open plan',
-                          onPressed: () => onOpenPreparationPlan(item.planId!),
-                          icon: const Icon(AppIcons.calendarMonthOutlined, size: 20),
-                        ),
-                      if (canExecute &&
-                          item.kind == TodayTimelineKind.preparation &&
-                          item.blockId != null &&
-                          const {'upcoming', 'partial', 'missed'}.contains(item.state))
-                        IconButton(
-                          tooltip: 'Start focus',
-                          onPressed: () => onStartPreparationFocus(item.blockId!),
-                          icon: const Icon(AppIcons.timerOutlined, size: 20),
-                        ),
-                      if (canExecute && item.kind == TodayTimelineKind.taskBlock)
-                        IconButton(
-                          tooltip: 'Start focus',
-                          onPressed: () => context.push(_scheduledFocusRoute(
-                            sourceKind: 'planner_task_block', blockId: item.id,
-                          )),
-                          icon: const Icon(AppIcons.timerOutlined, size: 20),
-                        ),
-                    ],
-                  ),
-              ],
+          color: appearance.background,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+            side: BorderSide(
+              color: appearance.foreground.withValues(alpha: .3),
             ),
           ),
-        ),
+          child: InkWell(
+            onTap: rowAction,
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 64,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _agendaTime(item),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: appearance.foreground),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Icon(
+                          appearance.icon,
+                          color: appearance.foreground,
+                          size: 21,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          appearance.label,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: appearance.foreground,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          item.title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: appearance.foreground),
+                        ),
+                        if (detail != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            detail,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: appearance.foreground),
+                          ),
+                        ],
+                        if (item.location != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            item.location!,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: appearance.foreground),
+                          ),
+                        ],
+                        if (canExecute &&
+                            item.kind == TodayTimelineKind.habitSlot &&
+                            item.habitId != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          FilledButton.tonalIcon(
+                            onPressed: () =>
+                                context.push(AppRoutes.habitCompletion),
+                            icon: const Icon(AppIcons.checkCircleOutline),
+                            label: const Text('Log habit'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (item.kind == TodayTimelineKind.focusSession)
+                    IconButton(
+                      tooltip: item.state == 'active'
+                          ? 'Open Focus timer'
+                          : 'Review Focus session',
+                      onPressed: _rowAction(context),
+                      icon: const Icon(AppIcons.timerOutlined, size: 20),
+                    ),
+                  if ((item.kind == TodayTimelineKind.preparation &&
+                          item.planId != null) ||
+                      (canExecute && item.kind == TodayTimelineKind.taskBlock))
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (item.kind == TodayTimelineKind.preparation &&
+                            item.planId != null)
+                          IconButton(
+                            tooltip: 'Open plan',
+                            onPressed: () =>
+                                onOpenPreparationPlan(item.planId!),
+                            icon: const Icon(
+                              AppIcons.calendarMonthOutlined,
+                              size: 20,
+                            ),
+                          ),
+                        if (canExecute &&
+                            item.kind == TodayTimelineKind.preparation &&
+                            item.blockId != null &&
+                            const {
+                              'upcoming',
+                              'partial',
+                              'missed',
+                            }.contains(item.state))
+                          IconButton(
+                            tooltip: 'Start focus',
+                            onPressed: () =>
+                                onStartPreparationFocus(item.blockId!),
+                            icon: const Icon(AppIcons.timerOutlined, size: 20),
+                          ),
+                        if (canExecute &&
+                            item.kind == TodayTimelineKind.taskBlock)
+                          IconButton(
+                            tooltip: 'Start focus',
+                            onPressed: () => context.push(
+                              _scheduledFocusRoute(
+                                sourceKind: 'planner_task_block',
+                                blockId: item.id,
+                              ),
+                            ),
+                            icon: const Icon(AppIcons.timerOutlined, size: 20),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -813,11 +825,11 @@ class _AgendaItem extends StatelessWidget {
     switch (item.kind) {
       case TodayTimelineKind.focusSession:
         return () => context.push(
-              Uri(
-                path: AppRoutes.deepWork,
-                queryParameters: {'session_id': item.id},
-              ).toString(),
-            );
+          Uri(
+            path: AppRoutes.deepWork,
+            queryParameters: {'session_id': item.id},
+          ).toString(),
+        );
       case TodayTimelineKind.preparation:
         final planId = item.planId;
         if (!canExecute || item.state == 'completed') {
@@ -832,11 +844,11 @@ class _AgendaItem extends StatelessWidget {
       case TodayTimelineKind.taskBlock:
         return canExecute
             ? () => context.push(
-                  _scheduledFocusRoute(
-                    sourceKind: 'planner_task_block',
-                    blockId: item.id,
-                  ),
-                )
+                _scheduledFocusRoute(
+                  sourceKind: 'planner_task_block',
+                  blockId: item.id,
+                ),
+              )
             : null;
       case TodayTimelineKind.habitSlot:
         return canExecute
@@ -853,14 +865,10 @@ class _AgendaItem extends StatelessWidget {
 String _scheduledFocusRoute({
   required String sourceKind,
   required String blockId,
-}) =>
-    Uri(
-      path: AppRoutes.deepWork,
-      queryParameters: {
-        'source_kind': sourceKind,
-        'source_block_id': blockId,
-      },
-    ).toString();
+}) => Uri(
+  path: AppRoutes.deepWork,
+  queryParameters: {'source_kind': sourceKind, 'source_block_id': blockId},
+).toString();
 
 String _agendaTime(TodayTimelineItem item) {
   if (item.allDay) return 'All day';
@@ -871,29 +879,29 @@ String _agendaTime(TodayTimelineItem item) {
 }
 
 String? _agendaDetail(TodayTimelineItem item) => switch (item.kind) {
-      TodayTimelineKind.setupCommitment => 'Recurring Setup commitment',
-      TodayTimelineKind.preparation => [
-          _preparationStateLabel(item.state ?? ''),
-          if (item.creditedTrackedMinutes != null &&
-              item.plannedMinutes != null)
-            '${item.creditedTrackedMinutes}/${item.plannedMinutes} min tracked',
-        ].join(' · '),
-      TodayTimelineKind.calendarEvent => item.sourceLabel == null
-          ? 'Imported calendar event'
-          : 'Imported from ${item.sourceLabel}',
-      TodayTimelineKind.focusSession => [
-          switch (item.state) {
-            'active' => 'Active',
-            'completed' => 'Completed',
-            'abandoned' => 'Abandoned',
-            _ => 'Focus',
-          },
-          if (item.actualMinutes != null) '${item.actualMinutes} min',
-        ].join(' · '),
-      TodayTimelineKind.taskBlock => '${item.plannedMinutes} min reserved',
-      TodayTimelineKind.habitSlot => '${item.plannedMinutes} min reserved',
-      TodayTimelineKind.manualCommitment => 'Fixed commitment',
-    };
+  TodayTimelineKind.setupCommitment => null,
+  TodayTimelineKind.preparation => [
+    _preparationStateLabel(item.state ?? ''),
+    if (item.creditedTrackedMinutes != null && item.plannedMinutes != null)
+      '${item.creditedTrackedMinutes}/${item.plannedMinutes} min tracked',
+  ].join(' · '),
+  TodayTimelineKind.calendarEvent =>
+    item.sourceLabel == null
+        ? 'Imported calendar event'
+        : 'Imported from ${item.sourceLabel}',
+  TodayTimelineKind.focusSession => [
+    switch (item.state) {
+      'active' => 'Active',
+      'completed' => 'Completed',
+      'abandoned' => 'Abandoned',
+      _ => 'Focus',
+    },
+    if (item.actualMinutes != null) '${item.actualMinutes} min',
+  ].join(' · '),
+  TodayTimelineKind.taskBlock => '${item.plannedMinutes} min reserved',
+  TodayTimelineKind.habitSlot => '${item.plannedMinutes} min reserved',
+  TodayTimelineKind.manualCommitment => 'Fixed commitment',
+};
 
 AppCategoryVisual _agendaAppearance(
   BuildContext context,
@@ -912,9 +920,9 @@ AppCategoryVisual _agendaAppearance(
 }
 
 String _preparationStateLabel(String state) => switch (state) {
-      'upcoming' => 'Upcoming',
-      'partial' => 'Partly tracked',
-      'completed' => 'Completed',
-      'missed' => 'Missed',
-      _ => 'Preparation',
-    };
+  'upcoming' => 'Upcoming',
+  'partial' => 'Partly tracked',
+  'completed' => 'Completed',
+  'missed' => 'Missed',
+  _ => 'Preparation',
+};

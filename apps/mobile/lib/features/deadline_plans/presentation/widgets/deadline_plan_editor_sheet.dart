@@ -22,58 +22,60 @@ class _PreparationSessionPickerState extends State<_PreparationSessionPicker> {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text('Preferred focus block'),
+      const SizedBox(height: AppSpacing.xs),
+      Wrap(
+        spacing: AppSpacing.xs,
+        runSpacing: AppSpacing.xs,
         children: [
-          const Text('Preferred focus block'),
-          const SizedBox(height: AppSpacing.xs),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: [
-              for (final minutes in _presets)
-                ChoiceChip(
-                  label: Text('$minutes min'),
-                  selected: !_custom && widget.minutes == minutes,
-                  onSelected: (_) {
-                    setState(() => _custom = false);
-                    widget.onChanged(minutes);
-                  },
-                ),
-              ChoiceChip(
-                key: const ValueKey('preparation-session-custom'),
-                label: const Text('Custom'),
-                selected: _custom,
-                onSelected: (_) => setState(() => _custom = true),
-              ),
-            ],
-          ),
-          if (_custom) ...[
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              key: const ValueKey('preparation-session-minutes'),
-              initialValue: '${widget.minutes}',
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Focus block (minutes)',
-                helperText: '25–180 minutes',
-              ),
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              validator: (value) {
-                final minutes = int.tryParse(value?.trim() ?? '');
-                return minutes == null || minutes < 25 || minutes > 180
-                    ? 'Enter 25–180 minutes.'
-                    : null;
+          for (final minutes in _presets)
+            ChoiceChip(
+              label: Text('$minutes min'),
+              selected: !_custom && widget.minutes == minutes,
+              onSelected: (_) {
+                setState(() => _custom = false);
+                widget.onChanged(minutes);
               },
-              onChanged: (value) =>
-                  widget.onChanged(int.tryParse(value.trim()) ?? 0),
             ),
-          ],
+          ChoiceChip(
+            key: const ValueKey('preparation-session-custom'),
+            label: const Text('Custom'),
+            selected: _custom,
+            onSelected: (_) => setState(() => _custom = true),
+          ),
         ],
-      );
+      ),
+      if (_custom) ...[
+        const SizedBox(height: AppSpacing.sm),
+        TextFormField(
+          key: const ValueKey('preparation-session-minutes'),
+          initialValue: '${widget.minutes}',
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Focus block (minutes)',
+            helperText: '25–180 minutes',
+          ),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          validator: (value) {
+            final minutes = int.tryParse(value?.trim() ?? '');
+            return minutes == null || minutes < 25 || minutes > 180
+                ? 'Enter 25–180 minutes.'
+                : null;
+          },
+          onChanged: (value) =>
+              widget.onChanged(int.tryParse(value.trim()) ?? 0),
+        ),
+      ],
+    ],
+  );
 }
 
 class _DeadlinePlanEditorSheet extends StatefulWidget {
   const _DeadlinePlanEditorSheet({
+    this.startingAgain = false,
+    this.remainingMinutes,
     required this.planId,
     required this.baseRevision,
     required this.healthPlanId,
@@ -103,6 +105,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   });
 
   final String planId;
+  final bool startingAgain;
+  final int? remainingMinutes;
   final int baseRevision;
   final String? healthPlanId;
   final int? healthBaseRevision;
@@ -128,7 +132,7 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final ExamPlanHealthItem? savedExamHealth;
   final VoidCallback onOpenPlanner;
   final Future<ExamPlanHealthPreview> Function(ExamPlanHealthPreviewDraft draft)
-      onPreviewHealth;
+  onPreviewHealth;
 
   @override
   State<_DeadlinePlanEditorSheet> createState() =>
@@ -160,7 +164,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   late bool _savedHealthStillMatches;
   bool _planOptionsExpanded = false;
 
-  bool get _guidedCalendar => widget.existing == null &&
+  bool get _guidedCalendar =>
+      widget.existing == null &&
       widget.sourceKind == DeadlinePlanSourceKind.calendarEvent;
 
   @override
@@ -172,7 +177,12 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       text: retained?.title ?? existing?.title ?? widget.initialTitle ?? '',
     );
     final total =
-        retained?.estimatedTotalMinutes ?? existing?.estimatedTotalMinutes;
+        retained?.estimatedTotalMinutes ??
+        (widget.startingAgain
+            ? ((widget.remainingMinutes ?? 0) >= 30
+                  ? widget.remainingMinutes
+                  : null)
+            : existing?.estimatedTotalMinutes);
     _totalHoursController = TextEditingController(
       text: total == null ? '' : '${total ~/ 60}',
     );
@@ -180,7 +190,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       text: total == null ? '' : '${total % 60}',
     );
     _creditedPriorMinutes =
-        retained?.creditedPriorMinutes ?? existing?.creditedPriorMinutes ?? 0;
+        retained?.creditedPriorMinutes ??
+        (widget.startingAgain ? 0 : existing?.creditedPriorMinutes ?? 0);
     _kind = widget.lockKind
         ? widget.initialKind
         : retained?.kind ?? existing?.kind ?? widget.initialKind;
@@ -189,13 +200,15 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? defaultDeadlinePlanDailyPreparationMinutes(_kind)}',
     );
     _dailyCapWasManuallyEdited = retained != null || existing != null;
-    _deadline = retained?.deadlineAt ??
+    _deadline =
+        retained?.deadlineAt ??
         existing?.deadlineAt ??
         widget.initialDeadlineAt;
     _deadlineDateHint = _deadline == null
         ? DateTime.tryParse(widget.initialDeadlineOn ?? '')
         : null;
-    _sessionMinutes = retained?.preferredSessionMinutes ??
+    _sessionMinutes =
+        retained?.preferredSessionMinutes ??
         existing?.preferredSessionMinutes ??
         50;
     _bufferDays = retained?.bufferDays ?? existing?.bufferDays ?? 1;
@@ -223,19 +236,19 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             savedPlanningStart.month,
             savedPlanningStart.day,
           );
-    _planningStart =
-        requestedPlanningStart.isBefore(today) ? today : requestedPlanningStart;
-    _useCalendarAvailability = retained?.useCalendarAvailability ??
+    _planningStart = requestedPlanningStart.isBefore(today)
+        ? today
+        : requestedPlanningStart;
+    _useCalendarAvailability =
+        retained?.useCalendarAvailability ??
         existing?.useCalendarAvailability ??
         false;
   }
 
   DateTime get _now => widget.currentTime ?? DateTime.now();
 
-  DateTime _profileLocal(DateTime instant) => profileDateTimeAt(
-        instant: instant,
-        timezoneName: widget.profileTimezone,
-      );
+  DateTime _profileLocal(DateTime instant) =>
+      profileDateTimeAt(instant: instant, timezoneName: widget.profileTimezone);
 
   @override
   void dispose() {
@@ -281,9 +294,11 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             _SavedExamHealthSummary(exam: widget.savedExamHealth!),
           ],
           const SizedBox(height: AppSpacing.xs),
-          Text(_guidedCalendar
-              ? '${_step + 1} of 3 · ${_step == 0 ? 'Event' : 'Study time'}'
-              : 'Step ${_step + 1} of 3'),
+          Text(
+            _guidedCalendar
+                ? '${_step + 1} of 3 · ${_step == 0 ? 'Event' : 'Study time'}'
+                : 'Step ${_step + 1} of 3',
+          ),
           const SizedBox(height: AppSpacing.md),
           if (_step == 0) _buildIdentityStep(context),
           if (_step == 1) ...[
@@ -294,8 +309,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
                 !widget.accountDailyPreparationBudgetKnown
                     ? 'Your total daily budget is unavailable here. Any saved limit still applies.'
                     : widget.accountDailyPreparationBudgetMinutes == null
-                        ? 'No total daily limit set in Settings.'
-                        : 'Total daily budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} across all plans.',
+                    ? 'No total daily limit set in Settings.'
+                    : 'Total daily budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} across all plans.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               ExpansionTile(
@@ -303,19 +318,25 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
                 tilePadding: EdgeInsets.zero,
                 maintainState: true,
                 title: const Text('Adjust plan'),
-                subtitle: const Text('Optional · daily limit, sessions and timing'),
+                subtitle: const Text(
+                  'Optional · daily limit, sessions and timing',
+                ),
                 onExpansionChanged: (expanded) =>
                     setState(() => _planOptionsExpanded = expanded),
                 children: [_buildPreferencesStep(context)],
               ),
               if (!_planOptionsExpanded) ...[
                 if (_healthPreviewError != null)
-                  const Text('The capacity check could not be loaded. Open Adjust plan to retry.'),
+                  const Text(
+                    'The capacity check could not be loaded. Open Adjust plan to retry.',
+                  ),
                 if (_healthPreview != null)
                   _ExamPlanHealthPreviewView(exam: _healthPreview!.exam),
               ],
               const SizedBox(height: AppSpacing.sm),
-              const Text('Next: review suggested study sessions. Confirm only when ready.'),
+              const Text(
+                'Next: review suggested study sessions. Confirm only when ready.',
+              ),
             ],
           ],
           if (_step == 2) _buildPreferencesStep(context),
@@ -334,7 +355,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     final remaining = (total - prior - tracked).clamp(0, total).toInt();
     final sourceCurrent =
         revision.sourceKind == DeadlinePlanSourceKind.manual ||
-            revision.sourceStatus == DeadlinePlanSourceStatus.current;
+        revision.sourceStatus == DeadlinePlanSourceStatus.current;
     final deadlineFuture = revision.deadlineAt.isAfter(_now);
     final canCreatePreview = sourceCurrent && deadlineFuture;
     final contextCopy = switch (widget.replanContext) {
@@ -355,9 +376,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'Review saved values; use Change values to edit.',
-          ),
+          const Text('Review saved values; use Change values to edit.'),
           if (contextCopy != null) ...[
             const SizedBox(height: AppSpacing.md),
             Text(contextCopy),
@@ -382,14 +401,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             runSpacing: AppSpacing.sm,
             children: [
               _ProgressValue(label: 'Estimate', value: _duration(total)),
-              _ProgressValue(
-                label: 'Tracked focus',
-                value: _duration(tracked),
-              ),
-              _ProgressValue(
-                label: 'Remaining',
-                value: _duration(remaining),
-              ),
+              _ProgressValue(label: 'Tracked focus', value: _duration(tracked)),
+              _ProgressValue(label: 'Remaining', value: _duration(remaining)),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -397,9 +410,18 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.sm,
             children: [
-              _ProgressValue(label: 'Preferred blocks', value: _duration(revision.preferredSessionMinutes)),
-              _ProgressValue(label: 'Daily maximum', value: _duration(revision.maxDailyMinutes)),
-              _ProgressValue(label: revision.bufferDays == 1 ? 'Clear day' : 'Clear days', value: '${revision.bufferDays}'),
+              _ProgressValue(
+                label: 'Preferred blocks',
+                value: _duration(revision.preferredSessionMinutes),
+              ),
+              _ProgressValue(
+                label: 'Daily maximum',
+                value: _duration(revision.maxDailyMinutes),
+              ),
+              _ProgressValue(
+                label: revision.bufferDays == 1 ? 'Clear day' : 'Clear days',
+                value: '${revision.bufferDays}',
+              ),
             ],
           ),
           if (revision.recoveryMinutes > 0)
@@ -418,8 +440,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             !widget.accountDailyPreparationBudgetKnown
                 ? 'Account daily budget unavailable; any saved limit still applies to confirmed plans.'
                 : widget.accountDailyPreparationBudgetMinutes == null
-                    ? 'Account daily budget: not set.'
-                    : 'Account daily budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)}.',
+                ? 'Account daily budget: not set.'
+                : 'Account daily budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)}.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           if (!sourceCurrent) ...[
@@ -501,9 +523,11 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     );
     final primary = FilledButton(
       onPressed: _step == 2 ? _submit : _next,
-      child: Text(_step == 2 || _guidedCalendar && _step == 1
-          ? 'Create preview'
-          : 'Continue'),
+      child: Text(
+        _step == 2 || _guidedCalendar && _step == 1
+            ? 'Create preview'
+            : 'Continue',
+      ),
     );
 
     if (_choiceDirection(context) == Axis.vertical) {
@@ -517,51 +541,56 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       );
     }
 
-    return Row(
-      children: [
-        secondary,
-        const Spacer(),
-        primary,
-      ],
-    );
+    return Row(children: [secondary, const Spacer(), primary]);
   }
 
   Widget _buildIdentityStep(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!_guidedCalendar) const AppInfoSectionDisclosure(
-          heading: 'What are you preparing for?',
-          compactHeading: true,
-          keyPrefix: 'deadline-identity-info',
-          description:
-              'Choose exam or assignment yourself; calendar titles are not classified automatically. Finish-by times use your profile timezone, even on another device. Review the preview before reserving study sessions.',
-        ),
+        if (!_guidedCalendar)
+          const AppInfoSectionDisclosure(
+            heading: 'What are you preparing for?',
+            compactHeading: true,
+            keyPrefix: 'deadline-identity-info',
+            description:
+                'Choose exam or assignment yourself; calendar titles are not classified automatically. Finish-by times use your profile timezone, even on another device. Review the preview before reserving study sessions.',
+          ),
         if (_guidedCalendar) ...[
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_titleController.text,
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  _titleController.text,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(_deadline == null
-                    ? 'Choose a finish-by time below · ${widget.profileTimezone}'
-                    : '${DateFormat.yMMMd().add_Hm().format(_profileLocal(_deadline!))} · ${widget.profileTimezone}'),
+                Text(
+                  _deadline == null
+                      ? 'Choose a finish-by time below · ${widget.profileTimezone}'
+                      : '${DateFormat.yMMMd().add_Hm().format(_profileLocal(_deadline!))} · ${widget.profileTimezone}',
+                ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(_sourceKind == DeadlinePlanSourceKind.calendarEvent
-                    ? 'Linked event · original calendar unchanged'
-                    : 'Independent plan · original calendar unchanged',
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  _sourceKind == DeadlinePlanSourceKind.calendarEvent
+                      ? 'Linked event · original calendar unchanged'
+                      : 'Independent plan · original calendar unchanged',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text('What are you preparing for?',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'What are you preparing for?',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const Text('Add study sessions before this event.'),
         ] else
-          const Text('Plan study sessions before this date. Your calendar stays unchanged.'),
+          const Text(
+            'Plan study sessions before this date. Your calendar stays unchanged.',
+          ),
         const SizedBox(height: AppSpacing.md),
         if (widget.lockKind && _kind != null)
           ListTile(
@@ -569,12 +598,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: const Icon(AppIcons.checkCircleOutline),
-            title: Text(
-              _kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment',
-            ),
-            subtitle: const Text(
-              'Already selected for this preparation plan.',
-            ),
+            title: Text(_kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment'),
+            subtitle: const Text('Already selected for this preparation plan.'),
           )
         else
           SegmentedButton<DeadlinePlanKind>(
@@ -602,14 +627,19 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         const SizedBox(height: AppSpacing.md),
         if (_guidedCalendar) ...[
           if (widget.initialSourceStatus == DeadlinePlanSourceStatus.stale ||
-              widget.initialSourceStatus == DeadlinePlanSourceStatus.unavailable)
-            const Text('The imported event changed or is unavailable. Review its details before continuing.'),
+              widget.initialSourceStatus ==
+                  DeadlinePlanSourceStatus.unavailable)
+            const Text(
+              'The imported event changed or is unavailable. Review its details before continuing.',
+            ),
           ExpansionTile(
             key: const ValueKey('deadline-event-details'),
             tilePadding: EdgeInsets.zero,
             maintainState: true,
-            initiallyExpanded: _titleController.text.trim().isEmpty ||
-                _deadline == null || !_deadline!.isAfter(_now) ||
+            initiallyExpanded:
+                _titleController.text.trim().isEmpty ||
+                _deadline == null ||
+                !_deadline!.isAfter(_now) ||
                 widget.initialSourceStatus != DeadlinePlanSourceStatus.current,
             title: const Text('Edit event details'),
             subtitle: const Text('Title, date and calendar link'),
@@ -630,8 +660,10 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           controller: _titleController,
           maxLength: 160,
           onChanged: (_) => setState(_clearHealthPreview),
-          decoration:
-              const InputDecoration(labelText: 'Title', counterText: ''),
+          decoration: const InputDecoration(
+            labelText: 'Title',
+            counterText: '',
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
         SizedBox(
@@ -642,8 +674,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             label: Text(
               _deadline == null
                   ? _deadlineDateHint == null
-                      ? 'Choose finish-by date and time · ${widget.profileTimezone}'
-                      : 'Choose time for ${DateFormat.yMMMd().format(_deadlineDateHint!)} · ${widget.profileTimezone}'
+                        ? 'Choose finish-by date and time · ${widget.profileTimezone}'
+                        : 'Choose time for ${DateFormat.yMMMd().format(_deadlineDateHint!)} · ${widget.profileTimezone}'
                   : 'Finish by ${DateFormat.yMMMd().add_Hm().format(_profileLocal(_deadline!))} · ${widget.profileTimezone}',
             ),
           ),
@@ -696,9 +728,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           description:
               'MyLifeGraph cannot estimate this for you. Try topics × sessions per topic × minutes per session. The hour chips are optional shortcuts, not recommendations.',
         ),
-        const Text(
-          'Your total focused work, excluding breaks and classes.',
-        ),
+        const Text('Your total focused work, excluding breaks and classes.'),
         const SizedBox(height: AppSpacing.md),
         _DurationFields(
           prefix: 'deadline-total',
@@ -749,9 +779,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           description:
               'These settings are optional. A total daily budget in Settings also limits this plan; other confirmed plans use part of that budget. Clear days have no preparation blocks; 0 allows the finish-by day. A saved start in the past moves to today when replanning. Imported busy times follow Planner; re-import after calendar changes because there is no background sync.',
         ),
-        const Text(
-          'Use the defaults or adjust them. Nothing is reserved yet.',
-        ),
+        const Text('Use the defaults or adjust them. Nothing is reserved yet.'),
         const SizedBox(height: AppSpacing.md),
         _PreparationSessionPicker(
           minutes: _sessionMinutes,
@@ -778,8 +806,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           !widget.accountDailyPreparationBudgetKnown
               ? 'Your account-wide budget is temporarily unavailable here. Any saved total budget still limits confirmed plans.'
               : widget.accountDailyPreparationBudgetMinutes == null
-                  ? 'No total daily limit set in Settings.'
-                  : 'Total daily budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} across all plans.',
+              ? 'No total daily limit set in Settings.'
+              : 'Total daily budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} across all plans.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.md),
@@ -794,9 +822,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             8,
             (days) => DropdownMenuItem(
               value: days,
-              child: Text(
-                '$days ${days == 1 ? 'clear day' : 'clear days'}',
-              ),
+              child: Text('$days ${days == 1 ? 'clear day' : 'clear days'}'),
             ),
           ),
           onChanged: (value) {
@@ -848,9 +874,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             label: const Text('Check Exam Plan Health'),
           ),
           const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'Check available capacity. No changes are saved.',
-          ),
+          const Text('Check available capacity. No changes are saved.'),
           if (_healthPreviewError != null) ...[
             const SizedBox(height: AppSpacing.sm),
             const Text(
@@ -914,20 +938,20 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     final dateHint = _deadlineDateHint;
     final requestedInitial =
         (_deadline == null ? null : _profileLocal(_deadline!)) ??
-            (dateHint == null
-                ? now.add(const Duration(days: 7))
-                : DateTime(
-                    dateHint.year,
-                    dateHint.month,
-                    dateHint.day,
-                    now.hour,
-                    now.minute,
-                  ));
+        (dateHint == null
+            ? now.add(const Duration(days: 7))
+            : DateTime(
+                dateHint.year,
+                dateHint.month,
+                dateHint.day,
+                now.hour,
+                now.minute,
+              ));
     final initial = requestedInitial.isAfter(lastDate)
         ? lastDate
         : requestedInitial.isBefore(now)
-            ? now
-            : requestedInitial;
+        ? now
+        : requestedInitial;
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -981,8 +1005,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     final initialDate = _planningStart.isAfter(lastDate)
         ? lastDate
         : _planningStart.isBefore(firstDate)
-            ? firstDate
-            : _planningStart;
+        ? firstDate
+        : _planningStart;
     final selected = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -1059,12 +1083,12 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         sourceKind: _sourceKind,
         sourceCalendarEventId:
             _sourceKind == DeadlinePlanSourceKind.calendarEvent
-                ? widget.sourceCalendarEventId
-                : null,
+            ? widget.sourceCalendarEventId
+            : null,
         sourceCalendarEventFingerprint:
             _sourceKind == DeadlinePlanSourceKind.calendarEvent
-                ? widget.sourceCalendarEventFingerprint
-                : null,
+            ? widget.sourceCalendarEventFingerprint
+            : null,
         useCalendarAvailability: _useCalendarAvailability,
       );
     } on DeadlinePlanAccessException catch (error) {
@@ -1112,10 +1136,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     _savedHealthStillMatches = false;
   }
 
-  int? get _totalMinutes => _durationInput(
-        _totalHoursController.text,
-        _totalMinutesController.text,
-      );
+  int? get _totalMinutes =>
+      _durationInput(_totalHoursController.text, _totalMinutesController.text);
 
   void _showValidation(String message) {
     ScaffoldMessenger.of(context).showSnackBar(

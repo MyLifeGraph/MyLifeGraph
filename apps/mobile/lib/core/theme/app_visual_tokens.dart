@@ -130,6 +130,32 @@ class AppVisualTokens extends ThemeExtension<AppVisualTokens> {
     shadow: Color(0xC4070814),
   );
 
+  static const liquidGlass = AppVisualTokens(
+    background: Color(0xFF080A0E),
+    surface: Color(0xFF10141B),
+    surfaceSubtle: Color(0xFF141A22),
+    surfaceRaised: Color(0xFF1C2430),
+    surfaceInteractive: Color(0xFF26313E),
+    textPrimary: Color(0xFFE5E9EF),
+    textSecondary: Color(0xFFADB7C4),
+    brand: Color(0xFFA5B8CF),
+    onBrand: Color(0xFF111923),
+    focus: Color(0xFF91A2B8),
+    outlineSoft: Color(0xFF354251),
+    info: Color(0xFFA3BCDE),
+    infoSurface: Color(0xFF172334),
+    attention: Color(0xFFCDBE9E),
+    attentionSurface: Color(0xFF211F1B),
+    danger: Color(0xFFF0A6A8),
+    dangerSurface: Color(0xFF332128),
+    success: Color(0xFF9BCBB1),
+    successSurface: Color(0xFF192B24),
+    dataBlue: Color(0xFF9ACBFF),
+    dataViolet: Color(0xFFCABCF4),
+    dataCoral: Color(0xFFFFB5A5),
+    shadow: Color(0x99030710),
+  );
+
   @override
   AppVisualTokens copyWith({
     Color? background,

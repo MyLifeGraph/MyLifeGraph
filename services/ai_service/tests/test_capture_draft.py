@@ -134,6 +134,9 @@ def test_unsupported_or_invented_evidence_never_becomes_proposal(fields, evidenc
 @pytest.mark.parametrize("key,value,text", [
     ("sleep_start", "23:00", "Schlafbeginn 23 Uhr"),
     ("wake_time", "07:30", "Woke at 7:30 am"),
+    ("wake_time", "07:00", "Woke at 7 am"),
+    ("sleep_start", "23:00", "Sleep start 11 pm"),
+    ("sleep_start", "23:30", "Schlafbeginn 23 Uhr 30"),
     ("sleep_target_minutes", 480, "My target is eight hours"),
     ("motivation", 2, "My study motivation is high"),
 ])

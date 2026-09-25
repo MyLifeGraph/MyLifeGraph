@@ -1,5 +1,34 @@
 # Architecture
 
+## Isolated product website
+
+`apps/website` is a standalone static EN/DE product site, deployed to a separate
+Vercel project. Its four-tab tour uses only invented in-memory data; it has no
+product API, authentication, database or Coach-provider connection. Only its
+language and appearance preferences use local storage. Links open the existing app or GitHub
+releases. Its CSP explicitly denies network connections and form submissions.
+See [website ownership and workflow](../apps/website/README.md). Flutter hosting,
+Cloud data authority and existing app routes are unchanged.
+
+## Reversible editing additions
+
+Capture leave protection is client-only; accepted device sleep values go through
+the existing reviewed Morning Save, not an independent health-to-Capture writer.
+Inbox history is an owner-filtered read. Restore shares the notification command
+ledger. Completed Focus correction goes Flutter → authenticated FastAPI →
+service-only correction RPC, updating the canonical elapsed interval under CAS
+and owner-first locking. A private audit ledger retains the original interval
+and exact retry result. Saved plan proposals remain immutable snapshots; current
+credit reads use the corrected Focus row. Database/API rollout must precede use
+of restore/correction; source alone is not deployment evidence.
+
+Morning/Evening reminder extensions reuse the existing Android FCM worker and
+push consent/revision/RPC boundary. Saved Capture presence is checked in Postgres
+both at locked reservation and pre-dispatch; no new process, public port, LLM or
+data source is introduced. The additive migration must precede the API and new
+native receipt support. Manual seven-day Capture backfill uses existing
+date-specific writes and projection invalidation, not another ingestion path.
+
 For the complete service inventory and the local-versus-released change list,
 start with the [development handoff](development-handoff.md). This architecture
 describes supported repository boundaries. Last observed deployment identities

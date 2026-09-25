@@ -1,5 +1,12 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+Reviewed voice Capture accepts explicit `7 am`, `11 pm`, and `23 Uhr 30` clock
+evidence as well as existing colon-form clocks. Output remains canonical HH:mm.
+A stated duration alone cannot invent either clock; corrections require their
+own verbatim evidence. Review replaces explicitly proposed sleep clocks and
+preserves unmentioned stored answers, as the review subtitle explains. Backend
+extraction never saves the Capture or bypasses full-form confirmation.
+
 Optional Android push uses an API-only Firebase credential. `FCM_*` is forbidden
 in the separate executor environment, and the local development subprocess
 allowlist excludes it. No Coach provider, model, tool or execution behavior is
@@ -29,7 +36,8 @@ not replace a subsequent explicit provider choice or bypass storage failures.
 
 The composer model control opens a bottom sheet with all three provider options
 directly selectable. Each option has independent Info opening its explanation
-in a dialog without selecting that provider. Standard selection closes the sheet;
+in a bounded, scrollable popover without selecting that provider. Outside tap,
+Back or Escape dismisses the explanation. Standard selection closes the sheet;
 personal-key options retain the existing key test/save/delete controls inside it.
 Errors remain visible above the chat. Opening the sheet or switching providers
 never sends a question. Settings no longer duplicates these provider controls.
@@ -56,7 +64,7 @@ positions it at the newest message; typing does not reset the scroll position.
 A small circular down-arrow inside the timeline appears when more than 48px
 remain below the viewport, returns to the latest message, and hides at the bottom.
 The empty invitation adds one non-interactive example question. Optional Coach
-information opens in a dialog so expanded copy cannot push the fixed panels away.
+information opens in an anchored popover so expanded copy cannot push the fixed panels away.
 At very small remaining heights the composer participates in that same chat
 viewport instead of creating another scroll region or clipping its controls.
 

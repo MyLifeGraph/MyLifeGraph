@@ -11,11 +11,25 @@ from app.models.focus import (
     FocusSessionResponse,
     FocusStartContextResponse,
     FocusStartRequest,
+    FocusTimeCorrectionRequest,
 )
 from app.services.focus_service import FocusService
 
 
 router = APIRouter(prefix="/focus", tags=["focus"])
+
+
+@router.post("/sessions/{session_id}/correct-time", response_model=FocusSessionResponse)
+async def correct_focus_time(
+    session_id: UUID,
+    request: FocusTimeCorrectionRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: FocusService = Depends(get_focus_service),
+) -> FocusSessionResponse:
+    try:
+        return await service.correct_time(user_id=principal.user_id, session_id=session_id, request=request)
+    except FOCUS_ERRORS as exc:
+        raise focus_problem(exc) from exc
 
 
 @router.get(

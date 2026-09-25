@@ -15,6 +15,10 @@ class PushSettings(BaseModel):
     sleep: bool = Field(strict=True)
     deadlines: bool = Field(strict=True)
     patterns: bool = Field(strict=True)
+    morning: bool = Field(default=False, strict=True)
+    evening: bool = Field(default=False, strict=True)
+    morning_time: str = Field(default="08:00", pattern=_CLOCK)
+    evening_time: str = Field(default="20:00", pattern=_CLOCK)
     quiet_start: str = Field(pattern=_CLOCK)
     quiet_end: str = Field(pattern=_CLOCK)
     consent_version: Literal[PUSH_CONSENT_VERSION] | None = None
@@ -50,14 +54,28 @@ class PushCommand(BaseModel):
     sleep: bool | None = Field(default=None, strict=True)
     deadlines: bool | None = Field(default=None, strict=True)
     patterns: bool | None = Field(default=None, strict=True)
+    morning: bool | None = Field(default=None, strict=True)
+    evening: bool | None = Field(default=None, strict=True)
+    morning_time: str | None = Field(default=None, pattern=_CLOCK)
+    evening_time: str | None = Field(default=None, pattern=_CLOCK)
     quiet_start: str | None = Field(default=None, pattern=_CLOCK)
     quiet_end: str | None = Field(default=None, pattern=_CLOCK)
     device_id: UUID | None = None
     registration_id: UUID | None = None
     token: str | None = Field(default=None, min_length=20, max_length=4096, repr=False)
 
+    def rpc_payload(self) -> dict:
+        # Keep historical request fingerprints byte-shape compatible: adding
+        # null extension keys would break exact retries across an API rollout.
+        excluded = {"morning", "evening", "morning_time", "evening_time"} if self.morning is None else set()
+        return self.model_dump(mode="json", exclude=excluded)
+
     @model_validator(mode="after")
     def validate_command(self):
+        checkins = (self.morning, self.evening, self.morning_time, self.evening_time)
+        if any(value is not None for value in checkins):
+            if self.command != "settings" or any(value is None for value in checkins):
+                raise ValueError("Complete check-in settings are required")
         config = (
             self.enabled,
             self.sleep,

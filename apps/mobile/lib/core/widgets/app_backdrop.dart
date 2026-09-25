@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme_effects.dart';
+import '../theme/app_liquid_glass.dart';
 import '../theme/app_visual_tokens.dart';
 
 class AppBackdrop extends StatefulWidget {
@@ -97,6 +98,20 @@ class _AppBackdropState extends State<AppBackdrop>
       child: Stack(
         fit: StackFit.expand,
         children: [
+          if (Theme.of(context).extension<AppLiquidGlass>() != null)
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  child: RepaintBoundary(
+                    child: DecoratedBox(
+                      key: ValueKey('liquid-glass-backdrop'),
+                      decoration: BoxDecoration(gradient: AppLiquidGlass.backdrop),
+                      child: LiquidGlassLightAccents(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (backdropAsset != null)
             Positioned.fill(
               child: IgnorePointer(

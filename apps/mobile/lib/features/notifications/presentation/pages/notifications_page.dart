@@ -84,6 +84,27 @@ class _NotificationsContent extends ConsumerWidget {
       onOpen: (target) => GoRouter.of(context).push(target.location),
       onLifecycleAction: controller.performAction,
       onRetryAction: controller.retry,
+      browseControls: controller.supportsHistory && state.canManageLifecycle
+          ? Row(
+              children: [
+                FilterChip(
+                  label: const Text('Dismissed'),
+                  selected: state.dismissed,
+                  onSelected: controller.canBrowse
+                      ? controller.showDismissed
+                      : null,
+                ),
+                const Spacer(),
+                if (state.items.length >= state.limit && state.limit < 1000)
+                  TextButton(
+                    onPressed: controller.canBrowse
+                        ? controller.loadMore
+                        : null,
+                    child: const Text('Load more'),
+                  ),
+              ],
+            )
+          : null,
     );
   }
 }
@@ -174,9 +195,11 @@ class _NotificationsHome extends StatelessWidget {
     required this.onOpen,
     required this.onLifecycleAction,
     required this.onRetryAction,
+    this.browseControls,
   });
 
   final List<_AlertItem> alerts;
+  final Widget? browseControls;
   final bool useDemoData;
   final bool isRefreshing;
   final Object? refreshError;
@@ -186,16 +209,19 @@ class _NotificationsHome extends StatelessWidget {
   final Future<bool> Function(
     String notificationId,
     NotificationLifecycleCommand command,
-  ) onLifecycleAction;
+  )
+  onLifecycleAction;
   final Future<bool> Function(String notificationId) onRetryAction;
 
   @override
   Widget build(BuildContext context) {
-    final unreadCount =
-        alerts.where((alert) => !alert.notification.isRead).length;
+    final unreadCount = alerts
+        .where((alert) => !alert.notification.isRead)
+        .length;
     final readCount = alerts.length - unreadCount;
-    final actionableCount =
-        alerts.where((alert) => alert.target != null).length;
+    final actionableCount = alerts
+        .where((alert) => alert.target != null)
+        .length;
 
     return SafeArea(
       child: CustomScrollView(
@@ -210,6 +236,7 @@ class _NotificationsHome extends StatelessWidget {
             sliver: SliverList.list(
               children: [
                 _NotificationsHeader(useDemoData: useDemoData),
+                if (browseControls != null) browseControls!,
                 if (isRefreshing) ...[
                   const SizedBox(height: AppSpacing.md),
                   const LinearProgressIndicator(
@@ -239,10 +266,8 @@ class _NotificationsHome extends StatelessWidget {
                         onOpen: alert.target == null
                             ? null
                             : () => onOpen(alert.target!),
-                        onLifecycleAction: (command) => onLifecycleAction(
-                          alert.notification.id,
-                          command,
-                        ),
+                        onLifecycleAction: (command) =>
+                            onLifecycleAction(alert.notification.id, command),
                         onRetryAction: () =>
                             onRetryAction(alert.notification.id),
                         onReload: onReload,
@@ -268,15 +293,12 @@ class _NotificationsHeader extends StatelessWidget {
     final copy = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Inbox',
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
+        Text('Inbox', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: AppSpacing.xs),
         Text(
           useDemoData
               ? 'Local examples · not synced or sent. Counts cover up to 30 shown items.'
-              : 'Latest 30 items · counts cover this list.',
+              : 'Counts cover this list.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
@@ -291,8 +313,10 @@ class _NotificationsHeader extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
-      child: Text(useDemoData ? 'Demo data' : 'Account data',
-          style: Theme.of(context).textTheme.bodySmall),
+      child: Text(
+        useDemoData ? 'Demo data' : 'Account data',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
     );
 
     return LayoutBuilder(
@@ -364,7 +388,8 @@ class _NotificationSummaryGrid extends StatelessWidget {
         children: [
           for (var index = 0; index < metrics.length; index++) ...[
             Expanded(child: _NotificationMetricCard(metric: metrics[index])),
-            if (index < metrics.length - 1) const SizedBox(width: AppSpacing.sm),
+            if (index < metrics.length - 1)
+              const SizedBox(width: AppSpacing.sm),
           ],
         ],
       ),
@@ -373,34 +398,36 @@ class _NotificationSummaryGrid extends StatelessWidget {
 }
 
 class _NotificationMetricCard extends StatelessWidget {
-  const _NotificationMetricCard({
-    required this.metric,
-  });
+  const _NotificationMetricCard({required this.metric});
 
   final _NotificationMetric metric;
 
   @override
   Widget build(BuildContext context) {
     final content = Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(metric.icon, color: metric.color, size: 18),
-                  const SizedBox(width: AppSpacing.xs),
-                  Flexible(child: Text(metric.value,
-                    style: Theme.of(context).textTheme.titleMedium)),
-                ],
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(metric.icon, color: metric.color, size: 18),
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                metric.value,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                metric.label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          );
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          metric.label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
     return _NotificationsPanel(
       key: metric.key,
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -439,7 +466,7 @@ class _NotificationCard extends StatelessWidget {
   final bool canManageLifecycle;
   final VoidCallback? onOpen;
   final Future<bool> Function(NotificationLifecycleCommand command)
-      onLifecycleAction;
+  onLifecycleAction;
   final Future<bool> Function() onRetryAction;
   final VoidCallback onReload;
 
@@ -456,11 +483,7 @@ class _NotificationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: ExcludeSemantics(
-        child: Icon(
-          _iconForType(notification.type),
-          color: accent,
-          size: 20,
-        ),
+        child: Icon(_iconForType(notification.type), color: accent, size: 20),
       ),
     );
     final content = _NotificationCardContent(
@@ -475,7 +498,8 @@ class _NotificationCard extends StatelessWidget {
 
     return Semantics(
       container: true,
-      label: '${notification.isRead ? 'Read' : 'Unread'} notification: '
+      label:
+          '${notification.isRead ? 'Read' : 'Unread'} notification: '
           '${notification.title}',
       child: _NotificationsPanel(
         key: ValueKey('notification-${notification.id}'),
@@ -523,7 +547,7 @@ class _NotificationCardContent extends StatelessWidget {
   final bool canManageLifecycle;
   final VoidCallback? onOpen;
   final Future<bool> Function(NotificationLifecycleCommand command)
-      onLifecycleAction;
+  onLifecycleAction;
   final Future<bool> Function() onRetryAction;
   final VoidCallback onReload;
 
@@ -532,7 +556,8 @@ class _NotificationCardContent extends StatelessWidget {
     final notification = alert.notification;
     final operation = alert.actionState;
     final isPending = operation?.isPending == true;
-    final lifecycleBlocked = isPending ||
+    final lifecycleBlocked =
+        isPending ||
         operation?.error != null ||
         operation?.committedRequiresReload == true;
     final readCommand = notification.isRead
@@ -546,65 +571,78 @@ class _NotificationCardContent extends StatelessWidget {
       onTap: () {},
       excludeFromSemantics: true,
       child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (canManageLifecycle)
-          Semantics(
-            button: true,
-            enabled: !lifecycleBlocked,
-            label: '$readLabel notification ${notification.title}',
-            excludeSemantics: true,
-            child: SizedBox.square(
-              dimension: 44,
-              child: IconButton(
-                key: ValueKey('notification-read-toggle-${notification.id}'),
-                tooltip: readLabel,
-                iconSize: 20,
-                onPressed: lifecycleBlocked
-                    ? null
-                    : () => onLifecycleAction(readCommand),
-                icon: Icon(notification.isRead
-                    ? AppIcons.markEmailUnreadOutlined
-                    : AppIcons.draftsOutlined),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (canManageLifecycle && notification.dismissedAt != null)
+            IconButton(
+              tooltip: 'Restore',
+              onPressed: lifecycleBlocked
+                  ? null
+                  : () =>
+                        onLifecycleAction(NotificationLifecycleCommand.restore),
+              icon: const Icon(AppIcons.undo),
+            ),
+          if (canManageLifecycle && notification.dismissedAt == null)
+            Semantics(
+              button: true,
+              enabled: !lifecycleBlocked,
+              label: '$readLabel notification ${notification.title}',
+              excludeSemantics: true,
+              child: SizedBox.square(
+                dimension: 44,
+                child: IconButton(
+                  key: ValueKey('notification-read-toggle-${notification.id}'),
+                  tooltip: readLabel,
+                  iconSize: 20,
+                  onPressed: lifecycleBlocked
+                      ? null
+                      : () => onLifecycleAction(readCommand),
+                  icon: Icon(
+                    notification.isRead
+                        ? AppIcons.markEmailUnreadOutlined
+                        : AppIcons.draftsOutlined,
+                  ),
+                ),
               ),
             ),
-          ),
-        if (canManageLifecycle)
-          Semantics(
-            button: true,
-            enabled: !lifecycleBlocked,
-            label: 'Dismiss notification ${notification.title}',
-            excludeSemantics: true,
-            child: SizedBox.square(
-              dimension: 44,
-              child: IconButton(
-                key: ValueKey('notification-dismiss-${notification.id}'),
-                tooltip: 'Dismiss',
-                iconSize: 20,
-                onPressed: lifecycleBlocked
-                    ? null
-                    : () => onLifecycleAction(NotificationLifecycleCommand.dismiss),
-                icon: const Icon(AppIcons.close),
+          if (canManageLifecycle && notification.dismissedAt == null)
+            Semantics(
+              button: true,
+              enabled: !lifecycleBlocked,
+              label: 'Dismiss notification ${notification.title}',
+              excludeSemantics: true,
+              child: SizedBox.square(
+                dimension: 44,
+                child: IconButton(
+                  key: ValueKey('notification-dismiss-${notification.id}'),
+                  tooltip: 'Dismiss',
+                  iconSize: 20,
+                  onPressed: lifecycleBlocked
+                      ? null
+                      : () => onLifecycleAction(
+                          NotificationLifecycleCommand.dismiss,
+                        ),
+                  icon: const Icon(AppIcons.close),
+                ),
               ),
             ),
-          ),
-        if (onOpen != null)
-          Semantics(
-            button: true,
-            label: 'Open notification ${notification.title}',
-            excludeSemantics: true,
-            child: SizedBox.square(
-              dimension: 44,
-              child: IconButton.filledTonal(
-                key: ValueKey('notification-open-${notification.id}'),
-                tooltip: alert.target!.openLabel,
-                iconSize: 20,
-                onPressed: onOpen,
-                icon: const Icon(AppIcons.arrowForward),
+          if (onOpen != null)
+            Semantics(
+              button: true,
+              label: 'Open notification ${notification.title}',
+              excludeSemantics: true,
+              child: SizedBox.square(
+                dimension: 44,
+                child: IconButton.filledTonal(
+                  key: ValueKey('notification-open-${notification.id}'),
+                  tooltip: alert.target!.openLabel,
+                  iconSize: 20,
+                  onPressed: onOpen,
+                  icon: const Icon(AppIcons.arrowForward),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
       ),
     );
 
@@ -613,8 +651,10 @@ class _NotificationCardContent extends StatelessWidget {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final title = Text(notification.title,
-                style: Theme.of(context).textTheme.titleMedium);
+            final title = Text(
+              notification.title,
+              style: Theme.of(context).textTheme.titleMedium,
+            );
             if (!canManageLifecycle && onOpen == null) return title;
             if (constraints.maxWidth < 250 ||
                 MediaQuery.textScalerOf(context).scale(14) > 18) {
@@ -655,14 +695,13 @@ class _NotificationCardContent extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          notification.body,
-          style: Theme.of(context).textTheme.bodyMedium,
+          '${DateTime.now().toUtc().difference(notification.createdAt.toUtc()).inHours >= 24 ? 'Earlier · ' : ''}'
+          '${DateFormat('MMM d, HH:mm').format(notification.createdAt.toLocal())}',
+          key: ValueKey('notification-date-${notification.id}'),
+          style: Theme.of(context).textTheme.labelMedium,
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          DateFormat('MMM d, HH:mm').format(notification.createdAt.toLocal()),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(notification.body, style: Theme.of(context).textTheme.bodyMedium),
         if (notification.dueAt != null) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -693,9 +732,7 @@ class _NotificationCardContent extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: Text(_pendingCopy(operation!.command)),
-                ),
+                Flexible(child: Text(_pendingCopy(operation!.command))),
               ],
             ),
           ),
@@ -722,9 +759,7 @@ class _NotificationCardContent extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Change saved. Inbox could not reload.',
-                  ),
+                  const Text('Change saved. Inbox could not reload.'),
                   const SizedBox(height: AppSpacing.sm),
                   OutlinedButton.icon(
                     onPressed: onRetryAction,
@@ -745,6 +780,7 @@ class _NotificationCardContent extends StatelessWidget {
       NotificationLifecycleCommand.markRead => 'Marking as read…',
       NotificationLifecycleCommand.markUnread => 'Marking as unread…',
       NotificationLifecycleCommand.dismiss => 'Dismissing…',
+      NotificationLifecycleCommand.restore => 'Restoring…',
     };
   }
 
@@ -790,11 +826,11 @@ class _NotificationActionError extends StatelessWidget {
               exact
                   ? 'The result could not be confirmed. The item is unchanged here; retry without changing the action.'
                   : reloadRequired
-                      ? 'This inbox item changed or is no longer available. Reload the inbox before acting again.'
-                      : 'The inbox action could not be completed. Reload the inbox before trying again.',
+                  ? 'This inbox item changed or is no longer available. Reload the inbox before acting again.'
+                  : 'The inbox action could not be completed. Reload the inbox before trying again.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                  ),
+                color: Theme.of(context).colorScheme.onErrorContainer,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Wrap(

@@ -84,6 +84,16 @@ class Api extends ApiClient {
 }
 
 void main() {
+  test('check-in push extension is optional but must be complete', () {
+    expect(PushSettingsState.parse(cloud()).settings.containsKey('morning'), isFalse);
+    final state = cloud();
+    (state['settings'] as Map<String, dynamic>).addAll(<String, Object>{
+      'morning': true, 'evening': false, 'morning_time': '08:30', 'evening_time': '20:00',
+    });
+    expect(PushSettingsState.parse(state).settings['morning_time'], '08:30');
+    (state['settings'] as Map<String, dynamic>).remove('evening_time');
+    expect(() => PushSettingsState.parse(state), throwsFormatException);
+  });
   test(
     'disabled consent binds locally but never requests a Firebase token',
     () async {

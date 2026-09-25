@@ -10,10 +10,8 @@ import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_surface.dart';
 import '../../../deadline_plans/domain/exam_plan_health.dart';
 
-typedef TodayInfoHeaderBuilder = Widget Function(
-  BuildContext context,
-  Widget infoButton,
-);
+typedef TodayInfoHeaderBuilder =
+    Widget Function(BuildContext context, Widget infoButton);
 
 /// Thin Today adapter over the shared, non-persisted information disclosure.
 ///
@@ -112,8 +110,9 @@ class TodayExamPlanHealthSection extends StatelessWidget {
             else
               Column(
                 children: [
-                  for (final exam in value.valueOrNull?.needsAttention ??
-                      const <ExamPlanHealthItem>[]) ...[
+                  for (final exam
+                      in value.valueOrNull?.needsAttention ??
+                          const <ExamPlanHealthItem>[]) ...[
                     ListTile(
                       key: ValueKey('today-exam-health-${exam.planId}'),
                       contentPadding: EdgeInsets.zero,
@@ -155,25 +154,25 @@ class TodayExamPlanHealthSection extends StatelessWidget {
 }
 
 String _todayHealthLabel(ExamPlanHealthStatus status) => switch (status) {
-      ExamPlanHealthStatus.green => 'Healthy capacity',
-      ExamPlanHealthStatus.yellow => 'Plan soon',
-      ExamPlanHealthStatus.red => 'Capacity shortfall',
-      ExamPlanHealthStatus.unknown => 'Availability unknown',
-    };
+  ExamPlanHealthStatus.green => 'Healthy capacity',
+  ExamPlanHealthStatus.yellow => 'Plan soon',
+  ExamPlanHealthStatus.red => 'Capacity shortfall',
+  ExamPlanHealthStatus.unknown => 'Availability unknown',
+};
 
 IconData _todayHealthIcon(ExamPlanHealthStatus status) => switch (status) {
-      ExamPlanHealthStatus.green => AppIcons.checkCircleOutline,
-      ExamPlanHealthStatus.yellow => AppIcons.warningAmberOutlined,
-      ExamPlanHealthStatus.red => AppIcons.errorOutline,
-      ExamPlanHealthStatus.unknown => AppIcons.infoOutline,
-    };
+  ExamPlanHealthStatus.green => AppIcons.checkCircleOutline,
+  ExamPlanHealthStatus.yellow => AppIcons.warningAmberOutlined,
+  ExamPlanHealthStatus.red => AppIcons.errorOutline,
+  ExamPlanHealthStatus.unknown => AppIcons.infoOutline,
+};
 
 AppStatusTone _todayHealthTone(ExamPlanHealthStatus status) => switch (status) {
-      ExamPlanHealthStatus.green => AppStatusTone.success,
-      ExamPlanHealthStatus.yellow => AppStatusTone.attention,
-      ExamPlanHealthStatus.red => AppStatusTone.danger,
-      ExamPlanHealthStatus.unknown => AppStatusTone.info,
-    };
+  ExamPlanHealthStatus.green => AppStatusTone.success,
+  ExamPlanHealthStatus.yellow => AppStatusTone.attention,
+  ExamPlanHealthStatus.red => AppStatusTone.danger,
+  ExamPlanHealthStatus.unknown => AppStatusTone.info,
+};
 
 Color _todayHealthColor(BuildContext context, ExamPlanHealthStatus status) =>
     switch (status) {
@@ -217,11 +216,7 @@ class DashboardSectionTitle extends StatelessWidget {
           if (icon != null) ...[
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Icon(
-                icon,
-                size: 22,
-                color: iconColor ?? tokens.brand,
-              ),
+              child: Icon(icon, size: 22, color: iconColor ?? tokens.brand),
             ),
             const SizedBox(width: AppSpacing.sm),
           ],
@@ -231,17 +226,19 @@ class DashboardSectionTitle extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge,
+                  AppInfoHeading(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                   if (caption != null) ...[
                     const SizedBox(height: 2),
                     Text(
                       caption!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.textSecondary,
-                          ),
+                        color: tokens.textSecondary,
+                      ),
                     ),
                   ],
                 ],
@@ -255,7 +252,8 @@ class DashboardSectionTitle extends StatelessWidget {
     if (trailing == null) return copy;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stack = constraints.maxWidth < (compactTrailing ? 280 : 520) ||
+        final stack =
+            constraints.maxWidth < (compactTrailing ? 280 : 520) ||
             MediaQuery.textScalerOf(context).scale(16) >= 24;
         if (stack) {
           return Column(
@@ -293,11 +291,8 @@ class DashboardStatusPill extends StatelessWidget {
   final AppStatusTone tone;
 
   @override
-  Widget build(BuildContext context) => AppStatusPill(
-        label: label,
-        icon: icon,
-        tone: tone,
-      );
+  Widget build(BuildContext context) =>
+      AppStatusPill(label: label, icon: icon, tone: tone);
 }
 
 class DashboardInlineMessage extends StatelessWidget {
@@ -497,8 +492,9 @@ class _DashboardInlineExpansionCardState
                               canRequestFocus: false,
                               borderRadius: BorderRadius.circular(AppRadii.sm),
                               child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(minHeight: 44),
+                                constraints: const BoxConstraints(
+                                  minHeight: 44,
+                                ),
                                 child: Row(
                                   children: [
                                     Expanded(child: Text(widget.title)),

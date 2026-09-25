@@ -11,6 +11,20 @@ class PushSettingsState {
       throw const FormatException('Invalid push settings');
     }
     final s = json['settings'] as Map<String, dynamic>;
+    const checkinKeys = ['morning', 'evening', 'morning_time', 'evening_time'];
+    if (checkinKeys.any(s.containsKey) && !checkinKeys.every(s.containsKey)) {
+      throw const FormatException('Incomplete check-in push settings');
+    }
+    for (final kind in ['morning', 'evening']) {
+      if (s.containsKey(kind) &&
+          (s[kind] is! bool ||
+              s['${kind}_time'] is! String ||
+              !RegExp(
+                r'^([01][0-9]|2[0-3]):[0-5][0-9]$',
+              ).hasMatch(s['${kind}_time'] as String))) {
+        throw const FormatException('Invalid check-in push settings');
+      }
+    }
     if (s['revision'] is! int ||
         (s['revision'] as int) < 0 ||
         [

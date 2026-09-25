@@ -54,8 +54,9 @@ target-source, and quality explanations start closed independently behind
 20-pixel information icons in 44×44 targets. Their semantics switch between
 `Show information about <heading>` and `Hide information about <heading>`, and
 their inline motion becomes immediate under Reduced Motion. The duration copy
-says that the times are self-estimates rather than objective measurement. The
-student may correct both clocks and the target before saving. The interval must
+asks the student to review the times before saving. Connected Android devices
+may offer a reviewed watch interval; this never replaces saved/manual values
+automatically. The student may correct both clocks and the target before saving. The interval must
 be ordered, positive, minute-aligned, and no longer than 16 hours.
 Cross-midnight examples such as 23:00–07:00 and same-date examples such as
 02:00–10:00 both derive 480 minutes.

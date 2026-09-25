@@ -12,6 +12,25 @@ const _firstId = '11111111-1111-4111-8111-111111111111';
 const _secondId = '22222222-2222-4222-8222-222222222222';
 
 void main() {
+  test('history loads older items and restores without recreating notifications', () async {
+    final item = _notification(_firstId).applyLifecycle(_result(_firstId, NotificationLifecycleCommand.dismiss));
+    final repository = _HistoryRepository(items: [item], onAction: (_, request) async => _result(
+      request.notificationId, request.command, updatedAt: DateTime.utc(2026, 7, 10, 8, 2)));
+    final controller = NotificationsController(repository: repository, canManageLifecycle: true, autoLoad: false);
+    addTearDown(controller.dispose);
+    await controller.load();
+    expect(controller.state.items, isEmpty);
+    await controller.showDismissed(true);
+    expect(controller.state.items.single.id, _firstId);
+    await controller.loadMore();
+    expect(repository.historyLimit, 60);
+    expect(await controller.performAction(_firstId, NotificationLifecycleCommand.restore), true);
+    expect(controller.state.items, isEmpty);
+    await controller.showDismissed(false);
+    expect(controller.state.items.single.id, _firstId);
+    expect(controller.state.items.single.isRead, true);
+    expect(repository.requests.single.command, NotificationLifecycleCommand.restore);
+  });
   test('loads and applies confirmed read state without optimistic mutation',
       () async {
     final completion = Completer<NotificationLifecycleResult>();
@@ -462,6 +481,16 @@ AppException _httpFailure(int statusCode) {
       statusCode: statusCode,
     ),
   );
+}
+
+class _HistoryRepository extends _FakeNotificationsRepository implements NotificationHistoryRepository {
+  _HistoryRepository({required super.items, required super.onAction});
+  int? historyLimit;
+  @override
+  Future<List<AppNotification>> getNotificationHistory({required bool dismissed, required int limit}) async {
+    historyLimit = limit;
+    return items.where((item) => (item.dismissedAt != null) == dismissed).take(limit).toList();
+  }
 }
 
 class _FakeNotificationsRepository implements NotificationsRepository {

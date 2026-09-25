@@ -1,8 +1,8 @@
 # Notification Lifecycle V1 Contract
 
 This document defines the first durable lifecycle boundary for stored Inbox
-items. It covers reading visible rows, marking them read or unread, and
-dismissing them. It does not itself define notification generation, scheduling,
+items. It covers reading visible/dismissed rows, marking them read or unread,
+dismissing and restoring them. It does not itself define notification generation, scheduling,
 or permission consent; the later local foreground boundary is specified
 separately in `docs/notification-delivery-v1-contract.md`.
 
@@ -25,12 +25,15 @@ separately in `docs/notification-delivery-v1-contract.md`.
 
 ## Visible Inbox Read
 
-The authenticated Inbox reads at most the latest 30 owner rows where:
+The authenticated Inbox initially reads the latest 30 owner rows where:
 
 - `dismissed_at` is null; and
 - `due_at` is null or no later than the captured current UTC instant.
 
-Rows are ordered by `created_at` descending. The UI reports that its counts
+`Load more` expands the prefix by 30, up to the 1,000-row read ceiling.
+`Dismissed` selects rows with a non-null dismissal and resets the prefix.
+Browsing waits while a mutation/reconciliation is unresolved.
+Rows are ordered by `created_at` descending, then `id` descending. The UI reports that its counts
 cover only those loaded rows. A stored row proves only that an Inbox item
 exists; it does not prove that a Web, local, push, email, or other notification
 was delivered.
@@ -65,6 +68,11 @@ and lifecycle/error/retry behavior remain available.
 The empty-list panel is an explicit live semantic container, so its status
 remains available to screen readers after dismissal and route reload.
 
+The creation timestamp precedes each stored message. Items at least 24 hours
+old are labelled `Earlier` so relative wording is read as historical copy.
+This is not an expiry claim: no expiry field exists on this projection. Bodies,
+due/provenance dates, unread state and lifecycle actions remain unchanged.
+
 ## Lifecycle Endpoint
 
 `POST /v1/notifications/{notification_id}/actions` accepts exactly:
@@ -79,7 +87,7 @@ remains available to screen readers after dismissal and route reload.
 ```
 
 `request_id` is a client-generated UUID. `command` is exactly `mark_read`,
-`mark_unread`, or `dismiss`. `expected_updated_at` is the timezone-aware value
+`mark_unread`, `dismiss`, or `restore`. `expected_updated_at` is the timezone-aware value
 from the row on which the user acted. Unknown or coerced fields are rejected.
 
 The exact success response is:
@@ -109,6 +117,7 @@ Response timestamps are timezone-aware. `is_read` is true exactly when
 | `mark_read` | An active unread row becomes read and receives matching `read_at` and `updated_at`; an already-read active row is an idempotent no-op. |
 | `mark_unread` | An active read row becomes unread, clears `read_at`, and advances `updated_at`; an already-unread active row is an idempotent no-op. |
 | `dismiss` | The row remains as a read tombstone, receives `dismissed_at`, and disappears from normal Inbox reads. It is not hard-deleted. |
+| `restore` | Clear `dismissed_at`, preserving read history and notification identity. Does not generate or deliver a new notification. |
 
 Every state-changing timestamp is strictly later than the row's prior
 `updated_at`, including when the database clock would otherwise compare equal.
@@ -128,7 +137,9 @@ and the exact result projection, but no notification title or message.
 - Reusing a request id with any different identity is `409`.
 - A current row whose `updated_at` no longer equals `expected_updated_at` is
   `409`; the client must reload before acting on the new state.
-- A dismissed row is not reinterpreted by a new request and returns `409`.
+- A dismissed row rejects read/unread/dismiss with `409`; only an explicit,
+  CAS-protected `restore` makes it visible again. Uncertain restore responses
+  retain exact retry identity and require authoritative reload.
 - A missing or foreign-owned notification is the same owner-safe `404`.
 - FastAPI retries one ambiguous service-role call with the exact same request.
   Two unresolved transport, upstream `5xx`, or invalid-response outcomes become

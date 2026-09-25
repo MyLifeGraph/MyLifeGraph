@@ -26,18 +26,184 @@ const _fingerprint =
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  testWidgets('Top patterns marks negative coefficients and arrows red', (tester) async {
-    await tester.pumpWidget(ProviderScope(overrides: [
-      _skillsetSelectionOverride(), _demoSurfaceOverride(),
-      insightsProvider.overrideWith((_) async => const []),
-      skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
-      correlationReportProvider.overrideWith((_) async => CorrelationReport(
-        windowDays: 30, metrics: correlationMetrics, points: const [],
-        results: const [CorrelationResult(metricAId: 'sleep_hours',
-          metricBId: 'energy_level', sampleSize: 20, coefficient: -.8,
-          summary: 'Descriptive association')],
-      )),
-    ], child: MaterialApp(theme: AppTheme.dark, home: const Scaffold(body: InsightsPage()))));
+  testWidgets(
+    'sparse Compare advances the shared window without promising data',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer(
+        overrides: [
+          _skillsetSelectionOverride(),
+          _demoSurfaceOverride(),
+          insightsProvider.overrideWith((_) async => const []),
+          skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
+          correlationReportProvider.overrideWith(
+            (ref) async => CorrelationReport(
+              windowDays: ref.watch(insightsWindowDaysProvider),
+              metrics: correlationMetrics,
+              points: const [],
+              results: const [
+                CorrelationResult(
+                  metricAId: 'sleep_hours',
+                  metricBId: 'useful_progress',
+                  sampleSize: 3,
+                  status: CorrelationStatus.notEnoughData,
+                  summary: 'Need at least 7 shared days.',
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            home: const Scaffold(body: InsightsPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Advanced'));
+      await tester.pumpAndSettle();
+      final expand = find.text('Longer period');
+      await tester.ensureVisible(expand);
+      final badge = tester.getRect(
+        find.byKey(const ValueKey('compare-correlation-badge')),
+      );
+      expect(badge.width, 92);
+      expect(badge.left, greaterThan(tester.getRect(expand).left));
+      expect(badge.top, lessThan(tester.getRect(expand).top));
+      await tester.tap(expand);
+      await tester.pumpAndSettle();
+      expect(container.read(insightsWindowDaysProvider), 30);
+      container.read(insightsWindowDaysProvider.notifier).state = 90;
+      await tester.pumpAndSettle();
+      expect(expand, findsNothing);
+      expect(find.text('Need at least 7 shared days.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  for (final scale in [1.0, 2.0]) {
+    testWidgets(
+      'Compare value stays compact across all windows at text scale $scale',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final container = ProviderContainer(
+          overrides: [
+            _skillsetSelectionOverride(),
+            _demoSurfaceOverride(),
+            insightsProvider.overrideWith((_) async => const []),
+            skillsetProfileProvider.overrideWith(
+              (_) async => _skillsetProfile(),
+            ),
+            correlationReportProvider.overrideWith(
+              (ref) async => CorrelationReport(
+                windowDays: ref.watch(insightsWindowDaysProvider),
+                metrics: correlationMetrics,
+                points: const [],
+                results: const [
+                  CorrelationResult(
+                    metricAId: 'sleep_hours',
+                    metricBId: 'useful_progress',
+                    sampleSize: 16,
+                    coefficient: .65,
+                    summary:
+                        'These signals moderately move together in this window.',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              theme: AppTheme.dark,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: const Scaffold(body: InsightsPage()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Advanced'));
+        await tester.pumpAndSettle();
+        for (final days in [7, 14, 30, 90]) {
+          container.read(insightsWindowDaysProvider.notifier).state = days;
+          await tester.pumpAndSettle();
+          final badgeFinder = find.byKey(
+            const ValueKey('compare-correlation-badge'),
+          );
+          await tester.ensureVisible(badgeFinder);
+          final badge = tester.getRect(badgeFinder);
+          final summary = tester.getRect(
+            find.text('These signals moderately move together in this window.'),
+          );
+          expect(find.text('0.65'), findsOneWidget);
+          if (scale == 1) {
+            expect(badge.width, 92);
+            expect(badge.left, greaterThan(summary.right));
+            expect(badge.top, closeTo(summary.top, 1));
+            final heading = tester.getRect(
+              find.byKey(const ValueKey('compare-correlation-heading')),
+            );
+            expect(heading.bottom, lessThan(badge.top));
+            expect(heading.width, greaterThan(summary.width));
+          } else {
+            expect(badge.top, greaterThan(summary.bottom));
+          }
+          expect(tester.takeException(), isNull);
+        }
+      },
+    );
+  }
+  testWidgets('Top patterns marks negative coefficients and arrows red', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _skillsetSelectionOverride(),
+          _demoSurfaceOverride(),
+          insightsProvider.overrideWith((_) async => const []),
+          skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
+          correlationReportProvider.overrideWith(
+            (_) async => CorrelationReport(
+              windowDays: 30,
+              metrics: correlationMetrics,
+              points: const [],
+              results: const [
+                CorrelationResult(
+                  metricAId: 'sleep_hours',
+                  metricBId: 'energy_level',
+                  sampleSize: 20,
+                  coefficient: -.8,
+                  summary: 'Descriptive association',
+                ),
+              ],
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Advanced'));
     await tester.pumpAndSettle();
@@ -47,231 +213,356 @@ void main() {
     await tester.tap(tab);
     await tester.pumpAndSettle();
     expect(find.text('Strong negative'), findsOneWidget);
-    expect(tester.widget<Text>(find.text('-0.80')).style!.color, AppTheme.dark.colorScheme.error);
-    expect(tester.widget<Icon>(find.byIcon(AppIcons.trendingDown)).color, AppTheme.dark.colorScheme.error);
+    expect(
+      tester.widget<Text>(find.text('-0.80')).style!.color,
+      AppTheme.dark.colorScheme.error,
+    );
+    expect(
+      tester.widget<Icon>(find.byIcon(AppIcons.trendingDown)).color,
+      AppTheme.dark.colorScheme.error,
+    );
     expect(tester.takeException(), isNull);
   });
   for (final sparse in [false, true]) {
     for (final width in [390.0, 1280.0]) {
-      testWidgets('Advanced windows are available across relevant tabs: sparse=$sparse width=$width', (tester) async {
-        tester.view.physicalSize = Size(width, 900);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        final showPage = ValueNotifier(true);
-        addTearDown(showPage.dispose);
-        await tester.pumpWidget(ProviderScope(
-          overrides: [
-            _skillsetSelectionOverride(),
-            _demoSurfaceOverride(),
-            insightsProvider.overrideWith((ref) async => const []),
-            skillsetProfileProvider.overrideWith((ref) async => _skillsetProfile()),
-            correlationReportProvider.overrideWith((ref) async => CorrelationReport(
-              windowDays: ref.watch(insightsWindowDaysProvider),
-              metrics: sparse ? [] : correlationMetrics,
-              points: const [], results: const [],
-            )),
-          ],
-          child: MaterialApp(theme: AppTheme.dark, home: Scaffold(
-            body: ValueListenableBuilder<bool>(
-              valueListenable: showPage,
-              builder: (_, show, _) => show ? const InsightsPage() : const SizedBox(),
+      testWidgets(
+        'Advanced windows are available across relevant tabs: sparse=$sparse width=$width',
+        (tester) async {
+          tester.view.physicalSize = Size(width, 900);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final showPage = ValueNotifier(true);
+          addTearDown(showPage.dispose);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                _skillsetSelectionOverride(),
+                _demoSurfaceOverride(),
+                insightsProvider.overrideWith((ref) async => const []),
+                skillsetProfileProvider.overrideWith(
+                  (ref) async => _skillsetProfile(),
+                ),
+                correlationReportProvider.overrideWith(
+                  (ref) async => CorrelationReport(
+                    windowDays: ref.watch(insightsWindowDaysProvider),
+                    metrics: sparse ? [] : correlationMetrics,
+                    points: const [],
+                    results: const [],
+                  ),
+                ),
+              ],
+              child: MaterialApp(
+                theme: AppTheme.dark,
+                home: Scaffold(
+                  body: ValueListenableBuilder<bool>(
+                    valueListenable: showPage,
+                    builder: (_, show, _) =>
+                        show ? const InsightsPage() : const SizedBox(),
+                  ),
+                ),
+              ),
             ),
-          )),
-        ));
-        await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('Advanced'));
-        await tester.tap(find.text('Advanced').hitTestable());
-        await tester.pumpAndSettle();
-        final container = ProviderScope.containerOf(tester.element(find.byType(InsightsPage)));
-        final strip = find.byKey(const Key('insights-advanced-pane-tabs'));
-        final stripScroll = find.descendant(of: strip, matching: find.byType(SingleChildScrollView));
-        expect(tester.getTopLeft(stripScroll).dx, tester.getTopLeft(strip).dx + 4);
-        if (width == 390) {
-          expect(find.byTooltip('More tabs'), findsOneWidget);
-          expect(find.byTooltip('Previous tabs'), findsNothing);
-          await tester.tap(find.byTooltip('More tabs'));
+          );
           await tester.pumpAndSettle();
-          expect(find.byTooltip('Previous tabs'), findsOneWidget);
-          expect(tester.getTopLeft(stripScroll).dx,
-              tester.getTopRight(find.byTooltip('Previous tabs')).dx);
-          await tester.tap(find.byTooltip('Previous tabs'));
+          await tester.ensureVisible(find.text('Advanced'));
+          await tester.tap(find.text('Advanced').hitTestable());
           await tester.pumpAndSettle();
-          expect(find.byTooltip('Previous tabs'), findsNothing);
-          expect(tester.getTopLeft(stripScroll).dx, tester.getTopLeft(strip).dx + 4);
-          for (var step = 0; step < 8 && find.byTooltip('More tabs').evaluate().isNotEmpty; step++) {
+          final container = ProviderScope.containerOf(
+            tester.element(find.byType(InsightsPage)),
+          );
+          final strip = find.byKey(const Key('insights-advanced-pane-tabs'));
+          final stripScroll = find.descendant(
+            of: strip,
+            matching: find.byType(SingleChildScrollView),
+          );
+          expect(
+            tester.getTopLeft(stripScroll).dx,
+            tester.getTopLeft(strip).dx + 4,
+          );
+          if (width == 390) {
+            expect(find.byTooltip('More tabs'), findsOneWidget);
+            expect(find.byTooltip('Previous tabs'), findsNothing);
             await tester.tap(find.byTooltip('More tabs'));
             await tester.pumpAndSettle();
+            expect(find.byTooltip('Previous tabs'), findsOneWidget);
+            expect(
+              tester.getTopLeft(stripScroll).dx,
+              tester.getTopRight(find.byTooltip('Previous tabs')).dx,
+            );
+            await tester.tap(find.byTooltip('Previous tabs'));
+            await tester.pumpAndSettle();
+            expect(find.byTooltip('Previous tabs'), findsNothing);
+            expect(
+              tester.getTopLeft(stripScroll).dx,
+              tester.getTopLeft(strip).dx + 4,
+            );
+            for (
+              var step = 0;
+              step < 8 && find.byTooltip('More tabs').evaluate().isNotEmpty;
+              step++
+            ) {
+              await tester.tap(find.byTooltip('More tabs'));
+              await tester.pumpAndSettle();
+            }
+            expect(find.byTooltip('More tabs'), findsNothing);
+            expect(
+              tester.getTopRight(stripScroll).dx,
+              tester.getTopRight(strip).dx - 4,
+            );
+            final scrollable = tester.state<ScrollableState>(
+              find.descendant(
+                of: stripScroll,
+                matching: find.byType(Scrollable),
+              ),
+            );
+            scrollable.position.jumpTo(0);
+            await tester.pumpAndSettle();
+            await tester.tap(find.byTooltip('More tabs'));
+            await tester.pumpAndSettle();
+            // One final click must reclaim the arrow's space, not require a
+            // second click just to expose the last few pixels of Discovered.
+            final position = tester
+                .state<ScrollableState>(
+                  find.descendant(
+                    of: stripScroll,
+                    matching: find.byType(Scrollable),
+                  ),
+                )
+                .position;
+            final step = (position.viewportDimension + 96) * .65;
+            position.jumpTo(position.maxScrollExtent - step - 24);
+            await tester.pumpAndSettle();
+            await tester.tap(find.byTooltip('More tabs'));
+            await tester.pumpAndSettle();
+            expect(find.byTooltip('More tabs'), findsNothing);
+            expect(
+              tester
+                  .getTopRight(
+                    find.byKey(const Key('insights-advanced-pane-discovered')),
+                  )
+                  .dx,
+              lessThanOrEqualTo(tester.getTopRight(stripScroll).dx + 1),
+            );
+          } else {
+            expect(find.byTooltip('More tabs'), findsNothing);
+            expect(find.byTooltip('Previous tabs'), findsNothing);
           }
-          expect(find.byTooltip('More tabs'), findsNothing);
-          expect(tester.getTopRight(stripScroll).dx, tester.getTopRight(strip).dx - 4);
-          final scrollable = tester.state<ScrollableState>(
-            find.descendant(of: stripScroll, matching: find.byType(Scrollable)),
+          var selected = 14;
+          for (final pane in [
+            'compare',
+            'topPatterns',
+            'trend',
+            'skillset',
+            'matrix',
+          ]) {
+            final tab = find.byKey(Key('insights-advanced-pane-$pane'));
+            await tester.ensureVisible(tab);
+            await tester.pumpAndSettle();
+            await tester.tap(tab);
+            await tester.pumpAndSettle();
+            expect(container.read(insightsWindowDaysProvider), selected);
+            for (final days in [7, 14, 30, 90]) {
+              expect(find.text('${days}d'), findsOneWidget);
+            }
+            if (pane == 'skillset') {
+              expect(
+                tester.getBottomLeft(find.text('7d')).dy,
+                lessThan(
+                  tester.getTopLeft(find.byType(InsightsSkillsetCard)).dy,
+                ),
+              );
+            }
+            selected = selected == 30 ? 90 : 30;
+            final choice = find.text('${selected}d');
+            await tester.ensureVisible(choice);
+            await tester.pumpAndSettle();
+            await tester.tap(choice);
+            await tester.pumpAndSettle();
+            expect(container.read(insightsWindowDaysProvider), selected);
+          }
+          final discovered = find.byKey(
+            const Key('insights-advanced-pane-discovered'),
           );
-          scrollable.position.jumpTo(0);
+          await tester.ensureVisible(discovered);
           await tester.pumpAndSettle();
-          await tester.tap(find.byTooltip('More tabs'));
+          await tester.tap(discovered);
           await tester.pumpAndSettle();
-          // One final click must reclaim the arrow's space, not require a
-          // second click just to expose the last few pixels of Discovered.
-          final position = tester.state<ScrollableState>(
-            find.descendant(of: stripScroll, matching: find.byType(Scrollable)),
-          ).position;
-          final step = (position.viewportDimension + 96) * .65;
-          position.jumpTo(position.maxScrollExtent - step - 24);
-          await tester.pumpAndSettle();
-          await tester.tap(find.byTooltip('More tabs'));
-          await tester.pumpAndSettle();
-          expect(find.byTooltip('More tabs'), findsNothing);
-          expect(
-            tester.getTopRight(find.byKey(const Key('insights-advanced-pane-discovered'))).dx,
-            lessThanOrEqualTo(tester.getTopRight(stripScroll).dx + 1),
+          expect(find.text('30d'), findsNothing);
+          final skillsetTab = find.byKey(
+            const Key('insights-advanced-pane-skillset'),
           );
-        } else {
-          expect(find.byTooltip('More tabs'), findsNothing);
-          expect(find.byTooltip('Previous tabs'), findsNothing);
-        }
-        var selected = 14;
-        for (final pane in ['compare', 'topPatterns', 'trend', 'skillset', 'matrix']) {
-          final tab = find.byKey(Key('insights-advanced-pane-$pane'));
-          await tester.ensureVisible(tab);
+          await tester.ensureVisible(skillsetTab);
           await tester.pumpAndSettle();
-          await tester.tap(tab);
+          await tester.tap(skillsetTab);
           await tester.pumpAndSettle();
+          showPage.value = false;
+          await tester.pumpAndSettle();
+          expect(find.byType(InsightsPage), findsNothing);
+          showPage.value = true;
+          await tester.pumpAndSettle();
+          // Route state was disposed, but both view choices survive.
+          expect(find.byType(InsightsSkillsetCard), findsOneWidget);
           expect(container.read(insightsWindowDaysProvider), selected);
-          for (final days in [7, 14, 30, 90]) {
-            expect(find.text('${days}d'), findsOneWidget);
-          }
-          if (pane == 'skillset') {
-            expect(tester.getBottomLeft(find.text('7d')).dy,
-              lessThan(tester.getTopLeft(find.byType(InsightsSkillsetCard)).dy));
-          }
-          selected = selected == 30 ? 90 : 30;
-          final choice = find.text('${selected}d');
-          await tester.ensureVisible(choice);
-          await tester.pumpAndSettle();
-          await tester.tap(choice);
-          await tester.pumpAndSettle();
-          expect(container.read(insightsWindowDaysProvider), selected);
-        }
-        final discovered = find.byKey(const Key('insights-advanced-pane-discovered'));
-        await tester.ensureVisible(discovered);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+  for (final sparse in [false, true]) {
+    testWidgets(
+      'Skillset tab is ordered and retains dimensions, sparse=$sparse',
+      (tester) async {
+        tester.view
+          ..physicalSize = Size(sparse ? 320 : 1280, 960)
+          ..devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              _skillsetSelectionOverride(),
+              _realSurfaceOverride(),
+              insightsProvider.overrideWith((ref) async => const []),
+              correlationReportProvider.overrideWith(
+                (ref) async => CorrelationReport(
+                  windowDays: 14,
+                  metrics: sparse ? [] : correlationMetrics,
+                  points: const [],
+                  results: const [],
+                ),
+              ),
+              personalPatternsProvider.overrideWith(
+                (ref) async => _personalPatterns(),
+              ),
+              sleepRecommendationProvider.overrideWith(
+                (ref) async =>
+                    _sleepRecommendation(SleepRecommendationStatus.ready),
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.dark,
+              home: const Scaffold(body: InsightsPage()),
+            ),
+          ),
+        );
         await tester.pumpAndSettle();
-        await tester.tap(discovered);
+        await tester.tap(find.text('Advanced'));
         await tester.pumpAndSettle();
-        expect(find.text('30d'), findsNothing);
-        final skillsetTab = find.byKey(const Key('insights-advanced-pane-skillset'));
+        final tabs = find.byKey(const Key('insights-advanced-pane-tabs'));
+        expect(
+          tester
+              .widgetList<Text>(
+                find.descendant(of: tabs, matching: find.byType(Text)),
+              )
+              .map((text) => text.data),
+          [
+            'Compare',
+            'Top patterns',
+            'Trend overlay',
+            'Skillset',
+            'Past',
+            'Matrix',
+            'Discovered',
+          ],
+        );
+        final skillsetTab = find.byKey(
+          const Key('insights-advanced-pane-skillset'),
+        );
         await tester.ensureVisible(skillsetTab);
         await tester.pumpAndSettle();
         await tester.tap(skillsetTab);
         await tester.pumpAndSettle();
-        showPage.value = false;
+        expect(find.byKey(const Key('skillset-empty')), findsOneWidget);
+        await tester.ensureVisible(find.text('Dimensions (11)'));
+        await tester.tap(find.text('Dimensions (11)'));
         await tester.pumpAndSettle();
-        expect(find.byType(InsightsPage), findsNothing);
-        showPage.value = true;
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('skillset-select-mood')),
+            )
+            .onChanged!(false);
         await tester.pumpAndSettle();
-        // Route state was disposed, but both view choices survive.
-        expect(find.byType(InsightsSkillsetCard), findsOneWidget);
-        expect(container.read(insightsWindowDaysProvider), selected);
+        await tester.ensureVisible(find.text('Overview'));
+        await tester.tap(find.text('Overview'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Advanced'));
+        await tester.pumpAndSettle();
+        expect(find.text('Dimensions (10)'), findsOneWidget);
         expect(tester.takeException(), isNull);
-      });
-    }
+      },
+    );
   }
   for (final sparse in [false, true]) {
-    testWidgets('Skillset tab is ordered and retains dimensions, sparse=$sparse', (tester) async {
-      tester.view..physicalSize = Size(sparse ? 320 : 1280, 960)..devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          _skillsetSelectionOverride(),
-          _realSurfaceOverride(),
-          insightsProvider.overrideWith((ref) async => const []),
-          correlationReportProvider.overrideWith((ref) async => CorrelationReport(
-            windowDays: 14, metrics: sparse ? [] : correlationMetrics,
-            points: const [], results: const [],)),
-          personalPatternsProvider.overrideWith((ref) async => _personalPatterns()),
-          sleepRecommendationProvider.overrideWith((ref) async =>
-              _sleepRecommendation(SleepRecommendationStatus.ready)),
-        ],
-        child: MaterialApp(theme: AppTheme.dark, home: const Scaffold(body: InsightsPage())),
-      ));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Advanced'));
-      await tester.pumpAndSettle();
-      final tabs = find.byKey(const Key('insights-advanced-pane-tabs'));
-      expect(tester.widgetList<Text>(find.descendant(of: tabs, matching: find.byType(Text)))
-          .map((text) => text.data),
-        ['Compare', 'Top patterns', 'Trend overlay', 'Skillset', 'Past', 'Matrix', 'Discovered']);
-      final skillsetTab = find.byKey(const Key('insights-advanced-pane-skillset'));
-      await tester.ensureVisible(skillsetTab);
-      await tester.pumpAndSettle();
-      await tester.tap(skillsetTab);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('skillset-empty')), findsOneWidget);
-      await tester.ensureVisible(find.text('Dimensions (6)'));
-      await tester.tap(find.text('Dimensions (6)'));
-      await tester.pumpAndSettle();
-      tester.widget<CheckboxListTile>(find.byKey(const ValueKey('skillset-select-mood')))
-          .onChanged!(true);
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Overview'));
-      await tester.tap(find.text('Overview'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Advanced'));
-      await tester.pumpAndSettle();
-      expect(find.text('Dimensions (7)'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  }
-  for (final sparse in [false, true]) {
-    testWidgets('Overview and Advanced separate content at 320px, sparse=$sparse',
-        (tester) async {
-      tester.view
-        ..physicalSize = const Size(320, 900)
-        ..devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          _skillsetSelectionOverride(),
-          _realSurfaceOverride(),
-          insightsProvider.overrideWith((ref) async => const []),
-          correlationReportProvider.overrideWith((ref) async => CorrelationReport(
-            windowDays: 14,
-            metrics: sparse ? [] : correlationMetrics,
-            points: const [],
-            results: const [],
-          )),
-          personalPatternsProvider.overrideWith((ref) async => _personalPatterns()),
-          sleepRecommendationProvider.overrideWith((ref) async =>
-              _sleepRecommendation(SleepRecommendationStatus.ready)),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.dark,
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2)),
-            child: child!,
+    testWidgets(
+      'Overview and Advanced separate content at 320px, sparse=$sparse',
+      (tester) async {
+        tester.view
+          ..physicalSize = const Size(320, 900)
+          ..devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              _skillsetSelectionOverride(),
+              _realSurfaceOverride(),
+              insightsProvider.overrideWith((ref) async => const []),
+              correlationReportProvider.overrideWith(
+                (ref) async => CorrelationReport(
+                  windowDays: 14,
+                  metrics: sparse ? [] : correlationMetrics,
+                  points: const [],
+                  results: const [],
+                ),
+              ),
+              personalPatternsProvider.overrideWith(
+                (ref) async => _personalPatterns(),
+              ),
+              sleepRecommendationProvider.overrideWith(
+                (ref) async =>
+                    _sleepRecommendation(SleepRecommendationStatus.ready),
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.dark,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: child!,
+              ),
+              home: const Scaffold(body: InsightsPage()),
+            ),
           ),
-          home: const Scaffold(body: InsightsPage()),
-        ),
-      ));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('personal-study-pattern-panel')), findsOneWidget);
-      expect(find.text('Not enough signals yet'), findsNothing);
-      await tester.tap(find.text('Advanced'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('personal-study-pattern-panel')), findsNothing);
-      expect(
-        sparse ? find.text('Not enough signals yet')
-            : find.byKey(const Key('insights-advanced-pane-compare')),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Overview'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('personal-study-pattern-panel')), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('personal-study-pattern-panel')),
+          findsOneWidget,
+        );
+        expect(find.text('Not enough signals yet'), findsNothing);
+        await tester.tap(find.text('Advanced'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('personal-study-pattern-panel')),
+          findsNothing,
+        );
+        expect(
+          sparse
+              ? find.text('Not enough signals yet')
+              : find.byKey(const Key('insights-advanced-pane-compare')),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Overview'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('personal-study-pattern-panel')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets('trend signal disclosure preserves order and selection rules', (
@@ -294,7 +585,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Advanced'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('insights-advanced-pane-trend')));
+    await tester.ensureVisible(
+      find.byKey(const Key('insights-advanced-pane-trend')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('insights-advanced-pane-trend')));
     await tester.pumpAndSettle();
@@ -311,8 +604,8 @@ void main() {
       correlationMetrics.map((metric) => metric.label),
     );
     CheckboxListTile signal(String id) => tester.widget<CheckboxListTile>(
-          find.byKey(ValueKey('insights-trend-signal-$id')),
-        );
+      find.byKey(ValueKey('insights-trend-signal-$id')),
+    );
     expect(signal('sleep_target_deviation_minutes').onChanged, isNull);
     signal('sleep_hours').onChanged!(false);
     await tester.pumpAndSettle();
@@ -385,31 +678,20 @@ void main() {
   });
 
   test('daily metric labels and evidence timing stay explicit', () {
-    final byId = {
-      for (final metric in correlationMetrics) metric.id: metric,
-    };
+    final byId = {for (final metric in correlationMetrics) metric.id: metric};
 
     expect(byId['sleep_hours']?.label, 'Previous-night sleep');
     expect(
       byId['sleep_hours']?.timing,
       CorrelationEvidenceTiming.previousNightOnLocalWakeDay,
     );
-    expect(
-      byId['sleep_quality']?.label,
-      'Previous-night sleep quality',
-    );
-    expect(
-      byId['sleep_target_deviation_minutes']?.label,
-      'Sleep shortfall',
-    );
+    expect(byId['sleep_quality']?.label, 'Previous-night sleep quality');
+    expect(byId['sleep_target_deviation_minutes']?.label, 'Sleep shortfall');
     expect(byId['focus_minutes']?.label, 'Rated focus time');
     expect(byId['planned_focus_minutes']?.label, 'Planned focus time');
     expect(byId['focus_quality']?.label, 'Rated focus quality');
     expect(byId['useful_progress']?.label, 'Rated useful progress');
-    expect(
-      byId['focus_completion_rate']?.label,
-      'Rated session completion',
-    );
+    expect(byId['focus_completion_rate']?.label, 'Rated session completion');
   });
 
   test('backend points aggregate in the profile-local response window', () {
@@ -432,7 +714,7 @@ void main() {
     var apiDependencyReads = 0;
     final container = ProviderContainer(
       overrides: [
-          _skillsetSelectionOverride(),
+        _skillsetSelectionOverride(),
         _demoSurfaceOverride(),
         sleepRecommendationApiDataSourceProvider.overrideWith((ref) {
           apiDependencyReads += 1;
@@ -454,76 +736,79 @@ void main() {
     SleepRecommendationStatus.unstable,
     SleepRecommendationStatus.ready,
   ]) {
-    testWidgets('sleep recommendation renders ${status.name} at 320px and 200%',
-        (tester) async {
-      tester.view
-        ..physicalSize = const Size(320, 900)
-        ..devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-          _skillsetSelectionOverride(),
-            _realSurfaceOverride(),
-            insightsProvider.overrideWith((ref) async => const []),
-            correlationReportProvider.overrideWith(
-              (ref) async => const CorrelationReport(
-                windowDays: 14,
-                metrics: [],
-                points: [],
-                results: [],
+    testWidgets(
+      'sleep recommendation renders ${status.name} at 320px and 200%',
+      (tester) async {
+        tester.view
+          ..physicalSize = const Size(320, 900)
+          ..devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              _skillsetSelectionOverride(),
+              _realSurfaceOverride(),
+              insightsProvider.overrideWith((ref) async => const []),
+              correlationReportProvider.overrideWith(
+                (ref) async => const CorrelationReport(
+                  windowDays: 14,
+                  metrics: [],
+                  points: [],
+                  results: [],
+                ),
               ),
-            ),
-            personalPatternsProvider.overrideWith(
-              (ref) async => _personalPatterns(),
-            ),
-            sleepRecommendationProvider.overrideWith(
-              (ref) async => _sleepRecommendation(status),
-            ),
-          ],
-          child: MaterialApp(
-            theme: AppTheme.dark,
-            builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: const TextScaler.linear(2),
+              personalPatternsProvider.overrideWith(
+                (ref) async => _personalPatterns(),
               ),
-              child: child!,
+              sleepRecommendationProvider.overrideWith(
+                (ref) async => _sleepRecommendation(status),
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.dark,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: child!,
+              ),
+              home: const Scaffold(body: InsightsPage()),
             ),
-            home: const Scaffold(body: InsightsPage()),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.byKey(Key('sleep-recommendation-${status.name}')),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.byKey(Key('sleep-recommendation-${status.name}')),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
 
-      expect(
-        find.byKey(Key('sleep-recommendation-${status.name}')),
-        findsOneWidget,
-      );
-      if (status == SleepRecommendationStatus.ready) {
-        expect(find.text('Best-supported sleep window'), findsOneWidget);
-        expect(find.text('Sleep start'), findsOneWidget);
-        expect(find.text('Wake time'), findsOneWidget);
-        expect(find.text('Following local day'), findsNothing);
-        expect(find.text('Duration'), findsOneWidget);
         expect(
-          find.byKey(const Key('sleep-recommendation-warning')),
+          find.byKey(Key('sleep-recommendation-${status.name}')),
           findsOneWidget,
         );
-      } else {
-        expect(find.text('No stable window yet'), findsOneWidget);
-      }
-      expect(tester.takeException(), isNull);
-    });
+        if (status == SleepRecommendationStatus.ready) {
+          expect(find.text('Best-supported sleep window'), findsOneWidget);
+          expect(find.text('Sleep start'), findsOneWidget);
+          expect(find.text('Wake time'), findsOneWidget);
+          expect(find.text('Following local day'), findsNothing);
+          expect(find.text('Duration'), findsOneWidget);
+          expect(
+            find.byKey(const Key('sleep-recommendation-warning')),
+            findsOneWidget,
+          );
+        } else {
+          expect(find.text('No stable window yet'), findsOneWidget);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
-  testWidgets('same-day sleep recommendation omits the wake-day caption',
-      (tester) async {
+  testWidgets('same-day sleep recommendation omits the wake-day caption', (
+    tester,
+  ) async {
     tester.view
       ..physicalSize = const Size(320, 900)
       ..devicePixelRatio = 1;
@@ -556,9 +841,9 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.dark,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: InsightsPage()),
@@ -577,8 +862,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('sleep recommendation loading is readable at 320px and 200%',
-      (tester) async {
+  testWidgets('sleep recommendation loading is readable at 320px and 200%', (
+    tester,
+  ) async {
     tester.view
       ..physicalSize = const Size(320, 900)
       ..devicePixelRatio = 1;
@@ -608,9 +894,9 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.light,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: InsightsPage()),
@@ -639,18 +925,25 @@ void main() {
     'mobile-long': AppTheme.dark,
     'narrow-long': AppTheme.dark,
   }.entries) {
-    testWidgets('ready sleep recommendation renders ${theme.key}',
-        (tester) async {
+    testWidgets('ready sleep recommendation renders ${theme.key}', (
+      tester,
+    ) async {
       tester.view
-        ..physicalSize = Size(theme.key.startsWith('mobile') ? 390
-            : theme.key == 'narrow-long' ? 320 : 1280, 900)
+        ..physicalSize = Size(
+          theme.key.startsWith('mobile')
+              ? 390
+              : theme.key == 'narrow-long'
+              ? 320
+              : 1280,
+          900,
+        )
         ..devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-          _skillsetSelectionOverride(),
+            _skillsetSelectionOverride(),
             _realSurfaceOverride(),
             insightsProvider.overrideWith((ref) async => const []),
             correlationReportProvider.overrideWith(
@@ -687,33 +980,52 @@ void main() {
       expect(find.text('Best-supported sleep window'), findsOneWidget);
       expect(find.text('Sleep start'), findsOneWidget);
       if (theme.key.startsWith('mobile') || theme.key == 'narrow-long') {
-        final recommendation = _sleepRecommendation(SleepRecommendationStatus.ready,
-            longWindow: theme.key.endsWith('long')).recommendation!;
+        final recommendation = _sleepRecommendation(
+          SleepRecommendationStatus.ready,
+          longWindow: theme.key.endsWith('long'),
+        ).recommendation!;
         final bedtime = recommendation.bedtime.label;
         if (theme.key != 'narrow-long') {
-        expect(tester.getTopLeft(find.text('Sleep start')).dy,
-            tester.getTopLeft(find.text(bedtime)).dy);
+          expect(
+            tester.getTopLeft(find.text('Sleep start')).dy,
+            tester.getTopLeft(find.text(bedtime)).dy,
+          );
         }
-        final values = [bedtime, recommendation.wakeTime.label, recommendation.duration.label];
+        final values = [
+          bedtime,
+          recommendation.wakeTime.label,
+          recommendation.duration.label,
+        ];
         for (final text in values) {
           final finder = find.text(text);
-          expect(tester.getTopLeft(finder).dx, tester.getTopLeft(find.text(bedtime)).dx);
+          expect(
+            tester.getTopLeft(finder).dx,
+            tester.getTopLeft(find.text(bedtime)).dx,
+          );
           final paragraph = tester.renderObject<RenderParagraph>(finder);
           expect(paragraph.didExceedMaxLines, isFalse);
           final boxes = paragraph.getBoxesForSelection(
-              TextSelection(baseOffset: 0, extentOffset: text.length));
+            TextSelection(baseOffset: 0, extentOffset: text.length),
+          );
           expect(boxes, isNotEmpty);
-          expect(boxes.every((box) => box.left >= -0.1 &&
-              box.right <= paragraph.size.width + 0.1 &&
-              box.bottom <= paragraph.size.height + 0.1), isTrue);
+          expect(
+            boxes.every(
+              (box) =>
+                  box.left >= -0.1 &&
+                  box.right <= paragraph.size.width + 0.1 &&
+                  box.bottom <= paragraph.size.height + 0.1,
+            ),
+            isTrue,
+          );
         }
       }
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('sleep recommendation failure stays inside its own card',
-      (tester) async {
+  testWidgets('sleep recommendation failure stays inside its own card', (
+    tester,
+  ) async {
     tester.view
       ..physicalSize = const Size(320, 900)
       ..devicePixelRatio = 1;
@@ -743,9 +1055,9 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.space,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: InsightsPage()),
@@ -770,8 +1082,9 @@ void main() {
     expect(find.text('Could not load account insights.'), findsNothing);
   });
 
-  testWidgets('keeps an account insight failure distinct from empty evidence',
-      (tester) async {
+  testWidgets('keeps an account insight failure distinct from empty evidence', (
+    tester,
+  ) async {
     var insightLoads = 0;
 
     await tester.pumpWidget(
@@ -807,10 +1120,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Could not load account insights.'), findsOneWidget);
-    expect(
-      find.textContaining('try loading Insights again'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('try loading Insights again'), findsOneWidget);
     expect(find.text('ONE OBSERVATION'), findsNothing);
 
     await tester.tap(find.text('Retry'));
@@ -827,8 +1137,9 @@ void main() {
     expect(insightLoads, 2);
   });
 
-  testWidgets('skillset failure stays visible and retries independently',
-      (tester) async {
+  testWidgets('skillset failure stays visible and retries independently', (
+    tester,
+  ) async {
     var skillsetLoads = 0;
     await tester.pumpWidget(
       ProviderScope(
@@ -865,10 +1176,7 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(
-      find.text('Example skill profile unavailable.'),
-      findsOneWidget,
-    );
+    expect(find.text('Example skill profile unavailable.'), findsOneWidget);
     expect(
       find.textContaining('optional example could not be loaded'),
       findsOneWidget,
@@ -888,8 +1196,9 @@ void main() {
     expect(skillsetLoads, 2);
   });
 
-  testWidgets('missing demo skillset remains an honest example error',
-      (tester) async {
+  testWidgets('missing demo skillset remains an honest example error', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -927,15 +1236,13 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.text('EXAMPLE SKILL PROFILE'),
-      findsOneWidget,
-    );
+    expect(find.text('EXAMPLE SKILL PROFILE'), findsOneWidget);
     expect(find.text('Retry example'), findsOneWidget);
   });
 
-  testWidgets('real account hides the unproduced skillset without loading it',
-      (tester) async {
+  testWidgets('real account hides the unproduced skillset without loading it', (
+    tester,
+  ) async {
     var skillsetLoads = 0;
     await tester.pumpWidget(
       ProviderScope(
@@ -971,8 +1278,9 @@ void main() {
     expect(find.text('ONE OBSERVATION'), findsNothing);
   });
 
-  testWidgets('real account shows stable personal evidence and limitations',
-      (tester) async {
+  testWidgets('real account shows stable personal evidence and limitations', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -1013,14 +1321,12 @@ void main() {
     await tester.tap(find.text('Details'));
     await tester.pumpAndSettle();
     expect(find.text('Focus timing'), findsOneWidget);
-    expect(
-      find.textContaining('observational associations'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('observational associations'), findsOneWidget);
   });
 
-  testWidgets('disabled personal analysis still names its evidence context',
-      (tester) async {
+  testWidgets('disabled personal analysis still names its evidence context', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -1055,8 +1361,9 @@ void main() {
     );
   });
 
-  testWidgets('personal pattern failure stays inside its compact card',
-      (tester) async {
+  testWidgets('personal pattern failure stays inside its compact card', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -1091,8 +1398,9 @@ void main() {
     );
   });
 
-  testWidgets('light theme keeps panel styling and compact header actions',
-      (tester) async {
+  testWidgets('light theme keeps panel styling and compact header actions', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: _loadedOverrides(),
@@ -1115,10 +1423,7 @@ void main() {
     );
 
     expect(panel.variant, AppSurfaceVariant.raised);
-    expect(
-      find.byKey(const Key('insights-header-description')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('insights-header-description')), findsNothing);
     expect(refreshButton.onPressed, isNotNull);
   });
 
@@ -1159,22 +1464,28 @@ void main() {
 
       for (final days in insightsWindowDayOptions) {
         await tester.scrollUntilVisible(
-          find.text('${days}d').hitTestable(), 150,
+          find.text('${days}d').hitTestable(),
+          150,
           scrollable: find.byType(Scrollable).first,
         );
         await tester.tap(find.text('${days}d'));
         await tester.pumpAndSettle();
         expect(
-          ProviderScope.containerOf(tester.element(find.byType(InsightsPage)))
-              .read(insightsWindowDaysProvider),
+          ProviderScope.containerOf(
+            tester.element(find.byType(InsightsPage)),
+          ).read(insightsWindowDaysProvider),
           days,
         );
       }
       expect(find.text('180d'), findsNothing);
       expect(find.text('All'), findsNothing);
-      await tester.ensureVisible(find.byKey(const Key('insights-advanced-pane-discovered')));
+      await tester.ensureVisible(
+        find.byKey(const Key('insights-advanced-pane-discovered')),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('insights-advanced-pane-discovered')));
+      await tester.tap(
+        find.byKey(const Key('insights-advanced-pane-discovered')),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Confidence not stored'), findsOneWidget);
       expect(find.text('Stored insights and previous notes'), findsOneWidget);
@@ -1194,26 +1505,25 @@ void main() {
         required int windowDays,
         required int sampleSize,
         required String summary,
-      }) =>
-          CorrelationReport(
-            windowDays: windowDays,
-            metrics: correlationMetrics,
-            points: const [],
-            results: [
-              CorrelationResult(
-                metricAId: 'sleep_hours',
-                metricBId: 'useful_progress',
-                sampleSize: sampleSize,
-                coefficient: 0.42,
-                summary: summary,
-              ),
-            ],
-          );
+      }) => CorrelationReport(
+        windowDays: windowDays,
+        metrics: correlationMetrics,
+        points: const [],
+        results: [
+          CorrelationResult(
+            metricAId: 'sleep_hours',
+            metricBId: 'useful_progress',
+            sampleSize: sampleSize,
+            coefficient: 0.42,
+            summary: summary,
+          ),
+        ],
+      );
 
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-          _skillsetSelectionOverride(),
+            _skillsetSelectionOverride(),
             _demoSurfaceOverride(),
             insightsProvider.overrideWith((ref) async => const []),
             correlationReportProvider.overrideWith((ref) {
@@ -1370,7 +1680,9 @@ void main() {
     );
     await tester.tap(find.text('Advanced'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('insights-advanced-pane-matrix')));
+    await tester.ensureVisible(
+      find.byKey(const Key('insights-advanced-pane-matrix')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('insights-advanced-pane-matrix')));
     await tester.pumpAndSettle();
@@ -1381,9 +1693,7 @@ void main() {
     );
 
     final cell = find.byKey(
-      const ValueKey(
-        'insights-matrix-cell-sleep_hours-focus_minutes',
-      ),
+      const ValueKey('insights-matrix-cell-sleep_hours-focus_minutes'),
     );
     await tester.ensureVisible(cell);
     await tester.pumpAndSettle();
@@ -1403,8 +1713,9 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('overlapping matrix signals are neutral and not selectable',
-      (tester) async {
+  testWidgets('overlapping matrix signals are neutral and not selectable', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       ProviderScope(
@@ -1429,7 +1740,8 @@ void main() {
     expect(
       tester.getSemantics(cell),
       matchesSemantics(
-        label: 'Previous-night sleep and Sleep shortfall. '
+        label:
+            'Previous-night sleep and Sleep shortfall. '
             'Not compared · overlapping signals',
         hasEnabledState: true,
         isEnabled: false,
@@ -1440,8 +1752,9 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('desktop correlation matrix keeps long axis labels readable',
-      (tester) async {
+  testWidgets('desktop correlation matrix keeps long axis labels readable', (
+    tester,
+  ) async {
     tester.view
       ..physicalSize = const Size(1280, 960)
       ..devicePixelRatio = 1;
@@ -1460,7 +1773,9 @@ void main() {
     await tester.pumpAndSettle();
     await _openCorrelationMatrix(tester);
 
-    await tester.ensureVisible(find.byKey(const Key('insights-advanced-pane-trend')));
+    await tester.ensureVisible(
+      find.byKey(const Key('insights-advanced-pane-trend')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('insights-advanced-pane-trend')));
     await tester.pumpAndSettle();
@@ -1475,12 +1790,12 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.textContaining(
-        'Each line is normalized relative to its own range.',
-      ),
+      find.textContaining('Each line is normalized relative to its own range.'),
       findsOneWidget,
     );
-    await tester.ensureVisible(find.byKey(const Key('insights-advanced-pane-matrix')));
+    await tester.ensureVisible(
+      find.byKey(const Key('insights-advanced-pane-matrix')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('insights-advanced-pane-matrix')));
     await tester.pumpAndSettle();
@@ -1501,9 +1816,7 @@ void main() {
 
     final rowLeftBefore = tester.getTopLeft(row).dx;
     final horizontalScroll = find.descendant(
-      of: find.byKey(
-        const ValueKey('insights-correlation-matrix-grid'),
-      ),
+      of: find.byKey(const ValueKey('insights-correlation-matrix-grid')),
       matching: find.byWidgetPredicate(
         (widget) =>
             widget is Scrollable && widget.axisDirection == AxisDirection.right,
@@ -1518,8 +1831,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('matrix labels remain complete at 320px and 200 percent text',
-      (tester) async {
+  testWidgets('matrix labels remain complete at 320px and 200 percent text', (
+    tester,
+  ) async {
     tester.view
       ..physicalSize = const Size(320, 900)
       ..devicePixelRatio = 1;
@@ -1532,9 +1846,9 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.dark,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(body: InsightsPage()),
@@ -1550,16 +1864,8 @@ void main() {
     const rowKey = ValueKey(
       'insights-matrix-row-sleep_target_deviation_minutes',
     );
-    _expectMatrixLabelFits(
-      tester,
-      find.byKey(columnKey),
-      'Sleep shortfall',
-    );
-    _expectMatrixLabelFits(
-      tester,
-      find.byKey(rowKey),
-      'Sleep shortfall',
-    );
+    _expectMatrixLabelFits(tester, find.byKey(columnKey), 'Sleep shortfall');
+    _expectMatrixLabelFits(tester, find.byKey(rowKey), 'Sleep shortfall');
     expect(tester.takeException(), isNull);
   });
 
@@ -1583,18 +1889,15 @@ void main() {
           MaterialApp(
             theme: AppTheme.light,
             builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.linear(textScale),
-              ),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(textScale)),
               child: child!,
             ),
             home: const Scaffold(
               body: SingleChildScrollView(
                 padding: EdgeInsets.all(16),
-                child: InsightsPatternTile(
-                  insight: insight,
-                  isMobile: true,
-                ),
+                child: InsightsPatternTile(insight: insight, isMobile: true),
               ),
             ),
           ),
@@ -1602,9 +1905,7 @@ void main() {
         await tester.pumpAndSettle();
 
         final title = find.byKey(
-          const ValueKey(
-            'insight-pattern-title-responsive-null-confidence',
-          ),
+          const ValueKey('insight-pattern-title-responsive-null-confidence'),
         );
         final confidence = find.byKey(
           const ValueKey(
@@ -1616,9 +1917,7 @@ void main() {
         expect(confidence, findsOneWidget);
         expect(
           tester.getTopLeft(confidence).dy,
-          greaterThanOrEqualTo(
-            tester.getBottomLeft(title).dy,
-          ),
+          greaterThanOrEqualTo(tester.getBottomLeft(title).dy),
         );
         expect(tester.takeException(), isNull);
       },
@@ -1646,11 +1945,7 @@ Future<void> _openCorrelationMatrix(WidgetTester tester) async {
     await tester.pumpAndSettle();
     final tabs = find.byKey(const Key('insights-advanced-pane-tabs'));
     if (tabs.evaluate().isNotEmpty) {
-      await tester.dragUntilVisible(
-        matrixTab,
-        tabs,
-        const Offset(-72, 0),
-      );
+      await tester.dragUntilVisible(matrixTab, tabs, const Offset(-72, 0));
       await tester.pumpAndSettle();
     }
     await tester.tap(matrixTab);
@@ -1669,10 +1964,7 @@ void _expectMatrixLabelFits(
   Finder container,
   String label,
 ) {
-  final textFinder = find.descendant(
-    of: container,
-    matching: find.text(label),
-  );
+  final textFinder = find.descendant(of: container, matching: find.text(label));
   final widget = tester.widget<Text>(textFinder);
   final context = tester.element(textFinder);
   final renderBox = tester.renderObject<RenderBox>(textFinder);
@@ -1692,24 +1984,23 @@ void _expectMatrixLabelFits(
   );
 }
 
-Override _skillsetSelectionOverride() => skillsetPreferenceScopeProvider.overrideWith(
-  (ref) => 'guest',
-);
+Override _skillsetSelectionOverride() =>
+    skillsetPreferenceScopeProvider.overrideWith((ref) => 'guest');
 
 List<Override> _loadedOverrides({List<Insight> insights = const []}) => [
-      _skillsetSelectionOverride(),
-      _demoSurfaceOverride(),
-      insightsProvider.overrideWith((ref) async => insights),
-      correlationReportProvider.overrideWith(
-        (ref) async => const CorrelationReport(
-          windowDays: 14,
-          metrics: correlationMetrics,
-          points: [],
-          results: [],
-        ),
-      ),
-      skillsetProfileProvider.overrideWith((ref) async => _skillsetProfile()),
-    ];
+  _skillsetSelectionOverride(),
+  _demoSurfaceOverride(),
+  insightsProvider.overrideWith((ref) async => insights),
+  correlationReportProvider.overrideWith(
+    (ref) async => const CorrelationReport(
+      windowDays: 14,
+      metrics: correlationMetrics,
+      points: [],
+      results: [],
+    ),
+  ),
+  skillsetProfileProvider.overrideWith((ref) async => _skillsetProfile()),
+];
 
 Override _demoSurfaceOverride() =>
     appSurfaceCapabilitiesProvider.overrideWithValue(
@@ -1729,14 +2020,14 @@ Override _realSurfaceOverride() =>
     );
 
 SkillsetProfile _skillsetProfile() => SkillsetProfile(
-      userName: 'Alex',
-      overallScore: 82,
-      primaryArchetype: 'Focused Builder',
-      scores: const [
-        SkillScore(name: 'Recovery', score: 74, signal: 'Stable sleep'),
-      ],
-      updatedAt: DateTime.utc(2026, 7, 13, 10),
-    );
+  userName: 'Alex',
+  overallScore: 82,
+  primaryArchetype: 'Focused Builder',
+  scores: const [
+    SkillScore(name: 'Recovery', score: 74, signal: 'Stable sleep'),
+  ],
+  updatedAt: DateTime.utc(2026, 7, 13, 10),
+);
 
 SleepRecommendation _sleepRecommendation(
   SleepRecommendationStatus status, {
@@ -1769,15 +2060,15 @@ SleepRecommendation _sleepRecommendation(
       'eligible_focus_days': status == SleepRecommendationStatus.disabled
           ? 0
           : status == SleepRecommendationStatus.collecting
-              ? 22
-              : 30,
+          ? 22
+          : 30,
       'rated_sessions': status == SleepRecommendationStatus.disabled ? 0 : 34,
       'required_eligible_days': 30,
       'progress': status == SleepRecommendationStatus.disabled
           ? '0/30'
           : status == SleepRecommendationStatus.collecting
-              ? '22/30'
-              : '30/30',
+          ? '22/30'
+          : '30/30',
     },
     'recommendation': ready
         ? {
@@ -1818,8 +2109,8 @@ SleepRecommendation _sleepRecommendation(
     'summary': ready
         ? 'This best-supported sleep window is associated with stronger mornings.'
         : status == SleepRecommendationStatus.disabled
-            ? 'Sleep recommendation analysis is turned off.'
-            : 'No stable window yet. Keep collecting comparable days.',
+        ? 'Sleep recommendation analysis is turned off.'
+        : 'No stable window yet. Keep collecting comparable days.',
     'limitations': ready
         ? ['This is an observed association, not a causal claim.']
         : ['No recommendation is shown without stable evidence.'],
@@ -1827,129 +2118,127 @@ SleepRecommendation _sleepRecommendation(
 }
 
 PersonalPatterns _personalPatterns() => PersonalPatterns.fromJson({
-      'contract_version': 'personal-patterns-v1',
-      'status': 'stable',
-      'generated_at': '2026-07-26T12:00:00Z',
-      'timezone': 'Europe/Berlin',
-      'window': {
-        'rolling_days': 90,
-        'starts_at': '2026-04-27T12:00:00Z',
-        'ends_at': '2026-07-26T12:00:00Z',
-        'local_starts_on': '2026-04-27',
-        'local_ends_on': '2026-07-26',
-      },
+  'contract_version': 'personal-patterns-v1',
+  'status': 'stable',
+  'generated_at': '2026-07-26T12:00:00Z',
+  'timezone': 'Europe/Berlin',
+  'window': {
+    'rolling_days': 90,
+    'starts_at': '2026-04-27T12:00:00Z',
+    'ends_at': '2026-07-26T12:00:00Z',
+    'local_starts_on': '2026-04-27',
+    'local_ends_on': '2026-07-26',
+  },
+  'summary':
+      'A stable baseline now covers 20 rated sessions. Morning sessions were associated with higher useful progress.',
+  'sample': {
+    'terminal_sessions': 20,
+    'rated_sessions': 20,
+    'rated_local_days': 20,
+    'rating_coverage': 1.0,
+    'first_rated_local_date': '2026-06-16',
+    'last_rated_local_date': '2026-07-25',
+  },
+  'baseline': {
+    'median_focus_quality': 4.0,
+    'median_useful_progress': 4.0,
+    'completion_rate': 0.9,
+  },
+  'patterns': [
+    {
+      'kind': 'focus_timing',
+      'maturity': 'stable',
+      'title': 'Focus timing',
       'summary':
-          'A stable baseline now covers 20 rated sessions. Morning sessions were associated with higher useful progress.',
-      'sample': {
-        'terminal_sessions': 20,
-        'rated_sessions': 20,
-        'rated_local_days': 20,
-        'rating_coverage': 1.0,
-        'first_rated_local_date': '2026-06-16',
-        'last_rated_local_date': '2026-07-25',
+          'Sessions starting 09:00–13:00 were associated with higher median useful progress.',
+      'evidence': {
+        'preferred_group': '09:00–13:00',
+        'comparison_group': 'other daytime windows',
+        'preferred_count': 10,
+        'comparison_count': 10,
+        'useful_progress_median_delta': 1.0,
+        'focus_quality_median_delta': 0.0,
+        'completion_rate_delta': 0.0,
+        'details': [
+          'Median useful progress 5.0 vs 4.0.',
+          '10 preferred-window days and 10 comparison days.',
+        ],
       },
-      'baseline': {
-        'median_focus_quality': 4.0,
-        'median_useful_progress': 4.0,
-        'completion_rate': 0.9,
-      },
-      'patterns': [
-        {
-          'kind': 'focus_timing',
-          'maturity': 'stable',
-          'title': 'Focus timing',
-          'summary':
-              'Sessions starting 09:00–13:00 were associated with higher median useful progress.',
-          'evidence': {
-            'preferred_group': '09:00–13:00',
-            'comparison_group': 'other daytime windows',
-            'preferred_count': 10,
-            'comparison_count': 10,
-            'useful_progress_median_delta': 1.0,
-            'focus_quality_median_delta': 0.0,
-            'completion_rate_delta': 0.0,
-            'details': [
-              'Median useful progress 5.0 vs 4.0.',
-              '10 preferred-window days and 10 comparison days.',
-            ],
-          },
-        },
-      ],
-      'planner_preference': {
-        'eligible': true,
-        'reason': 'eligible',
-        'window': '09-13',
-        'window_label': '09:00–13:00',
-        'evidence_count': 20,
-        'evidence_starts_on': '2026-06-16',
-        'evidence_ends_on': '2026-07-25',
-        'evidence_fingerprint': _fingerprint,
-      },
-      'limitations': [
-        'These are observational associations and do not show cause.',
-        'Missing reflections are excluded rather than scored as zero.',
-      ],
-      'correlation_points': [
-        {
-          'local_date': '2026-07-25',
-          'local_started_at': '2026-07-25T09:00:00+02:00',
-          'focus_quality': 4,
-          'useful_progress': 5,
-          'planned_focus_minutes': 45,
-          'actual_focus_minutes': 45,
-          'completed': 1,
-          'sleep_hours': 7.5,
-          'sleep_target_deviation_minutes': -30,
-          'sleep_quality': 7,
-          'morning_energy': 6,
-        },
-        {
-          'local_date': '2026-07-25',
-          'local_started_at': '2026-07-25T14:00:00+02:00',
-          'focus_quality': 3,
-          'useful_progress': 4,
-          'planned_focus_minutes': 30,
-          'actual_focus_minutes': 20,
-          'completed': 0,
-          'sleep_hours': 7.5,
-          'sleep_target_deviation_minutes': 15,
-          'sleep_quality': 7,
-          'morning_energy': 6,
-        },
-      ],
-      'evidence_fingerprint': _fingerprint,
-    });
+    },
+  ],
+  'planner_preference': {
+    'eligible': true,
+    'reason': 'eligible',
+    'window': '09-13',
+    'window_label': '09:00–13:00',
+    'evidence_count': 20,
+    'evidence_starts_on': '2026-06-16',
+    'evidence_ends_on': '2026-07-25',
+    'evidence_fingerprint': _fingerprint,
+  },
+  'limitations': [
+    'These are observational associations and do not show cause.',
+    'Missing reflections are excluded rather than scored as zero.',
+  ],
+  'correlation_points': [
+    {
+      'local_date': '2026-07-25',
+      'local_started_at': '2026-07-25T09:00:00+02:00',
+      'focus_quality': 4,
+      'useful_progress': 5,
+      'planned_focus_minutes': 45,
+      'actual_focus_minutes': 45,
+      'completed': 1,
+      'sleep_hours': 7.5,
+      'sleep_target_deviation_minutes': -30,
+      'sleep_quality': 7,
+      'morning_energy': 6,
+    },
+    {
+      'local_date': '2026-07-25',
+      'local_started_at': '2026-07-25T14:00:00+02:00',
+      'focus_quality': 3,
+      'useful_progress': 4,
+      'planned_focus_minutes': 30,
+      'actual_focus_minutes': 20,
+      'completed': 0,
+      'sleep_hours': 7.5,
+      'sleep_target_deviation_minutes': 15,
+      'sleep_quality': 7,
+      'morning_energy': 6,
+    },
+  ],
+  'evidence_fingerprint': _fingerprint,
+});
 
 PersonalPatterns _disabledPersonalPatterns() => PersonalPatterns(
-      status: PersonalPatternsStatus.disabled,
-      summary: 'Personal pattern analysis is off.',
-      timezone: 'Europe/Berlin',
-      window: PersonalPatternsWindow(
-        startsAt: DateTime.utc(2026, 4, 27, 12),
-        endsAt: DateTime.utc(2026, 7, 26, 12),
-        localStartsOn: DateTime.utc(2026, 4, 27),
-        localEndsOn: DateTime.utc(2026, 7, 26),
-      ),
-      sample: const PersonalPatternsSample(
-        terminalSessions: 0,
-        ratedSessions: 0,
-        ratedLocalDays: 0,
-        ratingCoverage: 0,
-        firstRatedLocalDate: null,
-        lastRatedLocalDate: null,
-      ),
-      baseline: null,
-      patterns: const [],
-      plannerPreference: const LearnedPlannerPreference(
-        eligible: false,
-        reason: 'analysis_disabled',
-        window: null,
-        windowLabel: null,
-        evidenceCount: 0,
-      ),
-      limitations: const [
-        'Pattern analysis is turned off in Personal learning.',
-      ],
-      correlationPoints: const [],
-      evidenceFingerprint: null,
-    );
+  status: PersonalPatternsStatus.disabled,
+  summary: 'Personal pattern analysis is off.',
+  timezone: 'Europe/Berlin',
+  window: PersonalPatternsWindow(
+    startsAt: DateTime.utc(2026, 4, 27, 12),
+    endsAt: DateTime.utc(2026, 7, 26, 12),
+    localStartsOn: DateTime.utc(2026, 4, 27),
+    localEndsOn: DateTime.utc(2026, 7, 26),
+  ),
+  sample: const PersonalPatternsSample(
+    terminalSessions: 0,
+    ratedSessions: 0,
+    ratedLocalDays: 0,
+    ratingCoverage: 0,
+    firstRatedLocalDate: null,
+    lastRatedLocalDate: null,
+  ),
+  baseline: null,
+  patterns: const [],
+  plannerPreference: const LearnedPlannerPreference(
+    eligible: false,
+    reason: 'analysis_disabled',
+    window: null,
+    windowLabel: null,
+    evidenceCount: 0,
+  ),
+  limitations: const ['Pattern analysis is turned off in Personal learning.'],
+  correlationPoints: const [],
+  evidenceFingerprint: null,
+);

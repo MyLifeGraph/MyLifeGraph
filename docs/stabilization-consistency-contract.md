@@ -1,5 +1,23 @@
 # Stabilization Write And Projection Consistency Contract
 
+## Optional edits and reconciliation
+
+Unsaved Morning/Evening values require confirmation before route/date departure.
+Wearable sleep is an optional draft proposal, never an independent Capture writer;
+manual/saved values retain authority and the normal Save uses unchanged CAS.
+Completed Focus corrections use the additive owner-locked service RPC described
+in [executable actions](phase-3-executable-actions-contract.md). Snapshot refresh
+follows the durable write; a failed refresh must not imply rollback. Notification
+restore uses the existing lifecycle ledger/CAS/reload contract.
+
+Manual Morning/Evening backfill (today plus seven previous calendar dates) uses
+the existing date-addressed Capture read/write and branch CAS path. Date changes
+discard drafts only after confirmation, clear stale form state, reload the
+selected date and refresh projections for that written date. A failed read is
+not an empty existing branch. Future-day sleep plans must not prefill historical
+Capture. Voice review remains bound to today's owner/date/timezone and preserves
+unmentioned stored answers; explicit proposed clocks replace the stored clocks.
+
 This contract records the post-product-review stabilization boundary introduced
 by migrations `20260729120000_stabilization_write_authority.sql` and
 `20260729130000_observed_projection_persistence.sql`, with the additive Daily

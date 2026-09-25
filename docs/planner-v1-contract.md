@@ -1,5 +1,13 @@
 # Planner V1 Mutation And Overview V2 Contract
 
+Action-reservation details distinguish `Cancel reservations` (keep the target)
+from `Remove task` (existing target cancellation, releasing future slots).
+Habit rows expose a management action: manual Habits use Habit management,
+Setup-owned definitions return to Setup. Existing archive/cancel commands and
+their concurrency guards retain Focus and execution history. Terminal Deadline
+plans cannot contribute active agenda blocks even if a historical revision is
+retained. Imported source events are separate and are not erased by plan removal.
+
 ## Compact view and Task controls
 
 On mobile/tablet the presentation toggle separates `This week` (the existing Days/List calendar)
@@ -176,7 +184,7 @@ projection.
 Today and Planner use the same category semantics for both Add-new actions and
 complete agenda rows: Task/Setup are brand-primary, Habit/Preparation are
 information-secondary, Calendar is attention-tertiary, Focus is violet, and a
-fixed commitment is danger. Exam and Assignment share Preparation color while
+fixed commitment is neutral, not danger. Exam and Assignment share Preparation color while
 retaining different icons and labels.
 
 Planner load failures use short outcome-first retry copy and never describe an
@@ -655,6 +663,13 @@ definition mutation. It does not claim that energy windows predict performance
 or that imported Calendar data is complete availability.
 
 ## Visual presentation
+
+Needs attention groups unplaced saved-plan rows under the matching Exam Health
+item's Details disclosure. Other warnings (including stale/conflict/source
+states) remain visible, with all existing destinations retained. The count is
+the number of visible grouped entries. Exact uncovered minutes use hours/minutes;
+reserve is labelled short/spare under Details, not a negative unexplained number.
+Capacity status stays visible once; transport errors remain distinct from unknown.
 
 Task/Habit descriptions start at one line and grow to three, retaining the
 same character limits and full editable text. Compact fields retain every

@@ -17,6 +17,14 @@ void main() {
         SharedPreferences.getInstance,
       );
 
+  test('new selection includes every supported dimension', () async {
+    final preferences = controller('account:new');
+    await preferences.settled;
+    expect(preferences.state.dimensions, supportedSkillsetDimensions);
+    expect(preferences.state.dimensions.length, 11);
+    preferences.dispose();
+  });
+
   test(
     'dimensions and chart survive a new controller and preserve empty selection',
     () async {
@@ -28,11 +36,10 @@ void main() {
       first.dispose();
       final second = controller('account:one');
       await second.settled;
-      expect(second.state.dimensions, {
-        ...defaultSkillsetDimensions,
-        'motivation',
-        'discipline',
-      });
+      expect(
+        second.state.dimensions,
+        defaultSkillsetDimensions.difference({'motivation', 'discipline'}),
+      );
       expect(second.state.chart, SkillsetChartView.bars);
       for (final id in {...second.state.dimensions}) {
         await second.toggle(id);
@@ -68,7 +75,10 @@ void main() {
     }
     container.read(scope.notifier).state = 'account:one';
     await container.read(skillsetDisplayPreferencesProvider.notifier).settled;
-    expect(container.read(skillsetDimensionsProvider), contains('motivation'));
+    expect(
+      container.read(skillsetDimensionsProvider),
+      isNot(contains('motivation')),
+    );
   });
 
   test('late restore does not overwrite an immediate edit', () async {
@@ -86,10 +96,10 @@ void main() {
     final change = preferences.toggle('motivation');
     pending.complete(await SharedPreferences.getInstance());
     expect(await change, isTrue);
-    expect(preferences.state.dimensions, {
-      ...defaultSkillsetDimensions,
-      'motivation',
-    });
+    expect(
+      preferences.state.dimensions,
+      defaultSkillsetDimensions.difference({'motivation'}),
+    );
     final restored = controller('account:one');
     await restored.settled;
     expect(restored.state.dimensions, preferences.state.dimensions);
@@ -109,10 +119,10 @@ void main() {
     expect(await Future.wait(changes), everyElement(isTrue));
     final restored = controller('account:one');
     await restored.settled;
-    expect(restored.state.dimensions, {
-      ...defaultSkillsetDimensions,
-      'discipline',
-    });
+    expect(
+      restored.state.dimensions,
+      defaultSkillsetDimensions.difference({'discipline'}),
+    );
     expect(restored.state.chart, SkillsetChartView.bars);
     preferences.dispose();
     restored.dispose();
@@ -149,7 +159,7 @@ void main() {
       );
       await preferences.settled;
       expect(await preferences.toggle('motivation'), isFalse);
-      expect(preferences.state.dimensions, contains('motivation'));
+      expect(preferences.state.dimensions, isNot(contains('motivation')));
       preferences.dispose();
     },
   );

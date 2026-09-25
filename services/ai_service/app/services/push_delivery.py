@@ -99,6 +99,10 @@ async def deliver_for_owner(
         patterns=prefs.patterns,
         quiet_start=time.fromisoformat(prefs.quiet_start),
         quiet_end=time.fromisoformat(prefs.quiet_end),
+        morning=prefs.morning,
+        evening=prefs.evening,
+        morning_time=time.fromisoformat(prefs.morning_time),
+        evening_time=time.fromisoformat(prefs.evening_time),
     )
     # Avoid expensive read-only analysis in quiet hours and disabled categories.
     clock = local.time().replace(tzinfo=None)
@@ -156,6 +160,10 @@ async def deliver_for_owner(
         has_open_deadlines_today=deadlines,
         sleep=sleep,
         patterns=patterns,
+        # The locked SQL reservation and final dispatch recheck read the branch
+        # directly. No stale/cache-based absence may authorize a reminder.
+        morning_saved=False,
+        evening_saved=False,
     )
     accepted = 0
     for candidate in candidates:

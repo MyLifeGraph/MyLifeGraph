@@ -43,7 +43,12 @@ class _PushSyncHostState extends ConsumerState<PushSyncHost>
       if (!mounted || _owner != owner) return;
       final route = await const PushPlatform().call<String>('takeRoute');
       if (!mounted || _owner != owner) return;
-      if (route == '/planner' || route == '/insights') {
+      if (const {
+        '/planner',
+        '/insights',
+        '/morning-calibration',
+        '/quick-mood-check-in',
+      }.contains(route)) {
         ref.read(appRouterProvider).push(route!);
       }
     } catch (_) {

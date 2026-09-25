@@ -13,9 +13,13 @@ import '../../domain/quick_check_in.dart';
 import '../../domain/capture_draft_proposal.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
+import '../widgets/capture_leave_guard.dart';
+import '../widgets/capture_date_picker.dart';
 import '../../../../composition/skillset_providers.dart';
 import '../../domain/skillset_signals.dart';
 import '../widgets/optional_skillset_controls.dart';
+import '../../../../composition/health_connect_providers.dart';
+import '../../../../core/theme/app_icons.dart';
 
 class MorningCalibrationPage extends ConsumerStatefulWidget {
   const MorningCalibrationPage({super.key, this.proposal});
@@ -30,6 +34,8 @@ class MorningCalibrationPage extends ConsumerStatefulWidget {
 class _MorningCalibrationPageState
     extends ConsumerState<MorningCalibrationPage> {
   late MorningCalibrationDraft _draft;
+  MorningCalibrationDraft? _cleanDraft;
+  bool _sleepTouched = false;
   var _stepIndex = 0;
   var _isLoading = true;
   var _safeCaptureLoaded = false;
@@ -78,7 +84,7 @@ class _MorningCalibrationPageState
       subtitle: widget.proposal == null
           ? null
           : _revisingSavedCapture
-          ? 'Review suggestions. Saving updates today\'s Morning check-in.'
+          ? 'Review suggestions. Unmentioned answers stay unchanged. Saving updates today\'s Morning check-in.'
           : 'Review suggestions and fill any gaps before saving.',
       progress: (_stepIndex + 1) / _steps.length,
       canGoBack: _stepIndex > 0,
@@ -87,6 +93,7 @@ class _MorningCalibrationPageState
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save',
+      hasUnsavedChanges: _cleanDraft != null && !identical(_draft, _cleanDraft),
       errorMessage: _saveError,
       loadErrorMessage:
           (!_proposalMatchesContext
@@ -108,7 +115,19 @@ class _MorningCalibrationPageState
       onBack: _previousStep,
       onNext: _nextStep,
       child: proposalOwnerMatches
-          ? _buildStep(step.kind)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.proposal == null)
+                  CaptureDatePicker(
+                    date: DateTime.parse(_draft.entryDate),
+                    today: ref.read(profileLocalDateSourceProvider).today(),
+                    enabled: !_isLoading && !_isSaving,
+                    onChanged: _changeDate,
+                  ),
+                _buildStep(step.kind),
+              ],
+            )
           : const SizedBox.shrink(),
     );
   }
@@ -121,14 +140,72 @@ class _MorningCalibrationPageState
   }
 
   Widget _buildSleepStep() {
+    final watchSleep =
+        widget.proposal == null &&
+            _safeCaptureLoaded &&
+            !_revisingSavedCapture &&
+            !_sleepTouched
+        ? ref.watch(healthSleepSuggestionProvider(_draft.entryDate)).valueOrNull
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const CaptureInfoDisclosure(
           heading: 'Estimated sleep duration',
           description:
-              'These are your own estimates, not objectively measured sleep.',
+              'Review the times before saving. Watch times remain editable.',
         ),
+        if (watchSleep != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final useTimes = TextButton(
+                onPressed: _isSaving
+                    ? null
+                    : () => setState(() {
+                        _sleepTouched = true;
+                        _draft = _draft.withSleepInterval(
+                          estimatedSleepStartedAt: watchSleep.startedAt,
+                          wokeAt: watchSleep.wokeAt,
+                        );
+                      }),
+                child: const Text('Use times'),
+              );
+              final compact =
+                  constraints.maxWidth < 360 ||
+                  MediaQuery.textScalerOf(context).scale(14) > 20;
+              final heading = Row(
+                children: [
+                  const Icon(AppIcons.bedtimeOutlined),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Watch sleep\n${_clock(watchSleep.startedAt)}–${_clock(watchSleep.wokeAt)}',
+                    ),
+                  ),
+                  if (!compact) useTimes,
+                  IconButton(
+                    tooltip: 'Dismiss',
+                    icon: const Icon(AppIcons.close),
+                    onPressed: () => setState(() => _sleepTouched = true),
+                  ),
+                ],
+              );
+              return compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        heading,
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: useTimes,
+                        ),
+                      ],
+                    )
+                  : heading;
+            },
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         CaptureClockControl(
           label: 'Sleep start',
@@ -277,6 +354,7 @@ class _MorningCalibrationPageState
   }
 
   void _setEstimatedSleepStart(String value) {
+    _sleepTouched = true;
     _applySleepClocks(
       start: value,
       wake: _draft.wokeAt == null
@@ -286,6 +364,7 @@ class _MorningCalibrationPageState
   }
 
   void _setWakeTime(String value) {
+    _sleepTouched = true;
     final start = _draft.estimatedSleepStartedAt;
     if (start == null) {
       try {
@@ -364,6 +443,7 @@ class _MorningCalibrationPageState
     try {
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveMorning(draft);
+      _cleanDraft = _draft;
       await ref
           .read(projectionRefreshCoordinatorProvider)
           .dailyCaptureChanged(
@@ -415,13 +495,23 @@ class _MorningCalibrationPageState
     }
     try {
       final store = ref.read(quickCheckInStoreProvider);
-      final entry = await store.loadToday(
-        ref.read(profileLocalDateSourceProvider).today(),
-      );
+      final entry = await store.loadToday(DateTime.parse(_draft.entryDate));
       _safeCaptureLoaded = true;
       EveningShutdownDraft? sleepPlan;
       try {
-        sleepPlan = await store.loadLatestEvening();
+        final targetDate = DateTime.parse(_draft.entryDate);
+        if (_draft.entryDate ==
+            ref.read(profileLocalDateSourceProvider).todayKey()) {
+          sleepPlan = await store.loadLatestEvening();
+        }
+        if (_draft.entryDate !=
+                ref.read(profileLocalDateSourceProvider).todayKey() ||
+            (sleepPlan != null &&
+                sleepPlan.entryDate.compareTo(_draft.entryDate) >= 0)) {
+          sleepPlan = (await store.loadToday(
+            captureDayOffset(targetDate, -1),
+          ))?.evening;
+        }
       } catch (_) {
         _eveningPlanUnavailable = true;
       }
@@ -441,13 +531,17 @@ class _MorningCalibrationPageState
         var next = (_proposalApplied ? _draft : saved ?? _draft)
             .forEditing(sleepPlan: sleepPlan)
             .copyWith(capturedAt: saved == null ? null : _draft.capturedAt);
-        if (widget.proposal == null && next.wokeAt == null) {
+        if (widget.proposal == null &&
+            next.wokeAt == null &&
+            _draft.entryDate ==
+                ref.read(profileLocalDateSourceProvider).todayKey()) {
           next = next.copyWith(
             wokeAt: _clockOnEntryDate(_clock(DateTime.now())),
           );
         }
         if (widget.proposal == null &&
             next.estimatedSleepStartedAt == null &&
+            next.wokeAt != null &&
             sleepPlan?.plannedSleepTime != null) {
           final interval = estimatedSleepIntervalForLocalClocks(
             entryDate: next.entryDate,
@@ -466,6 +560,14 @@ class _MorningCalibrationPageState
         }
         setState(() {
           _draft = next;
+          _cleanDraft = widget.proposal == null
+              ? next
+              : saved ??
+                    _cleanDraft ??
+                    MorningCalibrationDraft.empty(
+                      next.capturedAt,
+                      entryDate: next.entryDate,
+                    );
           _revisingSavedCapture = saved != null;
           _safeCaptureLoaded = true;
           _loadError = null;
@@ -476,7 +578,7 @@ class _MorningCalibrationPageState
         setState(() {
           _safeCaptureLoaded = false;
           _loadError =
-              'Today\'s saved capture could not be loaded. Saving is blocked because its current branch version is unknown. Your draft is still here.';
+              'This day’s saved check-in could not be loaded. Retry before saving. Your draft is still here.';
         });
       }
     } finally {
@@ -497,6 +599,28 @@ class _MorningCalibrationPageState
           branch: 'morning',
         ) &&
         proposal.entryDate == _draft.entryDate;
+  }
+
+  Future<void> _changeDate(DateTime date) async {
+    if (_isLoading || _isSaving || widget.proposal != null) return;
+    if (dailyCaptureEntryDate(date) == _draft.entryDate) return;
+    if (_cleanDraft != null && !identical(_draft, _cleanDraft)) {
+      if (!await confirmCaptureDiscard(context) || !mounted || _isSaving) {
+        return;
+      }
+    }
+    setState(() {
+      _draft = MorningCalibrationDraft.empty(
+        ref.read(currentInstantProvider)(),
+        entryDate: dailyCaptureEntryDate(date),
+      );
+      _stepIndex = 0;
+      _cleanDraft = null;
+      _sleepTouched = false;
+      _safeCaptureLoaded = false;
+      _saveError = null;
+    });
+    _loadToday();
   }
 
   void _showMessage(String message) {

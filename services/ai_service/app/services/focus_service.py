@@ -10,6 +10,7 @@ from app.models.focus import (
     FocusSessionResponse,
     FocusStartContextResponse,
     FocusStartRequest,
+    FocusTimeCorrectionRequest,
     ManualFocusStartRequest,
     ScheduledFocusStartRequest,
 )
@@ -29,6 +30,22 @@ class FocusNotFoundError(RuntimeError):
 
 
 class FocusService:
+    async def correct_time(self, *, user_id: str, session_id: UUID,
+                           request: FocusTimeCorrectionRequest) -> FocusSessionResponse:
+        try:
+            raw = await self._repository.correct_time(
+                user_id=user_id, session_id=session_id, request_id=request.request_id,
+                expected_updated_at=request.expected_updated_at, minutes=request.minutes,
+            )
+        except FocusPersistenceNotFound as exc:
+            raise FocusNotFoundError(str(exc)) from exc
+        except FocusPersistenceConflict as exc:
+            raise FocusConflictError(str(exc)) from exc
+        result = FocusSessionResponse.model_validate(raw)
+        if result.id != session_id or result.actual_minutes != request.minutes or result.status != "completed":
+            raise ValueError("Correction response does not match request.")
+        return result
+
     def __init__(
         self,
         *,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/feedback/app_haptics.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
@@ -100,12 +101,14 @@ class _TodayTaskSectionsState extends State<TodayTaskSections> {
               !commands.restoredTaskIds.contains(item.id));
     }).toList();
     final completedTasks = allTasks.where((item) {
-      final completed = commands.completedTaskIds.contains(item.id) ||
+      final completed =
+          commands.completedTaskIds.contains(item.id) ||
           (item.isCompleted && !commands.restoredTaskIds.contains(item.id));
       return completed && !commands.deletedTaskIds.contains(item.id);
     }).toList();
-    final selectedTasks =
-        snapshot.isTodayOverview ? snapshot.todayTasks : activeTasks;
+    final selectedTasks = snapshot.isTodayOverview
+        ? snapshot.todayTasks
+        : activeTasks;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,6 +118,8 @@ class _TodayTaskSectionsState extends State<TodayTaskSections> {
           sourceState: snapshot.sourceStates?.tasks,
           canExecute: canExecute,
           updatingTaskIds: commands.updatingTaskIds,
+          completedTaskIds: commands.completedTaskIds,
+          restoredTaskIds: commands.restoredTaskIds,
           onAdd: actions.onOpenPlanner,
           onComplete: actions.onComplete,
           onRestore: actions.onRestore,
@@ -206,8 +211,7 @@ class TodayHabitSection extends StatelessWidget {
         DashboardSectionTitle(
           title: 'Habits for today',
           caption: 'Repeating habits due today',
-          subtitle:
-              'Repeating activities for today.',
+          subtitle: 'Repeating activities for today.',
           icon: AppIcons.repeat,
         ),
         const SizedBox(height: AppSpacing.md),
@@ -230,8 +234,8 @@ class TodayHabitSection extends StatelessWidget {
                 updating: commands.updatingHabitIds.contains(habit.id),
                 outcomeOverride:
                     commands.habitOutcomeOverrides.containsKey(habit.id)
-                        ? commands.habitOutcomeOverrides[habit.id]
-                        : habit.outcome,
+                    ? commands.habitOutcomeOverrides[habit.id]
+                    : habit.outcome,
                 canExecute: canExecute,
                 onSetOutcome: actions.onSetOutcome,
                 onUndo: actions.onUndo,
@@ -249,6 +253,8 @@ class _TodayTasksSection extends StatelessWidget {
     required this.sourceState,
     required this.canExecute,
     required this.updatingTaskIds,
+    required this.completedTaskIds,
+    required this.restoredTaskIds,
     required this.onAdd,
     required this.onComplete,
     required this.onRestore,
@@ -259,6 +265,8 @@ class _TodayTasksSection extends StatelessWidget {
   final TodaySourceState? sourceState;
   final bool canExecute;
   final Set<String> updatingTaskIds;
+  final Set<String> completedTaskIds;
+  final Set<String> restoredTaskIds;
   final VoidCallback onAdd;
   final ValueChanged<PlanItem> onComplete;
   final ValueChanged<PlanItem> onRestore;
@@ -270,10 +278,8 @@ class _TodayTasksSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DashboardSectionTitle(
-          title: 'Tasks due today',
-          caption: 'From Planner · one-off actions',
-          subtitle:
-              'Due, overdue, in progress or completed today.',
+          title: 'Today & overdue',
+          subtitle: 'Due, overdue, in progress or completed today.',
           icon: AppIcons.taskAltOutlined,
           compactTrailing: true,
           trailing: canExecute
@@ -302,7 +308,10 @@ class _TodayTasksSection extends StatelessWidget {
               child: _TaskCard(
                 task: task,
                 isUpdating: updatingTaskIds.contains(task.id),
-                isCompleted: task.status == 'done',
+                isCompleted:
+                    completedTaskIds.contains(task.id) ||
+                    (task.status == 'done' &&
+                        !restoredTaskIds.contains(task.id)),
                 compact: true,
                 onComplete: canExecute && task.status != 'done'
                     ? () => onComplete(task)
@@ -453,20 +462,15 @@ class _HabitCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (updating)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (open)
+          if (open)
             IconButton(
               tooltip: 'Complete',
-              onPressed: !canExecute
+              onPressed: !canExecute || updating
                   ? null
-                  : () => onSetOutcome(habit, HabitOutcome.completed),
+                  : AppHaptics.action(
+                      context,
+                      () => onSetOutcome(habit, HabitOutcome.completed),
+                    ),
               icon: Icon(
                 AppIcons.radioButtonUnchecked,
                 color: tokens.textSecondary,
@@ -476,9 +480,7 @@ class _HabitCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Icon(
-                completed
-                    ? AppIcons.checkCircle
-                    : AppIcons.skipNextOutlined,
+                completed ? AppIcons.checkCircle : AppIcons.skipNextOutlined,
                 color: completed
                     ? tokens.success
                     : Theme.of(context).colorScheme.tertiary,
@@ -504,12 +506,17 @@ class _HabitCard extends StatelessWidget {
               ],
             ),
           ),
-          if (canExecute && !updating)
+          if (updating)
+            const _SavingIndicator()
+          else if (canExecute)
             IconButton(
               tooltip: open ? 'Skip' : 'Undo outcome',
               onPressed: open
-                  ? () => onSetOutcome(habit, HabitOutcome.skipped)
-                  : () => onUndo(habit),
+                  ? AppHaptics.action(
+                      context,
+                      () => onSetOutcome(habit, HabitOutcome.skipped),
+                    )
+                  : AppHaptics.action(context, () => onUndo(habit)),
               icon: Icon(open ? AppIcons.skipNextOutlined : AppIcons.undo),
             ),
         ],
@@ -544,19 +551,20 @@ class _TaskCard extends StatelessWidget {
     final due = task.deadline == null
         ? null
         : 'Due ${DateFormat.yMMMd().format(task.deadline!)}';
-    final estimate =
-        task.estimatedMinutes == null ? null : '${task.estimatedMinutes} min';
+    final estimate = task.estimatedMinutes == null
+        ? null
+        : '${task.estimatedMinutes} min';
     final stateIcon = Icon(
       isCompleted
           ? AppIcons.checkCircle
           : isCancelled
-              ? AppIcons.cancelOutlined
-              : AppIcons.radioButtonUnchecked,
+          ? AppIcons.cancelOutlined
+          : AppIcons.radioButtonUnchecked,
       color: compact && isCompleted
           ? context.visualTokens.success
           : isCompleted || isCancelled
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.onSurfaceVariant,
+          ? Theme.of(context).colorScheme.primary
+          : Theme.of(context).colorScheme.onSurfaceVariant,
     );
     return AppCard(
       padding: compact
@@ -567,19 +575,15 @@ class _TaskCard extends StatelessWidget {
           : const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
-          if (compact && isUpdating)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (compact && !isCompleted && !isCancelled &&
-              !task.isDeadlinePlanManaged && onComplete != null)
+          if (compact &&
+              !isUpdating &&
+              !isCompleted &&
+              !isCancelled &&
+              !task.isDeadlinePlanManaged &&
+              onComplete != null)
             IconButton(
               tooltip: 'Complete task ${task.title}',
-              onPressed: onComplete,
+              onPressed: AppHaptics.action(context, onComplete),
               icon: stateIcon,
             )
           else if (compact)
@@ -595,18 +599,18 @@ class _TaskCard extends StatelessWidget {
                 Text(
                   task.title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        decoration: isCompleted || isCancelled
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
+                    decoration: isCompleted || isCancelled
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
                 ),
                 if (task.isDeadlinePlanManaged) ...[
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Managed by a preparation plan',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ],
                 const SizedBox(height: AppSpacing.xs),
@@ -632,14 +636,8 @@ class _TaskCard extends StatelessWidget {
               ],
             ),
           ),
-          if (isUpdating && !compact)
-            const Padding(
-              padding: EdgeInsets.all(AppSpacing.sm),
-              child: SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
+          if (isUpdating)
+            const _SavingIndicator()
           else if (!isUpdating) ...[
             if (task.isDeadlinePlanManaged) ...[
               if (onStartFocus != null)
@@ -658,7 +656,7 @@ class _TaskCard extends StatelessWidget {
               if (onComplete != null && !compact)
                 IconButton(
                   tooltip: 'Complete task ${task.title}',
-                  onPressed: onComplete,
+                  onPressed: AppHaptics.action(context, onComplete),
                   icon: const Icon(AppIcons.check),
                 ),
               if (onStartFocus != null)
@@ -670,7 +668,7 @@ class _TaskCard extends StatelessWidget {
               if (onRestore != null)
                 IconButton(
                   tooltip: 'Restore task ${task.title}',
-                  onPressed: onRestore,
+                  onPressed: AppHaptics.action(context, onRestore),
                   icon: const Icon(AppIcons.undo),
                 ),
             ],
@@ -679,4 +677,20 @@ class _TaskCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SavingIndicator extends StatelessWidget {
+  const _SavingIndicator();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.all(12),
+    child: SizedBox.square(
+      dimension: 16,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        semanticsLabel: 'Saving',
+      ),
+    ),
+  );
 }

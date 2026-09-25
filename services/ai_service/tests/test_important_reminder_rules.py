@@ -62,7 +62,36 @@ def test_invalid_counter_or_naive_clock_fails_closed():
     with pytest.raises(ValueError):
         evaluate(reserved_today=-1)
     with pytest.raises(ValueError):
+        evaluate(reserved_checkins=-1)
+    with pytest.raises(ValueError):
         evaluate(now=datetime(2026, 9, 14))
+
+
+@pytest.mark.parametrize('kind,hour,route', [
+    ('morning', 6, '/morning-calibration'), ('evening', 18, '/quick-mood-check-in'),
+])
+def test_checkins_are_opt_in_due_only_and_separately_bounded(kind, hour, route):
+    values = dict(now=datetime(2026, 9, 14, hour, 5, tzinfo=UTC),
+                  preferences=ReminderPreferences(enabled=True, morning=True, evening=True),
+                  morning_saved=False, evening_saved=False, reserved_today=2)
+    result = evaluate(**values)
+    assert [item.kind for item in result] == [kind]
+    assert result[0].destination == route
+    assert result[0].dedupe_key == f'{kind}:2026-09-14'
+    assert evaluate(**(values | {'reserved_checkins': 2})) == []
+    assert evaluate(**(values | {f'{kind}_saved': True})) == []
+    assert evaluate(**(values | {'reserved_keys': {result[0].dedupe_key}})) == []
+    assert evaluate(**(values | {'preferences': ReminderPreferences(enabled=True)})) == []
+    assert evaluate(**(values | {'now': datetime(2026, 9, 14, hour, 15, tzinfo=UTC)})) == []
+    assert evaluate(**(values | {'preferences': ReminderPreferences(enabled=False, morning=True, evening=True)})) == []
+
+
+def test_checkins_respect_quiet_hours_and_skip_nonexistent_dst_time():
+    assert evaluate(now=datetime(2026, 9, 14, 4, 5, tzinfo=UTC), morning_saved=False,
+        preferences=ReminderPreferences(enabled=True, morning=True, morning_time=time(6))) == []
+    assert evaluate(now=datetime(2026, 3, 29, 1, 35, tzinfo=UTC), morning_saved=False,
+        preferences=ReminderPreferences(enabled=True, morning=True, morning_time=time(2, 30),
+                                        quiet_start=time(4), quiet_end=time(5))) == []
 
 
 def test_sleep_uses_current_ready_window_and_respects_warning_and_freshness():

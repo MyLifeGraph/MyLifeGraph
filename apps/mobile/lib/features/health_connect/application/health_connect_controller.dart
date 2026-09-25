@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/health_connect_gateway.dart';
 import '../domain/health_connect_state.dart';
+import '../domain/health_sleep_suggestion.dart';
 
 class HealthConnectViewState {
   const HealthConnectViewState({
@@ -25,6 +26,26 @@ class HealthConnectController extends StateNotifier<HealthConnectViewState> {
     : super(const HealthConnectViewState());
   final HealthConnectGateway gateway;
   final bool android;
+
+  Future<HealthSleepSuggestion?> sleepSuggestion(String date) async {
+    if (!android) return null;
+    final cloud = await gateway.read();
+    if (!mounted || !cloud.enabled) return null;
+    final device = await gateway.deviceStatus();
+    if (!mounted ||
+        device['granted'] != true ||
+        device['device_id'] != cloud.deviceId) {
+      return null;
+    }
+    final data = await gateway.readSleep(date, cloud.timezone);
+    if (!mounted) return null;
+    return HealthSleepSuggestion.parse(
+      data,
+      date,
+      cloud.timezone,
+      DateTime.now(),
+    );
+  }
 
   Future<void> openSettings() => gateway.openSettings();
 

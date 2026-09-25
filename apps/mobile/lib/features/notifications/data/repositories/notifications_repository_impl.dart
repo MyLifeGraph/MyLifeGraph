@@ -12,24 +12,38 @@ import '../datasources/notifications_supabase_data_source.dart';
 typedef NotificationsAccessTokenProvider = FutureOr<String?> Function();
 
 class NotificationsRepositoryImpl
-    implements NotificationsRepository, NotificationDeliveryRepository {
+    implements
+        NotificationsRepository,
+        NotificationDeliveryRepository,
+        NotificationHistoryRepository {
   const NotificationsRepositoryImpl({
     required NotificationsMockDataSource mockDataSource,
     NotificationsSupabaseDataSource? supabaseDataSource,
     NotificationsApiDataSource? apiDataSource,
     NotificationsAccessTokenProvider? accessTokenProvider,
     required bool allowMockData,
-  })  : _mockDataSource = mockDataSource,
-        _supabaseDataSource = supabaseDataSource,
-        _apiDataSource = apiDataSource,
-        _accessTokenProvider = accessTokenProvider,
-        _allowMockData = allowMockData;
+  }) : _mockDataSource = mockDataSource,
+       _supabaseDataSource = supabaseDataSource,
+       _apiDataSource = apiDataSource,
+       _accessTokenProvider = accessTokenProvider,
+       _allowMockData = allowMockData;
 
   final NotificationsMockDataSource _mockDataSource;
   final NotificationsSupabaseDataSource? _supabaseDataSource;
   final NotificationsApiDataSource? _apiDataSource;
   final NotificationsAccessTokenProvider? _accessTokenProvider;
   final bool _allowMockData;
+
+  @override
+  Future<List<AppNotification>> getNotificationHistory({
+    required bool dismissed,
+    required int limit,
+  }) {
+    if (_allowMockData) return getNotifications();
+    final source = _supabaseDataSource;
+    if (source == null) throw StateError('Inbox unavailable.');
+    return source.getHistory(dismissed: dismissed, limit: limit);
+  }
 
   @override
   Future<List<AppNotification>> getNotifications() async {

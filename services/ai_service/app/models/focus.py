@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 
 FocusSourceKind = Literal[
@@ -12,6 +12,13 @@ FocusSourceKind = Literal[
     "deadline_plan_block",
     "planner_task_block",
 ]
+
+class FocusTimeCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: UUID
+    expected_updated_at: AwareDatetime
+    minutes: int = Field(ge=0, le=525600, strict=True)
 ScheduledFocusSourceKind = Literal[
     "deadline_plan_block",
     "planner_task_block",

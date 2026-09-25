@@ -16,13 +16,12 @@ import '../../application/focus_session_controller.dart';
 import '../../domain/focus_session.dart';
 import '../../../focus_protection/domain/focus_protection.dart';
 import '../widgets/focus_reflection_sheet.dart';
+import '../widgets/focus_time_sheet.dart';
 
 export '../../../../composition/focus_session_providers.dart'
     show
         focusSessionPageDataSourceProvider,
         focusStudySettingsDataSourceProvider;
-
-enum _PreparationChoice { ready, notNeeded }
 
 class FocusSessionPage extends ConsumerStatefulWidget {
   const FocusSessionPage({
@@ -51,14 +50,14 @@ class FocusSessionPage extends ConsumerStatefulWidget {
 class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     with WidgetsBindingObserver {
   FocusSessionLaunch get _launch => FocusSessionLaunch(
-        initialTargetKind: widget.initialTargetKind,
-        initialTargetId: widget.initialTargetId,
-        initialPlannedMinutes: widget.initialPlannedMinutes,
-        initialRecoveryMinutes: widget.initialRecoveryMinutes,
-        initialSourceKind: widget.initialSourceKind,
-        initialSourceBlockId: widget.initialSourceBlockId,
-        initialSessionId: widget.initialSessionId,
-      );
+    initialTargetKind: widget.initialTargetKind,
+    initialTargetId: widget.initialTargetId,
+    initialPlannedMinutes: widget.initialPlannedMinutes,
+    initialRecoveryMinutes: widget.initialRecoveryMinutes,
+    initialSourceKind: widget.initialSourceKind,
+    initialSourceBlockId: widget.initialSourceBlockId,
+    initialSessionId: widget.initialSessionId,
+  );
 
   FocusSessionController get _controller =>
       ref.read(focusSessionControllerProvider(_launch).notifier);
@@ -124,10 +123,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             ),
           )
         else if (state.loadError != null)
-          _FocusLoadErrorCard(
-            message: state.loadError!,
-            onRetry: _load,
-          )
+          _FocusLoadErrorCard(message: state.loadError!, onRetry: _load)
         else if (state.active != null) ...[
           _ActiveFocusCard(
             session: state.active!,
@@ -167,7 +163,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             isSaving: state.isSaving,
             startEnabled: state.canStart,
             scheduledContext: state.scheduledContext,
-            inlineError: state.startConflictMessage ??
+            inlineError:
+                state.startConflictMessage ??
                 (state.scheduledContext?.canStart == false
                     ? _focusStartBlockingText(
                         state.scheduledContext!.blockingReason,
@@ -185,6 +182,18 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             reflections: state.reflections,
             reflectionDataAvailable: state.reflectionDataAvailable,
             onRate: _openReflection,
+            onCorrectTime: (session) => showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => FocusTimeSheet(
+                minutes: session.actualMinutes ?? 0,
+                onSave: (minutes, requestId) => _controller.correctTime(
+                  session: session,
+                  minutes: minutes,
+                  requestId: requestId,
+                ),
+              ),
+            ),
           ),
       ],
     );
@@ -205,11 +214,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     if (maximum < 5) return;
     final initialMinutes =
         state.plannedMinutes >= 5 && state.plannedMinutes <= maximum
-            ? state.plannedMinutes
-            : (maximum < 25 ? maximum : 25);
-    final textController = TextEditingController(
-      text: '$initialMinutes',
-    );
+        ? state.plannedMinutes
+        : (maximum < 25 ? maximum : 25);
+    final textController = TextEditingController(text: '$initialMinutes');
     final selected = await showDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
@@ -302,7 +309,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   }
 
   Future<bool?> _confirmPreparation() {
-    final items = ref
+    final items =
+        ref
             .read(focusSessionControllerProvider(_launch))
             .studySettings
             ?.preparationItems
@@ -312,95 +320,54 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     if (items.isEmpty) {
       return Future.value(true);
     }
-    final choices = <String, _PreparationChoice?>{
-      for (final item in items) item.key: null,
-    };
     return showDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final complete = choices.values.every((choice) => choice != null);
-          return AlertDialog(
-            title: const Text('Prepare to focus'),
-            content: SizedBox(
-              width: 520,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'These choices are only for this start. They are not saved or evaluated.',
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Prepare to focus'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final item in items)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.xs,
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    for (final item in items)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: AppSpacing.md,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.label,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Wrap(
-                              spacing: AppSpacing.sm,
-                              runSpacing: AppSpacing.xs,
-                              children: [
-                                ChoiceChip(
-                                  label: const Text('Ready'),
-                                  selected: choices[item.key] ==
-                                      _PreparationChoice.ready,
-                                  onSelected: (_) {
-                                    setDialogState(() {
-                                      choices[item.key] =
-                                          _PreparationChoice.ready;
-                                    });
-                                  },
-                                ),
-                                ChoiceChip(
-                                  label: const Text('Not needed today'),
-                                  selected: choices[item.key] ==
-                                      _PreparationChoice.notNeeded,
-                                  onSelected: (_) {
-                                    setDialogState(() {
-                                      choices[item.key] =
-                                          _PreparationChoice.notNeeded;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('•'),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(child: Text(item.label)),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-            actions: [
+          ),
+        ),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
                 child: const Text('Cancel'),
               ),
-              TextButton(
-                key: const ValueKey('focus-skip-preparation'),
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Skip remaining and start'),
-              ),
-              FilledButton(
-                key: const ValueKey('focus-preparation-start'),
-                onPressed: complete
-                    ? () => Navigator.of(dialogContext).pop(true)
-                    : null,
-                child: const Text('Start'),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                child: FilledButton(
+                  key: const ValueKey('focus-preparation-start'),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Ready & start'),
+                ),
               ),
             ],
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -451,7 +418,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   Future<void> _emergencyRelease() async {
     final state = ref.read(focusSessionControllerProvider(_launch));
     if (state.active == null || state.isChangingProtection) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (_) => const _EmergencyReleaseDialog(),
@@ -522,10 +490,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
 }
 
 class _FocusLoadErrorCard extends StatelessWidget {
-  const _FocusLoadErrorCard({
-    required this.message,
-    required this.onRetry,
-  });
+  const _FocusLoadErrorCard({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -594,14 +559,16 @@ class _StartFocusCard extends StatelessWidget {
       90,
       plannedMinutes,
       if (suggestion != null) suggestion!.durationMinutes,
-    }.where((minutes) => minutes >= 5 && minutes <= maximum).toList()
-      ..sort();
+    }.where((minutes) => minutes >= 5 && minutes <= maximum).toList()..sort();
     final hasSelectedDuration = durations.contains(plannedMinutes);
-    final selectedTargetExists = selectedTargetValue == null ||
+    final selectedTargetExists =
+        selectedTargetValue == null ||
         targets.any((target) => target.value == selectedTargetValue);
-    final visibleSelectedTarget =
-        selectedTargetExists ? selectedTargetValue : null;
-    final canStartNow = startEnabled &&
+    final visibleSelectedTarget = selectedTargetExists
+        ? selectedTargetValue
+        : null;
+    final canStartNow =
+        startEnabled &&
         inlineError == null &&
         hasSelectedDuration &&
         selectedTargetExists;
@@ -609,200 +576,205 @@ class _StartFocusCard extends StatelessWidget {
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 620;
         return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Start a focus block',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'Finishing records focused time. It never completes a linked '
-            'task or habit automatically.',
-          ),
-          if (scheduledContext != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Planned '
-              '${DateFormat.MMMd().add_Hm().format(scheduledContext!.originalStartsAt.toLocal())}–'
-              '${DateFormat.Hm().format(scheduledContext!.originalEndsAt.toLocal())} · '
-              '${scheduledContext!.remainingMinutes} min remaining',
-              key: const ValueKey('focus-scheduled-origin'),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            if (canStartNow)
-              const Text(
-                'This session starts now. Its actual timestamps are used for progress and reflection.',
-              ),
-          ],
-          if (recoveryMinutes > 0 && hasSelectedDuration) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '$plannedMinutes min focus + $recoveryMinutes min recovery',
-              key: const ValueKey('focus-rhythm-summary'),
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ],
-          if (durations.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            if (isMobile)
-              _MobileDurationGrid(
-                presets: const [25, 45, 50, 90]
-                    .where((minutes) => minutes >= 5 && minutes <= maximum)
-                    .toList(),
-                plannedMinutes: plannedMinutes,
-                isSaving: isSaving,
-                onDurationChanged: onDurationChanged,
-                onCustomDuration: onCustomDuration,
-              )
-            else ...[
-              SegmentedButton<int>(
-                emptySelectionAllowed: !hasSelectedDuration,
-                segments: [
-                  for (final minutes in durations)
-                    ButtonSegment(
-                      value: minutes,
-                      label: Text('$minutes min'),
-                    ),
-                ],
-                selected:
-                    hasSelectedDuration ? {plannedMinutes} : const <int>{},
-                onSelectionChanged: isSaving
-                    ? null
-                    : (values) {
-                        if (values.isNotEmpty) {
-                          onDurationChanged(values.single);
-                        }
-                      },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Start a focus block',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppSpacing.sm),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: isSaving ? null : onCustomDuration,
-                  icon: const Icon(AppIcons.tune),
-                  label: const Text('Custom duration'),
+              const Text(
+                'Finishing records focused time. It never completes a linked '
+                'task or habit automatically.',
+              ),
+              if (scheduledContext != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Planned '
+                  '${DateFormat.MMMd().add_Hm().format(scheduledContext!.originalStartsAt.toLocal())}–'
+                  '${DateFormat.Hm().format(scheduledContext!.originalEndsAt.toLocal())} · '
+                  '${scheduledContext!.remainingMinutes} min remaining',
+                  key: const ValueKey('focus-scheduled-origin'),
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-              ),
-            ],
-          ],
-          if (suggestion != null && scheduledContext == null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(AppIcons.insightsOutlined, size: 20),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'Your ${suggestion!.evidenceSessions} recent completed sessions cluster around '
-                      '${suggestion!.durationMinutes} minutes. '
-                      'This is a suggestion, not an automatic setting.',
+                const SizedBox(height: AppSpacing.xs),
+                if (canStartNow)
+                  const Text(
+                    'This session starts now. Its actual timestamps are used for progress and reflection.',
+                  ),
+              ],
+              if (recoveryMinutes > 0 && hasSelectedDuration) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '$plannedMinutes min focus + $recoveryMinutes min recovery',
+                  key: const ValueKey('focus-rhythm-summary'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ],
+              if (durations.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.lg),
+                if (isMobile)
+                  _MobileDurationGrid(
+                    presets: const [25, 45, 50, 90]
+                        .where((minutes) => minutes >= 5 && minutes <= maximum)
+                        .toList(),
+                    plannedMinutes: plannedMinutes,
+                    isSaving: isSaving,
+                    onDurationChanged: onDurationChanged,
+                    onCustomDuration: onCustomDuration,
+                  )
+                else ...[
+                  SegmentedButton<int>(
+                    emptySelectionAllowed: !hasSelectedDuration,
+                    segments: [
+                      for (final minutes in durations)
+                        ButtonSegment(
+                          value: minutes,
+                          label: Text('$minutes min'),
+                        ),
+                    ],
+                    selected: hasSelectedDuration
+                        ? {plannedMinutes}
+                        : const <int>{},
+                    onSelectionChanged: isSaving
+                        ? null
+                        : (values) {
+                            if (values.isNotEmpty) {
+                              onDurationChanged(values.single);
+                            }
+                          },
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: isSaving ? null : onCustomDuration,
+                      icon: const Icon(AppIcons.tune),
+                      label: const Text('Custom duration'),
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          DropdownButtonFormField<String?>(
-            key: ValueKey('focus-target-selector-$visibleSelectedTarget'),
-            initialValue: visibleSelectedTarget,
-            isExpanded: true,
-            // Keep the popup inside the usable viewport, including system bars
-            // and the keyboard; all options remain reachable by scrolling.
-            menuMaxHeight: (MediaQuery.sizeOf(context).height -
-                    MediaQuery.paddingOf(context).vertical -
-                    MediaQuery.viewInsetsOf(context).bottom - 96)
-                .clamp(48.0, 320.0),
-            decoration: InputDecoration(
-              labelText: scheduledContext == null
-                  ? 'Link task or habit (optional)'
-                  : 'Linked planned task',
-            ),
-            items: [
-              const DropdownMenuItem<String?>(
-                value: null,
-                child: Text(
-                  'Focus block (normal)',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              ],
+              if (suggestion != null && scheduledContext == null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(AppIcons.insightsOutlined, size: 20),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Your ${suggestion!.evidenceSessions} recent completed sessions cluster around '
+                          '${suggestion!.durationMinutes} minutes. '
+                          'This is a suggestion, not an automatic setting.',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              DropdownButtonFormField<String?>(
+                key: ValueKey('focus-target-selector-$visibleSelectedTarget'),
+                initialValue: visibleSelectedTarget,
+                isExpanded: true,
+                // Keep the popup inside the usable viewport, including system bars
+                // and the keyboard; all options remain reachable by scrolling.
+                menuMaxHeight:
+                    (MediaQuery.sizeOf(context).height -
+                            MediaQuery.paddingOf(context).vertical -
+                            MediaQuery.viewInsetsOf(context).bottom -
+                            96)
+                        .clamp(48.0, 320.0),
+                decoration: InputDecoration(
+                  labelText: scheduledContext == null
+                      ? 'Link task or habit (optional)'
+                      : 'Linked planned task',
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text(
+                      'Focus block (normal)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  ...targets.map(
+                    (target) => DropdownMenuItem<String?>(
+                      value: target.value,
+                      child: Text(
+                        _focusTargetDisplayLabel(target),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: isSaving || scheduledContext != null
+                    ? null
+                    : onTargetChanged,
               ),
-              ...targets.map(
-                (target) => DropdownMenuItem<String?>(
-                  value: target.value,
-                  child: Text(
-                    _focusTargetDisplayLabel(target),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              if (scheduledContext != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  recoveryMinutes == 0
+                      ? 'No recovery is reserved for this block.'
+                      : '$recoveryMinutes min recovery is fixed by the plan.',
+                  key: const ValueKey('focus-scheduled-recovery'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              if (inlineError != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    key: const ValueKey('focus-start-inline-conflict'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                    ),
+                    child: Text(
+                      inlineError!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              Align(
+                alignment: isMobile ? Alignment.center : Alignment.centerRight,
+                child: SizedBox(
+                  width: isMobile ? double.infinity : null,
+                  child: FilledButton.icon(
+                    onPressed: isSaving || !canStartNow ? null : onStart,
+                    icon: isSaving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(AppIcons.playArrow),
+                    label: const Text('Start focus session'),
                   ),
                 ),
               ),
             ],
-            onChanged:
-                isSaving || scheduledContext != null ? null : onTargetChanged,
           ),
-          if (scheduledContext != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              recoveryMinutes == 0
-                  ? 'No recovery is reserved for this block.'
-                  : '$recoveryMinutes min recovery is fixed by the plan.',
-              key: const ValueKey('focus-scheduled-recovery'),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          if (inlineError != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Semantics(
-              liveRegion: true,
-              child: Container(
-                key: const ValueKey('focus-start-inline-conflict'),
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(AppRadii.sm),
-                ),
-                child: Text(
-                  inlineError!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          Align(
-            alignment:
-                isMobile ? Alignment.center : Alignment.centerRight,
-            child: SizedBox(
-              width: isMobile ? double.infinity : null,
-              child: FilledButton.icon(
-                onPressed: isSaving || !canStartNow ? null : onStart,
-                icon: isSaving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(AppIcons.playArrow),
-                label: const Text('Start focus session'),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+        );
       },
     );
   }
@@ -934,8 +906,9 @@ class _ActiveFocusCard extends StatelessWidget {
     final elapsed = now.isAfter(session.startedAt)
         ? now.difference(session.startedAt)
         : Duration.zero;
-    final remaining =
-        plannedEnd.isAfter(now) ? plannedEnd.difference(now) : Duration.zero;
+    final remaining = plannedEnd.isAfter(now)
+        ? plannedEnd.difference(now)
+        : Duration.zero;
     final plannedDuration = Duration(minutes: session.plannedMinutes);
     final progress = elapsed.inMilliseconds / plannedDuration.inMilliseconds;
     final reachedPlan = !plannedEnd.isAfter(now);
@@ -959,9 +932,7 @@ class _ActiveFocusCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            _focusBlockDisplayLabel(session.label ?? target?.title),
-          ),
+          Text(_focusBlockDisplayLabel(session.label ?? target?.title)),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Started ${DateFormat.Hm().format(session.startedAt.toLocal())} · '
@@ -1038,7 +1009,8 @@ class _ActiveFocusProtectionCard extends StatelessWidget {
     final lease = status.lease;
     final matchesSession = lease?.sessionId == sessionId;
     final leaseActive = matchesSession && lease?.isActive == true;
-    final released = matchesSession &&
+    final released =
+        matchesSession &&
         lease?.state == FocusProtectionLeaseState.emergencyReleased;
     final mechanisms = <String>[
       if (matchesSession && status.activeMechanisms.contains('app_blocking'))
@@ -1051,12 +1023,12 @@ class _ActiveFocusProtectionCard extends StatelessWidget {
     final title = !status.configurationKnown
         ? 'Device protection status unavailable'
         : !status.configuration.enabled
-            ? 'Device protection is off'
-            : released
-                ? 'Device protection released'
-                : leaseActive && hasActiveMechanism
-                    ? 'Device protection active'
-                    : 'Focus continues with partial protection';
+        ? 'Device protection is off'
+        : released
+        ? 'Device protection released'
+        : leaseActive && hasActiveMechanism
+        ? 'Device protection active'
+        : 'Focus continues with partial protection';
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1074,16 +1046,13 @@ class _ActiveFocusProtectionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                    Text(title, style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       mechanisms.isEmpty
                           ? released
-                              ? 'The synced Focus session is still active. Reloading will not restart protection for this session.'
-                              : 'No Android protection mechanism is currently active.'
+                                ? 'The synced Focus session is still active. Reloading will not restart protection for this session.'
+                                : 'No Android protection mechanism is currently active.'
                           : 'Active: ${mechanisms.join(' and ')}.',
                     ),
                   ],
@@ -1159,8 +1128,9 @@ class _EmergencyReleaseDialogState extends State<_EmergencyReleaseDialog> {
         ),
         FilledButton(
           key: const ValueKey('confirm-focus-protection-emergency-release'),
-          onPressed:
-              _remaining <= 0 ? () => Navigator.of(context).pop(true) : null,
+          onPressed: _remaining <= 0
+              ? () => Navigator.of(context).pop(true)
+              : null,
           child: Text(
             _remaining > 0 ? 'Confirm in $_remaining' : 'Confirm release',
           ),
@@ -1238,8 +1208,9 @@ class _RecoveryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remaining =
-        endsAt.isAfter(now) ? endsAt.difference(now) : Duration.zero;
+    final remaining = endsAt.isAfter(now)
+        ? endsAt.difference(now)
+        : Duration.zero;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1276,9 +1247,7 @@ class _RecoveryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Reserved recovery ends at ${DateFormat.Hm().format(endsAt)}',
-          ),
+          Text('Reserved recovery ends at ${DateFormat.Hm().format(endsAt)}'),
           const SizedBox(height: AppSpacing.lg),
           Align(
             alignment: Alignment.centerRight,
@@ -1324,17 +1293,21 @@ class _FocusHistoryCard extends StatelessWidget {
     required this.reflections,
     required this.reflectionDataAvailable,
     required this.onRate,
+    required this.onCorrectTime,
   });
 
   final List<FocusSession> sessions;
   final Map<String, FocusReflection> reflections;
   final bool reflectionDataAvailable;
   final ValueChanged<FocusSession> onRate;
+  final ValueChanged<FocusSession> onCorrectTime;
 
   @override
   Widget build(BuildContext context) {
-    final terminal =
-        sessions.where((session) => !session.isActive).take(5).toList();
+    final terminal = sessions
+        .where((session) => !session.isActive)
+        .take(5)
+        .toList();
     return AppCard(
       padding: EdgeInsets.zero,
       child: ExpansionTile(
@@ -1367,20 +1340,31 @@ class _FocusHistoryCard extends StatelessWidget {
                 subtitle: Text(
                   '${session.actualMinutes ?? 0} min · ${session.status.code}',
                 ),
-                trailing: reflectionDataAvailable
-                    ? TextButton(
-                        key: ValueKey(
-                          'focus-reflection-${session.id}',
-                        ),
-                        onPressed: () => onRate(session),
-                        child: Text(
-                          reflections.containsKey(session.id) ? 'Edit' : 'Rate',
-                        ),
-                      )
-                    : const Tooltip(
-                        message: 'Reflection history could not be loaded.',
-                        child: Icon(AppIcons.syncProblemOutlined),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (session.status == FocusSessionStatus.completed)
+                      IconButton(
+                        tooltip: 'Correct time',
+                        icon: const Icon(AppIcons.timerOutlined),
+                        onPressed: () => onCorrectTime(session),
                       ),
+                    reflectionDataAvailable
+                        ? TextButton(
+                            key: ValueKey('focus-reflection-${session.id}'),
+                            onPressed: () => onRate(session),
+                            child: Text(
+                              reflections.containsKey(session.id)
+                                  ? 'Edit'
+                                  : 'Rate',
+                            ),
+                          )
+                        : const Tooltip(
+                            message: 'Reflection history could not be loaded.',
+                            child: Icon(AppIcons.syncProblemOutlined),
+                          ),
+                  ],
+                ),
               ),
             ),
         ],

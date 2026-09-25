@@ -18,7 +18,7 @@ NOTIFICATION_SETTINGS_CONTRACT_VERSION = "notification-settings-v1"
 NOTIFICATION_CONSENT_VERSION = "in-app-notification-consent-v1"
 NOTIFICATION_GENERATION_CONTRACT_VERSION = "notification-generation-v1"
 NOTIFICATION_DELIVERY_CONTRACT_VERSION = "in-app-notification-delivery-v1"
-NotificationLifecycleCommand = Literal["mark_read", "mark_unread", "dismiss"]
+NotificationLifecycleCommand = Literal["mark_read", "mark_unread", "dismiss", "restore"]
 NotificationCategory = Literal[
     "focus_prompt",
     "recovery_prompt",
@@ -197,6 +197,8 @@ class NotificationLifecycleActionResponse(BaseModel):
             self.is_read or self.dismissed_at is not None
         ):
             raise ValueError("mark_unread must return an active unread notification")
+        if self.command == "restore" and self.dismissed_at is not None:
+            raise ValueError("restore must clear dismissal")
         if self.command == "dismiss" and (
             not self.is_read or self.dismissed_at is None
         ):
