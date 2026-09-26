@@ -31,6 +31,20 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Complete hosted verification and cache repeat (2026-09-26)
+
+- Candidate `43f2881570733c5ea0bc8e39a281a156beae671b` on
+  `codex/settings-website-link` passed all seven Linux CI jobs in
+  [run 36237557542](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/36237557542):
+  source/docs/security, Flutter/Android, backend, Web, classification, fresh
+  database verification and all eight browser journeys. Backend: 1,959 passed,
+  two explicit skips. This closes the Windows `setsid` verification gap below
+  through hosted Linux, not by disabling a guard or installing a Windows shim.
+- Repeating the Web job on the same SHA/key succeeded: build helper **68.44 s**
+  on a miss versus **0.27 s** on a hit. Runner setup and cache transfer are
+  outside these helper measurements. Local invalidation/no-cache probes below
+  remain separate evidence. Main and deployment were unchanged at this check.
+
 ### Compact layouts and interactive root navigation (2026-09-26, local)
 
 - Same task base as the cache work below. All **207 targeted Flutter tests** pass:
@@ -3761,9 +3775,11 @@ statuses or weaken protection. Manual and
 scheduled documentation checks compare against `origin/main`; PR runs retain
 their exact PR base SHA. Required checks and administrator enforcement stay
 enabled when the PR requirement is removed. Once verification is complete,
-ask the user to confirm the current/proposed `main` commits and intended
-fast-forward or merge, following `AGENTS.md`. Do not update `main` before that
-confirmation, and ask again if the candidate or target changes.
+follow the authorization rule in `AGENTS.md`: an explicit instruction for Main
+or production already authorizes that operation within the current task; do not
+request duplicate approval. Otherwise ask for the concrete current/proposed Main
+update before proceeding. Always inspect exact commits, required checks and
+target drift; approval never waives branch protection or expands task scope.
 
 Fresh hosted runners obtain an empty local stack through normal startup. CI does
 not set `RESET_DB=true` and cannot call the guarded reset execution path. A local

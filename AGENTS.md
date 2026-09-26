@@ -263,19 +263,26 @@ change lockfiles; review and report those changes instead of discarding them.
 Do not push, deploy, open a pull request, mutate remote state, or perform a
 destructive action without explicit authorization.
 
-### Confirmation Before Updating Main
+### Authorization Before Updating Main
 
-Before every push or merge targeting local or remote `main`, finish the
-candidate and verification first, then explicitly ask the user to confirm the
-concrete update. Name the repository, current `main` commit, proposed commit,
-operation, and check results. Wait for an affirmative response before changing
-`main`; a general implementation or publishing request is not that confirmation.
-One confirmation may cover an explicitly described local fast-forward and its
-matching remote push. If either commit changes, obtain a new confirmation.
+An explicit instruction to push or merge to `main`, or to deploy to production,
+authorizes that named operation for the current task, including when given in
+the initial prompt. Do not ask for a second confirmation for the same scope.
+Main and production are separate permissions: authorization for one does not
+implicitly authorize the other. In-scope fixes and their reverified commits
+remain covered; unrelated changes, a different target or material scope expansion
+require fresh authorization. A general implementation request alone is not
+permission to publish.
+
+Before the authorized update, finish and verify the candidate, inspect the
+current/proposed commits and check results, and report the exact operation.
+If explicit authorization is absent, ask for confirmation naming the repository,
+current `main` commit, proposed commit, operation and check results, then wait.
+Recheck target drift before updating; never overwrite others' new work.
 
 A pull request is optional. Required GitHub checks, administrator enforcement,
 the force-push prohibition, and branch deletion protection remain mandatory.
 Prepare and check candidates on a working branch; the complete manual CI run
 documented in `docs/verification.md` supports promotion without a pull request.
-The confirmation is an agent workflow requirement, not a GitHub-enforced chat
+The authorization is an agent workflow requirement, not a GitHub-enforced chat
 approval. Do not create a pull request unless the user asks for one.
