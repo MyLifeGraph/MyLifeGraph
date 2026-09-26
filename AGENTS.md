@@ -77,6 +77,7 @@ Route names refer to modules below `services/ai_service/app/api/routes/`.
 | Weekly Review | `weekly_review`; `weekly_reviews.py` | `docs/phase-8-weekly-review-contract.md` |
 | Today, app shell, dashboard, copy, and presentation | `dashboard`, `shell`, cross-feature presentation in `settings`; `today.py` | `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md` where Planner facts appear, `docs/ui-language-and-copy-contract.md`, and `docs/frontend-visual-system-v2.md` |
 | Android Focus Protection | `focus_protection` plus the synced Focus seam | `docs/android-focus-protection-v1-contract.md` and `docs/phase-3-executable-actions-contract.md` |
+| Android app updates | `app_updates`, update Settings entry/startup host, installed package bridge | `docs/android-app-updates.md`; copy/visual owners for presentation |
 | Service health and route composition | `routes/__init__.py`, `health.py`, or `app/main.py` | `services/ai_service/README.md` and `docs/architecture.md` |
 
 Backend/AI/onboarding direction also loads `docs/backend-roadmap.md`. A fresh

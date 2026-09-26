@@ -1,5 +1,17 @@
 # MyLifeGraph Mobile App
 
+## Android updates
+
+Settings > Updates reads the installed package version and checks the public
+GitHub release feed, including completed pilot prereleases. Numeric build codes
+and matching signing metadata determine compatibility. App startup/resume checks
+are non-blocking; each newer build can show one device-persisted notice, with
+Close and Download now. Manual checks/downloads remain available after dismissal.
+Downloads open externally and Android owns installation confirmation. No new
+permissions, account writes or web updater are introduced. See the
+[Android update contract](../../docs/android-app-updates.md) for failure,
+throttling, release-selection and persistence details.
+
 ## Reversible flows and wearable suggestions
 
 Morning projects Watch/saved instants into the current profile IANA timezone

@@ -18,6 +18,7 @@ import '../../../core/theme/app_theme_effects.dart';
 import '../../../core/theme/app_visual_tokens.dart';
 import '../../../core/widgets/app_brand_mark.dart';
 import '../../../composition/notifications_providers.dart';
+import '../../../composition/widgets/app_update_host.dart';
 import '../../notifications/domain/entities/notification_action_target.dart';
 import 'shell_destination_descriptor.dart';
 import 'shell_swipe_region.dart';
@@ -144,7 +145,9 @@ class _MainShellState extends ConsumerState<MainShell> {
       ),
     );
 
-    return LayoutBuilder(
+    return AppUpdateHost(
+      allowPrompt: swipeIndex >= 0,
+      child: LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 1100;
         if (desktop) {
@@ -189,6 +192,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
         );
       },
+      ),
     );
   }
 }

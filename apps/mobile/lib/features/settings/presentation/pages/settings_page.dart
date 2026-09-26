@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/widgets/health_connect_settings_entry.dart';
 import '../../../../composition/widgets/push_settings_entry.dart';
+import '../../../../composition/widgets/app_updates_entry.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -234,6 +235,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         const AppSectionHeader(title: 'Account and appearance'),
+        const AppUpdatesEntry(),
         if (config?.isHostedEnvironment == true)
           AppCard(
             padding: EdgeInsets.zero,

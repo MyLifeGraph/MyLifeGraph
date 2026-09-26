@@ -31,6 +31,34 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Android update discovery and one-time notice (2026-09-26, local candidate)
+
+- Task base `189b583e1df94b04fb34c20e200d1bcd8830b35d`; no remote publication,
+  database change, dependency upgrade or signing configuration change.
+- Added numeric installed-version/signer discovery, bounded public GitHub release
+  selection, manual Settings checks/downloads and device-persisted once-per-build
+  startup notices. No silent installer or app-data writes.
+- Focused Flutter update, widget, architecture, Settings and shell tests passed
+  (59 tests). Covers RC ordering, current/older builds, incomplete/draft/invalid
+  releases, pagination, fixed URLs/signer checks, retry/concurrency/throttling,
+  dismissal across recreation, newer-version notice, nested GoRouter shell and
+  320px / 200-percent text dialogs. Dart analysis is clean.
+- Full Flutter suite after the transport-layer correction: 1456 passed, six
+  component-reference golden comparisons failed locally. Their reference tests,
+  images, themes, fonts and component sources are unchanged from the task base;
+  no goldens were regenerated. A subsequently added nested-router regression is
+  included in the passing focused run. This is not an all-green full-suite claim.
+- Debug web build passed. Docs, visual contract, Android release configuration
+  and diff checks passed. Affected dry-run selects Full because Android paths are
+  conservatively configuration-classified; database/browser-full gates were not
+  run for this local client-only change and no remote CI success is claimed.
+- Native JVM/lint could not run: installed Android Studio Java is 25.0.2 whereas
+  the pinned Gradle lane requires Java 21. An isolated Java-21 download attempt
+  failed with TLS decryption errors; system Java/toolchain settings were not
+  changed. Native compilation and installed-APK update/download acceptance remain
+  explicit release prerequisites, not inferred from Flutter/widget success.
+
+
 ### Profile-timezone sleep regression (2026-09-26, local candidate)
 
 - Candidate `d06f47a6873cacd249f37fda1ae8dbe148881900` passed all seven jobs

@@ -345,6 +345,10 @@ of route-local borders, radii, and shadows.
 A compact `Website` ListTile under Tools and connections uses the existing
 globe and external-link icons with no subtitle, matching adjacent settings.
 
+Android `Updates` uses the same compact ListTile/shared subtle surface, under
+Account and appearance. Version/check controls and the one-time notice use themed
+scrollable AlertDialogs with wrapping actions; no new palette or decoration.
+
 Inbox uses three equal-width compact counters, smaller category icons and a
 shared top-right icon-action row on mobile and desktop, stacked below the title
 when narrow or text is enlarged. Allowlisted cards use the interactive surface.

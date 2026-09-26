@@ -35,6 +35,18 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.mylifegraph.app/updates")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "installedVersion") {
+                    result.notImplemented()
+                } else {
+                    try {
+                        result.success(AppUpdateBridge.installedVersion(applicationContext))
+                    } catch (_: Exception) {
+                        result.error("version_unavailable", "Installed version unavailable", null)
+                    }
+                }
+            }
         pushBridge = PushBridge(this)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PushBridge.CHANNEL)
             .setMethodCallHandler { call, result -> pushBridge?.handle(call, result) }

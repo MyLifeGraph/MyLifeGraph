@@ -1,5 +1,13 @@
 # Architecture
 
+## Android release discovery
+
+The isolated client-side [app updater](android-app-updates.md) reads public GitHub
+release metadata without any account credentials. A small native bridge supplies
+installed versionCode/name and signing-certificate digest. Notification history
+is device-local; no Supabase/API/FCM state is involved. Explicit downloads open
+the official APK externally; Android retains package-install authority.
+
 ## Isolated product website
 
 `apps/website` is a standalone static EN/DE product site, deployed to a separate

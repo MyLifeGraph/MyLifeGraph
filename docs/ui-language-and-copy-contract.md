@@ -1,5 +1,11 @@
 # UI Language And Copy Contract
 
+Android Settings uses `Updates`, `Check`, `Download` and the installed version.
+The one-time-per-build startup dialog says `Update available` with `Close` and
+`Download now`. Check failure says `Could not check. Try again.`, never `Up to date`;
+launcher failure says `Could not open download. Try again.` Installation is not
+automatic. See [Android updates](android-app-updates.md).
+
 Compare metric selectors use `Previous-night sleep (Recovery)`-style labels:
 the existing category is parenthetical, not separated by a middle dot. This
 does not rename metric identities, values, units or analysis semantics.
