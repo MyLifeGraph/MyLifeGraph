@@ -1856,10 +1856,12 @@ not require Flutter, a database stack, or live credentials.
 
 For promotion to `main`, prepare a working-branch candidate and run the complete
 manual GitHub workflow with `gh workflow run ci.yml --ref <candidate-branch>`.
-After all required checks pass on its exact SHA, use the user's explicit Main
-authorization for this task; ask for the concrete update only if that permission
-is absent. Production deployment requires its own explicit authorization, which
-may be given in the same request. Do not ask twice for the same scope. Pull requests are optional;
+After all required checks pass on its exact SHA, use the user's explicit delivery
+authorization for this task. "Implement, test, then make it live" includes the
+necessary branch, PR, Main merge, release and affected production deployment;
+do not ask again for intermediate steps. A Main-only request does not by itself
+authorize production deployment. Ask before publication if the request contains
+no such permission, and respect any narrower limits. Pull requests are optional;
 force-push and deletion protection remain enabled. See
 [CI gates](verification.md#continuous-integration-gates) and `AGENTS.md`.
 

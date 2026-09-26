@@ -265,14 +265,19 @@ destructive action without explicit authorization.
 
 ### Authorization Before Updating Main
 
-An explicit instruction to push or merge to `main`, or to deploy to production,
-authorizes that named operation for the current task, including when given in
-the initial prompt. Do not ask for a second confirmation for the same scope.
-Main and production are separate permissions: authorization for one does not
-implicitly authorize the other. In-scope fixes and their reverified commits
-remain covered; unrelated changes, a different target or material scope expansion
-require fresh authorization. A general implementation request alone is not
-permission to publish.
+An explicit instruction to publish the current task, including in the initial
+prompt (for example, "implement, test, then make it live"), authorizes its normal
+end-to-end delivery: create or reuse a working branch and pull request, push,
+run checks, fix and reverify in-scope failures, merge to `main`, build/sign/publish
+release artifacts, and deploy the affected existing production services (including
+VPS/Vercel and required reviewed additive Supabase migrations). Do not ask again
+for these intermediate steps. Respect narrower instructions: "merge to main"
+alone permits the necessary branch/PR/check/merge steps but not an otherwise
+unrequested production rollout; "do not deploy" always keeps deployment held.
+Unrelated changes, different targets, destructive data operations, new paid
+services, weakened security or material scope expansion require fresh authority.
+A general implementation request without publication permission still requires
+confirmation before remote publication or deployment.
 
 Before the authorized update, finish and verify the candidate, inspect the
 current/proposed commits and check results, and report the exact operation.
@@ -285,4 +290,5 @@ the force-push prohibition, and branch deletion protection remain mandatory.
 Prepare and check candidates on a working branch; the complete manual CI run
 documented in `docs/verification.md` supports promotion without a pull request.
 The authorization is an agent workflow requirement, not a GitHub-enforced chat
-approval. Do not create a pull request unless the user asks for one.
+approval. Create a pull request when explicitly requested or needed for an
+authorized publication/merge workflow; otherwise ask before creating one.

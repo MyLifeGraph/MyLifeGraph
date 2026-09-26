@@ -33,6 +33,12 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ### Profile-timezone sleep regression (2026-09-26, local candidate)
 
+- Candidate `d06f47a6873cacd249f37fda1ae8dbe148881900` passed all seven jobs
+  in [full Linux CI 36253179687](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/36253179687):
+  source/security/docs, Flutter/Android, backend, Web, classification, fresh
+  migration/pgTAP checks and all eight browser journeys. Backend: 1,959 passed,
+  two explicit skips. This closes the Windows execution gap for that candidate;
+  the subsequent authorization-documentation commit still needs its own checks.
 - Task base `2c2b42cbd59bbdbc12510b81a08f107deaf3562b`; branch
   `codex/profile-timezone-sleep-fix`. The original regression first failed with
   expected Berlin `04:39`, actual `02:39`: formatting a projected `TZDateTime`
@@ -3793,14 +3799,17 @@ and satisfy protection in the candidate's status-check rollup. The 2026-09-06
 candidate's manual jobs were omitted from that rollup and its direct push was
 rejected. A separately user-authorized PR supplied eligible PR checks for the
 same candidate; the protected fast-forward then succeeded. If manual checks
-are omitted, obtain PR authorization and run normal PR CI; do not synthesize
+are omitted, create a PR under the user's task-scoped publication/merge authority
+and run normal PR CI; ask only when that authority is absent. Do not synthesize
 statuses or weaken protection. Manual and
 scheduled documentation checks compare against `origin/main`; PR runs retain
 their exact PR base SHA. Required checks and administrator enforcement stay
 enabled when the PR requirement is removed. Once verification is complete,
-follow the authorization rule in `AGENTS.md`: an explicit instruction for Main
-or production already authorizes that operation within the current task; do not
-request duplicate approval. Otherwise ask for the concrete current/proposed Main
+follow the authorization rule in `AGENTS.md`: an explicit "test, then make live"
+instruction covers the necessary branch/PR/check/Main/release/production steps
+within the current task; a narrower Main-only request covers branch/PR/check/merge
+without adding production authority. Do not request duplicate approval.
+Otherwise ask for the concrete current/proposed Main
 update before proceeding. Always inspect exact commits, required checks and
 target drift; approval never waives branch protection or expands task scope.
 

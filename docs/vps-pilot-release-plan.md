@@ -812,9 +812,10 @@ partially integrated branch stack:
    its exact provider SHA. If either condition cannot be proven, stop before
    the remote merge.
 5. Review the entire accumulated diff, its focused commit sequence, release
-   documentation, and green candidate gates. Ask the user to confirm the exact
-   update before pushing or merging into `main`. A verified fast-forward is
-   sufficient; a pull request is optional and requires a user request. Do not
+   documentation, and green candidate gates. Use the user's task-scoped delivery
+   authorization; ask only if publication/merge permission is absent. A verified
+   fast-forward is sufficient; a necessary pull request is covered by an explicit
+   merge or end-to-end publication request. Do not
    force-push or rewrite either branch.
 6. Once that candidate is integrated, make protected `main` the sole release
    authority. Vercel may build that exact SHA normally. Create RC/final tags
@@ -836,9 +837,13 @@ Configure `main` so that:
 - unresolved conversations block an optional pull-request merge; and
 - administrators remain subject to the rules and do not routinely bypass them.
 
-Agents must ask for fresh user confirmation before each `main` push or merge,
-after presenting the concrete target/candidate commits and check results. This
-is the repository workflow in `AGENTS.md`, not a GitHub chat-approval feature.
+Follow `AGENTS.md`: an explicit instruction, even in the initial prompt, to test
+and make the task live covers its branch, PR, verified Main merge, release and
+affected production rollout. Report exact commits and checks without asking
+again. A Main-only instruction does not add production authority. Ask if the
+needed publication authority is absent; respect explicit narrower limits and
+keep destructive or unrelated operations outside this scope. This is an agent
+workflow rule, not a GitHub chat-approval feature.
 The complete manual CI workflow allows a working-branch candidate to obtain
 all required checks before a confirmed fast-forward, without opening a PR.
 
