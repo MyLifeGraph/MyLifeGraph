@@ -5,7 +5,10 @@
 :root[data-theme=space]{--bg:#070814;--surface:#101329;--ink:#f6f3ff;--muted:#d4cfea;--mint:#67e8f9;--purple:#c4a7ff;--line:#353b68;--on-accent:#07272c;--tint:#292e5c80;--panel:linear-gradient(130deg,#101329ed,#1d1634dc);--raised:#20244a;--ambient:radial-gradient(ellipse at 18% 30%,#5c35844d,transparent 60%),radial-gradient(ellipse at 90% 75%,#12546e40,transparent 60%)}
 body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .gradient-text{background-image:linear-gradient(105deg,var(--ink),var(--mint) 60%,var(--purple))}
-.hero:before,.demo-glow{background:var(--ambient)}
+/* Feather the decorative layer instead of exposing its rectangular bounds. */
+.hero:before{background:var(--ambient);inset:-110px -10vw -100px;pointer-events:none}
+.demo-glow{background:var(--ambient);border-radius:50%;pointer-events:none}
+.hero:before,.demo-glow,.product-aura{mask-image:radial-gradient(ellipse closest-side at 50% 50%,#000 20%,#000a 55%,#0002 80%,transparent 100%)}
 .button.primary,.task[aria-pressed=true] .task-check{background:var(--mint);color:var(--on-accent)}
 .demo-frame{background:var(--panel);border-color:var(--line);box-shadow:0 25px 80px #0002,inset 0 1px #ffffff12}
 .feature-card{background:var(--panel)}

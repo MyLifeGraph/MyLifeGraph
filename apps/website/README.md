@@ -22,6 +22,14 @@ Desktop uses a sidebar and side-by-side Planner summaries; mobile uses bottom
 tabs and This week/Planning views. Today puts last-check-in metrics before the
 check-in controls. Insights has Overview/Advanced; Coach remains scripted.
 
+The page shows an inert, screenshot-like clone of the actual synthetic demo,
+adapted to viewport, language and appearance. A glass play pill opens a native
+modal: large on desktop, fullscreen on mobile with safe-area padding. Only the
+open demo scrolls internally; its navigation and close control remain visible.
+Close, Escape or a desktop backdrop click restores page position and launcher
+focus. Native modal containment keeps keyboard focus out of the background.
+Closing preserves the demo state; Reset and reload still reset it.
+
 Public copy follows `docs/current-product-guide.md`,
 `docs/ui-language-and-copy-contract.md` and `docs/frontend-visual-system-v2.md`.
 It distinguishes Android-only capabilities, optional imports/permissions,
@@ -64,6 +72,8 @@ Open `http://127.0.0.1:7360`. Inspect EN/DE at narrow and wide widths. Exercise
 all tabs, task toggle/undo, Sunday, both Coach replies, reset, preference reload,
 all four appearance options, menu keyboard dismissal, hero hover/idle motion
 and the reduced-motion/static fallback.
+Also test preview opening, modal tab controls, Escape/backdrop/close dismissal,
+focus return and page scroll restoration at desktop and mobile sizes.
 
 The dedicated Vercel project is `mylifegraph-website` in the existing
 `my-life-graph-s-projects` scope. Deployment uploads only the allowlisted

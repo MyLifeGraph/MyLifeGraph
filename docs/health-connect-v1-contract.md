@@ -12,6 +12,15 @@ attempts are at least 15 minutes apart per running account session. Failures sta
 visible in Health Connect Settings, never replace Dashboard or fabricate data.
 Manual Sync now remains available; no automatic connect or permission prompt.
 
+The compact Settings page shows Watch data, Sharing on/off, Sleep/Steps and
+last-sync time when available. Connect/reconnect or Sync now is the primary
+action. The header reload remains available after failures. A labelled overflow
+keeps Stop sharing and Delete imported data; deletion retains its confirmation.
+Android permissions and collapsed Details follow. Device requirements, Garmin
+sharing instructions, seven-day foreground behavior and retention remain in
+Details; unsupported platforms explicitly say import requires Android 14+.
+Cloud consent is still a separate explicit dialog, not hidden in Details.
+
 ## Consent and authority
 
 `health-connect-v1` GET/POST `/v1/health-connect` derives its owner from the verified

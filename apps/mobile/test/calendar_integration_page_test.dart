@@ -11,13 +11,34 @@ import 'package:my_life_graph/features/calendar_integration/presentation/pages/c
 import 'package:my_life_graph/features/calendar_integration/presentation/providers/calendar_integration_providers.dart';
 
 import 'support/calendar_integration_fixtures.dart';
+import 'support/ui_catalog_capture.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
 
 void main() {
+  if (captureUiCatalog) {
+    testWidgets('catalog calendar screenshots', (tester) async {
+      await loadCatalogFonts();
+      for (final wide in [false, true]) {
+        for (final imported in [false, true]) {
+          await _pumpPage(
+            tester,
+            repository: _FakeCalendarRepository(
+              _connectedFeed(includeImport: imported),
+            ),
+            size: wide ? const Size(1280, 1000) : const Size(390, 1000),
+          );
+          await captureCatalog(
+            tester,
+            'calendar-${imported ? 'imported' : 'empty'}-${wide ? 'desktop' : 'mobile'}',
+          );
+          await tester.pumpWidget(const SizedBox());
+        }
+      }
+    });
+  }
   test('only ambiguous or server failures require exact unchanged retry', () {
-    ApiFailure failure(int statusCode) => ApiFailure(
-          kind: ApiFailureKind.response,
-          statusCode: statusCode,
-        );
+    ApiFailure failure(int statusCode) =>
+        ApiFailure(kind: ApiFailureKind.response, statusCode: statusCode);
 
     expect(calendarOperationRequiresExactRetry(failure(409)), isFalse);
     expect(calendarOperationRequiresExactRetry(failure(422)), isFalse);
@@ -36,46 +57,49 @@ void main() {
     );
   });
 
-  test('only confirmed import disconnect and delete refresh planning',
-      () async {
-    final repository = _FakeCalendarRepository(_emptyFeed());
-    var refreshes = 0;
-    final controller = CalendarIntegrationController(
-      repository: repository,
-      filePicker: _FakeCalendarPicker(
-        SelectedCalendarIcsFile.fromBytes(
-          name: 'study.ics',
-          bytes: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'.codeUnits,
+  test(
+    'only confirmed import disconnect and delete refresh planning',
+    () async {
+      final repository = _FakeCalendarRepository(_emptyFeed());
+      var refreshes = 0;
+      final controller = CalendarIntegrationController(
+        repository: repository,
+        filePicker: _FakeCalendarPicker(
+          SelectedCalendarIcsFile.fromBytes(
+            name: 'study.ics',
+            bytes: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'.codeUnits,
+          ),
         ),
-      ),
-      planningSourcesChanged: () async {
-        refreshes += 1;
-        if (refreshes == 1) throw StateError('refresh failed');
-      },
-    );
-    addTearDown(controller.dispose);
-    await Future<void>.delayed(Duration.zero);
+        planningSourcesChanged: () async {
+          refreshes += 1;
+          if (refreshes == 1) throw StateError('refresh failed');
+        },
+      );
+      addTearDown(controller.dispose);
+      await Future<void>.delayed(Duration.zero);
 
-    controller.updateSourceLabel('Study');
-    controller.setConsentAccepted(true);
-    await controller.createConnection();
-    expect(refreshes, 0);
+      controller.updateSourceLabel('Study');
+      controller.setConsentAccepted(true);
+      await controller.createConnection();
+      expect(refreshes, 0);
 
-    await controller.selectFile();
-    expect(refreshes, 0);
-    await controller.importSelectedFile();
-    expect(refreshes, 1);
-    expect(controller.state.operationError, isNull);
+      await controller.selectFile();
+      expect(refreshes, 0);
+      await controller.importSelectedFile();
+      expect(refreshes, 1);
+      expect(controller.state.operationError, isNull);
 
-    await controller.disconnect();
-    expect(refreshes, 2);
-    await controller.deleteImportedData();
-    expect(refreshes, 3);
-    expect(controller.state.operationError, isNull);
-  });
+      await controller.disconnect();
+      expect(refreshes, 2);
+      await controller.deleteImportedData();
+      expect(refreshes, 3);
+      expect(controller.state.operationError, isNull);
+    },
+  );
 
-  testWidgets('local demo is honest and exposes no import controls',
-      (tester) async {
+  testWidgets('local demo is honest and exposes no import controls', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       CalendarIntegrationFeed.localDemo(),
     );
@@ -91,14 +115,15 @@ void main() {
     expect(repository.mutationCalls, 0);
   });
 
-  testWidgets('explicit consent is required before creating a source',
-      (tester) async {
+  testWidgets('explicit consent is required before creating a source', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(_emptyFeed());
     await _pumpPage(tester, repository: repository);
 
     FilledButton createButton() => tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, 'Create read-only source'),
-        );
+      find.widgetWithText(FilledButton, 'Create read-only source'),
+    );
     expect(createButton().onPressed, isNull);
 
     await tester.enterText(find.byType(TextFormField), 'Work calendar');
@@ -108,38 +133,44 @@ void main() {
     expect(createButton().onPressed, isNotNull);
   });
 
-  testWidgets('file import leads and optional explanations start closed',
-      (tester) async {
+  testWidgets('file import leads and optional explanations start closed', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       _connectedFeed(includeImport: false),
     );
     await _pumpPage(tester, repository: repository);
 
     expect(
-      find.textContaining('There is no live calendar connection'),
+      find.textContaining('No live connection'),
       findsNothing,
     );
-    expect(find.textContaining('no larger than 512 KiB'), findsNothing);
-    expect(tester.getTopLeft(find.text('Choose .ics file')).dy,
-        lessThan(tester.getTopLeft(find.text('Connected')).dy));
+    expect(find.textContaining('up to 512 KiB'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('Choose .ics file')).dy,
+      greaterThan(tester.getTopLeft(find.text('No file imported')).dy),
+    );
 
     await tester.tap(
-      find.byKey(const ValueKey('calendar-info-control-Import a file')),
+      find.byKey(const ValueKey('calendar-info-control-Original calendar unchanged')),
     );
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('There is no live calendar connection'),
+      find.textContaining('No live connection'),
       findsOneWidget,
     );
-    expect(find.textContaining('no larger than 512 KiB'), findsOneWidget);
+    expect(find.textContaining('up to 512 KiB'), findsOneWidget);
   });
 
-  testWidgets('import statistics remain accessible in compact details',
-      (tester) async {
-    final repository = _FakeCalendarRepository(_connectedFeed(includeImport: true));
+  testWidgets('import statistics remain accessible in compact details', (
+    tester,
+  ) async {
+    final repository = _FakeCalendarRepository(
+      _connectedFeed(includeImport: true),
+    );
     await _pumpPage(tester, repository: repository);
     expect(find.textContaining('recurring unsupported'), findsNothing);
-    final details = find.text('Import details');
+    final details = find.text('Last import');
     await tester.ensureVisible(details);
     await tester.pumpAndSettle();
     await tester.tap(details);
@@ -149,8 +180,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('individual events expand to optional study planning on mobile',
-      (tester) async {
+  testWidgets('individual events expand to optional study planning on mobile', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       _connectedFeed(includeImport: true),
       eventRows: [
@@ -168,26 +200,33 @@ void main() {
 
     expect(find.text('Room 2'), findsNothing);
     expect(find.text('Plan study time'), findsNothing);
-    final event = find.byKey(const ValueKey('calendar-event-$calendarTimedEventId'));
+    final event = find.byKey(
+      const ValueKey('calendar-event-$calendarTimedEventId'),
+    );
     await tester.ensureVisible(event);
     await tester.tap(find.text('Late planning session'));
     await tester.pumpAndSettle();
     expect(find.text('Room 2'), findsOneWidget);
     expect(find.text('Plan study time'), findsOneWidget);
-    expect(find.text('For an exam or assignment. Review a plan before scheduling.'),
-        findsOneWidget);
+    expect(
+      find.text('For an exam or assignment. Review a plan before scheduling.'),
+      findsOneWidget,
+    );
 
     await tester.ensureVisible(find.text('Company holiday'));
     await tester.tap(find.text('Company holiday'));
     await tester.pumpAndSettle();
-    expect(find.text('Study planning is available for upcoming events only.'),
-        findsOneWidget);
+    expect(
+      find.text('Study planning is available for upcoming events only.'),
+      findsOneWidget,
+    );
     expect(repository.mutationCalls, 0);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('source label keeps focus while request identity rotates',
-      (tester) async {
+  testWidgets('source label keeps focus while request identity rotates', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(_emptyFeed());
     await _pumpPage(tester, repository: repository);
 
@@ -228,8 +267,9 @@ void main() {
     );
   });
 
-  testWidgets('ambiguous create retries the exact locked request',
-      (tester) async {
+  testWidgets('ambiguous create retries the exact locked request', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       _emptyFeed(),
       failFirstCreateAmbiguously: true,
@@ -259,11 +299,12 @@ void main() {
     expect(repository.createRequestIds, hasLength(2));
     expect(repository.createRequestIds.toSet(), hasLength(1));
     expect(repository.createLabels, ['Work calendar', 'Work calendar']);
-    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('No file imported'), findsOneWidget);
   });
 
-  testWidgets('file retry keeps bytes and request id without repicking',
-      (tester) async {
+  testWidgets('file retry keeps bytes and request id without repicking', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       _connectedFeed(includeImport: false),
       failFirstImportAmbiguously: true,
@@ -291,14 +332,12 @@ void main() {
     expect(repository.importRequestIds.toSet(), hasLength(1));
     expect(repository.importTexts, ['BEGIN', 'BEGIN']);
     expect(find.text('Imported · read-only'), findsOneWidget);
-    expect(
-      find.text('2026-07-13 · 22:30–2026-07-14 01:30'),
-      findsOneWidget,
-    );
+    expect(find.text('2026-07-13 · 22:30–2026-07-14 01:30'), findsOneWidget);
   });
 
-  testWidgets('connection header wraps at 320 pixels and 200 percent text',
-      (tester) async {
+  testWidgets('connection header wraps at 320 pixels and 200 percent text', (
+    tester,
+  ) async {
     const sourceLabel =
         'University timetable with seminars, tutorials, and laboratory work';
     final repository = _FakeCalendarRepository(
@@ -317,48 +356,127 @@ void main() {
     );
 
     final sourceLabelFinder = find.text(sourceLabel);
-    for (var attempt = 0;
-        attempt < 4 && sourceLabelFinder.evaluate().isEmpty;
-        attempt += 1) {
-      await tester.drag(
-        find.byType(CustomScrollView),
-        const Offset(0, -320),
-      );
+    for (
+      var attempt = 0;
+      attempt < 4 && sourceLabelFinder.evaluate().isEmpty;
+      attempt += 1
+    ) {
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -320));
       await tester.pumpAndSettle();
     }
 
     expect(sourceLabelFinder, findsOneWidget);
-    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('Imported · read-only'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('disconnected never-imported source can still be cleared',
-      (tester) async {
+  testWidgets(
+    'empty connected source removal is confirmed and permits setup again',
+    (tester) async {
+      final repository = _FakeCalendarRepository(
+        _connectedFeed(includeImport: false),
+      );
+      await _pumpPage(tester, repository: repository);
+      await tester.tap(find.byTooltip('Source actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove source'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(repository.mutationCalls, 0);
+      await tester.tap(find.byTooltip('Source actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove source'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove source'));
+      await tester.pumpAndSettle();
+      expect(repository.disconnectRequestIds, hasLength(1));
+      expect(repository.deleteRequestIds, hasLength(1));
+      expect(find.text('Create read-only source'), findsOneWidget);
+    },
+  );
+
+  for (final failedStep in ['disconnect', 'delete']) {
+    testWidgets('empty source safely retries ambiguous $failedStep', (
+      tester,
+    ) async {
+      final repository = _FakeCalendarRepository(
+        _connectedFeed(includeImport: false),
+        failFirstDisconnectAmbiguously: failedStep == 'disconnect',
+        failFirstDeleteAmbiguously: failedStep == 'delete',
+      );
+      await _pumpPage(tester, repository: repository);
+      await tester.tap(find.byTooltip('Source actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove source'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove source'));
+      await tester.pumpAndSettle();
+      expect(
+        repository.deleteRequestIds,
+        hasLength(failedStep == 'disconnect' ? 0 : 1),
+      );
+      await tester.tap(find.text('Retry unchanged'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove source'));
+      await tester.pumpAndSettle();
+      expect(
+        repository.disconnectRequestIds,
+        hasLength(failedStep == 'disconnect' ? 2 : 1),
+      );
+      expect(
+        repository.deleteRequestIds,
+        hasLength(failedStep == 'delete' ? 2 : 1),
+      );
+      expect(repository.disconnectRequestIds.toSet(), hasLength(1));
+      expect(repository.deleteRequestIds.toSet(), hasLength(1));
+      expect(find.text('Create read-only source'), findsOneWidget);
+    });
+  }
+
+  test('empty source shortcut cannot delete a source with an import', () async {
+    final repository = _FakeCalendarRepository(
+      _connectedFeed(includeImport: true),
+    );
+    final controller = CalendarIntegrationController(
+      repository: repository,
+      filePicker: _FakeCalendarPicker(null),
+    );
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+    await controller.removeEmptySource();
+    expect(repository.mutationCalls, 0);
+  });
+
+  testWidgets('disconnected never-imported source can still be cleared', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       _disconnectedFeed(includeImport: false),
     );
     await _pumpPage(tester, repository: repository);
 
     expect(find.text('Disconnected'), findsOneWidget);
-    expect(find.textContaining('No file was imported'), findsOneWidget);
-    expect(find.text('No file has been imported yet.'), findsNWidgets(2));
+    expect(find.textContaining('Remove this empty source'), findsOneWidget);
+    expect(find.text('Imported events'), findsNothing);
     await tester.ensureVisible(find.byTooltip('Source actions'));
     await tester.tap(find.byTooltip('Source actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete imported data'));
+    await tester.tap(find.text('Remove source'));
     await tester.pumpAndSettle();
-    expect(find.text('Delete imported calendar data?'), findsOneWidget);
+    expect(find.text('Remove empty source?'), findsOneWidget);
     expect(repository.deleteRequestIds, isEmpty);
 
-    await tester.tap(find.text('Delete local imported data'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove source'));
     await tester.pumpAndSettle();
     expect(repository.deleteRequestIds, hasLength(1));
     expect(find.text('Imported data deleted'), findsOneWidget);
     expect(find.text('Create read-only source'), findsOneWidget);
   });
 
-  testWidgets('ambiguous disconnect retries the exact request id',
-      (tester) async {
+  testWidgets('ambiguous disconnect retries the exact request id', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       _connectedFeed(includeImport: true),
       failFirstDisconnectAmbiguously: true,
@@ -382,14 +500,12 @@ void main() {
 
     expect(repository.disconnectRequestIds, hasLength(2));
     expect(repository.disconnectRequestIds.toSet(), hasLength(1));
-    expect(
-      find.text('Disconnected · may be out of date'),
-      findsOneWidget,
-    );
+    expect(find.text('Disconnected'), findsOneWidget);
   });
 
-  testWidgets('ambiguous deletion retries the exact request id',
-      (tester) async {
+  testWidgets('ambiguous deletion retries the exact request id', (
+    tester,
+  ) async {
     final repository = _FakeCalendarRepository(
       _disconnectedFeed(includeImport: true),
       failFirstDeleteAmbiguously: true,
@@ -438,6 +554,8 @@ Future<void> _pumpPage(
         ),
       ],
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: captureUiCatalog ? AppTheme.liquidGlass : null,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: textScaler),
           child: child!,
@@ -449,9 +567,8 @@ Future<void> _pumpPage(
   await tester.pumpAndSettle();
 }
 
-CalendarIntegrationFeed _emptyFeed() => CalendarIntegrationFeed.fromJson(
-      calendarFeedJson(noConnection: true),
-    );
+CalendarIntegrationFeed _emptyFeed() =>
+    CalendarIntegrationFeed.fromJson(calendarFeedJson(noConnection: true));
 
 CalendarIntegrationFeed _connectedFeed({required bool includeImport}) =>
     CalendarIntegrationFeed.fromJson(
@@ -558,7 +675,9 @@ class _FakeCalendarRepository implements CalendarIntegrationRepository {
     required String connectionId,
     String? cursor,
   }) async {
-    return CalendarEventPage.fromJson(calendarEventsPageJson(events: eventRows));
+    return CalendarEventPage.fromJson(
+      calendarEventsPageJson(events: eventRows),
+    );
   }
 
   @override
@@ -570,7 +689,9 @@ class _FakeCalendarRepository implements CalendarIntegrationRepository {
     if (failFirstDisconnectAmbiguously && disconnectRequestIds.length == 1) {
       throw _ambiguous;
     }
-    feed = _disconnectedFeed(includeImport: true);
+    feed = _disconnectedFeed(
+      includeImport: feed.connection?.lastImport != null,
+    );
     return feed;
   }
 

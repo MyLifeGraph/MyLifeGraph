@@ -591,6 +591,17 @@ backend anti-replay ledgers and export no request fingerprint.
 
 ## Flutter Surface
 
+The compact single-plan editor uses New exam/Edit plan, Study time and Study
+rhythm with a short step count. Date and time controls show the profile timezone
+once; the time control can edit an already selected date without repeating the
+date picker. DST/future-date validation is unchanged. The locked kind stays
+visible and read-only. Estimates, all hour presets and Custom focus minutes
+remain explicit. Daily limit/clear days and start/busy-time controls share rows
+on wide screens and stack on phones or large text. Check capacity, its complete
+result/errors and explicit preview/confirmation remain. Optional methodology
+lives under Details; the reservation confirmation rule stays visible. No
+new defaults, draft semantics, backend fields or calculation rules are introduced.
+
 The saved replan review uses concise instructions and wrapping value groups for
 preferred Focus blocks, the plan's daily maximum and clear days. Recovery and
 first-block reservation, planning start, imported busy-time use, account budget,

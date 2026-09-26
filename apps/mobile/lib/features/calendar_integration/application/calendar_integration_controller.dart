@@ -368,6 +368,30 @@ class CalendarIntegrationController
     }
   }
 
+  // Keep the existing owner-scoped, idempotent disconnect/delete commands.
+  // Never continue to deletion after an uncertain disconnect or a changed source.
+  Future<void> removeEmptySource() async {
+    final original = state.feed?.connection;
+    if (state.isBusy ||
+        original == null ||
+        original.lastImport != null ||
+        original.importedDataDeleted) {
+      return;
+    }
+    if (original.isConnected) {
+      await disconnect();
+      if (!mounted || state.operationError != null) return;
+    }
+    if (!mounted) return;
+    final current = state.feed?.connection;
+    if (current?.id != original.id ||
+        current?.lastImport != null ||
+        current?.status != CalendarConnectionStatus.disconnected) {
+      return;
+    }
+    await deleteImportedData();
+  }
+
   Future<void> deleteImportedData() async {
     final connection = state.feed?.connection;
     if (state.isBusy ||

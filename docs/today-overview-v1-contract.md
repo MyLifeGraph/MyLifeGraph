@@ -5,6 +5,9 @@ between Today, Insights, Planner and visible Coach. The shortcut uses the same
 routes as the navigation buttons; it does not mutate data or apply to subpages.
 Root-page motion follows destination order, including reverse navigation by
 either button or swipe. Auxiliary push/back routes keep platform transitions.
+Root touch navigation follows the finger through a lazy adjacent-page preview;
+short/cancelled/diagonal gestures return without changing the route. A settled
+page uses the same authenticated route and providers, not a duplicate data model.
 
 All tasks has compact `Dated` / `Undated` filters, both selected initially.
 They filter the existing Task deadline field, not reservation existence;

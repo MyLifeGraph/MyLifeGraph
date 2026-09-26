@@ -13,8 +13,10 @@
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/appearance.css">
   <link rel="stylesheet" href="/product-scene.css">
+  <link rel="stylesheet" href="/demo-dialog.css">
   <script type="module" src="/app.js"></script>
   <script type="module" src="/product-motion.js"></script>
+  <script type="module" src="/demo-dialog.js"></script>
 </head>
 <body>
   <a href="#main" class="skip" data-copy="skip">Skip to content</a>
@@ -69,8 +71,15 @@
     </section>
     <section id="demo" class="demo-section wrap" aria-label="Interactive product demo" data-aria="demoAria">
       <div class="demo-glow" aria-hidden="true"></div>
+      <div class="demo-launch">
+        <div id="demo-preview" class="demo-preview" inert aria-hidden="true"></div>
+        <button class="demo-launch-hit" id="demo-launch" type="button" aria-haspopup="dialog" aria-controls="demo-dialog" aria-labelledby="demo-launch-action">
+          <span class="demo-launch-action"><span class="demo-play" aria-hidden="true">▷</span><span id="demo-launch-action" data-copy="previewAction">Explore demo</span><span aria-hidden="true">↗</span></span>
+        </button>
+      </div>
+      <dialog id="demo-dialog" class="demo-dialog" aria-labelledby="demo-dialog-title">
       <div class="demo-frame">
-        <div class="demo-top"><div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div><span data-copy="interactive">INTERACTIVE PREVIEW</span><button type="button" id="reset" data-copy="reset">Reset ↺</button></div>
+        <div class="demo-top"><div class="demo-heading"><span id="demo-dialog-title" data-copy="interactive">INTERACTIVE PREVIEW</span><small class="demo-scope" data-copy="demoScope">Simplified · Not the full app</small></div><div class="demo-dialog-actions"><button type="button" id="reset" data-copy="reset">Reset ↺</button><button type="button" id="demo-close" class="demo-close" aria-label="Close demo" data-aria="closeDemo" autofocus><span aria-hidden="true">×</span></button></div></div>
         <div class="demo-layout">
           <div class="demo-sidebar"><div class="demo-person"><span class="avatar">J</span><div><strong>Jamie</strong><small data-copy="sampleProfile">Example profile</small></div></div>
             <div role="tablist" aria-label="Demo views" data-aria="demoViews" id="demo-tabs">
@@ -84,7 +93,9 @@
           <div id="demo-panel" class="demo-content" role="tabpanel" aria-labelledby="tab-today" tabindex="0"></div>
         </div>
       </div>
-      <p class="demo-caption"><span data-copy="demoCaption">A simplified preview, not a live account. Pick a tab and try the controls.</span><span aria-hidden="true">↑</span></p>
+      <div class="sr-only" id="announcement" aria-live="polite"></div>
+      </dialog>
+      <p class="demo-caption"><span data-copy="demoCaption">Simplified preview · Not the full app</span></p>
       <noscript><p>This interactive preview needs JavaScript. MyLifeGraph brings study planning, focus sessions, personal insights and a chat-based Coach together. <a href="https://my-life-graph-my-life-graph-s-projects.vercel.app/">Open the app</a>.</p></noscript>
     </section>
     <section id="features" class="features wrap">
@@ -107,6 +118,5 @@
     <section class="closing wrap"><div class="closing-orbit" aria-hidden="true"></div><p class="eyebrow" data-copy="closingEyebrow">START SMALL. FIND YOUR RHYTHM.</p><h2 data-copy="closingTitle">A better day starts<br>with understanding yours.</h2><div class="hero-actions"><a class="button primary" href="https://my-life-graph-my-life-graph-s-projects.vercel.app/" data-copy="openApp">Open app ↗</a><a class="button quiet" href="https://github.com/MyLifeGraph/MyLifeGraph/releases" data-copy="android">Get Android APK ↗</a></div><p class="micro" data-copy="pilot">Student-built pilot · Android & Web</p></section>
   </main>
   <footer class="wrap"><a class="brand" href="#"><img src="/brand.svg" alt="" width="24" height="24">MyLifeGraph</a><span data-copy="footer">Built by students. Made for real life.</span><a href="https://github.com/MyLifeGraph/MyLifeGraph" data-copy="source">Source code ↗</a></footer>
-  <div class="sr-only" id="announcement" aria-live="polite"></div>
 </body>
 </html>

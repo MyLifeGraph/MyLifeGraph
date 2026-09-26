@@ -36,6 +36,7 @@ import '../../features/settings/presentation/pages/account_deletion_recovery_pag
 import '../../features/shell/presentation/main_shell.dart';
 import '../../features/weekly_review/presentation/pages/weekly_review_page.dart';
 import 'app_routes.dart';
+import 'root_tab_pager.dart';
 
 const _postAuthContinuationParameter = 'continue';
 const _postAuthContinuationPaths = <String>{
@@ -212,7 +213,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: AppRoutes.dashboard,
-            builder: (context, state) => const DashboardPage(),
+            pageBuilder: (context, state) => _rootTabPage(context, ref, state),
           ),
           GoRoute(
             path: AppRoutes.settings,
@@ -251,11 +252,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.planner,
-            builder: (context, state) => const PlannerPage(),
+            pageBuilder: (context, state) => _rootTabPage(context, ref, state),
           ),
           GoRoute(
             path: AppRoutes.insights,
-            builder: (context, state) => const InsightsPage(),
+            pageBuilder: (context, state) => _rootTabPage(context, ref, state),
           ),
           GoRoute(
             path: AppRoutes.quickAction,
@@ -328,7 +329,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ref.read(appSurfaceCapabilitiesProvider).canShowCoachSurface
                 ? null
                 : AppRoutes.settings,
-            builder: (context, state) => const CoachPage(),
+            pageBuilder: (context, state) => _rootTabPage(context, ref, state),
           ),
           GoRoute(
             path: AppRoutes.more,
@@ -373,6 +374,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.onDispose(router.dispose);
   return router;
 });
+
+Page<void> _rootTabPage(BuildContext context, Ref ref, GoRouterState state) {
+  Widget pageFor(String path) => switch (path) {
+    AppRoutes.dashboard => const DashboardPage(),
+    AppRoutes.insights => const InsightsPage(),
+    AppRoutes.planner => const PlannerPage(),
+    _ => const CoachPage(),
+  };
+  // GoRouter gives imperative pushes a distinct page identity. Preserve those
+  // push/back surfaces; only the four declarative root locations share a pager.
+  if (state.pageKey.value != state.fullPath) {
+    return MaterialPage<void>(key: state.pageKey, child: pageFor(state.uri.path));
+  }
+  final paths = [AppRoutes.dashboard, AppRoutes.insights, AppRoutes.planner,
+    if (ref.read(appSurfaceCapabilitiesProvider).canShowCoachSurface) AppRoutes.coach];
+  return MaterialPage<void>(
+    key: const ValueKey('root-tabs'),
+    child: RootTabPager(
+      index: paths.indexOf(state.uri.path),
+      count: paths.length,
+      onSettled: (index) => context.go(paths[index]),
+      pageBuilder: (context, index) => pageFor(paths[index]),
+    ),
+  );
+}
 
 int? _focusMinutes(String? value) {
   if (value == null || !RegExp(r'^\d{1,3}$').hasMatch(value)) return null;

@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CI_NO_CACHE: ${{ inputs.no_cache == true || vars.CI_NO_CACHE == 'true' }}
+
 concurrency:
   group: signed-pilot-apk-${{ github.ref }}
   cancel-in-progress: false
@@ -63,10 +66,19 @@ jobs:
             "$RUNNER_TEMP/mylifegraph-release/MyLifeGraph-${GITHUB_REF_NAME}.cdx.json" >/dev/null
 
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        id: java
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
+
+      - name: Cache Android dependency downloads only
+        if: env.CI_NO_CACHE != 'true'
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: signed-android-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.java.outputs.version }}-sdk36-build36.0.0-flutter3.44.0-${{ hashFiles('apps/mobile/android/**', 'apps/mobile/pubspec.*', '.github/workflows/*apk.yml') }}
 
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
@@ -79,7 +91,18 @@ jobs:
         with:
           channel: stable
           flutter-version: 3.44.0
-          cache: true
+          cache: ${{ env.CI_NO_CACHE != 'true' }}
+          pub-cache: false
+          cache-key: 'signed-flutter-:os:-:arch:-:version:-:hash:'
+
+      - name: Cache public Flutter packages
+        if: env.CI_NO_CACHE != 'true'
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: |
+            ~/.pub-cache/hosted
+            ~/.pub-cache/hosted-hashes
+          key: signed-pub-v1-${{ runner.os }}-${{ runner.arch }}-flutter3.44.0-${{ hashFiles('apps/mobile/pubspec.*') }}
 
       - name: Resolve Flutter dependencies
         working-directory: apps/mobile
@@ -91,8 +114,8 @@ jobs:
         run: |
           npm run verify:android-release
           cd apps/mobile
-          flutter analyze
-          flutter test \
+          flutter analyze --no-pub
+          flutter test --no-pub \
             test/app_config_environment_test.dart \
             test/auth_recovery_test.dart \
             test/coach_credentials_test.dart
@@ -138,7 +161,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           test -n "$FIREBASE_ANDROID_CONFIG_BASE64"
-          flutter build apk --release \
+          flutter build apk --release --no-pub \
             --build-name='${{ steps.identity.outputs.build_name }}' \
             --build-number='${{ steps.identity.outputs.build_number }}' \
             --dart-define-from-file="$RUNNER_TEMP/mylifegraph-pilot-defines.json"

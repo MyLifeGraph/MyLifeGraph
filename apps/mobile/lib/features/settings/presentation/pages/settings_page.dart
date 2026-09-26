@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/widgets/health_connect_settings_entry.dart';
@@ -222,6 +223,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: () => context.push(AppRoutes.calendarIntegration),
           ),
         ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            key: const ValueKey('product-website-setting-entry'),
+            leading: const Icon(AppIcons.publicOutlined),
+            title: const Text('Website'),
+            trailing: const Icon(AppIcons.openInNew),
+            onTap: _openWebsite,
+          ),
+        ),
         const AppSectionHeader(title: 'Account and appearance'),
         if (config?.isHostedEnvironment == true)
           AppCard(
@@ -381,6 +392,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _openWebsite() async {
+    try {
+      if (await launchUrl(
+        Uri.parse('https://mylifegraph-website.vercel.app/'),
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      )) {
+        return;
+      }
+    } catch (_) {
+      // Keep Settings intact if no browser is available on this device.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open website. Try again.')),
     );
   }
 

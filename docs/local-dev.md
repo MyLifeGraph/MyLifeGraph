@@ -16,6 +16,12 @@ Do not restart retired VM development services or a failing migration-retry
 loop for this workflow. The normal full local stack remains a separate opt-in
 workflow with its own database-safety prerequisites.
 
+For the personal development VM's dated service, RAM/CPU and disk inventory,
+see [Personal dev VM inventory](personal-dev-vm-inventory.md). This is a
+read-only snapshot, not an instruction to restart or remove that stack.
+Its [architecture and rebuild guide](personal-dev-vm-rebuild.md) separates the
+observed legacy installation from a supported future reconstruction.
+
 ### Optional Android integrations
 
 Health Connect requires Android 14+ and source-app sharing enabled in Android;
@@ -1289,6 +1295,21 @@ timezone revision read before import. Only an import with
 `docs/stabilization-consistency-contract.md` for the exact cutover boundary.
 
 ## Android Builds
+
+### Build-cache controls
+
+`npm run verify:web` reuses only a checksum-validated, credential-free debug
+verification bundle for the exact checkout and toolchain. It is not a hosted
+release build. `npm run verify:web -- --no-cache` bypasses both bundle reuse
+and Pub package reuse, building in a fresh temporary directory. On Windows,
+where Bash is unavailable, run `node scripts/web_build_cache.mjs --no-cache`
+with `FLUTTER_BIN` pointing to the installed Flutter launcher.
+
+GitHub's verification and automatic APK manual workflows expose `no_cache`.
+Repository variable `CI_NO_CACHE=true` also disables restore/save for all
+three build workflows, including tag-triggered APK builds. GitHub runners are
+fresh; installed runner/SDK tools themselves are not removed by this setting.
+This control does not change Vercel's separate cache policy.
 
 Debug builds use the normal Android debug signing path. Distributable release
 builds deliberately fail unless ignored `apps/mobile/android/key.properties`

@@ -1,5 +1,15 @@
 # Android pilot release signing
 
+CI caches only SDKs and public dependency downloads, never APKs, Gradle build
+outputs, credentials, Firebase configuration, private keystores or Dart defines.
+Signed workflows use a separate cache namespace from PR verification. Every
+candidate is compiled for its current SHA/tag/build number and certificate
+verified before upload. Use the automatic workflow's `no_cache` input or
+repository variable `CI_NO_CACHE=true` (also for tag builds) for a fresh build
+without cache restore/save. Tests, release guards, SBOM and signing checks
+remain mandatory. The reusable debug web verification bundle is not a release
+artifact and is never consumed by either signed workflow.
+
 Directly distributed pilot APKs use one long-lived app-signing key (not a
 Play-managed upload-key exchange). The keystore, passwords, and
 `key.properties` are never committed, uploaded as ordinary artifacts, copied

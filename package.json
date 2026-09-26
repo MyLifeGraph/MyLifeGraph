@@ -14,6 +14,7 @@
     "verify:source": "bash scripts/verify_source.sh",
     "verify:db": "bash scripts/verify_supabase_local.sh",
     "verify:web": "bash scripts/verify_web.sh",
+    "verify:build-cache": "node --test scripts/web_build_cache.test.mjs",
     "verify:staging:remote": "node scripts/verify_staging_remote.mjs",
     "verify:vps": "python3 -m unittest discover -s deploy/vps/tests -p 'test_*.py'",
     "verify:android-release": "node --test scripts/android_release_identity.test.mjs scripts/check_android_release_config.test.mjs && node scripts/check_android_release_config.mjs",

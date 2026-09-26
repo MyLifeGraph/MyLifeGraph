@@ -197,6 +197,12 @@ session/device-bound, deduplicated and privacy-minimal. See
 
 ## Push, import and model limits
 
+The optional personal development VM has a separate
+[dated resource inventory](personal-dev-vm-inventory.md), including its remaining
+Supabase containers and disk footprint. It is not the production VPS inventory.
+The [personal VM rebuild guide](personal-dev-vm-rebuild.md) records its connections,
+ports, persistence and recovery prerequisites; it is not a backup or a tested restore.
+
 - Android push: grouped due-today Tasks, a fresh reliable learned bedtime and a
   rare stable Focus-timing pattern. Explicit consent, category switches, quiet
   hours, two attempts per 24 hours and a 30-day pattern cooldown prevent spam.

@@ -2,6 +2,14 @@
 
 ## Reversible flows and wearable suggestions
 
+Compact Watch settings retain connect/sync, permission access and overflow
+stop/delete actions with unchanged consent. Calendar import groups source and
+file selection, hides the never-imported empty events card and keeps Last import
+details; desktop puts events alongside the source. The Exam editor keeps all
+inputs in three compact steps, with profile-local date/time controls and
+responsive paired preferences. These presentation changes reuse existing
+Liquid Glass tokens and all original mutation/confirmation boundaries.
+
 Morning/Evening warn before discarding unsaved edits through Back/date changes.
 This does not persist incomplete forms or protect browser refreshes. A connected
 Android device can offer `Watch sleep / Use times` when Morning opens. Acceptance
@@ -185,7 +193,12 @@ used. Permission, data availability, Cloud rollout and physical-device behavior
 must be verified separately; existing manual check-ins stay unchanged.
 
 Settings omits its own navigation cog while retaining Coach notices and Back;
-its compact header reduces the gap before Profile. The Focus target dropdown
+its compact header reduces the gap before Profile.
+`Tools and connections` includes `Website`, opening the public product tour
+in an external browser (new tab on Web), without passing account data or
+replacing the app route. It is also available to guests; launch failure shows
+a short message and leaves Settings intact.
+The Focus target dropdown
 has a viewport-bounded scrollable menu so the final option remains reachable.
 Android app blocking offers Focus sessions (the existing default), a confirmed
 weekly day/time schedule, or Always block. Weekly windows use device time and
@@ -716,8 +729,15 @@ actual backend time while retaining their original planned interval.
 Deliberate horizontal touch swipes switch the root Today, Insights, Planner and
 capability-visible Coach pages without wrapping. Quick actions remains the Plus
 action, not an intermediate swipe page. Nested horizontal scrollers keep their
-gestures. Short/diagonal/slow drags, vertical scrolling, mouse selection, active
+gestures. Short/diagonal drags, vertical scrolling, mouse selection, active
 text editing and auxiliary/form routes do not switch main pages.
+Declarative root tabs share a lazily built pager: touch movement reveals the
+actual neighbouring page before release. Release at 22% of the viewport (bounded
+to 48–120 logical pixels), or a deliberate 650 px/s flick after 32 pixels,
+settles one tab; shorter/cancelled gestures return. Slow deliberate drags work.
+The route changes only after settling. Authentication redirects, imperative
+push/back pages and nested scroll ownership remain unchanged. Reduced motion
+uses the shell's discrete swipe shortcut, without interactive sliding.
 Root-page transitions follow the same order in both directions, for navigation
 buttons and swipes: later tabs enter from the right, earlier tabs from the left.
 Auxiliary routes retain normal push/back behavior; reduced motion removes slides.
@@ -1002,7 +1022,11 @@ Individual imported events expand from compact title/date rows. Their optional
 `Plan study time` action opens the existing exam/assignment preparation flow;
 unavailable actions explain the unchanged future-event/connection requirement.
 Source actions sit in the imported-events header menu and retain confirmation
-and exact-retry behavior. New Calendar preparation uses two compact input screens
+and exact-retry behavior. A never-imported source offers `Remove source`: one
+confirmation runs the existing disconnect and delete commands in order, stops
+on an uncertain result, and permits fresh source setup after confirmed deletion.
+Sources with an import retain the separate disconnect/delete workflow.
+New Calendar preparation uses two compact input screens
 before the existing preview: event/type and study time. Event editing/linking and
 optional plan settings are expandable; required missing details and source warnings
 remain visible. Other editors, defaults, validation, and confirmation are unchanged.

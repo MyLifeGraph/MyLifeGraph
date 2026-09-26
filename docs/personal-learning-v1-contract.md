@@ -252,6 +252,8 @@ Both viewport layouts use Compare, Top patterns, Trend overlay, Skillset,
 Past, Matrix, then Discovered tabs. Skillset remains selectable with sparse data.
 Compare, Top patterns, Trend overlay, Skillset and Matrix expose the shared
 7/14/30/90-day selection, including sparse states. Switching tabs retains it.
+Compare and With metric choices display `Metric (Category)`, including the
+opened dropdown; metric IDs, pair exclusions and calculations are unchanged.
 Skillset uses the same selector above its card rather than separate in-card
 chips. Its slightly larger radar uses the theme outline for the grid; Details
 remains collapsed. Top patterns uses the error color for negative coefficients

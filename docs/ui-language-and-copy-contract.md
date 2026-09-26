@@ -1,10 +1,24 @@
 # UI Language And Copy Contract
 
+Compare metric selectors use `Previous-night sleep (Recovery)`-style labels:
+the existing category is parenthetical, not separated by a middle dot. This
+does not rename metric identities, values, units or analysis semantics.
+
 The separate product website is fully EN/DE, English first. Its compact feature
 copy and FAQ must distinguish the scripted synthetic demo from real app data,
 Android-only features, optional sharing, review-before-save and noncausal
 patterns. Do not imply that the whole app interface is translated, that calendar
 import is live sync, or that unshipped reminder extensions are already available.
+
+The website preview opens with `Explore demo` / `Demo entdecken`, not a second
+explanatory section. The modal close icon has `Close demo` / `Demo schließen`
+as its accessible name. The caption explicitly says `Simplified preview · Not
+the full app` / `Vereinfachte Vorschau · Nicht die vollständige App`.
+Inside the open demo, a persistent header note says `Simplified · Not the full
+app` / `Vereinfacht · Nicht die volle App`; it remains visible across all tabs.
+
+Settings links to the product tour with `Website` and an external-link icon,
+without a subtitle. Launch failure says `Could not open website. Try again.`
 
 ## Reversible flow labels
 
@@ -45,6 +59,12 @@ APK/server states and the two-per-24-hours / monthly-pattern limits clear.
 Do not promise delivery after force-stop or while offline.
 
 Health Connect uses `Connect`, `Sync now`, `Stop sharing` and `Delete imported data`.
+Its compact summary is `Watch data`, `Sharing on/off`, and `Sleep · Steps`;
+secondary instructions live under `Details`, not the consent dialog.
+Calendar's empty source says `No file imported`; its read-only disclosure is
+`Original calendar unchanged`. Exam uses `Study time`, `Study rhythm`,
+`Daily limit`, `Busy times` and `Check capacity`, with optional planning
+details collapsed and `Review and confirm to reserve study time.` visible.
 The consent dialog names Cloud storage and selected Coach-provider access; Android
 permission alone is not Cloud consent. Keep the seven-day foreground sync scope,
 missing-data behavior, deletion distinction and errors visible. Imported sleep is
@@ -481,7 +501,10 @@ optional, soft, applies only to new previews, and never moves existing plans.
 Compact summaries retain these limits; calculation details are under `How it works`.
 In-app reminders states its foreground-only limit once beside consent, with
 channel details behind Info. Calendar import keeps read-only/no-sync and original
-calendar safety visible, without repeating the file-picker instruction. Today
+calendar safety visible, without repeating the file-picker instruction.
+Never-imported Calendar sources use `Remove source` and `Remove empty source?`;
+the confirmation states that no file was imported and calendar/plans stay unchanged.
+Imported sources keep the distinct disconnect/delete labels and consequences. Today
 omits redundant source subtitles and repeats no Setup commitment label per row.
 
 The Focus sheet asks `How focused did the session feel?` and

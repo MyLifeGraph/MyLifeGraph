@@ -1,11 +1,50 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {runInNewContext} from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {german,demoCopy,tourCopy,signals,chartPoints} from './public/content.js';
 import {appearances,normalizeAppearance,appearanceIcon} from './public/appearance.js';
 const html=await readFile(new URL('./public/index.html',import.meta.url),'utf8');
 const script=await readFile(new URL('./public/app.js',import.meta.url),'utf8');
 const config=JSON.parse(await readFile(new URL('./vercel.json',import.meta.url),'utf8'));
+const dialogScript=await readFile(new URL('./public/demo-dialog.js',import.meta.url),'utf8');
+
+function dialogHarness(){
+  const elements={};let focus=null,restored=null;
+  for(const id of ['#demo-dialog','#demo-launch','#demo-close'])elements[id]={
+    open:false,handlers:{},addEventListener(name,fn){this.handlers[name]=fn;},
+    focus(){focus=id;},showModal(){this.open=true;},
+    close(){this.open=false;this.handlers.close();},
+  };
+  const classes=new Set();const body={style:{top:'3px'}};
+  runInNewContext(dialogScript,{document:{querySelector:id=>elements[id],body,documentElement:{classList:{add:c=>classes.add(c),remove:c=>classes.delete(c)}}},window:{scrollY:937,scrollTo:options=>{restored=options.top;}}});
+  return {elements,classes,body,get focus(){return focus;},get restored(){return restored;}};
+}
+test('modal locks page and restores scroll, original style and focus on close',()=>{
+  const h=dialogHarness();const d=h.elements['#demo-dialog'];
+  h.elements['#demo-launch'].handlers.click();
+  assert(d.open);assert(h.classes.has('demo-open'));assert.equal(h.body.style.top,'-937px');
+  assert.equal(h.focus,'#demo-close');
+  h.elements['#demo-launch'].handlers.click();
+  h.elements['#demo-close'].handlers.click();
+  assert(!d.open);assert(!h.classes.has('demo-open'));assert.equal(h.body.style.top,'3px');
+  assert.equal(h.restored,937);assert.equal(h.focus,'#demo-launch');
+});
+test('only a backdrop-originating click dismisses the modal',()=>{
+  const h=dialogHarness();const d=h.elements['#demo-dialog'];
+  h.elements['#demo-launch'].handlers.click();
+  d.handlers.pointerdown({target:{}});d.handlers.click({target:d});assert(d.open);
+  d.handlers.pointerdown({target:d});d.handlers.click({target:d});assert(!d.open);
+});
+test('preview is inert and mobile dialog keeps navigation with scrollable content',async()=>{
+  const css=await readFile(new URL('./public/demo-dialog.css',import.meta.url),'utf8');
+  assert.match(html,/<dialog id="demo-dialog"/);
+  assert.match(html,/id="demo-preview"[^>]*inert aria-hidden="true"/);
+  assert.match(script,/cloneNode\(true\)/);assert.match(script,/removeAttribute\(attr\)/);
+  assert.match(css,/\.demo-preview \.demo-content\{[^}]*overflow:clip/);
+  assert.match(css,/height:100dvh/);assert.match(css,/safe-area-inset-bottom/);
+  assert.doesNotMatch(dialogScript,/\b(?:fetch|XMLHttpRequest|WebSocket|sendBeacon)\b/);
+});
 
 test('every visible and accessible page label has a German translation',()=>{
   const keys=[...html.matchAll(/data-(?:copy|aria)="([^"]+)"/g)].map(m=>m[1]);
@@ -66,6 +105,11 @@ test('product scene is decorative and independent of scrolling',async()=>{
   assert.match(css,/prefers-reduced-motion:reduce/);
   assert.match(css,/pointer-events:none/);
   assert(html.indexOf('class="product-scene"')<html.indexOf('id="demo"'));
+});
+
+test('ambient layers fade on every edge, not only vertically',async()=>{
+  const css=await readFile(new URL('./public/appearance.css',import.meta.url),'utf8');
+  assert.match(css,/\.hero:before,\.demo-glow,\.product-aura\{mask-image:radial-gradient\(ellipse closest-side at 50% 50%,[^}]*transparent 100%\)/);
 });
 
 test('phone loop is subtle, visibility-paused and respects motion preferences',async()=>{

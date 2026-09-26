@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
@@ -10,6 +11,63 @@ import 'package:my_life_graph/features/settings/presentation/pages/settings_page
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  for (final outcome in ['success', 'unavailable', 'error']) {
+    testWidgets('website opens externally: $outcome', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'auth_guest_active': true,
+        'auth_guest_onboarding_done': true,
+      });
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        calls.add(call);
+        if (outcome == 'error') throw PlatformException(code: 'unavailable');
+        return outcome == 'success';
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appConfigProvider.overrideWithValue(_testConfig)],
+          child: const _ThemeAwareSettingsApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scrollable = find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await _revealText(tester, 'Website', scrollable);
+      expect(calls, isEmpty);
+      await tester.tap(
+        find.byKey(const ValueKey('product-website-setting-entry')),
+      );
+      await tester.pumpAndSettle();
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'launch');
+      expect(
+        calls.single.arguments['url'],
+        'https://mylifegraph-website.vercel.app/',
+      );
+      expect(calls.single.arguments['useWebView'], isFalse);
+      expect(calls.single.arguments['useSafariVC'], isFalse);
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(
+        find.text('Could not open website. Try again.'),
+        outcome == 'success' ? findsNothing : findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('settings exposes only truthful session controls', (
     tester,
   ) async {

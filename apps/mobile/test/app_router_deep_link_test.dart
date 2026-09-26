@@ -21,6 +21,39 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  testWidgets('root pager keeps imperative Planner push and Settings back intact', (tester) async {
+    final repository = _DelayedAuthRepository(Future.value(AppSession.guest(_guestProfile)));
+    await tester.pumpWidget(ProviderScope(overrides: [
+      appConfigProvider.overrideWithValue(_testConfig),
+      authRepositoryProvider.overrideWithValue(repository),
+    ], child: const PersonalOptimizationApp()));
+    await tester.pumpAndSettle();
+    final router = ProviderScope.containerOf(tester.element(find.byType(PersonalOptimizationApp)))
+        .read(appRouterProvider);
+    router.go(AppRoutes.dashboard);
+    await tester.pumpAndSettle();
+    await tester.dragFrom(const Offset(350, 160), const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.insights);
+    router.go(AppRoutes.dashboard);
+    await tester.pumpAndSettle();
+    router.push(AppRoutes.planner);
+    await tester.pumpAndSettle();
+    expect(router.canPop(), isTrue);
+    expect(tester.takeException(), isNull);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.dashboard);
+    router.go(AppRoutes.planner);
+    await tester.pumpAndSettle();
+    router.push(AppRoutes.settings);
+    await tester.pumpAndSettle();
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.planner);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('optional hosted confirmation is reachable without gating product routes', (tester) async {
     const profile = AppProfile(
       id: 'pilot-user', email: 'person@example.test', name: 'Pilot User',

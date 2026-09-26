@@ -411,7 +411,7 @@ class _MetricPicker extends StatelessWidget {
                         metric.id,
                         blockedWithMetricId,
                       )),
-              child: Text('${metric.label} · ${metric.category}'),
+              child: Text('${metric.label} (${metric.category})'),
             ),
           )
           .toList(),

@@ -7,6 +7,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page.dart';
+import '../../../core/widgets/app_surface.dart';
 
 class HealthConnectPage extends ConsumerStatefulWidget {
   const HealthConnectPage({super.key});
@@ -42,21 +43,79 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
     return AppPage(
       title: 'Health Connect',
       compactHeader: true,
+      maxWidth: 720,
+      actions: [
+        IconButton(
+          tooltip: 'Reload',
+          onPressed: view.busy ? null : controller.load,
+          icon: const Icon(AppIcons.refresh),
+        ),
+      ],
       children: [
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Your watch · optional',
-                style: Theme.of(context).textTheme.titleMedium,
+              Row(
+                children: [
+                  const Icon(AppIcons.devicesOutlined),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Watch data',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        if (cloud != null)
+                          AppStatusPill(
+                            label: cloud.enabled ? 'Sharing on' : 'Sharing off',
+                            tone: cloud.enabled
+                                ? AppStatusTone.success
+                                : AppStatusTone.neutral,
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (cloud != null)
+                    PopupMenuButton<String>(
+                      tooltip: 'Watch data actions',
+                      enabled: editable,
+                      icon: const Icon(AppIcons.moreHoriz),
+                      onSelected: (action) {
+                        if (action == 'stop') {
+                          controller.disconnect();
+                        } else {
+                          _delete();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        if (cloud.enabled)
+                          const PopupMenuItem(
+                            value: 'stop',
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(AppIcons.stop),
+                              title: Text('Stop sharing'),
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(AppIcons.deleteOutline),
+                            title: Text('Delete imported data'),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
               const SizedBox(height: AppSpacing.sm),
-              const Text('Steps and sleep, kept separate from your check-ins.'),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'In Garmin Connect, enable Health Connect sharing first. Then allow access here on Android 14 or later.',
-              ),
+              const Text('Sleep · Steps'),
               const SizedBox(height: AppSpacing.md),
               if (view.busy) const LinearProgressIndicator(),
               if (view.error != null)
@@ -67,15 +126,13 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
                   ),
                 ),
               if (cloud != null) ...[
-                Text(cloud.enabled ? 'Cloud sharing on' : 'Cloud sharing off'),
                 if (cloud.lastSyncedAt != null)
                   Text(
                     'Last sync: ${MaterialLocalizations.of(context).formatShortDate(cloud.lastSyncedAt!.toLocal())} · ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(cloud.lastSyncedAt!.toLocal()))}',
                   ),
                 const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (view.supported &&
                         (!cloud.enabled || !ownDevice || !view.granted))
@@ -94,54 +151,57 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
                         icon: const Icon(AppIcons.refresh),
                         label: const Text('Sync now'),
                       ),
-                    if (cloud.enabled)
-                      OutlinedButton(
-                        onPressed: editable
-                            ? () => controller.disconnect()
-                            : null,
-                        child: const Text('Stop sharing'),
-                      ),
-                    TextButton(
-                      onPressed: editable ? _delete : null,
-                      child: const Text('Delete imported data'),
-                    ),
                   ],
                 ),
               ],
-              TextButton.icon(
-                onPressed: view.busy ? null : controller.load,
-                icon: const Icon(AppIcons.refresh),
-                label: const Text('Reload'),
-              ),
-              if (view.supported)
-                TextButton(
-                  onPressed: view.busy
-                      ? null
-                      : () async {
-                          try {
-                            await controller.openSettings();
-                          } catch (_) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Open Health Connect in Android Settings.',
-                                  ),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                  child: const Text('Android permissions'),
+              if (!view.supported)
+                const Text(
+                  'Import on Android 14 or later.',
+                  textAlign: TextAlign.start,
                 ),
             ],
           ),
         ),
-        const Text(
-          'Checks the last 7 days when you open the Android app, or tap Sync now. Missing data stays empty. Earlier imports stay saved until you delete them.',
+        if (view.supported)
+          AppCard(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Android permissions'),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: view.busy ? null : _openPermissions,
+            ),
+          ),
+        const AppCard(
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text('Details'),
+            children: [
+              Text(
+                'In Garmin Connect, enable Health Connect sharing first. '
+                'Then allow access here on Android 14 or later.\n\n'
+                'Checks the last 7 days when you open the Android app, or tap Sync now. '
+                'Manual check-ins stay separate. Missing data stays empty. '
+                'Earlier imports stay saved until you delete them.',
+              ),
+            ],
+          ),
         ),
       ],
     );
+  }
+
+  Future<void> _openPermissions() async {
+    try {
+      await ref.read(healthConnectProvider.notifier).openSettings();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Open Health Connect in Android Settings.'),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _connect() async {

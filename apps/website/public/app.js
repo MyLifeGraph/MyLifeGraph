@@ -85,6 +85,16 @@ function render(){
   }
 }
 
+function renderPreview(){
+  // A non-interactive snapshot of the same responsive demo, not a second app.
+  const snapshot=document.querySelector('#demo-dialog .demo-frame').cloneNode(true);
+  snapshot.querySelectorAll('[id],[autofocus],[aria-controls],[aria-labelledby]').forEach(el=>{
+    for(const attr of ['id','autofocus','aria-controls','aria-labelledby'])el.removeAttribute(attr);
+  });
+  snapshot.querySelector('.demo-dialog-actions').remove();
+  document.querySelector('#demo-preview').replaceChildren(snapshot);
+}
+
 function translate(){
   message('');
   document.documentElement.lang=language;
@@ -101,6 +111,7 @@ function translate(){
   switcher.setAttribute('aria-label',language==='de'?'Switch to English':'Auf Deutsch wechseln');
   applyAppearance();
   render();
+  renderPreview();
 }
 document.querySelector('#language').addEventListener('click',()=>{language=language==='en'?'de':'en';try{localStorage.setItem('mylifegraph.website.language',language);}catch{}translate();});
 tabs.forEach(tab=>tab.addEventListener('click',()=>{active=tab.dataset.tab;render();}));

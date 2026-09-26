@@ -352,7 +352,14 @@ connection/import/event ownership consistency.
 
 ## Disconnect And Delete
 
-Disconnect and deletion are separate explicit confirmations.
+Sources with an import keep separate explicit disconnect and deletion confirmations.
+For a never-imported source (`last_import == null`), the Flutter source-actions
+menu offers `Remove source` with one explicit empty-source confirmation. It
+sequentially reuses disconnect (if still connected) and imported-data deletion;
+the backend still requires disconnected status and retains its audit tombstone.
+Deletion proceeds only after confirmed disconnect of the same still-empty source.
+An ambiguous step retains its exact request identity; retry resumes that step,
+not a fresh command. Imported sources cannot use this shortcut.
 
 Disconnect sends the exact JSON body `{"request_id":"<uuid>"}`. Imported-data
 deletion sends no body and requires the exact UUID query
@@ -410,8 +417,8 @@ disconnect/delete consequences. Events share an `Imported · read-only`
 label and retain source label, local date/time, timezone, and import freshness. No event
 edit, provider delete, or provider-write control exists.
 
-Optional method and file-limit copy starts closed behind independent standard
-information controls headed `Read-only import` and `Import a file`. Explicit
+Optional method and file-limit copy starts closed behind the standard
+information control headed `Original calendar unchanged`. Explicit
 consent, the selected source, replacement/disconnect/delete consequences,
 current or stale state, and retry actions remain visible. Imported timestamps
 are formatted in the device locale and labelled local time; selected file size
@@ -526,15 +533,20 @@ migration does not change consent, import identity, disconnect, deletion, or
 provider-write authority in this contract. Optional explanations use the
 standard 44×44 disclosure; connection/import state uses shared labelled status
 pills rather than route-local chips.
-For connected sources, file selection/import is the first card. The calendar
-name/status and imported events follow. Source actions live in the events
-header overflow menu, with unchanged disconnect/delete confirmations and a
+The first card combines source name/status, file selection/import and a source
+actions overflow. Never-imported sources say `No file imported` rather than
+implying a live connection and do not render a redundant empty events card.
+Source actions remain available before any file is chosen, with separate
+disconnect/delete confirmations for imported
+sources or the empty-source removal confirmation described above, and a
 visible exact-retry action when needed. Read-only/no-sync
 copy remains visible, while file limits and detailed explanations share one
 disclosure. The replacement notice appears beside the selected-file import
-action. Import window/counts are expandable; timezone invalidation remains
+action. `Last import` retains expandable window/counts; timezone invalidation remains
 visible. New-source setup keeps the existing explicit consent and commands.
 Imported events use compact expandable title/date rows and one shared read-only
 badge. Expanded details retain timezone, source, and location. `Plan study time`
 is an optional, separate exam/assignment preparation action; past events and
 disconnected imports explain why it is unavailable. Eligibility is unchanged.
+On wide screens source/import details sit beside events; mobile and enlarged
+text use a single column. Existing Liquid Glass surfaces and tokens are unchanged.

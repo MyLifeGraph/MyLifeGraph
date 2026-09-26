@@ -30,6 +30,9 @@ import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'support/ui_catalog_capture.dart';
 import 'support/deadline_plan_fixtures.dart';
 import 'support/assignment_series_fixtures.dart';
 import 'support/multi_exam_plan_fixtures.dart';
@@ -45,6 +48,73 @@ const _berlinProfile = AppProfile(
 );
 
 void main() {
+  for (final size in [const Size(320, 900), const Size(1280, 1000)]) {
+    testWidgets('compact Exam keeps all steps usable at ${size.width} and large text', (tester) async {
+      final repository = _FakeDeadlinePlanRepository();
+      await _pumpPage(tester, repository: repository, size: size,
+        textScaler: const TextScaler.linear(2),
+        page: DeadlinePlansPage(
+          initialKind: DeadlinePlanKind.exam, initialTitle: 'Algorithms exam',
+          initialDeadlineAt: DateTime(2026, 7, 30, 10),
+          currentTime: DateTime(2026, 7, 18, 9),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.byKey(const ValueKey('deadline-estimate-20h')));
+      expect(tester.takeException(), isNull);
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.byKey(const ValueKey('preparation-session-custom')));
+      await tester.enterText(find.byKey(const ValueKey('preparation-session-minutes')), '60');
+      await tester.pumpAndSettle();
+      await _tap(tester, find.byKey(const ValueKey('deadline-planning-details')));
+      expect(find.textContaining('Daily budget is shared'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(repository.proposalDrafts, isEmpty);
+    });
+  }
+
+  testWidgets('Exam time control retains date and uses the existing time picker', (tester) async {
+    await _pumpPage(tester, repository: _FakeDeadlinePlanRepository(),
+      page: DeadlinePlansPage(
+        initialKind: DeadlinePlanKind.exam, initialTitle: 'Algorithms exam',
+        initialDeadlineAt: DateTime(2026, 7, 30, 10),
+        currentTime: DateTime(2026, 7, 18, 9),
+      ),
+    );
+    await _tap(tester, find.widgetWithIcon(OutlinedButton, AppIcons.schedule));
+    expect(find.byType(TimePickerDialog), findsOneWidget);
+    expect(find.byType(DatePickerDialog), findsNothing);
+    await _tap(tester, find.text('Cancel').last);
+    expect(find.textContaining('Jul 30, 2026'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  if (captureUiCatalog) {
+    testWidgets('catalog exam screenshots', (tester) async {
+      await loadCatalogFonts();
+      for (final wide in [false, true]) {
+        await _pumpPage(
+          tester,
+          repository: _FakeDeadlinePlanRepository(),
+          size: wide ? const Size(1280, 1000) : const Size(390, 1000),
+          page: DeadlinePlansPage(
+            initialKind: DeadlinePlanKind.exam,
+            initialTitle: 'Algorithms exam',
+            initialDeadlineAt: DateTime(2026, 7, 30, 10),
+            currentTime: DateTime(2026, 7, 18, 9),
+          ),
+        );
+        await captureCatalog(tester, 'exam-1-${wide ? 'desktop' : 'mobile'}');
+        await _tap(tester, find.text('Continue'));
+        await captureCatalog(tester, 'exam-2-${wide ? 'desktop' : 'mobile'}');
+        await _tap(tester, find.byKey(const ValueKey('deadline-estimate-20h')));
+        await _tap(tester, find.text('Continue'));
+        await captureCatalog(tester, 'exam-3-${wide ? 'desktop' : 'mobile'}');
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+  }
   testWidgets('Plan again creates a separate preview without restoring reservations', (tester) async {
     final repository = _FakeDeadlinePlanRepository(useProposedIdentity: true, feeds: [DeadlinePlanFeed(plans: [_plan(status: 'cancelled')])]);
     await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(currentTime: DateTime(2026, 7, 18, 9)));
@@ -651,7 +721,7 @@ void main() {
       ),
     );
 
-    expect(find.text('What are you preparing for?'), findsOneWidget);
+    expect(find.text('New exam'), findsOneWidget);
     expect(find.byKey(const ValueKey('deadline-locked-kind')), findsOneWidget);
     expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
   });
@@ -1226,16 +1296,16 @@ void main() {
         find.byTooltip('Show information about How much study time?'));
     expect(find.textContaining('cannot estimate this for you'), findsOneWidget);
     await _tap(tester, find.text('Continue'));
-    expect(find.text('Step 3 of 3'), findsOneWidget);
+    expect(find.text('3 / 3'), findsOneWidget);
     expect(find.textContaining('prior work'), findsNothing);
     expect(
-      find.text('Daily limit for this plan (minutes)'),
+      find.text('Daily limit'),
       findsOneWidget,
     );
-    expect(find.textContaining('there is no background sync'), findsNothing);
+    expect(find.textContaining('Re-import after calendar changes'), findsNothing);
     await _tap(tester,
-        find.byTooltip('Show information about How should we split it?'));
-    expect(find.textContaining('there is no background sync'), findsOneWidget);
+        find.byKey(const ValueKey('deadline-planning-details')));
+    expect(find.textContaining('Re-import after calendar changes'), findsOneWidget);
   });
 
   testWidgets('hides seven-day load but keeps its budget in the editor',
@@ -1265,13 +1335,13 @@ void main() {
     await _tap(tester, find.text('Continue'));
 
     expect(
-      find.textContaining('Total daily budget: 2 h across all plans'),
+      find.textContaining('All plans: 2 h / day.'),
       findsOneWidget,
     );
-    expect(find.textContaining('other confirmed plans use part'), findsNothing);
+    expect(find.textContaining('Daily budget is shared'), findsNothing);
     await _tap(tester,
-        find.byTooltip('Show information about How should we split it?'));
-    expect(find.textContaining('other confirmed plans use part'), findsOneWidget);
+        find.byKey(const ValueKey('deadline-planning-details')));
+    expect(find.textContaining('Daily budget is shared'), findsOneWidget);
   });
 
   testWidgets('three-step same-day preview needs explicit confirmation',
@@ -1397,7 +1467,7 @@ void main() {
     );
 
     await _tap(tester, find.text('Edit plan'));
-    expect(find.text('Step 1 of 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
     expect(find.text('Create preview with these values'), findsNothing);
     expect(repository.proposalDrafts, isEmpty);
   });
@@ -1713,7 +1783,7 @@ void main() {
     expect(repository.proposalDrafts, isEmpty);
 
     await _tap(tester, find.text('Change values'));
-    expect(find.text('Step 1 of 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
   });
 
   testWidgets('large active plan initially renders only six block rows',
@@ -2115,10 +2185,10 @@ void main() {
     expect(find.byKey(const ValueKey('deadline-daily-cap')), findsNothing);
     await _tap(tester, find.text('Adjust plan'));
     expect(find.byKey(const ValueKey('deadline-daily-cap')), findsOneWidget);
-    expect(find.textContaining('Clear days have no preparation blocks'), findsNothing);
+    expect(find.textContaining('Clear days have no study blocks'), findsNothing);
     await _tap(tester,
-        find.byTooltip('Show information about How should we split it?'));
-    expect(find.textContaining('Clear days have no preparation blocks'), findsOneWidget);
+        find.byKey(const ValueKey('deadline-planning-details')));
+    expect(find.textContaining('Clear days have no study blocks'), findsOneWidget);
     await _tap(tester, find.text('Adjust plan'));
     await _tap(tester, find.text('Create preview'));
     expect(repository.proposalDrafts.single.sourceCalendarEventId, deadlineCalendarEventId);
@@ -2244,7 +2314,7 @@ void main() {
       find.byKey(const ValueKey('deadline-plan-title')),
       findsNothing,
     );
-    expect(find.text('1 of 3 · Event'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
   });
 
   testWidgets('missing deep-linked terminal plan gets one targeted read',
@@ -2306,7 +2376,7 @@ void main() {
     expect(repository.proposalDrafts, isEmpty);
 
     await _tap(tester, find.text('Change values'));
-    expect(find.text('Step 1 of 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
     expect(find.byKey(const ValueKey('deadline-plan-title')), findsOneWidget);
     expect(repository.proposalDrafts, isEmpty);
   });
@@ -2620,7 +2690,8 @@ void main() {
     expect(find.text('Replan remaining preparation'), findsOneWidget);
 
     await _tap(tester, find.text('Change values'));
-    expect(find.text('Adjust preparation plan'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(
+        const ValueKey('deadline-editor-heading'))).data, 'Edit plan');
 
     await _tap(tester, find.widgetWithText(TextButton, 'Cancel'));
     expect(
@@ -2686,7 +2757,7 @@ void main() {
       find.byKey(const ValueKey('preparation-kind-exam')),
     );
     expect(tester.takeException(), isNull);
-    expect(find.text('Step 1 of 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
   });
 
   testWidgets('narrow high-text-scale replan summary does not overflow',
@@ -2846,6 +2917,8 @@ Future<void> _pumpPage(
           child: child!,
         ),
         home: Scaffold(body: page),
+        theme: captureUiCatalog ? AppTheme.liquidGlass : null,
+        debugShowCheckedModeBanner: false,
       ),
     ),
   );

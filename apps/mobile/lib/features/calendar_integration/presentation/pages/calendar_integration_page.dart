@@ -97,11 +97,45 @@ class CalendarIntegrationPage extends ConsumerWidget {
         ),
         _ConnectionSetupCard(state: state, controller: controller),
       ] else ...[
-        if (connection.isConnected)
-          _ImportFileCard(state: state, controller: controller),
-        _ConnectionStatusCard(connection: connection),
-        _ImportedEventsCard(state: state, controller: controller),
-        if (!connection.isConnected) const _ReadOnlyPromiseCard(),
+        LayoutBuilder(builder: (context, constraints) {
+          final source = _ImportFileCard(state: state, controller: controller);
+          final hasEvents = connection.lastImport != null || state.eventError != null;
+          final events = _ImportedEventsCard(state: state, controller: controller);
+          final details = connection.lastImport == null
+              ? null
+              : _ConnectionStatusCard(connection: connection);
+          if (constraints.maxWidth >= 900 &&
+              MediaQuery.textScalerOf(context).scale(16) < 24 && hasEvents) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: Column(children: [
+                  source,
+                  if (details != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    details,
+                  ],
+                ])),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: events),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              source,
+              if (hasEvents) ...[
+                const SizedBox(height: AppSpacing.md),
+                events,
+              ],
+              if (details != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                details,
+              ],
+            ],
+          );
+        }),
       ],
       if (state.operationError != null)
         _OperationErrorCard(state: state, controller: controller),
@@ -109,30 +143,6 @@ class CalendarIntegrationPage extends ConsumerWidget {
   }
 }
 
-class _ReadOnlyPromiseCard extends StatelessWidget {
-  const _ReadOnlyPromiseCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const AppInfoSectionDisclosure(
-            heading: 'Read-only import',
-            description:
-                'There is no live calendar connection. MyLifeGraph saves only essential event details from the file you select.',
-            keyPrefix: 'calendar-info',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'You choose the file. MyLifeGraph never changes the source calendar.',
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _ConnectionSetupCard extends StatelessWidget {
   const _ConnectionSetupCard({required this.state, required this.controller});
@@ -214,100 +224,31 @@ class _ConnectionSetupCard extends StatelessWidget {
 
 class _ConnectionStatusCard extends StatelessWidget {
   const _ConnectionStatusCard({required this.connection});
-
   final CalendarConnection connection;
 
   @override
   Widget build(BuildContext context) {
-    final connected = connection.isConnected;
-    final lastImport = connection.lastImport;
+    final lastImport = connection.lastImport!;
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ExpansionTile(
+        key: const ValueKey('calendar-import-details'),
+        tilePadding: EdgeInsets.zero,
+        title: const Text('Last import'),
+        subtitle: Text(_formatImportedAt(lastImport.importedAt)),
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final status = AppStatusPill(
-                label: connected
-                    ? 'Connected'
-                    : lastImport == null
-                    ? 'Disconnected'
-                    : 'Disconnected · may be out of date',
-                tone: connected
-                    ? AppStatusTone.success
-                    : lastImport == null
-                    ? AppStatusTone.neutral
-                    : AppStatusTone.attention,
-              );
-              final label = Text(
-                connection.sourceLabel,
-                softWrap: true,
-                style: Theme.of(context).textTheme.titleMedium,
-              );
-              if (constraints.maxWidth < 480 ||
-                  MediaQuery.textScalerOf(context).scale(16) >= 28) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    label,
-                    const SizedBox(height: AppSpacing.xs),
-                    status,
-                  ],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: label),
-                  const SizedBox(width: AppSpacing.sm),
-                  Flexible(child: status),
-                ],
-              );
-            },
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Window: ${lastImport.window.startsOn} to before ${lastImport.window.endsBefore} · '
+              '${lastImport.window.timezone}\n'
+              '${lastImport.counts.accepted} accepted · '
+              '${lastImport.counts.cancelled} cancelled · '
+              '${lastImport.counts.outOfWindow} outside window · '
+              '${lastImport.counts.unsupportedRecurring} recurring unsupported · '
+              '${lastImport.counts.invalid} invalid',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
-          if (!connected) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              lastImport == null
-                  ? 'Further imports are disabled. No file was imported; clear this empty source before creating another.'
-                  : 'Further imports are off. The saved read-only copy may become out of date and remains until you delete it.',
-            ),
-          ],
-          if (lastImport != null) ...[
-            ExpansionTile(
-              key: const ValueKey('calendar-import-details'),
-              tilePadding: EdgeInsets.zero,
-              title: const Text('Import details'),
-              subtitle: Text(
-                'Last import: ${_formatImportedAt(lastImport.importedAt)}',
-              ),
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Window: ${lastImport.window.startsOn} to before ${lastImport.window.endsBefore} · '
-                    '${lastImport.window.timezone}\n'
-                    '${lastImport.counts.accepted} accepted · '
-                    '${lastImport.counts.cancelled} cancelled · '
-                    '${lastImport.counts.outOfWindow} outside window · '
-                    '${lastImport.counts.unsupportedRecurring} recurring unsupported · '
-                    '${lastImport.counts.invalid} invalid',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-            if (lastImport.planningStatus ==
-                CalendarImportPlanningStatus.profileTimezoneChanged) ...[
-              const SizedBox(height: AppSpacing.xs),
-              const Text(
-                'Profile timezone changed. Re-import this file before Planner uses it as busy time.',
-              ),
-            ],
-          ] else ...[
-            const SizedBox(height: AppSpacing.md),
-            const Text('No file has been imported yet.'),
-          ],
         ],
       ),
     );
@@ -323,6 +264,7 @@ class _ImportFileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final file = state.selectedFile;
+    final connection = state.feed!.connection!;
     final locked = state.isBusy || state.operationRequiresExactRetry;
     final canImport =
         !state.isBusy &&
@@ -332,30 +274,55 @@ class _ImportFileCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AppInfoSectionDisclosure(
-            heading: 'Import a file',
-            description:
-                'Choose one UTF-8 .ics file no larger than 512 KiB. '
-                'There is no live calendar connection. MyLifeGraph saves only '
-                'essential event details from the file you select.',
-            keyPrefix: 'calendar-info',
+          Row(
+            children: [
+              const Icon(AppIcons.calendarTodayOutlined),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: Text(connection.sourceLabel,
+                  style: Theme.of(context).textTheme.titleMedium)),
+              _SourceControlsMenu(state: state, controller: controller,
+                  connection: connection),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'Read-only import · No sync. Original calendar unchanged.',
+          AppStatusPill(
+            label: !connection.isConnected
+                ? 'Disconnected'
+                : connection.lastImport == null
+                    ? 'No file imported'
+                    : 'Imported · read-only',
+            tone: !connection.isConnected
+                ? AppStatusTone.attention
+                : AppStatusTone.info,
           ),
+          const SizedBox(height: AppSpacing.sm),
+          const Text('File import · No sync'),
+          if (!connection.isConnected) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(connection.lastImport == null
+                ? 'Imports off. Remove this empty source to add another.'
+                : 'Imports off. Saved events may be out of date until deleted.'),
+          ],
+          if (connection.lastImport?.planningStatus ==
+              CalendarImportPlanningStatus.profileTimezoneChanged) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text('Profile timezone changed. Re-import this file before Planner uses it as busy time.'),
+          ],
           const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
+          if (connection.isConnected) SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
             onPressed: locked ? null : controller.selectFile,
             icon: state.operation == CalendarIntegrationOperation.selectingFile
                 ? const SizedBox.square(
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(AppIcons.fileOpenOutlined),
+                : const Icon(AppIcons.downloadOutlined),
             label: const Text('Choose .ics file'),
+            ),
           ),
-          if (file != null) ...[
+          if (file != null && connection.isConnected) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(
               width: double.infinity,
@@ -404,6 +371,13 @@ class _ImportFileCard extends StatelessWidget {
               ),
             ),
           ],
+          const SizedBox(height: AppSpacing.sm),
+          const AppInfoSectionDisclosure(
+            heading: 'Original calendar unchanged',
+            description: 'Choose one UTF-8 .ics file, up to 512 KiB. '
+                'No live connection. Only essential event details are saved.',
+            keyPrefix: 'calendar-info',
+          ),
         ],
       ),
     );
@@ -432,15 +406,10 @@ class _ImportedEventsCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              _SourceControlsMenu(
-                state: state,
-                controller: controller,
-                connection: connection,
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          const AppStatusPill(
+          if (!connection.isConnected) const AppStatusPill(
             label: 'Imported · read-only',
             tone: AppStatusTone.info,
           ),
@@ -591,17 +560,22 @@ class _SourceControlsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final emptySource = connection.lastImport == null;
     final retryKind = connection.isConnected
         ? CalendarIntegrationRetryKind.disconnect
         : CalendarIntegrationRetryKind.delete;
     final enabled =
         !state.isBusy &&
         (state.retryKind == null || state.retryKind == retryKind);
-    final icon = connection.isConnected
+    final icon = connection.isConnected && !emptySource
         ? AppIcons.linkOff
         : AppIcons.deleteOutline;
     Future<void> act() async {
-      if (connection.isConnected) {
+      if (emptySource) {
+        if (await _confirmRemoveEmpty(context)) {
+          await controller.removeEmptySource();
+        }
+      } else if (connection.isConnected) {
         if (await _confirmDisconnect(context)) await controller.disconnect();
       } else {
         if (await _confirmDelete(context)) {
@@ -631,7 +605,9 @@ class _SourceControlsMenu extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Flexible(
                 child: Text(
-                  connection.isConnected
+                  emptySource
+                      ? 'Remove source'
+                      : connection.isConnected
                       ? 'Disconnect source'
                       : 'Delete imported data',
                 ),
@@ -659,6 +635,30 @@ class _SourceControlsMenu extends StatelessWidget {
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
                 child: const Text('Disconnect'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<bool> _confirmRemoveEmpty(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Remove empty source?'),
+            content: const Text(
+              'No file was imported. Removes this source so you can add another. '
+              'Your calendar and plans stay unchanged.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Remove source'),
               ),
             ],
           ),

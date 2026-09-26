@@ -31,6 +31,110 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Compact layouts and interactive root navigation (2026-09-26, local)
+
+- Same task base as the cache work below. All **207 targeted Flutter tests** pass:
+  Calendar, Deadline editor, Health Connect, Insights, root pager, shell direction,
+  app-route authentication/deep links and Back navigation. Checks include 320px /
+  enlarged text, finger-follow, cancellation, nested scrolling, editing guards,
+  reversed navigation and existing imperative Planner/Settings history.
+- Static analysis of the eight changed Flutter implementation/test targets passes.
+  Fourteen isolated Liquid Glass widget captures cover Watch connected/off,
+  Calendar empty/imported and all three Exam steps at mobile/desktop sizes.
+  They use synthetic fixtures, not installed-device or live-account evidence.
+- Final isolated debug web build succeeds: **39.55 s** cache miss, then **2.22 s**
+  exact-key hit (**37.33 s / 94.4%** less elapsed time locally). This is a second
+  local observation, not a GitHub-runner performance claim.
+- Docs consistency, visual contract and cache tests pass. Captured-base affected
+  verification correctly selects the full gate but stops in the existing local
+  stack tests because Windows Git Bash lacks `setsid`; no database or browser
+  E2E gate ran through that selector. Full hosted CI remains outstanding.
+- No schema, API, stored analysis values, Liquid Glass color/material tokens,
+  release signing or account data changed. Exam outlook ownership needs no edit:
+  only editor presentation changed, not capacity/outlook calculation or authority.
+- Nothing from these changes has been pushed or deployed. The local catalog's
+  `implemented.html` adds actual widget renderings alongside the original concepts.
+
+### Build-cache verification (2026-09-26, local working tree)
+
+- Task base `b000f1fb7b91e7f625ad3473a4002af4a93c4b9b`; Windows x64,
+  installed Flutter, real debug web builds. Fresh build-output cache: **40.39 s**;
+  exact-key rerun: **1.20 s**, **39.19 s / 97.0%** saved. The first run reused
+  installed SDK/public Pub downloads; it was not a cold network/toolchain install.
+- `--no-cache` with isolated Pub downloads and fresh generated state: **60.18 s**.
+  An unexpected file inserted into the scoped test cache triggered a successful
+  rebuild (**51.56 s**). A temporary Dart source input changed the key and triggered
+  another successful rebuild (**51.17 s**); the probe was removed afterward.
+  These latter runs are correctness probes, not controlled performance comparisons.
+- Four cache tests, six release-boundary tests, six affected-selector tests,
+  eighteen docs tests, visual guard and YAML parsing pass. The wider Node script
+  suite reports 76/85 passing on Windows; nine POSIX-only checks fail because
+  Bash/Linux paths or Unix file modes are unavailable. The source shell gate
+  reaches local-stack tests but cannot continue without `setsid`. Those guards
+  were not weakened. Complete Linux/GitHub CI remains unverified.
+- No push, hosted workflow execution, APK signing, database mutation or production
+  deployment performed for this task. Local timing does not predict GitHub cache
+  transfer time. The reusable bundle is verification-only, not a release.
+
+### Website ambient edge polish (2026-09-26)
+
+- Ultrawide follow-up replaces the vertical fade with an elliptical closest-side
+  mask on hero, demo glow and phone aura. Before/after browser review at 2560×1440
+  confirms removal of the rectangular side boundaries. Twelve website tests
+  pass; docs/whitespace pass and the Bash limitation below is unchanged.
+  Deployment `dpl_EfTxP4U7Dptm8qBooj7toX4ijVNT` is READY; public CSS returns
+  the all-edge mask. No Flutter, backend or database changes are included.
+
+- Base `b000f1fb7b91e7f625ad3473a4002af4a93c4b9b`: eleven website tests,
+  docs consistency and whitespace checks pass; affected selector remains
+  blocked by missing Bash. Desktop and 390×844 browser review confirms the
+  hero-to-demo color seam fades out with no content/layout changes.
+- Website-only deployment `dpl_29DxtdQwgtSG3VyaJ4xhGL2ERAoD` is READY.
+  The public alias's computed hero style confirms the decorative fade mask.
+
+### Website disclaimer copy (2026-09-26)
+
+- Follow-up adds a persistent EN/DE disclaimer inside the modal header.
+  Eleven website tests and docs/whitespace checks pass again; the affected
+  selector still cannot start without Bash. Browser review at 320×640 confirms
+  the German note wraps without clipping close/reset controls. Deployment
+  `dpl_5m73qVroyv7gpjm1qT2zJPQWF9GX` is READY and its public HTML contains
+  the in-dialog note. Existing behavior and other deployments remain unchanged.
+
+- The preview caption now explicitly distinguishes the simplified preview from
+  the full app in EN/DE; layout and behavior are unchanged. Eleven website tests,
+  docs consistency and whitespace checks pass. Captured-base affected verification
+  remains blocked by missing Bash; base is `b000f1fb7b91e7f625ad3473a4002af4a93c4b9b`.
+- Website deployment `dpl_3ZPzpyxjTajoikfTdDY4cF3r8vA9` is READY; the public
+  alias returns both updated strings. No other product is deployed.
+
+### Website screenshot invitation and modal demo (2026-09-26)
+
+- Task base `b000f1fb7b91e7f625ad3473a4002af4a93c4b9b`. Eleven website
+  tests pass, including scroll/focus restoration and backdrop dismissal;
+  JavaScript syntax, documentation consistency and whitespace checks pass.
+  Captured-base affected verification is blocked by Bash missing from PATH.
+- Browser checks cover desktop, 390×844 and 320×640 mobile layouts, EN/DE,
+  Space/Liquid Glass, all four tabs, Reset, Escape and close. Mobile controls
+  stay in bounds and closing restores the captured page offset. No installed
+  Android or full app-suite claim is made for this website-only change.
+- Dedicated website deployment `dpl_6pQqZ85KezLJqDhPS5d5t4V6k41V` is READY
+  at `https://mylifegraph-website.vercel.app/`. Dry run includes only public
+  website assets and its Vercel config. The live invitation is visible.
+  Flutter Settings changes remain local; no app, VPS or database rollout.
+
+### Settings product website link (local candidate)
+
+- Task base `b000f1fb7b91e7f625ad3473a4002af4a93c4b9b`, branch
+  `codex/settings-website-link`. Six Settings widget tests pass, including
+  exact public URL/external launch, guest access, false result and platform
+  exception. Targeted Dart analysis, documentation consistency and whitespace
+  checks pass. The existing URL launcher is declared directly without a
+  package version change.
+- Captured-base affected verification cannot start because Bash is absent
+  from this PowerShell PATH. No full-suite, installed-browser/Android or new
+  production deployment claim is made for this small local addition.
+
 ### Consolidated release preparation (2026-09-25)
 
 - Task base `83f2de0e216e1835bb7d8997682a9d1b7bd06089`; accumulated work is
@@ -3592,6 +3696,42 @@ replace browser or product verification.
 - Redact any unexpected credential output before sharing logs.
 
 ## Continuous Integration Gates
+
+### Conservative build reuse
+
+Dependency caches retain SDKs and public package downloads only. Android caches
+contain only `modules-2` and wrapper distributions, not Gradle's whole cache,
+project build state, keystores, signing files or generated Firebase/define files.
+Resolved Java, OS/architecture, Android SDK/build-tools, Flutter version, Gradle
+configuration and Pub locks identify Android download caches. Pub caches include
+only hosted packages and their hashes; lock-enforced resolution still runs.
+Python installs remain hash-enforced and npm still uses `npm ci`.
+
+`scripts/web_build_cache.mjs` optionally reuses the debug verification bundle
+only. Its exact key binds the current commit, tracked/non-ignored mobile inputs,
+build scripts/workflows, package metadata, actual Flutter/engine/Dart/Node
+versions, OS/architecture, runner image and fixed build arguments. Changes,
+missing outputs or manifest/checksum mismatch cause a fresh isolated build.
+No prefix restore is used for build output. The build uses an allowlisted
+environment and source-only temporary directory; ignored local credentials and
+release defines are never copied. Cache integrity is not an independent security
+attestation: GitHub branch cache isolation and separate signed/verification
+namespaces remain part of the trust boundary.
+
+Tests, analysis, database checks and security gates are not skipped by cache
+hits. E2E, Vercel and signed APKs have different build identities/settings and
+never consume this verification bundle. Signed candidates are freshly built,
+bound to the current SHA/tag and certificate verified before upload.
+`npm run verify:build-cache` tests identity invalidation, corruption handling,
+environment isolation and retained workflow gates; it is part of the source gate.
+
+Manual verification/automatic APK workflows accept `no_cache=true`; repository
+variable `CI_NO_CACHE=true` covers all build workflows, including tag builds.
+This bypasses both restores and saves. Locally use
+`npm run verify:web -- --no-cache` (or `node scripts/web_build_cache.mjs --no-cache`);
+this also isolates Pub downloads. Installed toolchains are not reinstalled.
+The separate Vercel production builder retains its checksum-verified SDK cache
+and always recompiles; it is not covered by this GitHub/local opt-out.
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) defines the current
 hosted workflow:

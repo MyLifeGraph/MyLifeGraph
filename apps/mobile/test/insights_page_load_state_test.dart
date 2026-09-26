@@ -70,6 +70,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Advanced'));
       await tester.pumpAndSettle();
+      expect(find.text('Previous-night sleep (Recovery)'), findsWidgets);
+      expect(find.text('Previous-night sleep · Recovery'), findsNothing);
       final expand = find.text('Longer period');
       await tester.ensureVisible(expand);
       final badge = tester.getRect(

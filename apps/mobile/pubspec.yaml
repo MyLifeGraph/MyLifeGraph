@@ -34,6 +34,8 @@ dependencies:
   supabase_flutter: 2.15.4
   # Keep the repository's validated timezone behavior pinned.
   timezone: 0.10.1
+  # Already resolved through hosted Auth; reuse the pinned browser launcher.
+  url_launcher: 6.3.2
   # Native hosted Auth renders Cloudflare Turnstile in an isolated WebView.
   webview_flutter: 4.13.0
   # Direct import configures Android third-party cookies required by Turnstile.

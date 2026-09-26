@@ -10,6 +10,17 @@ It uses all four palettes. A separate wrapper provides a five-pixel/eight-second
 float, paused offscreen/in background tabs, plus fine-pointer hover tilt.
 There is no scroll rotation. Reduced motion disables both additions; missing
 visibility observation keeps the loop paused. App themes/layouts are unchanged.
+Hero, demo and phone ambient layers use an elliptical closest-side fade that
+reaches transparency on all four edges, including on ultrawide screens. These
+masks affect only decoration, never the phone, copy, controls or section geometry.
+
+The website demo invitation is a non-scrolling, slightly dimmed snapshot of its
+responsive synthetic panels with a central glass play pill. It opens a native
+dialog (mobile fullscreen) with fixed close/navigation controls and scrollable
+content. Closing restores page position and focus. Preview and dialog share
+palettes and translated content; no Flutter or backend behavior changes.
+The modal header carries a small muted simplified-demo disclaimer below its
+title. It wraps at narrow widths without shrinking the close/reset controls.
 
 Today shows last check-in metrics directly, with a small parenthesized saved date
 and no disclosure arrow. Task/Habit outcome icons update immediately; a small
@@ -37,6 +48,11 @@ Calendar import sits beside Refresh in the page header. Below 600px,
 Planning's Add spans the content width. Desktop keeps its creation section.
 Touch navigation supplements rather than replaces visible buttons: horizontal
 main-page swipes are deliberate and nested scrollers retain gesture priority.
+The root pager follows touch movement after the platform's horizontal touch slop.
+Release commits at 22% width (48–120px), or after a 32px / 650px/s directional
+flick; cancellation and diagonal movement snap back. No fixed time limit forces
+users to rush. Navigation state changes only once the page settles. Reduced
+motion retains the discrete shortcut instead of dragging page content.
 Root-page transitions enter from the right for a later destination and from the
 left for an earlier destination, consistently for buttons and swipes. Reduced
 motion removes the slide; auxiliary push/back navigation is unchanged.
@@ -280,6 +296,12 @@ the filled icon and selected surface without creating another route.
 
 ## Shape And Surface Roles
 
+Watch, Calendar import and the Exam wizard use compact shared surfaces:
+primary actions first, optional details collapsed, source actions in a labelled
+overflow, and paired controls only when width/text scale allows. This layout
+polish does not change any palette, glass opacity, backdrop, shadow or shared
+theme token. Consent, errors, replacement consequences and all inputs remain.
+
 The radius scale is `8 / 12 / 16 / 20 / pill`, exposed through `AppRadii`.
 Ordinary cards use 12, dialogs use 16, and large shell or hero surfaces never
 exceed 20.
@@ -319,6 +341,9 @@ organize the existing controls without adding another card style or changing
 their authority. Feature panels, auth/recovery regions, Inbox groups, Weekly
 facts, and Insights regions use the appropriate shared surface variant instead
 of route-local borders, radii, and shadows.
+
+A compact `Website` ListTile under Tools and connections uses the existing
+globe and external-link icons with no subtitle, matching adjacent settings.
 
 Inbox uses three equal-width compact counters, smaller category icons and a
 shared top-right icon-action row on mobile and desktop, stacked below the title
