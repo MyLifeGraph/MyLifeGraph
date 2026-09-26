@@ -31,7 +31,27 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
-### Android update discovery and one-time notice (2026-09-26, local candidate)
+### Android update discovery and one-time notice (2026-09-26)
+
+- Application candidate `0d76be674dd033fc7941507d5edb4a1b10c26a69` passed all
+  seven jobs in [full Linux CI 36260168395](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/36260168395)
+  on [PR #29](https://github.com/MyLifeGraph/MyLifeGraph/pull/29). The complete
+  Flutter suite, native Android JVM/lint and Web build passed; backend tests:
+  1,959 passed / two explicit skips; PostgreSQL 15/17 and restore/replay:
+  649 pgTAP assertions per full pass; all eight browser journeys passed.
+  This closes the Windows golden/Java verification gaps recorded below.
+  The subsequent evidence-only commit must receive its own green checks before
+  promotion; these links prove the named application candidate, not a later SHA.
+- The actual unauthenticated Dart release reader also passed a public-feed probe:
+  installed code `10000088` selected RC13/code `10000089`; installed code
+  `10000089` returned current. Observed runtimes were 4.6s and 1.9s. These probes
+  do not claim installed-device download/installation acceptance.
+- Publication is explicitly authorized. Release-time Main/tag/source identity,
+  signing and uploaded asset hashes must still pass before publishing RC14;
+  final immutable evidence is attached to the GitHub release and its workflows.
+  No SQL migration or application-data rewrite is required.
+
+Local pre-publication evidence:
 
 - Task base `189b583e1df94b04fb34c20e200d1bcd8830b35d`; no remote publication,
   database change, dependency upgrade or signing configuration change.
@@ -57,6 +77,8 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   failed with TLS decryption errors; system Java/toolchain settings were not
   changed. Native compilation and installed-APK update/download acceptance remain
   explicit release prerequisites, not inferred from Flutter/widget success.
+  Hosted native verification is now established by the named Linux run above;
+  installed-device acceptance remains separate.
 
 
 ### Profile-timezone sleep regression (2026-09-26, local candidate)
