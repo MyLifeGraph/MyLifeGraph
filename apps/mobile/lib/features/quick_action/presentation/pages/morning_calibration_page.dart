@@ -358,7 +358,7 @@ class _MorningCalibrationPageState
     _applySleepClocks(
       start: value,
       wake: _draft.wokeAt == null
-          ? _clock(DateTime.now())
+          ? _clock(ref.read(currentInstantProvider)())
           : _clock(_draft.wokeAt!),
     );
   }
@@ -394,6 +394,7 @@ class _MorningCalibrationPageState
             entryDate: _draft.entryDate,
             estimatedSleepStartedAt: start,
             wokeAt: wake,
+            timezoneName: ref.read(profileLocalDateSourceProvider).timezoneName,
           );
       setState(() {
         _saveError = null;
@@ -414,16 +415,24 @@ class _MorningCalibrationPageState
     if (widget.proposal != null) {
       return widget.proposal!.clockOnEntryDate(value);
     }
-    final interval = estimatedSleepIntervalForLocalClocks(
+    return dailyCaptureInstantForClock(
       entryDate: _draft.entryDate,
-      estimatedSleepStartedAt: '00:00',
-      wokeAt: value,
+      clock: value,
+      timezoneName: ref.read(profileLocalDateSourceProvider).timezoneName,
     );
-    return interval.wokeAt;
   }
 
-  String _clock(DateTime instant) =>
-      widget.proposal?.clockForInstant(instant) ?? dailyCaptureClock(instant);
+  String _clock(DateTime instant) {
+    if (widget.proposal != null) {
+      return widget.proposal!.clockForInstant(instant);
+    }
+    final zone = ref.read(profileLocalDateSourceProvider).timezoneName;
+    return dailyCaptureClock(
+      zone == null
+          ? instant.toUtc().toLocal()
+          : profileDateTimeAt(instant: instant, timezoneName: zone),
+    );
+  }
 
   Future<void> _save() async {
     if (_isSaving ||
@@ -535,23 +544,31 @@ class _MorningCalibrationPageState
             next.wokeAt == null &&
             _draft.entryDate ==
                 ref.read(profileLocalDateSourceProvider).todayKey()) {
+          final now = ref.read(currentInstantProvider)().toUtc();
           next = next.copyWith(
-            wokeAt: _clockOnEntryDate(_clock(DateTime.now())),
+            // Now is unambiguous even during a repeated DST hour.
+            wokeAt: DateTime.utc(now.year, now.month, now.day, now.hour, now.minute),
           );
         }
         if (widget.proposal == null &&
             next.estimatedSleepStartedAt == null &&
             next.wokeAt != null &&
             sleepPlan?.plannedSleepTime != null) {
-          final interval = estimatedSleepIntervalForLocalClocks(
-            entryDate: next.entryDate,
-            estimatedSleepStartedAt: sleepPlan!.plannedSleepTime!,
-            wokeAt: _clock(next.wokeAt!),
-          );
-          next = next.withSleepInterval(
-            estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
-            wokeAt: interval.wokeAt,
-          );
+          try {
+            final interval = estimatedSleepIntervalForLocalClocks(
+              entryDate: next.entryDate,
+              estimatedSleepStartedAt: sleepPlan!.plannedSleepTime!,
+              wokeAt: _clock(next.wokeAt!),
+              timezoneName: ref.read(profileLocalDateSourceProvider).timezoneName,
+            );
+            next = next.withSleepInterval(
+              estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
+              wokeAt: interval.wokeAt,
+            );
+          } on ProfileTimezoneException {
+            // An unresolved plan hint must not block manual entry or Watch use.
+            _saveError = 'That time is ambiguous or unavailable in your timezone. Choose another time.';
+          }
         }
         if (!_proposalApplied && widget.proposal != null) {
           next = widget.proposal!.applyToMorning(next, allowSkillset: true);

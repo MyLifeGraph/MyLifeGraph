@@ -7,6 +7,8 @@ import 'package:my_life_graph/core/constants/app_radii.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
 
 import '../../../../composition/focus_session_providers.dart';
+import '../../../../composition/profile_local_date_providers.dart';
+import '../../../../core/time/profile_timezone.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/api_failure.dart';
@@ -519,7 +521,7 @@ class _FocusLoadErrorCard extends StatelessWidget {
   }
 }
 
-class _StartFocusCard extends StatelessWidget {
+class _StartFocusCard extends ConsumerWidget {
   const _StartFocusCard({
     required this.plannedMinutes,
     required this.recoveryMinutes,
@@ -551,7 +553,7 @@ class _StartFocusCard extends StatelessWidget {
   final VoidCallback onStart;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final maximum = scheduledContext?.remainingMinutes ?? 240;
     final durations = <int>{
       25,
@@ -592,8 +594,8 @@ class _StartFocusCard extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Planned '
-                  '${DateFormat.MMMd().add_Hm().format(scheduledContext!.originalStartsAt.toLocal())}–'
-                  '${DateFormat.Hm().format(scheduledContext!.originalEndsAt.toLocal())} · '
+                  '${_focusClock(ref, scheduledContext!.originalStartsAt, includeDate: true)}–'
+                  '${_focusClock(ref, scheduledContext!.originalEndsAt)} · '
                   '${scheduledContext!.remainingMinutes} min remaining',
                   key: const ValueKey('focus-scheduled-origin'),
                   style: Theme.of(context).textTheme.bodyMedium,
@@ -881,7 +883,7 @@ class _StudySetupUnavailableCard extends StatelessWidget {
   }
 }
 
-class _ActiveFocusCard extends StatelessWidget {
+class _ActiveFocusCard extends ConsumerWidget {
   const _ActiveFocusCard({
     required this.session,
     required this.target,
@@ -899,7 +901,7 @@ class _ActiveFocusCard extends StatelessWidget {
   final VoidCallback onAbandon;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final plannedEnd = session.startedAt.add(
       Duration(minutes: session.plannedMinutes),
     );
@@ -935,7 +937,7 @@ class _ActiveFocusCard extends StatelessWidget {
           Text(_focusBlockDisplayLabel(session.label ?? target?.title)),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Started ${DateFormat.Hm().format(session.startedAt.toLocal())} · '
+            'Started ${_focusClock(ref, session.startedAt)} · '
             '${session.plannedMinutes} planned minutes'
             '${session.recoveryMinutes > 0 ? ' · ${session.recoveryMinutes} min recovery after completion' : ''}',
             style: Theme.of(context).textTheme.bodySmall,
@@ -960,7 +962,7 @@ class _ActiveFocusCard extends StatelessWidget {
           Text(
             reachedPlan
                 ? 'Planned time reached'
-                : 'Ends at ${DateFormat.Hm().format(plannedEnd.toLocal())}',
+                : 'Ends at ${_focusClock(ref, plannedEnd)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1195,7 +1197,19 @@ String _focusStartBlockingText(String? reason) {
   };
 }
 
-class _RecoveryCard extends StatelessWidget {
+String _focusClock(WidgetRef ref, DateTime instant, {bool includeDate = false}) {
+  final zone = ref.watch(profileLocalDateSourceProvider).timezoneName;
+  try {
+    final local = zone == null
+        ? instant.toUtc().toLocal()
+        : profileDateTimeAt(instant: instant, timezoneName: zone);
+    return (includeDate ? DateFormat.MMMd().add_Hm() : DateFormat.Hm()).format(local);
+  } on ProfileTimezoneException {
+    return 'Time unavailable';
+  }
+}
+
+class _RecoveryCard extends ConsumerWidget {
   const _RecoveryCard({
     required this.endsAt,
     required this.now,
@@ -1207,7 +1221,7 @@ class _RecoveryCard extends StatelessWidget {
   final VoidCallback onSkip;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final remaining = endsAt.isAfter(now)
         ? endsAt.difference(now)
         : Duration.zero;
@@ -1247,7 +1261,7 @@ class _RecoveryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('Reserved recovery ends at ${DateFormat.Hm().format(endsAt)}'),
+          Text('Reserved recovery ends at ${_focusClock(ref, endsAt)}'),
           const SizedBox(height: AppSpacing.lg),
           Align(
             alignment: Alignment.centerRight,

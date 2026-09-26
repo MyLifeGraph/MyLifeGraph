@@ -2,6 +2,13 @@
 
 ## Reversible flows and wearable suggestions
 
+Morning projects Watch/saved instants into the current profile IANA timezone
+once, uses that zone for manual clock edits, and saves canonical UTC timestamps.
+DST gaps/folds in manual input require correction; known Watch instants retain
+their exact offset-independent identity. Today timed sources and Task deadlines,
+Focus clock labels, and Assignment Series editors use the profile timezone too.
+Device time remains intentional for guest flows and Android app-blocking rules.
+
 Compact Watch settings retain connect/sync, permission access and overflow
 stop/delete actions with unchanged consent. Calendar import groups source and
 file selection, hides the never-imported empty events card and keeps Last import

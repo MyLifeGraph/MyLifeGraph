@@ -336,6 +336,10 @@ multiple blocks never imply multiple required actions.
 
 ## Planner Copy
 
+Assignment Series deadline controls name the profile IANA zone, not device time.
+Manual DST gaps/folds request another time; unavailable profile zones never
+silently fall back to the device zone. Layout and all other labels are retained.
+
 The calendar preference is labeled `Plan around calendar events` in Planning.
 Both Planner views have a compact `+ Add` button opening `Add new`.
 The calendar hint preserves read-only behavior and the reminder to review

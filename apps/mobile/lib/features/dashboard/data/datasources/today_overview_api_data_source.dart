@@ -1,5 +1,6 @@
 import '../../../../core/contracts/strict_contract.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/time/profile_timezone.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 
 const todayOverviewContractVersion = 'today-overview-v2';
@@ -92,10 +93,10 @@ class TodayOverviewMapper {
     final rawTasks = _map(json['tasks'], 'Today tasks');
     _exactKeys(rawTasks, const {'today', 'all'}, 'Today tasks');
     final todayTasks = _list(rawTasks['today'], 'Today task list', 1000)
-        .map((value) => _task(_map(value, 'Today task')))
+        .map((value) => _task(_map(value, 'Today task'), timezone))
         .toList(growable: false);
     final allTasks = _list(rawTasks['all'], 'All task list', 1000)
-        .map((value) => _task(_map(value, 'All task')))
+        .map((value) => _task(_map(value, 'All task'), timezone))
         .toList(growable: false);
     final allIds = allTasks.map((task) => task.id).toSet();
     if (allIds.length != allTasks.length ||
@@ -109,7 +110,7 @@ class TodayOverviewMapper {
     }
 
     final timeline = _list(json['timeline'], 'Today timeline', 2000)
-        .map((value) => _timelineItem(_map(value, 'Today timeline item')))
+        .map((value) => _timelineItem(_map(value, 'Today timeline item'), timezone))
         .toList(growable: false);
     final habits = _list(json['habits'], 'Today habits', 500)
         .map((value) => _habit(_map(value, 'Today habit')))
@@ -201,7 +202,7 @@ class TodayOverviewMapper {
 
     return DashboardSnapshot(
       origin: DashboardOrigin.account,
-      loadedAt: generatedAt.toLocal(),
+      loadedAt: profileDateTimeAt(instant: generatedAt, timezoneName: timezone),
       latestCheckIn: null,
       checkInStreakDays: checkIns?.completedDaysStreak ?? 0,
       todayPlan: List.unmodifiable(allTasks),
@@ -255,7 +256,7 @@ class TodayOverviewMapper {
     return TodayProgress(completed: completed, total: total);
   }
 
-  PlanItem _task(Map<String, dynamic> json) {
+  PlanItem _task(Map<String, dynamic> json, String timezone) {
     _exactKeys(
       json,
       const {
@@ -309,17 +310,17 @@ class TodayOverviewMapper {
         'Today task priority',
         const {'low', 'medium', 'high', 'critical'},
       ),
-      deadline: _optionalAwareDateTime(
+      deadline: _profileTime(_optionalAwareDateTime(
         json['deadline'],
         'Today task deadline',
-      )?.toLocal(),
+      ), timezone),
       estimatedMinutes: _optionalInteger(
         json['estimated_minutes'],
         'Today task estimate',
         minimum: 5,
         maximum: 480,
       ),
-      completedAt: completedAt?.toLocal(),
+      completedAt: _profileTime(completedAt, timezone),
       source: source,
       deadlinePlanId: deadlinePlanId,
       todayReason: _optionalEnumString(
@@ -408,7 +409,7 @@ class TodayOverviewMapper {
     );
   }
 
-  TodayTimelineItem _timelineItem(Map<String, dynamic> json) {
+  TodayTimelineItem _timelineItem(Map<String, dynamic> json, String timezone) {
     final kind = json['kind'];
     switch (kind) {
       case 'setup_commitment':
@@ -428,6 +429,7 @@ class TodayOverviewMapper {
         return _timedTimeline(
           json,
           kind: TodayTimelineKind.setupCommitment,
+          timezone: timezone,
         );
       case 'preparation':
         _exactKeys(
@@ -452,6 +454,7 @@ class TodayOverviewMapper {
         final item = _timedTimeline(
           json,
           kind: TodayTimelineKind.preparation,
+          timezone: timezone,
           planId: _uuid(json['plan_id'], 'Today preparation plan'),
           blockId: _uuid(json['block_id'], 'Today preparation block'),
           managedTaskId: _uuid(
@@ -518,6 +521,7 @@ class TodayOverviewMapper {
         return _timedTimeline(
           json,
           kind: TodayTimelineKind.focusSession,
+          timezone: timezone,
           state: status,
           actualMinutes: actualMinutes,
         );
@@ -540,6 +544,7 @@ class TodayOverviewMapper {
         return _timedTimeline(
           json,
           kind: TodayTimelineKind.taskBlock,
+          timezone: timezone,
           taskId: _uuid(json['task_id'], 'Today Task block target'),
           plannedMinutes: _integer(
             json['planned_minutes'],
@@ -567,6 +572,7 @@ class TodayOverviewMapper {
         return _timedTimeline(
           json,
           kind: TodayTimelineKind.habitSlot,
+          timezone: timezone,
           habitId: _uuid(json['habit_id'], 'Today Habit slot target'),
           plannedMinutes: _integer(
             json['planned_minutes'],
@@ -593,6 +599,7 @@ class TodayOverviewMapper {
         return _timedTimeline(
           json,
           kind: TodayTimelineKind.manualCommitment,
+          timezone: timezone,
           commitmentId: _uuid(
             json['commitment_id'],
             'Today fixed commitment identity',
@@ -656,8 +663,8 @@ class TodayOverviewMapper {
             80,
           ),
           allDay: allDay,
-          startsAt: startsAt?.toLocal(),
-          endsAt: endsAt?.toLocal(),
+          startsAt: _profileTime(startsAt, timezone),
+          endsAt: _profileTime(endsAt, timezone),
           startsOn: startsOn,
           endsOn: endsOn,
         );
@@ -671,6 +678,7 @@ class TodayOverviewMapper {
   TodayTimelineItem _timedTimeline(
     Map<String, dynamic> json, {
     required TodayTimelineKind kind,
+    required String timezone,
     String? planId,
     String? blockId,
     String? managedTaskId,
@@ -704,8 +712,8 @@ class TodayOverviewMapper {
         300,
       ),
       allDay: false,
-      startsAt: startsAt.toLocal(),
-      endsAt: endsAt.toLocal(),
+      startsAt: profileDateTimeAt(instant: startsAt, timezoneName: timezone),
+      endsAt: profileDateTimeAt(instant: endsAt, timezoneName: timezone),
       planId: planId,
       blockId: blockId,
       managedTaskId: managedTaskId,
@@ -718,6 +726,10 @@ class TodayOverviewMapper {
       commitmentId: commitmentId,
     );
   }
+
+  DateTime? _profileTime(DateTime? instant, String timezone) => instant == null
+      ? null
+      : profileDateTimeAt(instant: instant, timezoneName: timezone);
 
   TodaySourceStates _sourceStates(Map<String, dynamic> json) {
     _exactKeys(

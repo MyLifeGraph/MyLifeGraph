@@ -12,6 +12,13 @@ Cloud data authority and existing app routes are unchanged.
 
 ## Reversible editing additions
 
+Client time projection uses the profile IANA zone for Morning Watch/manual
+clocks, Today timed sources, Focus clock labels and Assignment Series inputs.
+UTC instants remain the wire/persistence identity; formatting must not call
+`toLocal()` after `profileDateTimeAt`. Capture serializes both Dart DateTime and
+TZDateTime canonically to UTC. Manual wall-time ambiguity fails closed; imported
+instants need no guessed offset. This changes no API, schema or write authority.
+
 Capture leave protection is client-only; accepted device sleep values go through
 the existing reviewed Morning Save, not an independent health-to-Capture writer.
 Inbox history is an owner-filtered read. Restore shares the notification command

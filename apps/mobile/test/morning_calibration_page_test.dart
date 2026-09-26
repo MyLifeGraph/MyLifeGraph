@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/morning_calibration_page.dart';
@@ -14,6 +15,69 @@ import 'package:my_life_graph/features/quick_action/presentation/widgets/capture
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 
 void main() {
+  testWidgets('opening during a repeated DST hour retains the known current instant', (tester) async {
+    await _pumpPage(tester, _NoSleepPlanMorningStore(),
+      currentInstant: DateTime.utc(2026, 10, 25, 1, 30), timezoneName: 'Europe/Berlin');
+    expect(tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).at(1)).value, '02:30');
+    expect(find.textContaining('could not be loaded'), findsNothing);
+  });
+
+  testWidgets('unresolvable prior sleep plan leaves Morning editable', (tester) async {
+    await _pumpPage(tester, _MorningStore(sleepPlan: _latestSleepPlan().copyWith(
+      entryDate: '2026-03-28', plannedSleepTime: '02:30')),
+      currentInstant: DateTime.utc(2026, 3, 29, 8), timezoneName: 'Europe/Berlin');
+    expect(find.textContaining('could not be loaded'), findsNothing);
+    final start = tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first);
+    expect(start.value, isNull);
+    start.onChanged('23:00');
+    await tester.pumpAndSettle();
+    expect(tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first).value, '23:00');
+  });
+  for (final zone in ['Europe/Berlin', 'UTC', 'Asia/Kathmandu']) {
+    testWidgets('watch acceptance, edit, save and reload use $zone', (tester) async {
+      final now = DateTime.utc(2026, 9, 26, 12);
+      final watch = HealthSleepSuggestion.parse({
+        'started_at': '2026-09-26T02:39:00Z',
+        'woke_at': '2026-09-26T09:21:00Z',
+      }, '2026-09-26', zone, now)!;
+      final store = _NoSleepPlanMorningStore();
+      await _pumpPage(tester, store, currentInstant: now, watchSleep: watch,
+        timezoneName: zone);
+      final startClock = dailyCaptureClock(watch.startedAt);
+      final wakeClock = dailyCaptureClock(watch.wokeAt);
+      expect(find.text('Watch sleep\n$startClock–$wakeClock'), findsOneWidget);
+      await tester.tap(find.text('Use times'));
+      await tester.pumpAndSettle();
+      CaptureClockControl clock(int index) => tester.widget<CaptureClockControl>(
+        find.byType(CaptureClockControl).at(index));
+      expect(clock(0).value, startClock);
+      expect(clock(1).value, wakeClock);
+      // Re-enter the displayed value: it must not shift the stored instant.
+      clock(0).onChanged(startClock);
+      await tester.pumpAndSettle();
+      expect(clock(1).value, wakeClock);
+      tester.widget<CaptureSleepTargetControl>(find.byType(CaptureSleepTargetControl))
+        .onChanged(480);
+      await tester.pump();
+      await _tapVisible(tester, find.text('Next'));
+      await _performSemanticTap(tester, 'morning sleep quality 7 of 10');
+      await _performSemanticTap(tester, 'morning energy 6 of 10');
+      await _tapVisible(tester, find.text('Save'));
+      final saved = store.attempts.single;
+      expect(saved.estimatedSleepStartedAt!.toUtc(), DateTime.utc(2026, 9, 26, 2, 39));
+      expect(saved.wokeAt!.toUtc(), DateTime.utc(2026, 9, 26, 9, 21));
+      expect(saved.estimatedSleepMinutes, 402);
+      final reloaded = MorningCalibrationDraft.fromJson(saved.toMetadataJson(),
+        entryDate: saved.entryDate);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpPage(tester, _MorningStore(initial: DailyCaptureEntry(
+        entryDate: saved.entryDate, morning: reloaded)),
+        currentInstant: now, watchSleep: watch, timezoneName: zone);
+      expect(clock(0).value, startClock);
+      expect(clock(1).value, wakeClock);
+      expect(find.text('Use times'), findsNothing);
+    });
+  }
   testWidgets('watch times are offered once and manual edits remain authoritative', (tester) async {
     final store = _NoSleepPlanMorningStore();
     await _pumpPage(tester, store, currentInstant: DateTime(2026, 9, 25, 9),
@@ -93,7 +157,8 @@ void main() {
     'morning sleep step derives duration before the final check-in save',
     (tester) async {
       final semantics = tester.ensureSemantics();
-      final store = _MorningStore(sleepPlan: _latestSleepPlan().copyWith(entryDate: '2026-08-19'));
+      final store = _MorningStore(sleepPlan: _latestSleepPlan().copyWith(
+        entryDate: '2026-08-19', plannedSleepTime: '23:00'));
       await _pumpPage(tester, store, currentInstant: DateTime(2026, 8, 20, 7));
 
       expect(find.text('MORNING · SLEEP'), findsOneWidget);
@@ -498,6 +563,7 @@ Future<void> _pumpPage(
   bool skillsetEnabled = false,
   DateTime? currentInstant,
   HealthSleepSuggestion? watchSleep,
+  String? timezoneName,
 }) async {
   final router = GoRouter(
     initialLocation: '/morning-calibration',
@@ -531,7 +597,11 @@ Future<void> _pumpPage(
         skillsetDimensionsProvider.overrideWith((ref) => <String>{}),
         profileLocalDateSourceProvider.overrideWithValue(
           SessionProfileLocalDateSource(
-            session: null,
+            session: timezoneName == null ? null : AppSession.authenticated(AppProfile(
+              id: 'timezone-user', email: 'timezone@example.test', name: 'Timezone',
+              timezone: timezoneName, role: AppRole.user, onboardingDone: true,
+              authProvider: 'email',
+            )),
             currentInstant: currentInstant == null
                 ? DateTime.now
                 : () => currentInstant,

@@ -31,6 +31,29 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Profile-timezone sleep regression (2026-09-26, local candidate)
+
+- Task base `2c2b42cbd59bbdbc12510b81a08f107deaf3562b`; branch
+  `codex/profile-timezone-sleep-fix`. The original regression first failed with
+  expected Berlin `04:39`, actual `02:39`: formatting a projected `TZDateTime`
+  with another `.toLocal()` discarded its profile wall clock. The corrected
+  formatter preserves it; aware JSON uses canonical UTC without duplicate offsets.
+- **219 tests across ten Flutter suites pass**, covering Watch acceptance,
+  manual edit/save/reload, existing Capture authority, Today timed sources,
+  Focus lifecycle/protection, Planner and Assignment deadlines, voice drafts
+  and profile-local dates. Explicit zones include Berlin, UTC, New York,
+  Kathmandu and Lord Howe; formatter probes cover every bundled IANA zone.
+  Spring gaps, autumn folds and half-hour DST transitions are included.
+- Planner's existing profile-zone projection remains intact. Native Watch
+  timestamps remain instants; no historical rows, schema, backend calculation,
+  correlations or wire version change. Explicit device-local audit timestamps,
+  guest behavior and Android device scheduling are not reinterpreted as profile
+  times. Exam outlook calculation/authority is unchanged and its owner reviewed.
+- Local affected verification uses the captured base and selects the full gate,
+  but Windows Git Bash lacks `setsid`. Hosted Linux CI and deployment evidence
+  are required separately; these local passes do not establish a release or
+  installed-device behavior.
+
 ### Complete hosted verification and cache repeat (2026-09-26)
 
 - Candidate `43f2881570733c5ea0bc8e39a281a156beae671b` on

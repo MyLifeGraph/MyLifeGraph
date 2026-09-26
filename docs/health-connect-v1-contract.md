@@ -66,6 +66,14 @@ Coach answers are not rewritten; full account deletion remains separate.
 
 ## Verification and rollout
 
+Watch start/end values remain absolute instants. Morning renders them once in
+the current profile IANA zone, never through a second `toLocal()` conversion.
+Manual clocks use the strict profile-zone resolver (DST gaps/folds require a
+correction); an imported aware instant during a repeated hour stays valid.
+Capture serialization emits canonical UTC, without appending a duplicate offset.
+The selected wake date and actual elapsed duration, including DST changes,
+remain authoritative. Existing saved data is not rewritten.
+
 Opening an unsaved manual Morning check-in offers `Watch sleep` with `Use times`
 and dismiss actions, only on the consented, permission-granted bound device.
 It does not request permission, upload or save a Capture merely on opening.

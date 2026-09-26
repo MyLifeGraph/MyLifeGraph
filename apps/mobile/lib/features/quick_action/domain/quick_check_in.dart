@@ -1,3 +1,4 @@
+import '../../../core/time/profile_timezone.dart';
 import 'skillset_signals.dart';
 
 enum QuickCheckInSaveTarget { guest, supabase }
@@ -122,10 +123,35 @@ String dailyCaptureEntryDate(DateTime value) {
 }
 
 String dailyCaptureClock(DateTime value) {
-  final local = value.toLocal();
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
+  // Format already-projected wall time. TZDateTime.toLocal() would discard
+  // the profile zone in favour of the timezone library's local (usually UTC).
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+DateTime dailyCaptureInstantForClock({
+  required String entryDate,
+  required String clock,
+  String? timezoneName,
+}) {
+  final date = DateTime.parse(_requiredEntryDate(entryDate));
+  _validateSleepClock(clock);
+  final parts = clock.split(':');
+  final hour = int.parse(parts.first);
+  final minute = int.parse(parts.last);
+  if (timezoneName != null) {
+    return profileDateTimeFromComponents(
+      year: date.year,
+      month: date.month,
+      day: date.day,
+      hour: hour,
+      minute: minute,
+      timezoneName: timezoneName,
+    );
+  }
+  // Only guest/no-account callers omit the profile zone.
+  return DateTime(date.year, date.month, date.day, hour, minute);
 }
 
 ({DateTime estimatedSleepStartedAt, DateTime wokeAt})
@@ -133,6 +159,7 @@ estimatedSleepIntervalForLocalClocks({
   required String entryDate,
   required String estimatedSleepStartedAt,
   required String wokeAt,
+  String? timezoneName,
 }) {
   final date = DateTime.parse(_requiredEntryDate(entryDate));
   _validateSleepClock(estimatedSleepStartedAt);
@@ -143,22 +170,18 @@ estimatedSleepIntervalForLocalClocks({
       int.parse(startParts.first) * 60 + int.parse(startParts.last);
   final wakeMinute =
       int.parse(wakeParts.first) * 60 + int.parse(wakeParts.last);
-  final wake = DateTime(
-    date.year,
-    date.month,
-    date.day,
-    int.parse(wakeParts.first),
-    int.parse(wakeParts.last),
+  final wake = dailyCaptureInstantForClock(
+    entryDate: entryDate,
+    clock: wokeAt,
+    timezoneName: timezoneName,
   );
   final startDate = startMinute >= wakeMinute
       ? DateTime(date.year, date.month, date.day - 1)
       : date;
-  final start = DateTime(
-    startDate.year,
-    startDate.month,
-    startDate.day,
-    int.parse(startParts.first),
-    int.parse(startParts.last),
+  final start = dailyCaptureInstantForClock(
+    entryDate: dailyCaptureEntryDate(startDate),
+    clock: estimatedSleepStartedAt,
+    timezoneName: timezoneName,
   );
   return (estimatedSleepStartedAt: start, wokeAt: wake);
 }
@@ -1321,16 +1344,9 @@ DateTime _requiredAwareDateTime(Map<String, dynamic> json, String field) {
 }
 
 String _awareIso8601String(DateTime value) {
-  if (value.isUtc) {
-    return value.toIso8601String();
-  }
-  final base = value.toIso8601String();
-  final offset = value.timeZoneOffset;
-  final sign = offset.isNegative ? '-' : '+';
-  final absoluteMinutes = offset.inMinutes.abs();
-  final hours = (absoluteMinutes ~/ 60).toString().padLeft(2, '0');
-  final minutes = (absoluteMinutes % 60).toString().padLeft(2, '0');
-  return '$base$sign$hours:$minutes';
+  // DateTime and TZDateTime differ in whether their ISO string includes an
+  // offset. Canonical UTC preserves the instant and never appends a second one.
+  return value.toUtc().toIso8601String();
 }
 
 void _validateSleepClock(String? value) {

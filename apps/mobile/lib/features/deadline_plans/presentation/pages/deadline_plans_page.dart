@@ -371,6 +371,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       return _AssignmentSeriesCard(
         key: ValueKey('assignment-series-${series.id}'),
         series: series,
+        profileTimezone: profileTimezone,
         plans: {
           for (final plan in state.plans)
             if (series.occurrencePlanIds.contains(plan.id)) plan.id: plan,
@@ -1302,6 +1303,17 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         _seriesEditorOpen) {
       return;
     }
+    final profileTimezone = ref.read(profileLocalDateSourceProvider).timezoneName;
+    if (profileTimezone == null) {
+      _showMessage('Your current profile timezone is unavailable. Reload your account before editing preparation times.');
+      return;
+    }
+    try {
+      profileDateTimeAt(instant: widget.currentTime ?? DateTime.now(), timezoneName: profileTimezone);
+    } on ProfileTimezoneException {
+      _showMessage('Your current profile timezone is unavailable. Reload your account before editing preparation times.');
+      return;
+    }
     _seriesEditorOpen = true;
     final workload = ref.read(preparationWorkloadProvider);
     AssignmentSeriesProposalDraft? draft;
@@ -1312,6 +1324,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         useRootNavigator: true,
         useSafeArea: true,
         builder: (_) => _AssignmentSeriesEditorSheet(
+          profileTimezone: profileTimezone,
           seriesId: series?.id ?? retainedDraft?.seriesId ?? newClientUuid(),
           baseRevision:
               series?.latestRevision ?? retainedDraft?.baseRevision ?? 0,

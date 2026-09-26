@@ -66,6 +66,11 @@ rewritten to make the estimate appear accurate.
 
 ## Finite Assignment Series
 
+The next-deadline picker and occurrence labels use the current profile IANA
+zone, matching the one-off Exam editor. Manual DST gaps/folds are rejected;
+the selected deadline is serialized as an aware instant. The last-due date hint
+uses calendar-day arithmetic rather than fixed 24-hour additions across DST.
+
 `assignment-series-v1` represents recurring coursework that happens weekly but
 has a known end. A new series contains `2..20` occurrences and defaults to 12 in
 Flutter. Editing the remaining future scope accepts `1..20` occurrences. The

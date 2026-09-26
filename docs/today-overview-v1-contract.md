@@ -29,6 +29,11 @@ present that ranking as a decision made for the user.
 
 ## Endpoint And Authority
 
+Flutter projects every timed timeline source and Task deadline into the returned
+profile timezone before rendering. All-day calendar dates remain date-only.
+No device-time reprojection is applied to these product clocks; underlying UTC
+instants, durations and source identities remain unchanged.
+
 Authenticated real accounts read:
 
 `GET /v1/today/overview`

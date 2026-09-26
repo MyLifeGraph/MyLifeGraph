@@ -48,6 +48,48 @@ const _berlinProfile = AppProfile(
 );
 
 void main() {
+  final now = DateTime(2026, 7, 18, 10);
+  for (final sample in [('Europe/Berlin', 12, 45), ('UTC', 14, 45), ('Asia/Kathmandu', 9, 0)]) {
+    testWidgets('Assignment picker saves profile-local deadline ${sample.$1}', (tester) async {
+      final seriesRepository = _FakeAssignmentSeriesRepository(
+        proposalResult: AssignmentSeriesResponse.fromJson(assignmentSeriesEnvelope()).series,
+      );
+      await _pumpPage(tester, repository: _FakeDeadlinePlanRepository(),
+        assignmentSeriesRepository: seriesRepository,
+        profileDateSource: SessionProfileLocalDateSource(
+          session: AppSession.authenticated(_berlinProfile.copyWith(timezone: sample.$1))),
+        page: DeadlinePlansPage(initialKind: DeadlinePlanKind.assignment, currentTime: now));
+      await tester.enterText(find.byKey(const ValueKey('assignment-series-title')), 'Weekly coursework');
+      await _tap(tester, find.byKey(const ValueKey('assignment-series-next-deadline')));
+      Navigator.of(tester.element(find.byType(DatePickerDialog))).pop(DateTime(2026, 7, 25));
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.byType(TimePickerDialog))).pop(const TimeOfDay(hour: 14, minute: 45));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('14:45'), findsOneWidget);
+      expect(find.textContaining(sample.$1), findsOneWidget);
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.byKey(const ValueKey('assignment-series-estimate-1h')));
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.text('Create series preview'));
+      expect(seriesRepository.proposalDrafts.single.nextDeadlineAt.toUtc(),
+        DateTime.utc(2026, 7, 25, sample.$2, sample.$3));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final day in [DateTime(2026, 10, 25), DateTime(2027, 3, 28)]) {
+    testWidgets('Assignment rejects ambiguous/nonexistent Berlin clock $day', (tester) async {
+      await _pumpPage(tester, repository: _FakeDeadlinePlanRepository(),
+        page: DeadlinePlansPage(initialKind: DeadlinePlanKind.assignment, currentTime: now));
+      await _tap(tester, find.byKey(const ValueKey('assignment-series-next-deadline')));
+      Navigator.of(tester.element(find.byType(DatePickerDialog))).pop(day);
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.byType(TimePickerDialog))).pop(const TimeOfDay(hour: 2, minute: 30));
+      await tester.pumpAndSettle();
+      expect(find.text('That time is ambiguous or unavailable in your timezone. Choose another time.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final size in [const Size(320, 900), const Size(1280, 1000)]) {
     testWidgets('compact Exam keeps all steps usable at ${size.width} and large text', (tester) async {
       final repository = _FakeDeadlinePlanRepository();
@@ -133,8 +175,6 @@ void main() {
     expect(draft.sourceCalendarEventId, isNull);
     expect(repository.confirmCalls, 0);
   });
-  final now = DateTime(2026, 7, 18, 10);
-
   testWidgets('Series retry stays visible while the plan feed loads or fails',
       (tester) async {
     final series = AssignmentSeriesResponse.fromJson(assignmentSeriesEnvelope()).series;

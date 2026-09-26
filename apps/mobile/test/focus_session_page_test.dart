@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
+import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/features/focus/data/focus_session_supabase_data_source.dart';
 import 'package:my_life_graph/features/focus/domain/focus_session.dart';
@@ -13,6 +16,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  for (final sample in [('Europe/Berlin', '10:30'), ('UTC', '08:30'), ('Asia/Kathmandu', '14:15')]) {
+    testWidgets('active Focus displays the profile clock ${sample.$1}', (tester) async {
+      await tester.pumpWidget(ProviderScope(overrides: [
+        appConfigProvider.overrideWithValue(_realConfig),
+        focusSessionPageDataSourceProvider.overrideWithValue(_ActiveFocusSource()),
+        profileLocalDateSourceProvider.overrideWithValue(SessionProfileLocalDateSource(
+          session: AppSession.authenticated(AppProfile(
+            id: 'clock-user', email: 'clock@example.test', name: 'Clock',
+            timezone: sample.$1, role: AppRole.user, onboardingDone: true, authProvider: 'email',
+          )),
+        )),
+      ], child: const MaterialApp(home: Scaffold(body: FocusSessionPage()))));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Started ${sample.$2}'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
@@ -24,6 +44,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
         ],
@@ -65,6 +86,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(
             _ActiveFocusSource(),
@@ -103,6 +125,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
         ],
@@ -135,6 +158,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(
             _LongTargetFocusSource(),
@@ -179,6 +203,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
         ],
@@ -227,6 +252,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(
             _LongTargetFocusSource(),
@@ -289,6 +315,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
@@ -329,6 +356,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           focusStudySettingsDataSourceProvider.overrideWithValue(source),
@@ -365,6 +393,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           focusStudySettingsDataSourceProvider.overrideWithValue(source),
@@ -441,6 +470,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(
@@ -500,6 +530,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(
@@ -552,6 +583,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           focusStudySettingsDataSourceProvider.overrideWithValue(source),
@@ -604,6 +636,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           focusStudySettingsDataSourceProvider.overrideWithValue(source),
@@ -649,6 +682,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
@@ -703,6 +737,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(
@@ -756,6 +791,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
@@ -822,6 +858,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
         ],
@@ -879,6 +916,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
         ],
@@ -945,6 +983,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
         ],
@@ -999,6 +1038,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
             appConfigProvider.overrideWithValue(_realConfig),
             focusSessionPageDataSourceProvider.overrideWithValue(source),
           ],
@@ -1092,6 +1132,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
           appConfigProvider.overrideWithValue(_realConfig),
           focusSessionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(
@@ -1132,6 +1173,7 @@ void main() {
     final source = _ExactTerminalFocusSource();
     Widget page({String? sessionId}) => ProviderScope(
           overrides: [
+            profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
             appConfigProvider.overrideWithValue(_realConfig),
             focusSessionPageDataSourceProvider.overrideWithValue(source),
           ],

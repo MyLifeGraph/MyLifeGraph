@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
+import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
 import 'package:my_life_graph/composition/projection_refresh_providers.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/features/focus/data/focus_session_supabase_data_source.dart';
@@ -248,6 +250,7 @@ Future<void> _pumpFocus(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
         appConfigProvider.overrideWithValue(_realConfig),
         focusSessionPageDataSourceProvider.overrideWithValue(source),
         focusStudySettingsDataSourceProvider.overrideWithValue(source),

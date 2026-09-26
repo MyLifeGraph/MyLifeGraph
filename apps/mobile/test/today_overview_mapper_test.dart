@@ -5,6 +5,32 @@ import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snaps
 void main() {
   const mapper = TodayOverviewMapper();
 
+  for (final sample in [('Europe/Berlin', 2), ('UTC', 0), ('America/New_York', -4), ('Asia/Kathmandu', 5.75)]) {
+    test('every timed Today source and task uses profile zone ${sample.$1}', () {
+      final raw = _overview()..['timezone'] = sample.$1;
+      final snapshot = mapper.map(raw);
+      for (var i = 0; i < snapshot.timeline.length; i++) {
+        final item = snapshot.timeline[i];
+        if (item.allDay) continue;
+        final source = (raw['timeline'] as List)[i];
+        for (final field in [('starts_at', item.startsAt!), ('ends_at', item.endsAt!)]) {
+          final instant = DateTime.parse(source[field.$1] as String);
+          final expectedWall = instant.add(Duration(minutes: (sample.$2 * 60).round()));
+          expect(field.$2.toUtc(), instant);
+          expect(field.$2.hour, expectedWall.hour);
+          expect(field.$2.minute, expectedWall.minute);
+          expect(field.$2.day, expectedWall.day);
+        }
+      }
+      expect(snapshot.todayTasks.single.deadline!.timeZoneOffset.inMinutes, (sample.$2 * 60).round());
+      expect(snapshot.todayTasks.single.deadline!.toUtc(), DateTime.utc(2026, 7, 21, 12));
+    });
+  }
+
+  test('Today rejects invalid zones rather than using device time', () {
+    expect(() => mapper.map(_overview()..['timezone'] = 'Invalid/Zone'), throwsA(isA<Exception>()));
+  });
+
   test('maps the strict v2 overview with Planner agenda sources', () {
     final snapshot = mapper.map(_overview());
 

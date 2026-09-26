@@ -169,6 +169,11 @@ timezone never triggers that fallback.
 
 ### Focus Sessions
 
+Planned-origin, active start/end and recovery-end clock labels use the current
+profile IANA zone (device-local only for guest/no-account sessions). Invalid
+zones show unavailable times, never a guessed offset. Timer arithmetic and
+all lifecycle writes continue to use absolute instants and elapsed durations.
+
 - Planned duration: 5-240 minutes.
 - At most one active focus session per user.
 - At most one linked target: an owned task or an owned active habit.

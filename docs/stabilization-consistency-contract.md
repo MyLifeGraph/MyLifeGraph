@@ -263,6 +263,14 @@ later edits or reactivate an archived Habit.
 
 ## DST-Safe Local Time
 
+Flutter Morning follows the same profile-zone boundary for Watch suggestions,
+saved UTC values, clock edits and prior-Evening defaults. Formatting reads the
+projected wall-clock components without `toLocal()`. UTC serialization preserves
+exact instants for both Dart DateTime and TZDateTime. Manual gaps/folds fail
+closed; known imported instants remain unambiguous. Guest clocks alone use the
+device zone. Today timed rows/task deadlines, Focus clock labels and Assignment
+Series editors also use the profile zone; elapsed timers still compare instants.
+
 Setup and recurring Planner wall times use the shared local-time resolver. It
 tests both PEP 495 folds through a UTC round trip and accepts exactly one UTC
 mapping. A nonexistent spring-forward time or ambiguous fall-back time raises

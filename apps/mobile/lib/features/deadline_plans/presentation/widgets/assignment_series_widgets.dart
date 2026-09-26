@@ -2,6 +2,7 @@ part of '../pages/deadline_plans_page.dart';
 
 class _AssignmentSeriesEditorSheet extends StatefulWidget {
   const _AssignmentSeriesEditorSheet({
+    required this.profileTimezone,
     required this.seriesId,
     required this.baseRevision,
     required this.existing,
@@ -13,6 +14,7 @@ class _AssignmentSeriesEditorSheet extends StatefulWidget {
   });
 
   final String seriesId;
+  final String profileTimezone;
   final int baseRevision;
   final AssignmentSeriesRevision? existing;
   final AssignmentSeriesProposalDraft? retainedDraft;
@@ -40,6 +42,9 @@ class _AssignmentSeriesEditorSheetState
   bool _useCalendarAvailability = false;
 
   DateTime get _now => widget.currentTime ?? DateTime.now();
+
+  DateTime _profileLocal(DateTime instant) => profileDateTimeAt(
+    instant: instant, timezoneName: widget.profileTimezone);
 
   @override
   void initState() {
@@ -163,8 +168,8 @@ class _AssignmentSeriesEditorSheetState
             icon: const Icon(AppIcons.eventOutlined),
             label: Text(
               _nextDeadline == null
-                  ? 'Choose next due date and device time'
-                  : 'Next due ${DateFormat.yMMMd().add_Hm().format(_nextDeadline!.toLocal())} · device time',
+                  ? 'Choose next due date and time · ${widget.profileTimezone}'
+                  : 'Next due ${DateFormat.yMMMd().add_Hm().format(_profileLocal(_nextDeadline!))} · ${widget.profileTimezone}',
             ),
           ),
         ),
@@ -180,7 +185,9 @@ class _AssignmentSeriesEditorSheetState
     final count = int.tryParse(_countController.text.trim());
     final end = count == null || count < 1 || _nextDeadline == null
         ? null
-        : _nextDeadline!.add(Duration(days: 7 * (count - 1)));
+        : DateTime(_profileLocal(_nextDeadline!).year,
+            _profileLocal(_nextDeadline!).month,
+            _profileLocal(_nextDeadline!).day + 7 * (count - 1));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -382,10 +389,11 @@ class _AssignmentSeriesEditorSheetState
   }
 
   Future<void> _pickDeadline() async {
-    final now = _now;
-    final lastDate = now.add(const Duration(days: 366));
-    final initial =
-        _nextDeadline?.toLocal() ?? now.add(const Duration(days: 7));
+    final now = _profileLocal(_now);
+    final lastDate = DateTime(now.year, now.month, now.day + 366);
+    final initial = _nextDeadline == null
+        ? DateTime(now.year, now.month, now.day + 7, now.hour, now.minute)
+        : _profileLocal(_nextDeadline!);
     final date = await showDatePicker(
       context: context,
       initialDate: initial.isAfter(lastDate) ? lastDate : initial,
@@ -400,10 +408,15 @@ class _AssignmentSeriesEditorSheetState
       helpText: 'Weekly assignment due time',
     );
     if (time == null || !mounted) return;
-    setState(() {
-      _nextDeadline =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    });
+    try {
+      final instant = profileDateTimeFromComponents(
+        year: date.year, month: date.month, day: date.day,
+        hour: time.hour, minute: time.minute, timezoneName: widget.profileTimezone,
+      );
+      setState(() => _nextDeadline = instant);
+    } on ProfileTimezoneException {
+      _showValidation('That time is ambiguous or unavailable in your timezone. Choose another time.');
+    }
   }
 
   void _submit() {
@@ -524,6 +537,7 @@ class _AssignmentSeriesCard extends StatelessWidget {
   const _AssignmentSeriesCard({
     super.key,
     required this.series,
+    required this.profileTimezone,
     required this.plans,
     required this.expanded,
     required this.isBusy,
@@ -540,6 +554,7 @@ class _AssignmentSeriesCard extends StatelessWidget {
   });
 
   final AssignmentSeries series;
+  final String? profileTimezone;
   final Map<String, DeadlinePlan> plans;
   final bool expanded;
   final bool isBusy;
@@ -627,6 +642,7 @@ class _AssignmentSeriesCard extends StatelessWidget {
             for (final occurrence in occurrences)
               _AssignmentOccurrenceRow(
                 occurrence: occurrence,
+                profileTimezone: profileTimezone,
                 plan: plans[occurrence.planId],
                 enabled: !isBusy && !exactRetryLocked,
                 onEdit: onEditOccurrence,
@@ -681,12 +697,14 @@ class _AssignmentSeriesCard extends StatelessWidget {
 class _AssignmentOccurrenceRow extends StatelessWidget {
   const _AssignmentOccurrenceRow({
     required this.occurrence,
+    required this.profileTimezone,
     required this.plan,
     required this.enabled,
     required this.onEdit,
   });
 
   final AssignmentSeriesOccurrence occurrence;
+  final String? profileTimezone;
   final DeadlinePlan? plan;
   final bool enabled;
   final ValueChanged<DeadlinePlan> onEdit;
@@ -722,7 +740,7 @@ class _AssignmentOccurrenceRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Week ${occurrence.position} · ${DateFormat.yMMMd().add_Hm().format(occurrence.deadlineAt.toLocal())}',
+                  'Week ${occurrence.position} · ${_profileDeadlineCopy(occurrence.deadlineAt, profileTimezone)}',
                 ),
                 Text(status, style: Theme.of(context).textTheme.bodySmall),
               ],

@@ -759,6 +759,12 @@ sensitive and daily capture is easy to abandon after one bad interaction.
 
 ### Capture Reliability
 
+Morning clock display and manual entry use the current profile IANA zone;
+Watch/saved instants are never reprojected to device time after that conversion.
+UTC serialization retains the exact sleep interval, including DST elapsed-time
+differences. Manual ambiguous/nonexistent times require correction, not guessed
+offsets. This adds no write path and never rewrites historical captures.
+
 - A failed or timed-out write must keep the user's draft and offer a clear retry.
 - Retry must be idempotent or deduplicated so one check-in does not become two
   daily records.
