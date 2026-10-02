@@ -10,6 +10,8 @@ import '../../core/theme/app_visual_tokens.dart';
 import '../../core/widgets/app_surface.dart';
 import '../../features/coach/application/coach_turn_notice.dart';
 import '../../features/coach/presentation/providers/coach_providers.dart';
+import '../../core/capabilities/app_surface_capabilities.dart';
+import '../../features/focus_protection/application/focus_protection_gateway.dart';
 
 class AppHeaderActions extends ConsumerWidget {
   const AppHeaderActions({
@@ -53,6 +55,20 @@ class AppHeaderActions extends ConsumerWidget {
             constraints: const BoxConstraints.tightFor(width: 44, height: 44),
             icon: const Icon(AppIcons.inboxOutlined),
           ),
+          if (ref.watch(focusProtectionPlatformSupportedProvider) &&
+              ref
+                  .watch(appSurfaceCapabilitiesProvider)
+                  .canUseDeviceFocusProtection)
+            IconButton(
+              key: const ValueKey('global-header-blocking'),
+              tooltip: 'App blocking',
+              onPressed: GoRouter.maybeOf(context) == null
+                  ? null
+                  : () => context.push(AppRoutes.focusProtection),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+              icon: const Icon(AppIcons.shieldOutlined),
+            ),
           const _SettingsButton(selected: false),
         ],
       ],

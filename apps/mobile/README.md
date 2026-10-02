@@ -1,5 +1,31 @@
 # MyLifeGraph Mobile App
 
+## Android blocking plans
+
+The Android-only shared header shield and Settings entry open App blocking:
+Plans / Strict / Insights / Customize. The dedicated route owns its navigation;
+the main shell bar is hidden there. Flutter reuses the existing four themes and
+tokens. Named plans combine Focus, weekly windows, timers, Always and daily
+budgets. Targets can be apps or explicitly consented website domains. Native
+Strict guards, local usage charts and block-screen customization remain entirely
+on-device. Permissions retains the existing master and independent Focus DND
+controls; named plans own app/domain selections after migration.
+
+`blocking-plans-v2` is checked across the native/Dart device channel (explicit
+registry coverage, no FastAPI counterpart). Editors retain their opening
+revision. Legacy Focus lifecycle/DND authority is unchanged. Website observation
+is opt-in and restricted to known address-bar IDs, not page content or universal
+DNS filtering. The offline block page returns Home rather than immediately
+revealing a blocked browser tab; it does not rewrite third-party tabs.
+See [the complete native contract](../../docs/android-focus-protection-v1-contract.md).
+No new cloud data or migration is required. Build/test evidence and outstanding
+physical-device checks belong in [verification](../../docs/verification.md).
+Settings names the shared entry `App blocking`. Delayed catalog opens are
+single-flight; obsolete usage results/errors cannot replace the selected range.
+Revoked access still permits removing retained domains and reducing/removing
+budgets. Plan/Strict/Customize save failures keep drafts; pending saves freeze
+keyboard edits. Foreground refresh updates timed statuses and stops when hidden.
+
 ## Android updates
 
 Settings > Updates reads the installed package version and checks the public

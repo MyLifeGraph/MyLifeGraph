@@ -7,6 +7,22 @@ import 'package:flutter/widgets.dart';
 class AppIcons {
   const AppIcons._();
 
+  static const shieldOutlined = IconData(
+    0xe40a,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+  static const briefcaseOutlined = IconData(
+    0xe0ee,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+  static const gameController = IconData(
+    0xe26e,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+
   static const chartPolar = IconData(
     0xeaa8,
     fontFamily: 'PhosphorRegular',

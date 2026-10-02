@@ -18,7 +18,7 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/focus/domain/focus_session.dart';
 import '../../features/focus/presentation/pages/focus_session_page.dart';
 import '../../features/focus_protection/application/focus_protection_gateway.dart';
-import '../../features/focus_protection/presentation/pages/focus_protection_settings_page.dart';
+import '../../features/focus_protection/presentation/pages/blocking_page.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/learning/presentation/pages/personal_learning_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
@@ -236,7 +236,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ? null
                   : AppRoutes.settings;
             },
-            builder: (context, state) => const FocusProtectionSettingsPage(),
+            builder: (context, state) => const BlockingPage(),
           ),
           GoRoute(
             path: AppRoutes.personalLearning,

@@ -149,6 +149,10 @@ class _MainShellState extends ConsumerState<MainShell> {
       allowPrompt: swipeIndex >= 0,
       child: LayoutBuilder(
       builder: (context, constraints) {
+        if (currentPath == AppRoutes.focusProtection) {
+          // The device tool owns its four-tab navigation; do not stack bars.
+          return Scaffold(body: content);
+        }
         final desktop = constraints.maxWidth >= 1100;
         if (desktop) {
           return Scaffold(

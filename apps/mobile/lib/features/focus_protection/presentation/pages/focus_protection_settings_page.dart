@@ -11,7 +11,8 @@ import '../../application/focus_protection_gateway.dart';
 import '../../domain/focus_protection.dart';
 
 class FocusProtectionSettingsPage extends ConsumerStatefulWidget {
-  const FocusProtectionSettingsPage({super.key});
+  const FocusProtectionSettingsPage({this.permissionsOnly = false, super.key});
+  final bool permissionsOnly;
 
   @override
   ConsumerState<FocusProtectionSettingsPage> createState() =>
@@ -374,7 +375,7 @@ class _FocusProtectionSettingsPageState
                   title: const Text('Block selected apps'),
                   subtitle: const Text('Block whole apps, including browsers.'),
                 ),
-                if (configuration.blockSelectedApps) ...[
+                if (configuration.blockSelectedApps && !widget.permissionsOnly) ...[
                   const SizedBox(height: AppSpacing.sm),
                   OutlinedButton.icon(
                     icon: const Icon(AppIcons.tuneOutlined),
@@ -404,7 +405,7 @@ class _FocusProtectionSettingsPageState
           _PermissionCard(
             title: 'Accessibility access',
             description: status!.accessibilityEnabled
-                ? 'Allowed. Only foreground package changes are observed.'
+                ? 'Allowed. Website address bars need separate consent.'
                 : 'Needed only to recognize and cover selected apps.',
             granted: status.accessibilityEnabled,
             enabled: !_busy,
@@ -419,7 +420,7 @@ class _FocusProtectionSettingsPageState
             enabled: !_busy,
             onPressed: _openNotificationPolicySettings,
           ),
-          AppCard(
+          if (!widget.permissionsOnly) AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -554,7 +555,7 @@ class _FocusProtectionSettingsPageState
               title: Text('Privacy & limits'),
               children: [
                 Text(
-                  'Focus protection does not read messages, page text, clicks, or window content. It does not filter URLs, suspend packages, protect a computer, or prevent uninstalling MyLifeGraph. Settings and essential phone/alarm functions remain reachable.',
+                  'App protection uses foreground app changes. Optional website protection reads only supported browser address bars after separate consent. No messages or page content are read or uploaded. Settings, calls, alarms and uninstall remain available.',
                 ),
               ],
             ),
@@ -652,7 +653,7 @@ class _FocusProtectionSettingsPageState
       final agreed = await _showDisclosure(
         title: 'Allow app blocking?',
         body:
-            'Android Accessibility access lets MyLifeGraph see only which app moves to the foreground and show its own block page. MyLifeGraph does not retrieve window content, text, messages, or clicks.',
+            'Android access lets MyLifeGraph recognize selected apps and show a block screen. Website address bars require separate consent. No messages or page contents are read or uploaded.',
         agreeLabel: 'Agree and open settings',
       );
       if (agreed != true || !mounted) return;

@@ -605,6 +605,13 @@ available; the checkbox still explains recorded notice/time and no birth date.
 Android Focus protection names app-blocking modes `Focus sessions`, `Weekly
 schedule`, and `Always block`. Weekly selection confirms days/times in one
 compact sheet and names device time plus next-day end where relevant.
+
+Named Android plans use short Plans / Strict / Insights / Customize labels.
+Focus session, Always, Add time, Daily budget and Block now are combinable
+choices, not exclusive modes. Sensitive usage/website/Wi-Fi/NFC disclosures and
+limitations remain explicit at consent/setup or inside Limits. Website protection
+must not claim browser-universal or DNS filtering; the offline return page does
+not rewrite third-party tabs. A return delay never grants access to a blocked app.
 `Silence during Focus` explicitly distinguishes DND from independent app blocks.
 Permission disclosures and warnings stay visible; `Privacy & limits` holds
 the full explanation. Package identifiers remain available as app-label tooltips.

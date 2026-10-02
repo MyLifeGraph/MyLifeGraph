@@ -155,13 +155,18 @@ then submits through normal validation. Acknowledgement is per signed-in session
 microphone permission remains separate. The countdown and live level bars do not
 persist audio. See [speech operations](../services/speech_service/README.md).
 
-Android Focus Protection is local Accessibility-based blocking, not Cloud access
-control. Each app can combine Focus, weekly intervals, always and temporary rules
-with OR semantics. Overnight periods belong to the start weekday. Master disable,
-essential-app exclusions and emergency release remain authoritative. Notification
-silencing follows only the real Focus lease. App selection supports collapse,
-deselect all and a fixed installed-social-app preset. No calendar/Focus records
-are fabricated by standalone blocking. See [Focus Protection](android-focus-protection-v1-contract.md).
+Android App blocking is device-local Accessibility protection, not Cloud access
+control. Named app/domain plans combine Focus, weekly intervals, Always, timers
+and daily usage budgets with OR semantics. Plans/Strict/Insights/Customize share
+the header shield and Settings entry. Optional browser-address observation and
+usage metering have independent explicit consent; denied access is unavailable,
+not zero usage. Strict combines wait/charger/Wi-Fi/NFC unlock requirements with
+AND, while essential OS escapes remain available. Legacy selections are retained
+without discarded rules. Overnight periods belong to the start weekday; DND
+follows only the real Focus lease. No calendar/Focus/Cloud records are fabricated.
+Website protection uses known visible address-bar adapters and an offline local
+block page, not third-party URL rewriting or universal browser/DNS protection.
+See [Focus Protection](android-focus-protection-v1-contract.md).
 
 ### Inbox, in-app reminders and push
 
@@ -191,7 +196,7 @@ session/device-bound, deduplicated and privacy-minimal. See
 | On-device speech | Android downloads checksummed Whisper Tiny/Base multilingual or Parakeet V3 models, persists selected source/model and runs locally. No automatic server fallback or upload for on-device recordings. | [Coach/Speech](phase-10-controlled-coach-plan.md#flutter-contract) |
 | Firebase / FCM | Android push delivery only; Spark/no linked billing. Existing VPS evaluates rules; Firebase is not the app database or backend compute. | [Push delivery](notification-delivery-v1-contract.md) |
 | Android Health Connect | Optional consented foreground steps/sleep import, including data Garmin Connect makes available there. Source-tagged Cloud observations; no Garmin OAuth/developer API and no replacement of manual check-ins. | [Health Connect](health-connect-v1-contract.md) |
-| Android Focus Protection | Device-local Accessibility blocking, Focus/weekly/always/temporary per-app rules, and Focus-only notification silencing. Rules combine; no synthetic Focus or Cloud records. | [Focus Protection](android-focus-protection-v1-contract.md) |
+| Android App blocking | Device-local named app/domain plans, composable Focus/weekly/Always/timer/budget rules, Strict unlock, local usage insights and customization; Focus-only DND. No synthetic Focus or Cloud records. | [Focus Protection](android-focus-protection-v1-contract.md) |
 | GitHub Actions / Releases | CI, protected branches, signed Android builds and tagged release artifacts. An APK uses its compiled endpoints and does not load its UI from Vercel. | [Release workflows](../.github/workflows), [VPS release flow](../deploy/vps/README.md#build-and-release-flow) |
 | Local laptop / optional dev VM | Supported Cloud frontend launcher for fast testing; separate guest and full local-stack workflows remain available. Do not restart a retired VM development stack or its migration-retry loop as a prerequisite for Cloud UI work. | [Local development](local-dev.md#personal-windows-browser-with-existing-cloud-accounts) |
 

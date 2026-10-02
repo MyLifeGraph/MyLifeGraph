@@ -218,6 +218,10 @@ void main() {
     final gateway = _LifecycleGateway(events: events);
 
     await _pumpFocus(tester, source: source, gateway: gateway, events: events);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('focus-protection-emergency-release')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('focus-protection-emergency-release')),
     );

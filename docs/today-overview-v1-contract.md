@@ -219,6 +219,10 @@ The primary Today order is:
    collapsed `Full week` section. The Weekly Review entry is omitted when its
    existing capability is unavailable.
 
+The Android-only, synced-account header includes an App blocking shield before
+Settings; unsupported/guest/mock surfaces do not show it. Its dedicated device
+tool owns its four-tab navigation without changing Today content or data.
+
 The compact streak card puts directly visible `Last check-in` values below the
 streak heading, with the saved date in parentheses. Morning/Evening actions follow
 the values, preserving the original read-then-capture order.

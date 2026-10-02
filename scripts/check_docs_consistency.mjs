@@ -21,6 +21,7 @@ const CONTRACT_SOURCE_SUFFIXES = [
   '.dart',
   '.js',
   '.json',
+  '.kt',
   '.mjs',
   '.py',
   '.sql',

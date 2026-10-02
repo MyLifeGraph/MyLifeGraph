@@ -137,6 +137,25 @@
       ]
     },
     {
+      "coverage": "explicit",
+      "key": "blockingPlans",
+      "version": "blocking-plans-v2",
+      "sources": [
+        {
+          "path": "apps/mobile/android/app/src/main/kotlin/com/mylifegraph/app/BlockingPlans.kt",
+          "symbol": "CONTRACT_VERSION"
+        },
+        {
+          "path": "apps/mobile/lib/features/focus_protection/application/blocking_gateway.dart",
+          "symbol": "blockingPlansContractVersion"
+        }
+      ],
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/android-focus-protection-v1-contract.md"
+      ]
+    },
+    {
       "coverage": "shared_named",
       "key": "calendarImport",
       "version": "calendar-import-v2",

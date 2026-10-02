@@ -296,6 +296,13 @@ the filled icon and selected surface without creating another route.
 
 ## Shape And Surface Roles
 
+Android App blocking reuses these surfaces and all four current themes for
+Plans / Strict / Insights / Customize, named plan tiles and compact sheets.
+The shared-header shield sits before Settings. The dedicated device-tool route
+uses its own tab bar without stacking the main shell bar. Native overlay/offline
+pages use a bounded background/icon palette rather than Flutter blur shaders;
+this is a platform-specific block-screen choice, not a change to app theme tokens.
+
 Watch, Calendar import and the Exam wizard use compact shared surfaces:
 primary actions first, optional details collapsed, source actions in a labelled
 overflow, and paired controls only when width/text scale allows. This layout

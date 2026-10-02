@@ -17,6 +17,7 @@ import android.view.accessibility.AccessibilityManager
 
 class FocusProtectionManager(private val context: Context) {
     private val store = FocusProtectionStore(context)
+    private val blockingPlans by lazy { BlockingPlans(context) }
     private val zenController = FocusZenController(context, store)
     private val packageManager = context.packageManager
     private val handler = Handler(Looper.getMainLooper())
@@ -32,7 +33,12 @@ class FocusProtectionManager(private val context: Context) {
         val activeMechanisms = linkedSetOf<String>()
         val activeLease = lease?.isActive(System.currentTimeMillis()) == true
         val essential = if (configuration.blockSelectedApps) essentialPackages() else emptySet()
-        val hasSelectableConfiguredApp = configuration.selectedPackages.any { packageName ->
+        val selectedPackages = if (blockingPlans.migrated()) {
+            val values = blockingPlans.plans()
+            (0 until values.length()).flatMap { BlockingPlans.strings(values.getJSONObject(it).getJSONArray("apps")) }.toSet()
+        } else configuration.selectedPackages
+        val hasWebsiteTargets = blockingPlans.hasWebsiteTargets()
+        val hasSelectableConfiguredApp = selectedPackages.any { packageName ->
             packageName !in essential &&
                 runCatching { packageManager.getLaunchIntentForPackage(packageName) != null }
                     .getOrDefault(false)
@@ -40,9 +46,9 @@ class FocusProtectionManager(private val context: Context) {
 
         if (configuration.enabled && configuration.blockSelectedApps) {
             if (!accessibilityEnabled) warnings += "accessibility_disabled"
-            if (!hasSelectableConfiguredApp) warnings += "no_apps_selected"
-            if (appBlockingActive() &&
-                accessibilityEnabled && hasSelectableConfiguredApp
+            if (!hasSelectableConfiguredApp && !hasWebsiteTargets) warnings += "no_apps_selected"
+            if ((appBlockingActive() || blockingPlans.activeWebsitePlan()) &&
+                accessibilityEnabled && (hasSelectableConfiguredApp || hasWebsiteTargets)
             ) {
                 activeMechanisms += "app_blocking"
             }
@@ -107,6 +113,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun saveConfiguration(arguments: Map<*, *>): Map<String, Any?> {
+        check(!BlockingPlans(context).locked()) { "Unlock Strict mode first." }
         val existingLease = store.readLease()
         check(existingLease?.isActive(System.currentTimeMillis()) != true) {
             "Focus protection configuration is locked during an active lease."
@@ -281,6 +288,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun emergencyRelease(sessionId: String): Map<String, Any?> {
+        check(!BlockingPlans(context).locked()) { "Unlock Strict mode first." }
         val normalized = sessionId.trim()
         require(normalized.isNotEmpty()) { "Missing session id." }
         val lease = store.readLease()
@@ -338,6 +346,9 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun shouldBlock(packageName: String?): Boolean {
+        val plans = blockingPlans
+        expireIfNeeded()
+        if (plans.migrated()) return packageName !in essentialPackages() && plans.blocked(packageName) != null
         val configuration = store.readConfiguration()
         val lease = activeLease()
         val now = System.currentTimeMillis()
@@ -356,9 +367,18 @@ class FocusProtectionManager(private val context: Context) {
         )
     }
 
-    fun blockingMode(): String = store.readConfiguration().let { if (it.appRules.isEmpty()) it.blockingSchedule.mode else "rules" }
+    fun blockingMode(): String = if (BlockingPlans(context).migrated()) "plans" else
+        store.readConfiguration().let { if (it.appRules.isEmpty()) it.blockingSchedule.mode else "rules" }
 
     fun appBlockingActive(packageName: String? = null): Boolean {
+        val plans = blockingPlans
+        if (plans.migrated()) {
+            val all = plans.plans()
+            return (0 until all.length()).any { index ->
+                BlockingPlans.strings(all.getJSONObject(index).getJSONArray("apps"))
+                    .any { (packageName == null || it == packageName) && shouldBlock(it) }
+            }
+        }
         val configuration = store.readConfiguration()
         val now = System.currentTimeMillis()
         return configuration.enabled && configuration.blockSelectedApps &&
@@ -369,6 +389,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun releaseAppBlocking() {
+        check(!BlockingPlans(context).locked()) { "Unlock Strict mode first." }
         if (blockingMode() == "focus") {
             activeLease()?.let { emergencyRelease(it.sessionId) }
         } else {
@@ -381,6 +402,7 @@ class FocusProtectionManager(private val context: Context) {
         "always" -> "Always blocked"
         "weekly" -> "Scheduled app block"
         "rules" -> "App blocking active"
+        "plans" -> "App blocking active"
         else -> "Focus time remaining"
     }
 

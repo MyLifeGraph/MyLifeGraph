@@ -116,13 +116,17 @@ for persisted V1-V3 responses. The named current versions are
 `coach-request-v4`, `coach-capabilities-v5`, `coach-history-v4`,
 `coach-response-v4`, and `free-coach-agent-prompt-v5`.
 
-Android Focus Protection V1 adds a device-local adapter below the existing
+Android Focus Protection V1 and named Blocking Plans V2 add device-local adapters below the existing
 Flutter Focus presentation. Supabase remains the session authority; Flutter
 reconciles confirmed session identity and timing through an injectable channel,
 while native preferences, Accessibility, Alarm, Boot, and AutomaticZenRule
 components own only device protection. The default app-blocking mode and all DND
-follow the temporary Focus lease; optional weekly/always package blocking uses
-separate native preferences and never generates Focus or Cloud records. See
+follow the temporary Focus lease; optional named app/domain plans combine
+weekly windows, timers, Always and usage budgets in separate native preferences.
+Strict unlock checks, usage charts and customization remain device-local.
+Website observation requires separate consent and exact known address-bar IDs;
+the offline block page does not rewrite browser tabs or inspect page contents.
+These features never generate Focus or Cloud records. See
 `docs/android-focus-protection-v1-contract.md`.
 
 This document describes the current repository shape. It intentionally

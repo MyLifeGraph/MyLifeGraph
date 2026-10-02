@@ -31,6 +31,66 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Android Blocking V2 (2026-10-03, pre-publication checks)
+
+- Task base `2c5549cf686e732d282820f42cc3379b4cd67f38`, working branch
+  `codex/blocking-plans-v2`. Publication, checked Main promotion and existing
+  production rollout are explicitly authorized. No SQL migration, cloud-data
+  rewrite, dependency upgrade or signing-identity change is required.
+- The earlier follow-up audit reproduced four Flutter failures: duplicate Add
+  flows, a stale usage-request error, and inability to remove retained budgets or
+  website targets after revoked access. These are corrected and covered by tracked
+  regression tests. The earlier not-release-ready assessment is superseded by
+  these fixes; it must not be read as an outstanding failure on the new candidate.
+- **63 focused Flutter tests pass** across Blocking plans, stress regressions,
+  Focus protection, Focus lifecycle and page navigation. The 17 new regression
+  cases cover repeated taps, stale successes/errors, independent load generations,
+  unavailable usage, consent failure/revocation, active-Focus guards, Strict draft
+  retry and own NFC revision, keyboard freeze, expiry refresh and timer disposal.
+  Existing coverage retains combined rules/targets, 320px / 200-percent text,
+  keyboard insets and five-second Focus emergency-release semantics. Final Dart
+  analysis is clean. Finder corrections target the actual sheet/control and do
+  not weaken persistence, retry, revision or countdown assertions.
+- Native JVM verification passes **39 tests** (15 Blocking policy, 20 Focus core,
+  4 Push receipt), including consenting target/usage gates, retained legacy bounds,
+  single-consumption pending replies, cleanup failures and active-Focus edits.
+  The pinned Java-21 Android lint run has zero errors and 70 warnings. Its two
+  local Windows-property escaping errors were fixed in ignored SDK configuration,
+  then all tasks were rerun. Excluding Flutter compilation in the local native
+  command does not alone establish a complete signed APK build.
+- A bounded JVM probe against the newly compiled production policy passes
+  105,282 assertions in 0.479s: OR-rule combinations, 20,000 synthetic usage
+  events, domain/spoof handling and spring/autumn schedules in Berlin, UTC,
+  New York, Kathmandu and Lord Howe. This is a synthetic logic probe, not a
+  physical-device performance or background-delivery benchmark.
+- Independent requirement, Flutter and native/security reviews checked the
+  corrections. Site metering stops when either website or usage consent is absent;
+  old over-limit legacy plans are retained without allowing new over-limit targets;
+  failed NFC/Wi-Fi launch and cleanup consume replies exactly once. Strict and
+  pending-save guards preserve editable drafts without bypassing native authority.
+- Docs consistency, visual contracts, Android release configuration and diff
+  hygiene pass. Eight isolated Flutter-rendered Liquid Glass captures cover all
+  four tabs at 390px and 900px. A missing Customize font glyph was replaced with
+  the existing bundled icon. Captures are ignored synthetic design artifacts,
+  not installed-device or live-account evidence.
+- The earlier complete Windows Flutter run had 1,470 passes and six unchanged
+  dark/light/space reference-golden failures; no reference images were regenerated.
+  The captured-base affected selector selects Full. Local full execution lacks
+  Windows `setsid` and the backend interpreter's `ruff`; those historical local
+  gaps are not waived. Promotion requires all seven complete hosted Linux lanes
+  on the exact final candidate, including full Flutter/native, backend, source,
+  Web, fresh migrations/pgTAP and browser E2E.
+- Release-time immutable evidence belongs to the GitHub workflow and release
+  metadata for the promoted SHA/tag: successful full CI, signed tag build, APK and
+  SBOM hashes, numeric version and unchanged signing certificate. Production
+  promotion also checks the actual VPS source/readiness and Vercel bundle source.
+  Do not infer those remote results from the local checks recorded here.
+- Physical acceptance remains separate: Accessibility overlays across OEMs,
+  known browser address bars, usage accounting, NFC, charger/Wi-Fi unlock and
+  process/boot recovery. Website protection is an offline app-owned block page
+  with Return/Back to Home, not browser-tab rewriting or universal DNS/VPN.
+  Essential Android Settings/Home/call/uninstall escapes remain available.
+
 ### Android update discovery and one-time notice (2026-09-26)
 
 - Application candidate `0d76be674dd033fc7941507d5edb4a1b10c26a69` passed all
@@ -3687,6 +3747,15 @@ required, finish the separate guarded reset workflow first and then run the
 ordinary E2E command without reset authority.
 
 ## Android Verification
+
+Named Android blocking plans add pure JVM domain/Strict/combined-rule/usage
+reduction tests and Flutter model, four-tab viewport and Strict-control tests.
+The native/Dart `blocking-plans-v2` contract uses explicit registry coverage;
+the source validator accepts Kotlin selectors as well as existing source types.
+Opt-in synthetic blocking screenshots use the existing `UI_CATALOG` capture
+workflow, not a real account. None of these tests proves installed-device URL
+adapters, background survival, NFC, Wi-Fi or system escape behavior. Android
+publication remains held until explicitly authorized; no migration is required.
 
 For Android Focus Protection or Android platform changes, use the SDK setup and
 physical matrix in `docs/android-focus-protection-v1-contract.md`. The local

@@ -3,7 +3,7 @@
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canPerformGestures="false"
-    android:canRetrieveWindowContent="false"
+    android:canRetrieveWindowContent="true"
     android:description="@string/focus_protection_accessibility_description"
     android:isAccessibilityTool="false"
     android:notificationTimeout="50"

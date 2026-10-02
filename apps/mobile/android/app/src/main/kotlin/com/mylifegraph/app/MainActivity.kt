@@ -7,14 +7,18 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var healthConnectBridge: HealthConnectBridge? = null
     private var pushBridge: PushBridge? = null
+    private var blockingBridge: BlockingBridge? = null
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         healthConnectBridge?.onPermissionResult(requestCode)
         pushBridge?.onPermissionResult(requestCode)
+        blockingBridge?.permissionResult(requestCode)
     }
 
     override fun onDestroy() {
+        blockingBridge?.dispose()
+        blockingBridge = null
         healthConnectBridge?.dispose()
         healthConnectBridge = null
         pushBridge?.dispose()
@@ -27,6 +31,11 @@ class MainActivity : FlutterActivity() {
         PushBridge.captureIntent(this, intent)
     }
 
+    override fun onPause() {
+        blockingBridge?.paused()
+        super.onPause()
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -35,6 +44,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        blockingBridge = BlockingBridge(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BlockingBridge.CHANNEL)
+            .setMethodCallHandler { call, result -> blockingBridge?.handle(call, result) }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.mylifegraph.app/updates")
             .setMethodCallHandler { call, result ->
                 if (call.method != "installedVersion") {

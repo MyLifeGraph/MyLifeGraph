@@ -1016,7 +1016,7 @@ class _ActiveFocusProtectionCard extends StatelessWidget {
         lease?.state == FocusProtectionLeaseState.emergencyReleased;
     final mechanisms = <String>[
       if (matchesSession && status.activeMechanisms.contains('app_blocking'))
-        'Selected apps',
+        'App / website blocking',
       if (matchesSession &&
           status.activeMechanisms.contains('silence_notifications'))
         'Normal notifications',

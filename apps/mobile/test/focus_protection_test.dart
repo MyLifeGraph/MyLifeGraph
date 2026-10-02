@@ -293,42 +293,49 @@ void main() {
     );
   });
 
-  test(
-    'Android manifest and accessibility source keep the narrow boundary',
-    () {
-      final manifest = File(
-        'android/app/src/main/AndroidManifest.xml',
-      ).readAsStringSync();
-      final service = File(
-        'android/app/src/main/res/xml/focus_block_accessibility_service.xml',
-      ).readAsStringSync();
-      final nativeSources =
-          Directory('android/app/src/main/kotlin/com/mylifegraph/app')
-              .listSync()
-              .whereType<File>()
-              .map((file) => file.readAsStringSync())
-              .join('\n');
+  test('Android manifest and accessibility source keep the narrow boundary', () {
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    final service = File(
+      'android/app/src/main/res/xml/focus_block_accessibility_service.xml',
+    ).readAsStringSync();
+    final nativeSources =
+        Directory('android/app/src/main/kotlin/com/mylifegraph/app')
+            .listSync()
+            .whereType<File>()
+            .map((file) => file.readAsStringSync())
+            .join('\n');
 
-      expect(service, contains('typeWindowStateChanged'));
-      expect(service, contains('android:canRetrieveWindowContent="false"'));
-      expect(service, contains('android:canPerformGestures="false"'));
-      expect(service, contains('android:isAccessibilityTool="false"'));
-      expect(manifest, isNot(contains('QUERY_ALL_PACKAGES')));
-      expect(manifest, isNot(contains('NotificationListenerService')));
-      expect(manifest, isNot(contains('BIND_VPN_SERVICE')));
-      expect(manifest, contains('BIND_ACCESSIBILITY_SERVICE'));
-      expect(manifest, contains('BIND_CONDITION_PROVIDER_SERVICE'));
-      expect(manifest, contains('android:exported="false"'));
-      expect(nativeSources, isNot(contains('rootInActiveWindow')));
-      expect(nativeSources, isNot(contains('event.text')));
-      expect(nativeSources, contains('event.packageName'));
-      expect(nativeSources, contains('notifyCondition'));
-      expect(nativeSources, contains('Build.VERSION.SDK_INT >= 35'));
-      expect(nativeSources, contains('publishDesiredState'));
-      expect(nativeSources, contains('EmergencyReleaseGate'));
-      expect(nativeSources, isNot(contains('setOnLongClickListener')));
-    },
-  );
+    expect(service, contains('typeWindowStateChanged'));
+    expect(service, contains('android:canRetrieveWindowContent="true"'));
+    expect(service, contains('android:canPerformGestures="false"'));
+    expect(service, contains('android:isAccessibilityTool="false"'));
+    expect(manifest, isNot(contains('QUERY_ALL_PACKAGES')));
+    expect(manifest, isNot(contains('NotificationListenerService')));
+    expect(manifest, isNot(contains('BIND_VPN_SERVICE')));
+    expect(manifest, contains('BIND_ACCESSIBILITY_SERVICE'));
+    expect(manifest, contains('BIND_CONDITION_PROVIDER_SERVICE'));
+    expect(manifest, contains('android:exported="false"'));
+    final urlService = File(
+      'android/app/src/main/kotlin/com/mylifegraph/app/FocusBlockAccessibilityService.kt',
+    ).readAsStringSync();
+    expect(urlService, contains('!plans.websiteObservationEnabled()'));
+    expect(urlService, contains('pkg !in BrowserAddressBars.adapters'));
+    expect(urlService, contains('BrowserAddressBars.host(root, pkg)'));
+    final browser = File(
+      'android/app/src/main/kotlin/com/mylifegraph/app/BrowserAddressBars.kt',
+    ).readAsStringSync();
+    expect(browser, contains('findAccessibilityNodeInfosByViewId'));
+    expect(browser, isNot(contains('findAccessibilityNodeInfosByText')));
+    expect(nativeSources, isNot(contains('event.text')));
+    expect(nativeSources, contains('event.packageName'));
+    expect(nativeSources, contains('notifyCondition'));
+    expect(nativeSources, contains('Build.VERSION.SDK_INT >= 35'));
+    expect(nativeSources, contains('publishDesiredState'));
+    expect(nativeSources, contains('EmergencyReleaseGate'));
+    expect(nativeSources, isNot(contains('setOnLongClickListener')));
+  });
 }
 
 Future<void> _pumpSettings(

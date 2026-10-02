@@ -1,10 +1,12 @@
 package com.mylifegraph.app
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -30,10 +32,19 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private var remainingText: TextView? = null
     private var lastForegroundPackage: String? = null
     private var emergencyArmRunnable: Runnable? = null
+    private lateinit var plans: BlockingPlans
+    private var currentHost: String? = null
+    private var lastMeterAt = 0L
+    private var lastRedirect = ""
+    private var lastRedirectAt = 0L
+    private var returnButton: Button? = null
+    private var returnDeadline = 0L
+    private var textColor = Color.WHITE
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         manager = FocusProtectionManager(applicationContext)
+        plans = BlockingPlans(applicationContext)
         windowManager = getSystemService(WindowManager::class.java)
         runningService = WeakReference(this)
         handler.removeCallbacks(scheduleTick)
@@ -41,7 +52,14 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        if (event == null) return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            if (plans.websiteConsent() && event.packageName?.toString() in BrowserAddressBars.adapters) {
+                handler.removeCallbacks(browserTick); handler.postDelayed(browserTick, 150)
+            }
+            return
+        }
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val foregroundPackage = event.packageName?.toString()
         // Our overlay emits window events too. Keep the underlying package;
         // real entry into MyLifeGraph is reported by MainActivity.onResume.
@@ -49,16 +67,20 @@ class FocusBlockAccessibilityService : AccessibilityService() {
                 foregroundPackage, packageName, overlay != null,
             )
         ) {
+            if (lastForegroundPackage != foregroundPackage) { currentHost = null; lastMeterAt = SystemClock.elapsedRealtime() }
             lastForegroundPackage = foregroundPackage
         }
+        checkBrowser()
         refreshOverlay()
     }
 
     override fun onInterrupt() {
+        if (::plans.isInitialized) plans.flushSiteUsage()
         hideOverlay()
     }
 
     override fun onDestroy() {
+        if (::plans.isInitialized) plans.flushSiteUsage()
         if (runningService?.get() === this) runningService = null
         handler.removeCallbacksAndMessages(null)
         hideOverlay()
@@ -66,6 +88,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun refreshOverlay() {
+        updateBrowserSubscription()
         if (!manager.shouldBlock(lastForegroundPackage)) {
             hideOverlay()
             return
@@ -75,8 +98,19 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun showOverlay() {
+        val custom = plans.custom()
+        val colors = BlockingScreenIcon.colors(custom.optString("tone", "glass"))
+        textColor = Color.parseColor(colors.second)
+        val base = Color.parseColor(colors.first)
+        val background = when (custom.optString("tone", "glass")) {
+            "light", "dark" -> intArrayOf(base, base)
+            "space" -> intArrayOf(base, Color.parseColor("#171A38"))
+            else -> intArrayOf(base, Color.parseColor("#141A22"), base)
+        }
+        val count = plans.attempts("app:${lastForegroundPackage.orEmpty()}")
+        plans.recordAttempt("app:${lastForegroundPackage.orEmpty()}")
         val root = ScrollView(this).apply {
-            setBackgroundColor(Color.rgb(17, 24, 39))
+            this.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, background)
             isFillViewport = true
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
@@ -92,10 +126,11 @@ class FocusBlockAccessibilityService : AccessibilityService() {
                 FrameLayout.LayoutParams.MATCH_PARENT,
             ),
         )
-        content.addView(textView("Focus protection", 30f, true))
+        content.addView(textView(BlockingScreenIcon.symbol(custom.optString("icon", "shield")), 48f, false))
+        content.addView(textView(custom.optString("title", "Stay focused"), 30f, true))
         content.addView(
             textView(
-                "This app is blocked by your device settings.",
+                custom.optString("message", "Take a breath. Choose your next step."),
                 18f,
                 false,
             ).withTopMargin(16),
@@ -104,17 +139,16 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             it.contentDescription = "Focus time remaining"
             content.addView(it.withTopMargin(24))
         }
-        content.addView(
-            Button(this).apply {
+        returnDeadline = SystemClock.elapsedRealtime() + custom.optInt("waitSeconds") * 1000L
+        returnButton = Button(this).apply {
                 text = "Return to MyLifeGraph"
                 textSize = 18f
                 contentDescription = "Return to MyLifeGraph"
                 setOnClickListener { returnToMyLifeGraph() }
-            }.withTopMargin(32),
-        )
-        content.addView(
-            emergencyButton().withTopMargin(16),
-        )
+            }
+        content.addView(returnButton!!.withTopMargin(32))
+        content.addView(textView("${count.first + 1} today · ${count.second + 1} total", 15f, false).withTopMargin(16))
+        if (!plans.locked()) content.addView(emergencyButton().withTopMargin(16))
         content.addView(
             textView(
                 "Settings, phone, alarms, and essential Android functions remain available.",
@@ -216,7 +250,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun releaseCurrentLease() {
-        manager.releaseAppBlocking()
+        runCatching { manager.releaseAppBlocking() }
         refreshOverlay()
         returnToMyLifeGraph()
     }
@@ -229,6 +263,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun updateRemainingTime() {
+        val seconds = ((returnDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0) + 999) / 1000
+        returnButton?.isEnabled = seconds == 0L
+        returnButton?.text = if (seconds > 0) "Return in ${seconds}s" else "Return to MyLifeGraph"
         if (!manager.appBlockingActive(lastForegroundPackage)) {
             hideOverlay()
             return
@@ -247,8 +284,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         val remainingMs = (lease.endsAtEpochMs - System.currentTimeMillis()).coerceAtLeast(0)
         val totalSeconds = TimeUnit.MILLISECONDS.toSeconds(remainingMs)
         val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        remainingText?.text = String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
+        val remainingSeconds = totalSeconds % 60
+        remainingText?.text = String.format(Locale.ROOT, "%02d:%02d", minutes, remainingSeconds)
         if (remainingMs <= 0) {
             manager.expireIfNeeded()
             hideOverlay()
@@ -272,9 +309,59 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     // No wake lock, exact alarm or new service: one check per wall-clock minute.
     private val scheduleTick = object : Runnable {
         override fun run() {
+            if (::plans.isInitialized) {
+                val elapsed = SystemClock.elapsedRealtime()
+                val host = currentHost
+                val browser = lastForegroundPackage
+                if (host != null && browser != null && plans.websiteObservationEnabled() && overlay == null &&
+                    getSystemService(android.os.PowerManager::class.java).isInteractive) {
+                    plans.meterSite(host, browser, elapsed - lastMeterAt)
+                }
+                lastMeterAt = elapsed
+                checkBrowser()
+            }
             if (manager.blockingMode() != "focus") refreshOverlay()
-            handler.postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
+            handler.postDelayed(this, if (::plans.isInitialized && plans.migrated()) 1000L
+                else 60_000L - System.currentTimeMillis() % 60_000L)
         }
+    }
+
+    private val browserTick = Runnable { checkBrowser() }
+    private fun updateBrowserSubscription() {
+        val info = serviceInfo ?: return
+        val enabled = plans.websiteObservationEnabled()
+        val events = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+            if (enabled) AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED else 0
+        val flags = if (enabled) info.flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+            else info.flags and AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS.inv()
+        if (info.eventTypes != events || info.flags != flags) {
+            info.eventTypes = events; info.flags = flags; serviceInfo = info
+        }
+        if (!enabled) currentHost = null
+    }
+    @Suppress("DEPRECATION")
+    private fun checkBrowser() {
+        if (!::plans.isInitialized) return
+        if (!plans.websiteObservationEnabled()) { currentHost = null; return }
+        val pkg = lastForegroundPackage ?: return
+        if (pkg !in BrowserAddressBars.adapters) { currentHost = null; return }
+        // Whole-browser app rules win; do not miscount their URL as a site attempt.
+        if (manager.shouldBlock(pkg)) { currentHost = null; return }
+        // Only query a known URL resource ID after explicit website consent.
+        val root = rootInActiveWindow ?: run { currentHost = null; return }
+        val host = try { BrowserAddressBars.host(root, pkg) } finally { root.recycle() }
+        currentHost = host
+        if (host == null || pkg in manager.essentialPackages() || plans.blocked(pkg, host) == null) return
+        val key = "$pkg|$host"
+        val elapsed = SystemClock.elapsedRealtime()
+        if (key == lastRedirect && elapsed - lastRedirectAt < 3000) return
+        lastRedirect = key; lastRedirectAt = elapsed
+        plans.recordAttempt("web:$host")
+        currentHost = null
+        // Deliberately do not edit the browser URL or invent a reliable submit action.
+        // Our offline page consumes Back by returning Home, never to the blocked tab.
+        startActivity(Intent(this, LocalBlockPageActivity::class.java)
+            .putExtra("target", host).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
     }
 
     private fun hideOverlay() {
@@ -284,6 +371,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         overlay?.let { view -> runCatching { windowManager.removeView(view) } }
         overlay = null
         remainingText = null
+        returnButton = null
     }
 
     private fun textView(value: String, sizeSp: Float, heading: Boolean): TextView =
@@ -291,7 +379,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             text = value
             textSize = sizeSp
             gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
+            setTextColor(textColor)
             if (heading) {
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 if (android.os.Build.VERSION.SDK_INT >= 28) {
@@ -318,6 +406,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         fun onAppResumed(context: Context) {
             runningService?.get()?.let { service ->
                 service.lastForegroundPackage = context.packageName
+                service.currentHost = null
+                service.lastMeterAt = SystemClock.elapsedRealtime()
+                service.plans.flushSiteUsage()
                 service.refreshOverlay()
             }
         }

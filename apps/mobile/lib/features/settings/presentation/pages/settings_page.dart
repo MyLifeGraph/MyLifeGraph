@@ -140,9 +140,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: ListTile(
               key: const ValueKey('focus-protection-setting-entry'),
               leading: const Icon(AppIcons.lockOutline),
-              title: const Text('Focus protection'),
+              title: const Text('App blocking'),
               subtitle: const Text(
-                'App rules, schedules and Focus protection on this device.',
+                'Apps, websites and Focus permissions.',
               ),
               trailing: const Icon(AppIcons.chevronRight),
               onTap: () => context.push(AppRoutes.focusProtection),

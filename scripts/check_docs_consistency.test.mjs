@@ -244,6 +244,14 @@ test('current-contract metadata has a strict deterministic schema', () => {
   };
   assert.deepEqual(validateCurrentContractsMetadata(metadata).errors, []);
 
+  const nativeContract = structuredClone(metadata);
+  nativeContract.contracts[0].coverage = 'explicit';
+  nativeContract.contracts[0].sources = [
+    { path: 'android/BlockingPlans.kt', symbol: 'CONTRACT_VERSION' },
+    { path: 'lib/blocking.dart', symbol: 'blockingVersion' },
+  ];
+  assert.deepEqual(validateCurrentContractsMetadata(nativeContract).errors, []);
+
   const invalid = structuredClone(metadata);
   invalid.contracts[0].owners = [
     'docs/capture.md',
