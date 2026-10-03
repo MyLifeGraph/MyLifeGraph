@@ -12,6 +12,7 @@ import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/core/widgets/app_schedule_day_card.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 import 'package:my_life_graph/composition/projection_refresh_providers.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/exam_week_outlook.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/planner/application/planner_controller.dart';
@@ -22,7 +23,56 @@ import 'package:my_life_graph/features/planner/presentation/providers/planner_pr
 
 import 'support/planner_fixtures.dart';
 
+import 'support/header_actions.dart';
+
 void main() {
+  testWidgets('failed Planner pull retains overview with visible retry and locked writes', (tester) async {
+    // Desktop builds the complete retained overview, so a lazy mobile Sliver
+    // does not turn an offscreen section into a harness failure.
+    tester.view.physicalSize = const Size(1536, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _PlannerBackend();
+    final controller = await _pumpPlanner(tester, backend: backend);
+    final before = controller.state.overview;
+    expect(before, isNotNull);
+    expect(controller.state.canMutate, isTrue);
+    final readsBefore = backend.requests
+        .where((request) => request.path == '/v1/planner/overview').length;
+    backend.failNextOverview = true;
+
+    // The separate mobile-pull case proves gesture wiring. Here invoke that
+    // same page callback directly to isolate the failed-read state from the
+    // nested calendar's horizontal gesture recognizer.
+    final refreshing = tester.widget<AppPage>(find.byType(AppPage)).onRefresh!();
+    await tester.pumpAndSettle();
+    await refreshing;
+
+    expect(backend.requests
+        .where((request) => request.path == '/v1/planner/overview').length,
+        readsBefore + 1);
+    expect(controller.state.loadError, isNotNull);
+    expect(controller.state.overview, same(before));
+    expect(find.byType(RefreshProgressIndicator), findsNothing);
+    expect(find.byType(PlannerUnscheduledTasksSection), findsOneWidget);
+    expect(
+      find.text('Planner could not be loaded. Check your connection and try again.'),
+      findsOneWidget,
+    );
+    expect(controller.state.canMutate, isFalse);
+    expect(backend.requests.where((request) => request.method != 'GET'), isEmpty);
+    expect(tester.takeException(), isNull);
+
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Retry'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Retry'));
+    await tester.pumpAndSettle();
+    expect(controller.state.loadError, isNull);
+    expect(controller.state.canMutate, isTrue);
+    expect(find.byType(PlannerLoadError), findsNothing);
+    expect(backend.requests.where((request) => request.method != 'GET'), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('mobile Planner pull only reloads reads and deduplicates busy loads', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -121,11 +171,13 @@ void main() {
           lessThanOrEqualTo(tester.getSize(daysControl).height));
         expect(tester.widget<OutlinedButton>(addControl).style!.shape!.resolve({}),
           isA<StadiumBorder>());
+        await openHeaderActions(tester);
         final importControl = find.byKey(const ValueKey('planner-import-calendar'));
         expect(find.ancestor(of: importControl, matching: find.byType(PlannerSevenDaySection)), findsNothing);
         expect(tester.getCenter(importControl).dy,
           tester.getCenter(find.byTooltip('Settings')).dy);
         expect(find.byTooltip('Reload Planner'), findsNothing);
+        await closeHeaderActions(tester);
         await tester.ensureVisible(find.text('Planning'));
         await tester.tap(find.text('Planning'));
         await tester.pumpAndSettle();
@@ -2999,12 +3051,18 @@ void main() {
 }
 
 void _invokeHeaderReload(WidgetTester tester) {
-  final button = find.byWidgetPredicate(
-    (widget) => widget is IconButton && widget.tooltip == 'Reload Planner',
+  final header = find.byType(
+    AppHeaderActions,
     skipOffstage: false,
   );
-  expect(button, findsOneWidget);
-  tester.widget<IconButton>(button).onPressed?.call();
+  expect(header, findsOneWidget);
+  // These tests simulate an authoritative reload while a review is open.
+  // Actions now mount only when the island is expanded; preserve this seam
+  // without opening a second overlay above the review under test.
+  final button = tester.widget<AppHeaderActions>(header).pageActions
+      .whereType<IconButton>()
+      .singleWhere((button) => button.tooltip == 'Reload Planner');
+  button.onPressed?.call();
 }
 
 Future<void> _scrollPlannerUntilVisible(

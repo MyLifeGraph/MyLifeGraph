@@ -68,6 +68,11 @@ object BlockingMigrationPolicy {
 }
 
 object BlockingEditPolicy {
+    // A temporary editing window is not permission to release protection.
+    fun requireEmergencyAllowed(strictEnabled: Boolean) {
+        check(!strictEnabled) { "Turn off Strict mode first." }
+    }
+
     fun requireEditable(locked: Boolean, focusActive: Boolean) {
         check(!locked) { "Unlock Strict mode first." }
         check(!focusActive) { "Finish the active Focus session first." }

@@ -26,6 +26,109 @@ const _fingerprint =
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  for (final failingRead in ['insights', 'correlations']) {
+    for (final sparse in [true, false]) {
+      for (final largeText in [false, true]) {
+    testWidgets(
+      'failed Insights pull keeps prior content and exposes retry: $failingRead sparse=$sparse largeText=$largeText',
+      (tester) async {
+        tester.view.physicalSize = Size(largeText ? 320 : 390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        var insightReads = 0;
+        var reportReads = 0;
+        final report = CorrelationReport(
+          windowDays: 14,
+          metrics: sparse ? const [] : correlationMetrics,
+          points: const [],
+          results: const [],
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              _demoSurfaceOverride(),
+              _skillsetSelectionOverride(),
+              insightsProvider.overrideWith((_) async {
+                insightReads++;
+                if (failingRead == 'insights' && insightReads == 2) {
+                  throw StateError('controlled refresh failure');
+                }
+                return const [];
+              }),
+              correlationReportProvider.overrideWith((_) async {
+                reportReads++;
+                if (failingRead == 'correlations' && reportReads == 2) {
+                  throw StateError('controlled refresh failure');
+                }
+                return report;
+              }),
+              personalPatternsProvider.overrideWith((_) async => null),
+              sleepRecommendationProvider.overrideWith((_) async => null),
+              skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.liquidGlass,
+              home: const Scaffold(body: InsightsPage()),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(largeText ? 2 : 1),
+                ),
+                child: child!,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Advanced'));
+        await tester.pumpAndSettle();
+        final pageScroll = find.descendant(
+          of: find.byType(CustomScrollView).first,
+          matching: find.byType(Scrollable),
+        ).first;
+        tester.state<ScrollableState>(pageScroll).position.jumpTo(0);
+        await tester.pumpAndSettle();
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(InsightsPage)),
+        );
+        final before = container.read(correlationReportProvider).requireValue;
+
+        await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 320));
+        await tester.pumpAndSettle();
+
+        expect(insightReads, 2);
+        expect(reportReads, 2);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+        expect(find.byKey(const Key('insights-view-toggle')), findsOneWidget);
+        expect(
+          tester.widget<SegmentedButton>(find.byKey(const Key('insights-view-toggle')))
+              .selected.single.toString(),
+          contains('advanced'),
+        );
+        expect(container.read(correlationReportProvider).valueOrNull, same(before));
+        expect(find.text('Could not load account insights.'), findsOneWidget);
+        expect(find.widgetWithText(OutlinedButton, 'Retry'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        final retry = find.widgetWithText(OutlinedButton, 'Retry');
+        await Scrollable.ensureVisible(
+          tester.element(retry),
+          alignment: .5,
+        );
+        await tester.pumpAndSettle();
+        expect(retry.hitTestable(), findsOneWidget);
+        await tester.tap(retry);
+        await tester.pumpAndSettle();
+        expect(insightReads, 3);
+        expect(reportReads, 3);
+        expect(find.text('Could not load account insights.'), findsNothing);
+        expect(find.byKey(const Key('insights-view-toggle')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+      }
+    }
+  }
   for (final sparse in [true, false]) {
     testWidgets('mobile pull awaits Insights reads and retains filters; sparse=$sparse', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -1455,6 +1558,8 @@ void main() {
     final panel = tester.widget<AppSurface>(
       find.byKey(const Key('insights-observation-panel')),
     );
+    await tester.tap(find.byKey(const ValueKey('header-island-toggle')));
+    await tester.pumpAndSettle();
     final refreshButton = tester.widget<IconButton>(
       find.byWidgetPredicate(
         (widget) =>

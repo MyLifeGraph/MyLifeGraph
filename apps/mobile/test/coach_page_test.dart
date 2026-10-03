@@ -21,6 +21,8 @@ import 'package:my_life_graph/features/coach/presentation/widgets/coach_dictatio
 
 import 'support/coach_fixtures.dart';
 
+import 'support/header_actions.dart';
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('mobile pull reloads empty Coach without sending or losing draft', (tester) async {
@@ -303,6 +305,7 @@ void main() {
     expect(find.byKey(const Key('coach-scroll-to-latest')), findsNothing);
     await tester.drag(find.byKey(const Key('coach-chat-scroll')), const Offset(0, 300));
     await tester.pumpAndSettle();
+    await openHeaderActions(tester);
     await tester.tap(find.byTooltip('Refresh Coach'));
     await tester.pumpAndSettle();
     expect(chat.controller!.offset, chat.controller!.position.maxScrollExtent);

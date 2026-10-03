@@ -12,6 +12,8 @@ import 'package:my_life_graph/features/auth/domain/intake_response.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/header_actions.dart';
+
 void main() {
   testWidgets('renders authentication gate first', (tester) async {
     await _pumpTestApp(tester);
@@ -246,6 +248,7 @@ void main() {
       },
     );
 
+    await openHeaderActions(tester);
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Setup and commitments'));
@@ -416,7 +419,9 @@ void main() {
     await _startGuestAndCompleteSetup(tester);
 
     expect(find.text('Coach'), findsOneWidget);
+    await openHeaderActions(tester);
     expect(find.byTooltip('Settings'), findsOneWidget);
+    await closeHeaderActions(tester);
 
     final router = GoRouter.of(
       tester.element(find.text("Today's schedule")),
@@ -456,7 +461,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("Today's schedule"), findsOneWidget);
     expect(find.text('Weekly review'), findsNothing);
+    await openHeaderActions(tester);
     expect(find.byTooltip('Inbox'), findsOneWidget);
+    await closeHeaderActions(tester);
 
     router.go(AppRoutes.calendarIntegration);
     await tester.pumpAndSettle();

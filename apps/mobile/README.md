@@ -21,7 +21,8 @@ See [the complete native contract](../../docs/android-focus-protection-v1-contra
 No new cloud data or migration is required. Build/test evidence and outstanding
 physical-device checks belong in [verification](../../docs/verification.md).
 Settings names the shared entry `App blocking`. Delayed catalog opens are
-single-flight; obsolete usage results/errors cannot replace the selected range.
+single-flight, including repeated Strict Wi-Fi/NFC setup activations before the next frame;
+obsolete usage results/errors cannot replace the selected range.
 Revoked access still permits removing retained domains and reducing/removing
 budgets. Plan/Strict/Customize save failures keep drafts; pending saves freeze
 keyboard edits. Foreground refresh updates timed statuses and stops when hidden.
@@ -31,6 +32,28 @@ selection counts and a disclosure icon above keyboard/navigation insets.
 Social media/Games presets reflect full installed-category selection while
 remaining additive. Larger, high-contrast checks use existing theme colors.
 Search/collapse do not save or clear targets.
+The active local tab uses a quiet selected pill. Plan cards expose their actual
+weekly windows in device time; usage charts show measured durations and range
+totals. Strict keeps its existing layout and Limits, using compact minute units
+without an extra explanatory line.
+Weekly clock rows share the plan-card center axis. Android Customize embeds the
+same native `BlockingScreenView` as the actual app overlay, in a bounded phone
+frame. Its Return replays only its own preview countdown; it never records an
+attempt or changes blocking. Web/unsupported platforms label their approximation.
+Saved appearance changes recreate the native preview. Text may wrap and scroll.
+The six selectable icons use fixed outline vectors in native preview, actual
+app overlay and offline website SVG (a selected shield is a shield, not a
+diamond glyph). Background retains all four independently saved theme choices:
+Liquid Glass, Dark, Light and Space, with contrasting text/icon foregrounds.
+The delay picker includes 1/3/5/10/15 seconds and minute presets through 15m,
+retaining the existing immediate/20s options. The real oval Return fills from
+left to right and enables only after a monotonic deadline, rechecked natively.
+During a pending app attempt, Home/own-app navigation retains the overlay; Return
+removes it immediately before opening MyLifeGraph. Rule expiry and essential
+Android safety escapes remain. Emergency release is unavailable until Strict is
+disabled, including during its temporary editing window. Normal Return never
+releases a plan or unlocks Strict. This is not a tamper-proof/kiosk mechanism;
+the separate offline website screen is not the native app preview renderer.
 
 ## Branding and native timer display
 
@@ -108,8 +131,25 @@ failed reload. Conflicting actions remain locked until reconciliation finishes.
 The count sits right-aligned with extra separation from Info. In all themes, header
 actions share a floating capsule with the theme's own colors. In Liquid Glass, timeline category colors are confined
 to their side accents so translucent cards remain readable over the backdrop.
+The action island starts as a 48px menu circle. Its existing actions reveal
+leftwards in the same header row, without moving the title or adding height.
+Its width respects the title; narrow layouts scroll icons horizontally without
+shrinking their 44px targets. Outside tap, swipe/scroll, Back, Escape or activating
+an action closes it; outside gestures continue to the page. Route/tab changes
+also dismiss it. Reduced Motion skips the reveal, and selection haptics respect
+the existing preference. A collapsed unread dot preserves Coach notice visibility.
 Island icons have no individual resting tiles; circular interaction feedback
 and a visible keyboard focus ring retain their accessible targets.
+Both string-title pages and loaded Today/Insights headings reserve title space
+for the capsule. Route/tab visibility is subscribed while closed as well as
+open, so leaving a page dismisses it. Direct IconButton actions retain labelled
+semantics, focus and dismiss on screenreader activation; unread Coach notices
+retain the native button tap semantics too. Custom action widgets call
+`AppHeaderActions.dismissForAction(context)` before their guarded callback.
+Fitting icon rows use all available title-bounded space without a scroll arrow.
+Only overflowing rows add `More actions` / `First actions`; their arrow scrolls
+to the corresponding end without closing the island. Resizing recomputes whether
+it is needed. Exceptionally narrow widths retain swiping and a passive edge cue.
 Personal learning and In-app reminders use compact switch summaries; import and
 Today omit redundant instructions/category labels. Consent, warnings and state
 remain visible. Compare keeps its heading full-width, then places correlation values
@@ -261,6 +301,14 @@ a permission prompt automatically. Web/older Android can manage Cloud sharing an
 delete imports but cannot read Health Connect. No Garmin developer account is
 used. Permission, data availability, Cloud rollout and physical-device behavior
 must be verified separately; existing manual check-ins stay unchanged.
+Watch data adds a large watch icon and a finite state fade. `Connected` requires
+current sharing, matching device, supported Health Connect and permission;
+other-device, unavailable, unknown and disconnected states stay distinct.
+It is not a Bluetooth or freshness claim and adds no automatic connection.
+App blocking accents only effective native-active plans, with an explicit status
+pill alongside neutral paused/scheduled/expired cards. Strict's fixed lock has
+a slow rotating optical ring only when locked and visible in the foreground;
+Reduced Motion freezes it. The existing countdown and unlock guards are unchanged.
 
 Settings omits its own navigation cog while retaining Coach notices and Back;
 its compact header reduces the gap before Profile.
@@ -697,6 +745,13 @@ The sign-in introduction is concise; the guest tile retains device-only Setup
 and best-effort check-in transfer limits. All login/recovery methods, CAPTCHA,
 pilot disclosures and acceptance controls are unchanged.
 
+Restoring an expired real session waits for the SDK's shared token refresh
+before account-deletion recovery or profile reads. A concurrent SDK startup
+refresh is reused; mock restoration remains local. Auth stream errors enter
+the recoverable error state. A new read clears that previous error while
+pending, while ordinary successful refreshes retain their session and route.
+Actual refresh, hosted recovery and missing-profile failures remain errors.
+
 - Guest mode works without Supabase and stores session plus typed, revisioned
   Setup state locally. It never calls FastAPI or Supabase, and guest Setup is not
   copied automatically into an account later. Canonical guest captures are
@@ -796,6 +851,13 @@ actual backend time while retaining their original planned interval.
 
 ## Main Routes
 
+Coach notices remain unread in partial root-tab previews and beneath pushed
+Settings; settled visibility/Back rechecks the actual response-end marker.
+Failed Insights/Planner refreshes retain existing content with visible retry;
+Planner derived writes remain unavailable until its overview read succeeds.
+Blocking detail Edit resolves the current plan ID before retaining its revision,
+so foreground refresh cannot resurrect removed plans or overwrite newer fields.
+
 Deliberate horizontal touch swipes switch the root Today, Insights, Planner and
 capability-visible Coach pages without wrapping. Quick actions remains the Plus
 action, not an intermediate swipe page. Nested horizontal scrollers keep their
@@ -829,7 +891,7 @@ A disabled Coach gate omits the fifth
 destination rather than restoring Settings; auxiliary routes such as
 `/alerts` leave the shell destinations unselected.
 Today, Insights, Quick actions, Planner, and Coach align compact icon actions at the same
-top-right inset; large text moves actions above the title. Other page headers
+top-right inset; large text moves the menu circle above the title. Other page headers
 retain their existing layout. Pushed native Settings integrations also show Back,
 returning to the actual caller; direct root pages do not acquire a fake history.
 The Speech settings sheet has an explicit Back control and an inline model list.

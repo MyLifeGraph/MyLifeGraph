@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/constants/app_spacing.dart';
+import 'package:my_life_graph/core/navigation/root_tab_pager.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/features/coach/application/coach_turn_notice.dart';
@@ -16,6 +17,7 @@ import 'package:my_life_graph/features/coach/presentation/providers/coach_provid
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 
 import 'support/coach_fixtures.dart';
+import 'support/header_actions.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -54,9 +56,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<TextField>(
-              find.byKey(const Key('coach-message-field')),
-            )
+            .widget<TextField>(find.byKey(const Key('coach-message-field')))
             .controller
             ?.text,
         'Compare my whole Focus history',
@@ -85,6 +85,7 @@ void main() {
         container.read(coachTurnNoticeProvider)?.status,
         CoachTurnNoticeStatus.completed,
       );
+      await openHeaderActions(tester);
       expect(
         find.byKey(const ValueKey('global-header-coach-notice')),
         findsOneWidget,
@@ -99,6 +100,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.close));
       await tester.pumpAndSettle();
       expect(container.read(coachTurnNoticeProvider), isNotNull);
+      await openHeaderActions(tester);
       expect(
         find.byKey(const ValueKey('global-header-coach-notice')),
         findsOneWidget,
@@ -111,15 +113,19 @@ void main() {
       final chat = tester.widget<SingleChildScrollView>(
         find.byKey(const Key('coach-chat-scroll')),
       );
-      expect(chat.controller!.offset, chat.controller!.position.maxScrollExtent);
+      expect(
+        chat.controller!.offset,
+        chat.controller!.position.maxScrollExtent,
+      );
       // Reopening now reveals the reply end automatically; the popup alone
       // above still does not mark it read.
       expect(container.read(coachTurnNoticeProvider), isNull);
     },
   );
 
-  testWidgets('short fully visible answer is read after its first layout',
-      (tester) async {
+  testWidgets('short fully visible answer is read after its first layout', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(800, 1000);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -145,59 +151,293 @@ void main() {
     expect(container.read(coachTurnNoticeProvider), isNull);
   });
 
-  testWidgets('Settings hides its self-link, keeps Coach notice and returns back',
-      (tester) async {
+  testWidgets('cancelled adjacent Coach preview preserves the unread answer', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
     final repository = _ControlledCoachRepository();
-    final router = _router(initialLocation: '/today');
+    final router = _pagerRouter();
     addTearDown(router.dispose);
     await _pumpApp(tester, router: router, repository: repository);
-
     final container = ProviderScope.containerOf(
-      tester.element(find.text('Today content')),
+      tester.element(find.text('Planner content')),
     );
-    container.read(coachTurnNoticeProvider.notifier).publish(
-          profileId: 'profile-1',
-          requestId: coachRequestId,
-          status: CoachTurnNoticeStatus.completed,
-        );
+    final controller = container.read(coachControllerProvider.notifier);
     await tester.pumpAndSettle();
-
-    final settingsButton = tester.widget<IconButton>(
-      find.byKey(const ValueKey('global-header-settings')),
-    );
-    expect(settingsButton.onPressed, isNotNull);
-    settingsButton.onPressed!.call();
+    controller.updateDraft('Give me the short version');
+    final sending = controller.send();
+    await tester.pump();
+    await tester.pump();
+    expect(container.read(coachControllerProvider).isSending, isTrue);
+    repository.complete();
+    expect(await sending, isTrue);
     await tester.pumpAndSettle();
+    expect(container.read(coachTurnNoticeProvider), isNotNull);
 
-    expect(find.text('Settings content'), findsOneWidget);
-    expect(find.byKey(const ValueKey('global-header-settings')), findsNothing);
-    expect(find.byTooltip('Settings, current page'), findsNothing);
-    final pushedMatchCount = _imperativeMatchCount(
-      router.routerDelegate.currentConfiguration.matches,
-    );
-    expect(pushedMatchCount, 1);
-
-    await tester.tap(
-      find.byKey(const ValueKey('global-header-coach-notice')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Settings content'), findsOneWidget);
-    expect(find.text('Your Coach answer is ready.'), findsOneWidget);
+    final gesture = await tester.startGesture(const Offset(250, 50));
+    await gesture.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-35, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byType(CoachPage), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, '/planner');
     expect(
-      _imperativeMatchCount(
-        router.routerDelegate.currentConfiguration.matches,
-      ),
-      pushedMatchCount,
+      container.read(coachTurnNoticeProvider),
+      isNotNull,
+      reason: 'A partially clipped preview has not displayed the answer end.',
     );
-
-    await tester.tap(find.byKey(const ValueKey('app-page-back')));
+    await gesture.cancel();
     await tester.pumpAndSettle();
-    expect(find.text('Today content'), findsOneWidget);
-    expect(find.byKey(const ValueKey('global-header-settings')), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, '/planner');
+    expect(container.read(coachTurnNoticeProvider), isNotNull);
+
+    router.go('/coach');
+    await tester.pumpAndSettle();
+    expect(container.read(coachTurnNoticeProvider), isNull);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('header actions retain 44 pixel targets at 320px and 200% text',
-      (tester) async {
+  testWidgets('answer completing beneath Settings stays unread until Back', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final repository = _ControlledCoachRepository();
+    final router = _router();
+    addTearDown(router.dispose);
+    await _pumpApp(tester, router: router, repository: repository);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CoachPage)),
+    );
+    final controller = container.read(coachControllerProvider.notifier);
+    controller.updateDraft('Give me the short version');
+    final sending = controller.send();
+    await tester.pump();
+    await tester.pump();
+    expect(container.read(coachControllerProvider).isSending, isTrue);
+    router.push('/settings');
+    await tester.pumpAndSettle();
+    repository.complete();
+    expect(await sending, isTrue);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings content'), findsOneWidget);
+    expect(
+      container.read(coachTurnNoticeProvider),
+      isNotNull,
+      reason: 'The mounted Coach is covered by Settings.',
+    );
+    await tester.tap(find.byKey(const ValueKey('app-page-back')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CoachPage), findsOneWidget);
+    expect(container.read(coachTurnNoticeProvider), isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('failed answer in cancelled Coach preview remains unread', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final repository = _ControlledCoachRepository(fail: true);
+    final router = _pagerRouter();
+    addTearDown(router.dispose);
+    await _pumpApp(tester, router: router, repository: repository);
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Planner content')),
+    );
+    final controller = container.read(coachControllerProvider.notifier);
+    await tester.pumpAndSettle();
+    controller.updateDraft('Give me the short version');
+    final sending = controller.send();
+    await tester.pump();
+    await tester.pump();
+    repository.complete();
+    expect(await sending, isFalse);
+    await tester.pumpAndSettle();
+    expect(
+      container.read(coachTurnNoticeProvider)?.status,
+      CoachTurnNoticeStatus.failed,
+    );
+
+    final gesture = await tester.startGesture(const Offset(250, 50));
+    await gesture.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-35, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byType(CoachPage), findsOneWidget);
+    expect(
+      container.read(coachTurnNoticeProvider)?.status,
+      CoachTurnNoticeStatus.failed,
+    );
+    await gesture.cancel();
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/planner');
+    expect(
+      container.read(coachTurnNoticeProvider)?.status,
+      CoachTurnNoticeStatus.failed,
+    );
+
+    router.go('/coach');
+    await tester.pumpAndSettle();
+    expect(container.read(coachTurnNoticeProvider), isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'cancelled swipe back to Coach acknowledges the completed answer',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _ControlledCoachRepository();
+      final router = _pagerRouter(initialLocation: '/coach');
+      addTearDown(router.dispose);
+      await _pumpApp(tester, router: router, repository: repository);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(CoachPage)),
+      );
+      final controller = container.read(coachControllerProvider.notifier);
+      controller.updateDraft('Give me the short version');
+      final sending = controller.send();
+      await tester.pump();
+      await tester.pump();
+      final gesture = await tester.startGesture(const Offset(150, 50));
+      await gesture.moveBy(const Offset(25, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(35, 0));
+      await tester.pump();
+      repository.complete();
+      expect(await sending, isTrue);
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        container.read(coachTurnNoticeProvider),
+        isNotNull,
+        reason: 'Coach has moved away from its settled viewport.',
+      );
+
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/coach');
+      expect(container.read(coachTurnNoticeProvider), isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'reduced motion acknowledges only the selected Coach destination',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _ControlledCoachRepository();
+      final router = _pagerRouter();
+      addTearDown(router.dispose);
+      await _pumpApp(
+        tester,
+        router: router,
+        repository: repository,
+        reducedMotion: true,
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.text('Planner content')),
+      );
+      final controller = container.read(coachControllerProvider.notifier);
+      await tester.pumpAndSettle();
+      controller.updateDraft('Give me the short version');
+      final sending = controller.send();
+      await tester.pump();
+      await tester.pump();
+      repository.complete();
+      expect(await sending, isTrue);
+      await tester.pumpAndSettle();
+      expect(container.read(coachTurnNoticeProvider), isNotNull);
+      router.go('/coach');
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/coach');
+      expect(container.read(coachTurnNoticeProvider), isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Settings hides its self-link, keeps Coach notice and returns back',
+    (tester) async {
+      final repository = _ControlledCoachRepository();
+      final router = _router(initialLocation: '/today');
+      addTearDown(router.dispose);
+      await _pumpApp(tester, router: router, repository: repository);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.text('Today content')),
+      );
+      container
+          .read(coachTurnNoticeProvider.notifier)
+          .publish(
+            profileId: 'profile-1',
+            requestId: coachRequestId,
+            status: CoachTurnNoticeStatus.completed,
+          );
+      await tester.pumpAndSettle();
+
+      await openHeaderActions(tester);
+      final settingsButton = tester.widget<IconButton>(
+        find.byKey(const ValueKey('global-header-settings')),
+      );
+      expect(settingsButton.onPressed, isNotNull);
+      settingsButton.onPressed!.call();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Settings content'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('global-header-settings')),
+        findsNothing,
+      );
+      expect(find.byTooltip('Settings, current page'), findsNothing);
+      final pushedMatchCount = _imperativeMatchCount(
+        router.routerDelegate.currentConfiguration.matches,
+      );
+      expect(pushedMatchCount, 1);
+
+      await openHeaderActions(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('global-header-coach-notice')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Settings content'), findsOneWidget);
+      expect(find.text('Your Coach answer is ready.'), findsOneWidget);
+      expect(
+        _imperativeMatchCount(
+          router.routerDelegate.currentConfiguration.matches,
+        ),
+        pushedMatchCount,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('app-page-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('Today content'), findsOneWidget);
+      await openHeaderActions(tester);
+      expect(
+        find.byKey(const ValueKey('global-header-settings')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('header actions retain 44 pixel targets at 320px and 200% text', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -214,7 +454,9 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.text('Today content')),
     );
-    container.read(coachTurnNoticeProvider.notifier).publish(
+    container
+        .read(coachTurnNoticeProvider.notifier)
+        .publish(
           profileId: 'profile-1',
           requestId: coachRequestId,
           status: CoachTurnNoticeStatus.completed,
@@ -222,6 +464,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+    await openHeaderActions(tester);
     for (final key in const [
       ValueKey('today-refresh'),
       ValueKey('global-header-coach-notice'),
@@ -239,6 +482,7 @@ Future<void> _pumpApp(
   required GoRouter router,
   required CoachRepository repository,
   TextScaler textScaler = TextScaler.noScaling,
+  bool reducedMotion = false,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -249,7 +493,9 @@ Future<void> _pumpApp(
       child: MaterialApp.router(
         routerConfig: router,
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: textScaler, disableAnimations: reducedMotion),
           child: child!,
         ),
       ),
@@ -259,48 +505,48 @@ Future<void> _pumpApp(
 }
 
 GoRouter _router({String initialLocation = '/coach'}) => GoRouter(
-      initialLocation: initialLocation,
-      routes: [
-        GoRoute(
-          path: '/coach',
-          builder: (_, __) => const Scaffold(body: CoachPage()),
-        ),
-        GoRoute(
-          path: '/today',
-          builder: (_, __) => Scaffold(
-            body: AppPage(
-              title: 'Today',
-              actions: [
-                AppHeaderActions(
-                  pageActions: [
-                    IconButton(
-                      key: const ValueKey('today-refresh'),
-                      tooltip: 'Refresh Today',
-                      onPressed: () {},
-                      icon: const Icon(AppIcons.refreshOutlined),
-                    ),
-                  ],
+  initialLocation: initialLocation,
+  routes: [
+    GoRoute(
+      path: '/coach',
+      builder: (_, __) => const Scaffold(body: CoachPage()),
+    ),
+    GoRoute(
+      path: '/today',
+      builder: (_, __) => Scaffold(
+        body: AppPage(
+          title: 'Today',
+          actions: [
+            AppHeaderActions(
+              pageActions: [
+                IconButton(
+                  key: const ValueKey('today-refresh'),
+                  tooltip: 'Refresh Today',
+                  onPressed: () {},
+                  icon: const Icon(AppIcons.refreshOutlined),
                 ),
               ],
-              children: const [
-                Text('Today content'),
-                SizedBox(height: AppSpacing.xxl),
-              ],
             ),
-          ),
+          ],
+          children: const [
+            Text('Today content'),
+            SizedBox(height: AppSpacing.xxl),
+          ],
         ),
-        GoRoute(
-          path: '/settings',
-          builder: (_, __) => const Scaffold(
-            body: AppPage(
-              title: 'Settings',
-              actions: [AppHeaderActions(settingsSelected: true)],
-              children: [Text('Settings content')],
-            ),
-          ),
+      ),
+    ),
+    GoRoute(
+      path: '/settings',
+      builder: (_, __) => const Scaffold(
+        body: AppPage(
+          title: 'Settings',
+          actions: [AppHeaderActions(settingsSelected: true)],
+          children: [Text('Settings content')],
         ),
-      ],
-    );
+      ),
+    ),
+  ],
+);
 
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   await tester.scrollUntilVisible(
@@ -309,6 +555,37 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
+}
+
+GoRouter _pagerRouter({String initialLocation = '/planner'}) {
+  const paths = ['/today', '/insights', '/planner', '/coach'];
+  return GoRouter(
+    initialLocation: initialLocation,
+    routes: [
+      for (var index = 0; index < paths.length; index++)
+        GoRoute(
+          path: paths[index],
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: const ValueKey('root-tabs'),
+            child: Scaffold(
+              body: RootTabPager(
+                index: index,
+                count: paths.length,
+                onSettled: (next) => context.go(paths[next]),
+                pageBuilder: (context, item) => item == 3
+                    ? const CoachPage()
+                    : AppPage(
+                        title: paths[item].substring(1),
+                        children: [
+                          Text(item == 2 ? 'Planner content' : paths[item]),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
 }
 
 int _imperativeMatchCount(Iterable<RouteMatchBase> matches) {
@@ -325,9 +602,11 @@ int _imperativeMatchCount(Iterable<RouteMatchBase> matches) {
 class _ControlledCoachRepository implements CoachRepository {
   _ControlledCoachRepository({
     this.reply = 'A short Coach answer.',
+    this.fail = false,
   });
 
   final String reply;
+  final bool fail;
   final Completer<void> _completion = Completer<void>();
   String? _requestId;
   String? _message;
@@ -378,6 +657,7 @@ class _ControlledCoachRepository implements CoachRepository {
     yield const CoachActivityEvent('Checking relevant history …');
     await _completion.future;
     _responding = false;
+    if (fail) throw const CoachInputException('Test Coach failure.');
     yield CoachCompletedEvent(
       CoachResponse.fromJson(
         coachResponseJson(requestId: requestId, reply: reply),

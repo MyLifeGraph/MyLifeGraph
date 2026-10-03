@@ -98,6 +98,7 @@ class _SparseInsightsHome extends StatelessWidget {
     required this.sleepRecommendation,
     required this.showPersonalPatterns,
     required this.onRefresh,
+    required this.readFailed,
   });
 
   final _InsightsView view;
@@ -114,6 +115,7 @@ class _SparseInsightsHome extends StatelessWidget {
   final AsyncValue<SleepRecommendation?> sleepRecommendation;
   final bool showPersonalPatterns;
   final Future<void> Function() onRefresh;
+  final bool readFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +141,7 @@ class _SparseInsightsHome extends StatelessWidget {
                   SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
                   _InsightsViewToggle(selected: view, onChanged: onViewChanged),
                   const SizedBox(height: AppSpacing.md),
+                  if (readFailed) _InsightsLoadError(onRetry: onRefresh),
                   Visibility(
                     visible: view == _InsightsView.overview,
                     maintainState: true,
@@ -245,7 +248,10 @@ class _InsightsRefreshButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: 'Refresh correlations',
-      onPressed: onRefresh,
+      onPressed: () {
+        AppHeaderActions.dismissForAction(context);
+        onRefresh();
+      },
       icon: const Icon(AppIcons.refresh),
     );
   }

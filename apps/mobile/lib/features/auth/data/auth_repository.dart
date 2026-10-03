@@ -60,6 +60,13 @@ class AuthRepository {
   AppSession? _cachedSession;
 
   Future<AppSession?> currentSession() async {
+    // Supabase restores the persisted session before its background refresh
+    // finishes. Our FastAPI recovery request uses the bearer directly, unlike
+    // PostgREST's refreshing transport, so await a valid session first. The SDK
+    // shares any refresh already in flight and rejects obsolete session results.
+    if (!_useMockData && (_client.auth.currentSession?.isExpired ?? false)) {
+      await _client.auth.refreshSession();
+    }
     final user = _client.auth.currentUser;
     if (user != null) {
       final deletionRecovery = await _pendingDeletionRecovery(user);

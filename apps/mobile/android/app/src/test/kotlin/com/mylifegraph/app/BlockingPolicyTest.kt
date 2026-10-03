@@ -84,9 +84,17 @@ class BlockingPolicyTest {
         assertNull(requests.take())
     }
 
-    @Test fun nativeCustomizationUsesTheSameFixedSymbolsAndThemePairs() {
-        assertEquals(listOf("◇", "▣", "✥", "◎", "☾", "▤"),
-            listOf("shield", "work", "games", "social", "sleep", "study").map(BlockingScreenIcon::symbol))
+    @Test fun nativeCustomizationUsesTheSameFixedArtworkAndThemePairs() {
+        val icons = listOf("shield", "work", "games", "social", "sleep", "study")
+        assertEquals(6, icons.map(BlockingScreenIcon::paths).distinct().size)
+        assertEquals(listOf("M12 3L21 7V12Q21 18 12 22Q3 18 3 12V7Z"), BlockingScreenIcon.paths("shield"))
+        assertEquals(BlockingScreenIcon.paths("shield"), BlockingScreenIcon.paths("unknown"))
+        for (icon in icons) {
+            val svg = BlockingScreenIcon.svg(icon)
+            BlockingScreenIcon.paths(icon).forEach { assertTrue(svg.contains("<path d=\"$it\"/>")) }
+            assertTrue(svg.contains("stroke=\"currentColor\""))
+        }
+        assertEquals(BlockingScreenIcon.svg("shield"), BlockingScreenIcon.svg("<script>"))
         assertEquals("#08110F" to "#F2F6F3", BlockingScreenIcon.colors("dark"))
         assertEquals("#F6F6F1" to "#15201C", BlockingScreenIcon.colors("light"))
         assertEquals("#070814" to "#F6F3FF", BlockingScreenIcon.colors("space"))
@@ -110,6 +118,33 @@ class BlockingPolicyTest {
         assertFalse(BlockingConsentPolicy.budgetAllowed(45, 45, apps + "new.app", apps, existing[0], existing[0], false))
         assertFalse(BlockingConsentPolicy.budgetAllowed(45, 0, apps, emptySet(), emptySet(), emptySet(), false))
         assertTrue(BlockingConsentPolicy.sitesAllowed(existing[0], emptySet(), true))
+    }
+
+    @Test fun allIconAndToneCombinationsHaveFixedValidOfflineArtwork() {
+        val parser = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        for (tone in listOf("glass", "dark", "light", "space")) {
+            for (icon in listOf("shield", "work", "games", "social", "sleep", "study")) {
+                val document = parser.parse(java.io.ByteArrayInputStream(BlockingScreenIcon.svg(icon).toByteArray()))
+                assertEquals("svg", document.documentElement.tagName)
+                assertEquals(BlockingScreenIcon.paths(icon).size, document.getElementsByTagName("path").length)
+                assertTrue(BlockingScreenIcon.colors(tone).first.startsWith("#"))
+            }
+        }
+    }
+
+    @Test fun allNativeToneForegroundsRemainLegible() {
+        fun luminance(hex: String): Double {
+            val channels = listOf(1, 3, 5).map { index ->
+                val value = hex.substring(index, index + 2).toInt(16) / 255.0
+                if (value <= .04045) value / 12.92 else Math.pow((value + .055) / 1.055, 2.4)
+            }
+            return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722
+        }
+        for (tone in listOf("glass", "dark", "light", "space")) {
+            val colors = BlockingScreenIcon.colors(tone)
+            val levels = listOf(luminance(colors.first), luminance(colors.second)).sorted()
+            assertTrue("$tone text/icon contrast", (levels[1] + .05) / (levels[0] + .05) >= 4.5)
+        }
     }
     @Test fun domainsRetainOnlyHostsAndRejectSpoofedOrCredentialUrls() {
         assertEquals("instagram.com", BlockingDomains.host("https://INSTAGRAM.com/a?secret=value#x"))

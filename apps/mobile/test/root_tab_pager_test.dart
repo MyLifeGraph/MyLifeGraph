@@ -177,11 +177,90 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('rapid root changes stay synchronized through 25 cycles', (
+    tester,
+  ) async {
+    final router = await pump(tester);
+    for (var cycle = 0; cycle < 25; cycle++) {
+      router.go('/1');
+      await tester.pump(const Duration(milliseconds: 30));
+      router.go('/3');
+      await tester.pump(const Duration(milliseconds: 30));
+      router.go('/2');
+      await tester.pump(const Duration(milliseconds: 30));
+      router.go('/0');
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/0');
+      expect(find.text('Page 0').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('Settings pushed while a swipe settles stays open', (
+    tester,
+  ) async {
+    final router = await pump(tester);
+    final gesture = await tester.startGesture(const Offset(250, 50));
+    await gesture.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-125, 0));
+    await tester.pump(const Duration(milliseconds: 250));
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 20));
+    final routedBeforePush = tester
+        .widget<RootTabPager>(find.byType(RootTabPager))
+        .index;
+    router.push('/settings');
+    await tester.pumpAndSettle();
+    expect(find.text('Settings').hitTestable(), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/$routedBeforePush');
+    expect(
+      tester.widget<RootTabPager>(find.byType(RootTabPager)).index,
+      routedBeforePush,
+    );
+    expect(
+      find.text('Page $routedBeforePush').hitTestable(),
+      findsOneWidget,
+      reason:
+          'Back must restore the routed page $routedBeforePush before Settings.',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('diagonal movement does not change tabs', (tester) async {
     final router = await pump(tester);
     await tester.dragFrom(const Offset(280, 30), const Offset(-150, 90));
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path, '/0');
+  });
+
+  testWidgets('resizing during a swipe keeps the settled route and reverse usable', (
+    tester,
+  ) async {
+    final router = await pump(tester);
+    final gesture = await tester.startGesture(const Offset(280, 50));
+    await gesture.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+    tester.view.physicalSize = const Size(600, 844);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final settled = tester.widget<RootTabPager>(find.byType(RootTabPager)).index;
+    expect(settled, anyOf(0, 1));
+    expect(router.routeInformationProvider.value.uri.path, '/$settled');
+    expect(find.text('Page $settled').hitTestable(), findsOneWidget);
+    router.go('/1');
+    await tester.pumpAndSettle();
+    await tester.dragFrom(const Offset(250, 50), const Offset(180, 0));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/0');
+    expect(find.text('Page 0').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('reduced motion changes tabs without a slide', (tester) async {

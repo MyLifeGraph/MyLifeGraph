@@ -5,6 +5,7 @@ import '../constants/app_spacing.dart';
 import '../constants/app_radii.dart';
 import '../theme/app_icons.dart';
 import '../theme/app_liquid_glass.dart';
+import 'app_page_header_actions_scope.dart';
 
 class AppPage extends StatelessWidget {
   const AppPage({
@@ -64,6 +65,23 @@ class AppPage extends StatelessWidget {
           final showBack = (ModalRoute.canPopOf(context) ?? false) ||
               (backFallback != null && showBackForFallback);
 
+          final headerWidth = (constraints.maxWidth - horizontalPadding * 2)
+              .clamp(0.0, maxWidth);
+          final titleMeasure = TextPainter(
+            text: TextSpan(text: title, style: pageTitleStyle),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+            maxLines: 1,
+          )..layout();
+          final sharesTitleRow = compactHeader
+              ? scaledBodySize < 24
+              : !stackHeaderActions;
+          final menuWidth = sharesTitleRow
+              ? headerWidth - titleMeasure.width - AppSpacing.sm -
+                  (showBack ? 52 : 0)
+              : headerWidth;
+          titleMeasure.dispose();
+
           final header = Padding(
                 padding: EdgeInsets.fromLTRB(
                   horizontalPadding,
@@ -74,15 +92,21 @@ class AppPage extends StatelessWidget {
                   child: Center(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: _AppPageHeader(
-                        title: title,
-                        subtitle: subtitle,
-                        titleStyle: pageTitleStyle,
-                        showBack: showBack,
-                        backFallback: backFallback,
-                        stackActions: stackHeaderActions,
-                        actions: actions,
-                        compact: compactHeader,
+                      child: AppPageHeaderActionsScope(
+                        maxWidth: menuWidth.clamp(
+                          48.0,
+                          headerWidth.clamp(48.0, double.infinity),
+                        ),
+                        child: _AppPageHeader(
+                          title: title,
+                          subtitle: subtitle,
+                          titleStyle: pageTitleStyle,
+                          showBack: showBack,
+                          backFallback: backFallback,
+                          stackActions: stackHeaderActions,
+                          actions: actions,
+                          compact: compactHeader,
+                        ),
                       ),
                     ),
                   ),
@@ -369,27 +393,52 @@ class AppPageHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (largeText) ...[
-          Align(alignment: Alignment.topRight, child: actions),
-          const SizedBox(height: AppSpacing.xs),
-          title,
-        ] else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: title),
-              const SizedBox(width: AppSpacing.xs),
-              actions,
-            ],
-          ),
-        if (subtitle != null) ...[
-          const SizedBox(height: AppSpacing.xs),
-          subtitle!,
+    final inheritedWidth = AppPageHeaderActionsScope.maxWidthOf(context);
+    return LayoutBuilder(builder: (context, constraints) {
+      var available = inheritedWidth ?? constraints.maxWidth;
+      // Loaded Today/Insights headings do not go through AppPage's string title.
+      // Reserve their actual glyph width too, without changing the title layout.
+      if (inheritedWidth == null && !largeText && title is Text) {
+        final text = title as Text;
+        final painter = TextPainter(
+          text: text.textSpan ??
+              TextSpan(
+                text: text.data,
+                style: DefaultTextStyle.of(context).style.merge(text.style),
+              ),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: 1,
+        )..layout();
+        available -= painter.width + AppSpacing.sm;
+        painter.dispose();
+      }
+      final scopedActions = AppPageHeaderActionsScope(
+        maxWidth: available.clamp(48.0, double.infinity),
+        child: actions,
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (largeText) ...[
+            Align(alignment: Alignment.topRight, child: scopedActions),
+            const SizedBox(height: AppSpacing.xs),
+            title,
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: title),
+                const SizedBox(width: AppSpacing.xs),
+                scopedActions,
+              ],
+            ),
+          if (subtitle != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            subtitle!,
+          ],
         ],
-      ],
-    );
+      );
+    });
   }
 }

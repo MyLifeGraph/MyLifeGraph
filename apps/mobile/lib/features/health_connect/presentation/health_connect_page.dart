@@ -5,6 +5,7 @@ import '../../../composition/health_connect_providers.dart';
 import '../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_motion_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page.dart';
 import '../../../core/widgets/app_surface.dart';
@@ -40,6 +41,24 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
     final cloud = view.cloud;
     final editable = !view.busy && view.error == null && cloud != null;
     final ownDevice = view.deviceId != null && cloud?.deviceId == view.deviceId;
+    final connected =
+        view.error == null &&
+        !view.busy &&
+        cloud?.enabled == true &&
+        view.supported &&
+        view.granted &&
+        ownDevice;
+    final connectionLabel = view.error != null
+        ? 'Could not confirm'
+        : view.busy || cloud == null
+        ? 'Checking…'
+        : !view.supported
+        ? 'Unavailable here'
+        : cloud.enabled && !ownDevice
+        ? 'Other device'
+        : connected
+        ? 'Connected'
+        : 'Not connected';
     return AppPage(
       title: 'Health Connect',
       compactHeader: true,
@@ -58,8 +77,6 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
             children: [
               Row(
                 children: [
-                  const Icon(AppIcons.devicesOutlined),
-                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Wrap(
                       spacing: AppSpacing.sm,
@@ -115,7 +132,50 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
-              const Text('Sleep · Steps'),
+              AnimatedSwitcher(
+                duration: context.motionTokens.stateFor(context),
+                child: Row(
+                  key: ValueKey('watch-status-$connectionLabel'),
+                  children: [
+                    SizedBox.square(
+                      dimension: 88,
+                      child: AppSurface(
+                        variant: connected
+                            ? AppSurfaceVariant.accent
+                            : AppSurfaceVariant.subtle,
+                        padding: EdgeInsets.zero,
+                        child: Center(
+                          child: ExcludeSemantics(
+                            child: Icon(
+                              AppIcons.watch,
+                              size: 60,
+                              color: connected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            connectionLabel,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          const Text('Sleep · Steps'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: AppSpacing.md),
               if (view.busy) const LinearProgressIndicator(),
               if (view.error != null)

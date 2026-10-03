@@ -4,9 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
+import android.content.pm.PackageManager
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -16,10 +15,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
+import org.json.JSONObject
 import java.lang.ref.WeakReference
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -29,7 +25,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private lateinit var windowManager: WindowManager
     private val handler = Handler(Looper.getMainLooper())
     private var overlay: View? = null
-    private var remainingText: TextView? = null
+    private var blockScreen: BlockingScreenView? = null
+    private val returnDelay = BlockReturnDelay()
+    private var homePackages: Set<String> = emptySet()
     private var lastForegroundPackage: String? = null
     private var emergencyArmRunnable: Runnable? = null
     private lateinit var plans: BlockingPlans
@@ -37,15 +35,17 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private var lastMeterAt = 0L
     private var lastRedirect = ""
     private var lastRedirectAt = 0L
-    private var returnButton: Button? = null
-    private var returnDeadline = 0L
-    private var textColor = Color.WHITE
+    private var lastProtectionCheck = -1000L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         manager = FocusProtectionManager(applicationContext)
         plans = BlockingPlans(applicationContext)
         windowManager = getSystemService(WindowManager::class.java)
+        homePackages = packageManager.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            PackageManager.MATCH_ALL,
+        ).map { it.activityInfo.packageName }.toSet()
         runningService = WeakReference(this)
         handler.removeCallbacks(scheduleTick)
         handler.post(scheduleTick)
@@ -90,8 +90,24 @@ class FocusBlockAccessibilityService : AccessibilityService() {
 
     private fun refreshOverlay() {
         updateBrowserSubscription()
-        if (!manager.shouldBlock(lastForegroundPackage)) {
-            hideOverlay()
+        val foregroundBlocked = manager.shouldBlock(lastForegroundPackage)
+        val source = returnDelay.target
+        if (source != null && !manager.shouldBlock(source)) returnDelay.clear()
+        if (foregroundBlocked && returnDelay.target == null) {
+            val target = lastForegroundPackage ?: return
+            if (returnDelay.begin(target, plans.custom().optInt("waitSeconds"), SystemClock.elapsedRealtime())) {
+                runCatching { plans.recordAttempt("app:$target") }
+            }
+        }
+        val homeOrOwn = lastForegroundPackage == packageName || lastForegroundPackage in homePackages
+        if (!returnDelay.retain(
+                returnDelay.target?.let(manager::shouldBlock) == true,
+                foregroundBlocked,
+                homeOrOwn,
+            )) {
+            // System UI remains reachable without resetting the finite attempt.
+            // Settings/phone/alarms and other apps are genuine safe escape routes.
+            hideOverlay(clearAttempt = lastForegroundPackage != "com.android.systemui")
             return
         }
         if (overlay == null) showOverlay()
@@ -100,62 +116,12 @@ class FocusBlockAccessibilityService : AccessibilityService() {
 
     private fun showOverlay() {
         val custom = plans.custom()
-        val colors = BlockingScreenIcon.colors(custom.optString("tone", "glass"))
-        textColor = Color.parseColor(colors.second)
-        val base = Color.parseColor(colors.first)
-        val background = when (custom.optString("tone", "glass")) {
-            "light", "dark" -> intArrayOf(base, base)
-            "space" -> intArrayOf(base, Color.parseColor("#171A38"))
-            else -> intArrayOf(base, Color.parseColor("#141A22"), base)
-        }
-        val count = plans.attempts("app:${lastForegroundPackage.orEmpty()}")
-        plans.recordAttempt("app:${lastForegroundPackage.orEmpty()}")
-        val root = ScrollView(this).apply {
-            this.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, background)
-            isFillViewport = true
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        }
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(24), dp(48), dp(24), dp(48))
-        }
-        root.addView(
-            content,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        content.addView(textView(BlockingScreenIcon.symbol(custom.optString("icon", "shield")), 48f, false))
-        content.addView(textView(custom.optString("title", "Stay focused"), 30f, true))
-        content.addView(
-            textView(
-                custom.optString("message", "Take a breath. Choose your next step."),
-                18f,
-                false,
-            ).withTopMargin(16),
-        )
-        remainingText = textView("", 40f, true).also {
-            it.contentDescription = "Focus time remaining"
-            content.addView(it.withTopMargin(24))
-        }
-        returnDeadline = SystemClock.elapsedRealtime() + custom.optInt("waitSeconds") * 1000L
-        returnButton = Button(this).apply {
-                text = "Return to MyLifeGraph"
-                textSize = 18f
-                contentDescription = "Return to MyLifeGraph"
-                setOnClickListener { returnToMyLifeGraph() }
-            }
-        content.addView(returnButton!!.withTopMargin(32))
-        content.addView(textView("${count.first + 1} today · ${count.second + 1} total", 15f, false).withTopMargin(16))
-        if (!plans.locked()) content.addView(emergencyButton().withTopMargin(16))
-        content.addView(
-            textView(
-                "Settings, phone, alarms, and essential Android functions remain available.",
-                15f,
-                false,
-            ).withTopMargin(24),
+        val count = plans.attempts("app:${returnDelay.target.orEmpty()}")
+        val root = BlockingScreenView(
+            this, custom,
+            JSONObject().put("today", count.first).put("total", count.second),
+            manager.blockingSummary(), plans.strict().optBoolean("enabled"),
+            { returnToMyLifeGraph() }, emergencyButton(),
         )
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -168,7 +134,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             title = "MyLifeGraph Focus protection"
         }
         runCatching { windowManager.addView(root, params) }
-            .onSuccess { overlay = root }
+            .onSuccess { overlay = root; blockScreen = root }
+            .onFailure { root.dispose(); returnDelay.clear() }
         scheduleRemainingTick()
     }
 
@@ -251,30 +218,50 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun releaseCurrentLease() {
+        if (plans.strict().optBoolean("enabled")) return
         runCatching { manager.releaseAppBlocking() }
-        refreshOverlay()
-        returnToMyLifeGraph()
+            .onSuccess {
+                hideOverlay()
+                launchMyLifeGraph()
+            }
+            .onFailure { refreshOverlay() }
     }
 
     private fun returnToMyLifeGraph() {
-        packageManager.getLaunchIntentForPackage(packageName)?.let {
-            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            startActivity(it)
+        if (!returnDelay.complete(SystemClock.elapsedRealtime())) return
+        // Clear origin before launch so resume/ticks cannot redraw this attempt.
+        lastForegroundPackage = packageName
+        currentHost = null
+        hideOverlay()
+        launchMyLifeGraph()
+    }
+
+    private fun launchMyLifeGraph() {
+        val launch = packageManager.getLaunchIntentForPackage(packageName)
+        val opened = launch != null && runCatching {
+            startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        }.isSuccess
+        if (!opened) {
+            runCatching {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
         }
     }
 
     private fun updateRemainingTime() {
-        val seconds = ((returnDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0) + 999) / 1000
-        returnButton?.isEnabled = seconds == 0L
-        returnButton?.text = if (seconds > 0) "Return in ${seconds}s" else "Return to MyLifeGraph"
-        if (!manager.appBlockingActive(lastForegroundPackage)) {
+        val elapsed = SystemClock.elapsedRealtime()
+        blockScreen?.updateReturn(returnDelay.remaining(elapsed), returnDelay.durationMs)
+        // Paint progress smoothly without polling package/rule authority at 10Hz.
+        if (elapsed - lastProtectionCheck < 1000) return
+        lastProtectionCheck = elapsed
+        blockScreen?.updateStrictLocked(plans.strict().optBoolean("enabled"))
+        if (returnDelay.target?.let(manager::shouldBlock) != true) {
             hideOverlay()
             return
         }
         if (manager.blockingMode() != "focus") {
-            remainingText?.textSize = 24f
-            remainingText?.text = manager.blockingSummary()
-            remainingText?.contentDescription = manager.blockingSummary()
+            blockScreen?.updateSummary(manager.blockingSummary())
             return
         }
         val lease = manager.activeLease()
@@ -286,7 +273,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         val totalSeconds = TimeUnit.MILLISECONDS.toSeconds(remainingMs)
         val minutes = totalSeconds / 60
         val remainingSeconds = totalSeconds % 60
-        remainingText?.text = String.format(Locale.ROOT, "%02d:%02d", minutes, remainingSeconds)
+        blockScreen?.updateSummary(String.format(Locale.ROOT, "%02d:%02d", minutes, remainingSeconds))
         if (remainingMs <= 0) {
             manager.expireIfNeeded()
             hideOverlay()
@@ -302,7 +289,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         override fun run() {
             if (overlay == null) return
             updateRemainingTime()
-            if (overlay != null) handler.postDelayed(this, 1_000L)
+            if (overlay != null) handler.postDelayed(this, 100L)
         }
     }
 
@@ -366,40 +353,16 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             .putExtra("target", host).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
     }
 
-    private fun hideOverlay() {
+    private fun hideOverlay(clearAttempt: Boolean = true) {
+        if (clearAttempt) returnDelay.clear()
         handler.removeCallbacks(remainingTick)
         emergencyArmRunnable?.let(handler::removeCallbacks)
         emergencyArmRunnable = null
-        overlay?.let { view -> runCatching { windowManager.removeView(view) } }
+        overlay?.let { view -> runCatching { windowManager.removeViewImmediate(view) } }
+        blockScreen?.dispose()
         overlay = null
-        remainingText = null
-        returnButton = null
+        blockScreen = null
     }
-
-    private fun textView(value: String, sizeSp: Float, heading: Boolean): TextView =
-        TextView(this).apply {
-            text = value
-            textSize = sizeSp
-            gravity = Gravity.CENTER
-            setTextColor(textColor)
-            if (heading) {
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                if (android.os.Build.VERSION.SDK_INT >= 28) {
-                    isAccessibilityHeading = true
-                }
-            }
-        }
-
-    private fun <T : View> T.withTopMargin(margin: Int): T {
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = dp(margin) }
-        return this
-    }
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
 
     companion object {
         private const val HOLD_DURATION_MS = 5_000L

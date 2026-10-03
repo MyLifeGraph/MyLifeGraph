@@ -48,6 +48,11 @@ actions block competing reloads; conflict/stale reconciliation retains its
 existing authority and never replays a mutation. Below 600px the ordinary
 header reload is omitted; wider screens retain it. Explicit error/retry controls
 remain available at every width.
+An ordinary failed overview refresh retains saved content with a visible Retry
+and disables derived mutations until a successful read. This is not a committed
+change and does not show the mutation-success warning or replay a write.
+Overlapping ordinary reload/Retry calls share one in-flight overview read;
+late success or failure after controller disposal cannot publish state.
 
 When the configured Coach surface is enabled, the mobile and desktop
 destinations are, in order: `Today`, `Insights`, `Quick actions`, `Planner`, and
@@ -59,7 +64,11 @@ unread Coach result, Inbox and Settings; the same action group remains visible i
 locked, initial loading, overview-error, current, and stale-after-mutation
 states. Settings is pushed so Back returns to Planner. `/preparation-plans` and `/habits` remain
 compatible and select Planner in the shell; `/alerts` remains a compatible
-auxiliary route without selecting an unrelated shell destination. Quick
+auxiliary route without selecting an unrelated shell destination. These existing
+header actions are accessed through the collapsed `Page actions` circle; its
+same-row reveal leaves the Planner title and content layout unchanged; narrow
+menus scroll icons horizontally. Outside tap/swipe/scroll dismisses the menu
+while preserving the underlying page interaction. Quick
 actions contains Morning, Evening, Focus, and Habit completion. Today is an
 execution surface and no longer exposes generic Task creation or
 Habit-definition management.

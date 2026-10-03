@@ -65,7 +65,7 @@ class LocalBlockPageActivity : ComponentActivity() {
                 <style>body{background:transparent;color:${colors.second};font-family:system-ui;text-align:center;padding:20px;margin:0}
                 .card{padding:32px 16px;border:1px solid #75819855;border-radius:20px;background:#75819818}
                 h1{font-size:30px}p{line-height:1.6}small{opacity:.75}</style>
-                <div class="card"><div style="font-size:48px">${BlockingScreenIcon.symbol(custom.optString("icon", "shield"))}</div><h1>$title</h1><p>$message</p><p>$safeTarget</p>
+                <div class="card"><div>${BlockingScreenIcon.svg(custom.optString("icon", "shield"))}</div><h1>$title</h1><p>$message</p><p>$safeTarget</p>
                 <small>${count.first} today · ${count.second} total</small></div></html>
             """.trimIndent(), "text/html", "utf-8", null)
         }

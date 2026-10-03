@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/preferences/assistant_language.dart';
+import 'app_header_actions.dart';
 
 class AssistantLanguageButton extends ConsumerWidget {
   const AssistantLanguageButton({
@@ -23,6 +24,7 @@ class AssistantLanguageButton extends ConsumerWidget {
       onPressed: !enabled || language.loading
           ? null
           : () async {
+              AppHeaderActions.dismissForAction(context);
               final saved = await language.toggle();
               if (!saved && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

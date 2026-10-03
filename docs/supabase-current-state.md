@@ -537,6 +537,14 @@ mode, then restores locally applied Setup state across reloads. Use
 | Email/password | Yes | Uses Supabase Auth `signInWithPassword` and `signUp`. |
 | Google OAuth | Yes | Uses Supabase OAuth; web returns to the current origin and installed Android returns through `com.mylifegraph.app://login-callback/`. |
 
+Flutter awaits the SDK's coalesced refresh when a restored real session is
+expired, before passing its bearer to the account-deletion status check and
+loading the canonical profile. This prevents a startup request using a stale
+persisted token while the SDK's background recovery is still running. Real
+refresh/profile/recovery errors remain failures; mock restoration makes no
+refresh request. Auth-stream errors are handled explicitly, and an actual retry
+replaces the prior error with pending state until its result is known.
+
 Supabase local auth config allows:
 
 - `http://127.0.0.1:7357`

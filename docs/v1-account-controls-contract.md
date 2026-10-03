@@ -345,6 +345,11 @@ satisfy the guard, and a token refresh does not replace the original session
 authentication timestamp. Flutter keeps the session open and asks the user to
 sign out, sign in again, and return to the deletion control.
 
+During account restoration, an expired persisted bearer is refreshed through
+the SDK before the deletion-status read. The SDK coalesces an already-running
+startup refresh. This changes neither deletion authorization nor recent-sign-in
+requirements; failed refresh and hosted recovery reads remain failures.
+
 Migration `20260820170000_account_deletion_recovery_v2.sql` first writes a
 minimal forced-RLS intent, then the hosted API durably appends one canonical
 `account-deletion-journal-v2` envelope using the configured journal backend.

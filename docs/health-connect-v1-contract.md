@@ -20,6 +20,13 @@ Android permissions and collapsed Details follow. Device requirements, Garmin
 sharing instructions, seven-day foreground behavior and retention remain in
 Details; unsupported platforms explicitly say import requires Android 14+.
 Cloud consent is still a separate explicit dialog, not hidden in Details.
+An enlarged watch icon and a short connection status supplement the existing
+controls, with a Reduced-Motion-aware state fade. `Connected` means current
+Cloud sharing, a matching bound device, supported Health Connect and granted
+permission, not live Bluetooth/watch reachability or proof of fresh data.
+`Not connected`, `Other device`, `Unavailable here`, `Checking…` and
+`Could not confirm` remain distinct; an old sync timestamp cannot establish
+connection. Opening this visual status adds no device read, upload or consent.
 
 ## Consent and authority
 

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_radii.dart';
+import '../../../../core/navigation/root_tab_pager.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -38,12 +39,38 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   final _composerViewportKey = GlobalKey();
   bool _readCheckScheduled = false;
   bool _historyPositioned = false;
+  bool _noticeVisible = true;
+  Animation<double>? _routeAnimation;
+  Animation<double>? _coverAnimation;
   final _showScrollToLatest = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
     _chatScrollController.addListener(_updateScrollToLatest);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (_routeAnimation != route?.animation ||
+        _coverAnimation != route?.secondaryAnimation) {
+      _routeAnimation?.removeStatusListener(_routeTransitionEnded);
+      _coverAnimation?.removeStatusListener(_routeTransitionEnded);
+      _routeAnimation = route?.animation;
+      _coverAnimation = route?.secondaryAnimation;
+      _routeAnimation?.addStatusListener(_routeTransitionEnded);
+      _coverAnimation?.addStatusListener(_routeTransitionEnded);
+    }
+    _scheduleReadCheck();
+  }
+
+  void _routeTransitionEnded(AnimationStatus status) {
+    if (status == AnimationStatus.completed ||
+        status == AnimationStatus.dismissed) {
+      _scheduleReadCheck();
+    }
   }
 
   void _updateScrollToLatest() {
@@ -85,6 +112,8 @@ class _CoachPageState extends ConsumerState<CoachPage> {
 
   @override
   void dispose() {
+    _routeAnimation?.removeStatusListener(_routeTransitionEnded);
+    _coverAnimation?.removeStatusListener(_routeTransitionEnded);
     _messageController.dispose();
     _chatScrollController.dispose();
     _showScrollToLatest.dispose();
@@ -93,6 +122,8 @@ class _CoachPageState extends ConsumerState<CoachPage> {
 
   @override
   Widget build(BuildContext context) {
+    _noticeVisible = ModalRoute.of(context)?.isCurrent != false &&
+        RootTabVisibility.of(context);
     final state = ref.watch(coachControllerProvider);
     ref.listen(coachControllerProvider, (_, next) {
       // A fast history refresh can finish between two frames. Observe the
@@ -277,6 +308,8 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   }
 
   void _markVisibleNoticeRead() {
+    // A covered route or horizontally clipped pager preview is not a read.
+    if (!_noticeVisible || ModalRoute.of(context)?.isCurrent == false) return;
     final notice = ref.read(coachTurnNoticeProvider);
     final profileId = ref.read(coachActiveProfileIdProvider);
     if (notice == null || profileId == null || notice.profileId != profileId) {
@@ -307,6 +340,13 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     final viewportBottom =
         viewport.localToGlobal(Offset(0, viewport.size.height)).dy;
     const tolerance = 0.5;
+    final viewportLeft = viewport.localToGlobal(Offset.zero).dx;
+    final viewportRight =
+        viewport.localToGlobal(Offset(viewport.size.width, 0)).dx;
+    if (viewportLeft < -tolerance ||
+        viewportRight > MediaQuery.sizeOf(context).width + tolerance) {
+      return;
+    }
     if (markerTop + tolerance < viewportTop ||
         markerBottom - tolerance > viewportBottom) {
       return;

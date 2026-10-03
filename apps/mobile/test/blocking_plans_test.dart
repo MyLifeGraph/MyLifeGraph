@@ -121,6 +121,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('header-island-toggle')));
+      await tester.pumpAndSettle();
       expect(
         find.byTooltip('App blocking'),
         eligible ? findsOneWidget : findsNothing,
@@ -526,6 +528,112 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 400));
   });
+  testWidgets('Customize persists one-second return delay on reopen', (
+    tester,
+  ) async {
+    final gateway = FakeBlockingGateway();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          blockingGatewayProvider.overrideWithValue(gateway),
+          focusProtectionGatewayProvider.overrideWithValue(
+            UnsupportedFocusProtectionGateway(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.liquidGlass,
+          home: const Scaffold(body: BlockingPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Customize').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
+    await tester.pumpAndSettle();
+    final delay = find.byType(DropdownButtonFormField<int>);
+    await tester.ensureVisible(delay);
+    await tester.tap(delay);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('1s').last);
+    await tester.pumpAndSettle();
+    final save = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(gateway.custom['waitSeconds'], 1);
+    await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<DropdownButtonFormField<int>>(delay).initialValue, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+  for (final (tone, label, icon) in [
+    ('glass', 'Liquid Glass', 'shield'),
+    ('dark', 'Dark', 'work'),
+    ('light', 'Light', 'games'),
+    ('space', 'Space', 'sleep'),
+  ]) {
+    testWidgets('Customize saves and reopens $tone background and $icon icon', (
+      tester,
+    ) async {
+      final gateway = FakeBlockingGateway();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            blockingGatewayProvider.overrideWithValue(gateway),
+            focusProtectionGatewayProvider.overrideWithValue(
+              UnsupportedFocusProtectionGateway(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.liquidGlass,
+            home: const Scaffold(body: BlockingPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Customize').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
+      await tester.pumpAndSettle();
+      final fields = find.byType(DropdownButtonFormField<String>);
+      await tester.ensureVisible(fields.first);
+      await tester.tap(fields.first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(icon).last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(fields.last);
+      await tester.tap(fields.last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(gateway.custom['tone'], tone);
+      expect(gateway.custom['icon'], icon);
+      await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<DropdownButtonFormField<String>>(fields.first)
+            .initialValue,
+        icon,
+      );
+      expect(
+        tester
+            .widget<DropdownButtonFormField<String>>(fields.last)
+            .initialValue,
+        tone,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    });
+  }
   test('offline page cannot access network or rewrite the browser', () {
     final page = File(
       'android/app/src/main/kotlin/com/mylifegraph/app/LocalBlockPageActivity.kt',

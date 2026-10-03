@@ -932,6 +932,11 @@ navigating:
 - failure:
   `Coach could not finish the answer. Open Coach to review or retry.`.
 
+The shared action group starts collapsed behind `Page actions`, with an unread
+dot on that circle. Expanding exposes the same Coach notice action and semantics.
+Opening, closing or dismissing the menu does not acknowledge the answer, reload
+data, or invoke a provider; covered-route/tab changes close the menu safely.
+
 Closing that message leaves the unread icon intact. Opening Coach also does not
 read it. For the latest successful response, an invisible marker follows Reply
 and Uncertainty and precedes the optional `Data and analysis details`.
@@ -942,6 +947,12 @@ answer, and expansion of later analysis details do not acknowledge it. The
 failure marker follows the visible error and retry copy; reaching it or
 starting a subsequent retry acknowledges the failure. Explicit Cancel creates no
 notice.
+
+Read acknowledgement also requires the settled visible root destination and an
+uncovered route. A cancelled/partial Coach preview or response beneath Settings
+does not clear a notice. Visibility is rechecked after root settlement and
+primary/secondary route transitions finish, including Back; listeners are
+detached on disposal. Read checks do not start provider calls.
 
 Header controls have 44 by 44 logical-pixel targets, keyboard focus, unique
 tooltips/semantics, and wrapping layout that remains usable at 320 logical

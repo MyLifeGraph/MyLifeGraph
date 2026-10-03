@@ -169,6 +169,9 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     });
     final children = <Widget>[
       if (desktop || availabilityIncomplete || (_showPlanning && overview != null)) addSection,
+      if (overview != null && state.loadError != null &&
+          state.projectionStatus != PlannerProjectionStatus.staleAfterMutation)
+        PlannerLoadError(onRetry: controller.load),
     ];
     if (state.projectionStatus == PlannerProjectionStatus.staleAfterMutation) {
       children.add(

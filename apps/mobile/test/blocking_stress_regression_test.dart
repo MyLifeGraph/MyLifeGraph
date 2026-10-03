@@ -11,6 +11,7 @@ import 'package:my_life_graph/features/focus_protection/domain/focus_protection.
 import 'package:my_life_graph/features/focus_protection/presentation/pages/blocking_page.dart';
 
 import 'blocking_plans_test.dart' show snapshot;
+import 'support/native_blocking_preview.dart';
 
 class _ConsentGateway extends UnsupportedFocusProtectionGateway {
   _ConsentGateway({this.activeLease = false});
@@ -164,6 +165,7 @@ Future<void> _retainedEditor(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(stubNativeBlockingPreview);
   testWidgets('active Focus disables plan editing and Strict reconfiguration', (
     tester,
   ) async {
@@ -384,7 +386,10 @@ void main() {
       200,
       scrollable: _mainScroll,
     );
-    await tester.drag(find.byKey(const ValueKey('blocking-editor-scroll')), const Offset(0, -500));
+    await tester.drag(
+      find.byKey(const ValueKey('blocking-editor-scroll')),
+      const Offset(0, -500),
+    );
     await tester.pumpAndSettle();
     final chip = find.widgetWithText(InputChip, 'x.com');
     expect(chip, findsOneWidget);
@@ -450,7 +455,16 @@ void main() {
     await _pumpPage(tester, gateway);
     await tester.tap(find.widgetWithText(TextButton, 'Customize').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
+    final customize = find.widgetWithText(FilledButton, 'Customize');
+    // The native phone owns gestures inside its frame. Scroll the parent using
+    // its side gutter, as a user can on this wide host viewport.
+    await tester.dragFrom(
+      tester.getTopLeft(_mainScroll) + const Offset(8, 150),
+      const Offset(0, -450),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(customize);
+    await tester.tap(customize);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'Saved title');
     final save = find.widgetWithText(FilledButton, 'Save');

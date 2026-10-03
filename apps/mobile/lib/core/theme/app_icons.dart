@@ -7,6 +7,18 @@ import 'package:flutter/widgets.dart';
 class AppIcons {
   const AppIcons._();
 
+  static const watch = IconData(
+    0xe4e6,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+
+  static const menu = IconData(
+    0xe2f0,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+
   static const shieldOutlined = IconData(
     0xe40a,
     fontFamily: 'PhosphorRegular',
@@ -222,6 +234,12 @@ class AppIcons {
   );
   static const checkOutlined = IconData(
     0xe182,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+    matchTextDirection: true,
+  );
+  static const chevronLeft = IconData(
+    0xe138,
     fontFamily: 'PhosphorRegular',
     fontPackage: 'phosphor_flutter',
     matchTextDirection: true,
