@@ -36,6 +36,41 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _showCancelledTasks = false;
   bool _showAllTasks = false;
   bool _showFullWeek = false;
+  Future<void>? _refreshing;
+
+  Future<void> _refreshToday() => _refreshing ??= _readToday()
+      .whenComplete(() => _refreshing = null);
+
+  Future<void> _readToday() async {
+    final commands = ref.read(todayCommandControllerProvider);
+    final snapshot = ref.read(dashboardSnapshotProvider);
+    if (commands.updatingTaskIds.isNotEmpty || commands.updatingHabitIds.isNotEmpty ||
+        commands.projectionStatus == TodayProjectionStatus.refreshingAfterMutation ||
+        snapshot.isLoading) {
+      return;
+    }
+    final capabilities = ref.read(appSurfaceCapabilitiesProvider);
+    try {
+      DashboardSnapshot? refreshed;
+      if (!capabilities.isLocalDemo &&
+          (commands.displayedSnapshot ?? snapshot.valueOrNull) != null) {
+        await ref.read(todayCommandControllerProvider.notifier).reloadToday();
+      } else {
+        refreshed = await ref.refresh(dashboardSnapshotProvider.future);
+      }
+      if (!mounted) return;
+      final date = (refreshed ?? ref.read(todayCommandControllerProvider).displayedSnapshot ??
+          ref.read(dashboardSnapshotProvider).valueOrNull)?.localDate;
+      await Future.wait<Object?>([
+        if (date != null) ref.refresh(dashboardLatestCheckInProvider(date).future),
+        if (date != null && _showFullWeek) ref.refresh(dashboardFullWeekProvider(date).future),
+        if (!capabilities.isLocalDemo && capabilities.canUseDeadlinePlanner)
+          ref.refresh(examPlanHealthProvider.future),
+      ]);
+    } catch (_) {
+      // Provider/controller error and stale states remain visible; no writes.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,8 +81,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
     if (visibleSnapshot == null) {
       return snapshot.when(
-        loading: () => const AppPage(
+        loading: () => AppPage(
           title: 'Today',
+          onRefresh: _refreshToday,
           compactHeader: true,
           actions: [AppHeaderActions()],
           children: [
@@ -56,6 +92,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ),
         error: (error, stackTrace) => AppPage(
           title: 'Today',
+          onRefresh: _refreshToday,
           compactHeader: true,
           actions: const [AppHeaderActions()],
           children: [
@@ -93,8 +130,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       projectionCurrent: projectionCurrent,
       projectionStale:
           commands.projectionStatus == TodayProjectionStatus.staleAfterMutation,
-      onReloadToday: () =>
-          ref.read(todayCommandControllerProvider.notifier).reloadToday(),
+      onReloadToday: _refreshToday,
       overviewActions: TodayOverviewActions(
         onAddEvening: () => context.push(AppRoutes.dailyCheckIn),
         onAddMorning: () => context.push(AppRoutes.morningCalibration),
@@ -437,7 +473,7 @@ class _DashboardHome extends StatelessWidget {
   final TodayCommandState commands;
   final bool projectionCurrent;
   final bool projectionStale;
-  final VoidCallback onReloadToday;
+  final Future<void> Function() onReloadToday;
   final TodayOverviewActions overviewActions;
   final AsyncValue<DashboardCheckIn?> latestCheckIn;
   final TodayTaskVisibility taskVisibility;
@@ -460,7 +496,8 @@ class _DashboardHome extends StatelessWidget {
               constraints.maxWidth < 600 ? AppSpacing.md : AppSpacing.xl;
           final desktopShell = MediaQuery.sizeOf(context).width >= 1100;
           final bottomPadding = desktopShell ? AppSpacing.xxl : 116.0;
-          return CustomScrollView(
+          return RefreshIndicator(onRefresh: onReloadToday, child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
@@ -567,7 +604,7 @@ class _DashboardHome extends StatelessWidget {
                 ),
               ),
             ],
-          );
+          ));
         },
       ),
     );

@@ -10,6 +10,63 @@ import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
 void main() {
+  testWidgets('optional pull refresh ignores nested horizontal scrolling', (
+    tester,
+  ) async {
+    var reads = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.liquidGlass,
+        home: Scaffold(
+          body: AppPage(
+            title: 'Planner',
+            onRefresh: () async {
+              reads++;
+            },
+            children: [
+              SizedBox(
+                height: 80,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: const [
+                    SizedBox(width: 1400, child: Text('Nested agenda')),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final indicator = tester.widget<RefreshIndicator>(
+      find.byType(RefreshIndicator),
+    );
+    expect(
+      indicator.notificationPredicate(
+        ScrollUpdateNotification(
+          metrics: FixedScrollMetrics(
+            minScrollExtent: 0,
+            maxScrollExtent: 100,
+            pixels: 0,
+            viewportDimension: 80,
+            axisDirection: AxisDirection.right,
+            devicePixelRatio: 1,
+          ),
+          context: tester.element(find.byType(ListView)),
+          depth: 1,
+        ),
+      ),
+      isFalse,
+    );
+    await tester.drag(find.byType(ListView), const Offset(-160, 0));
+    await tester.pumpAndSettle();
+    expect(reads, 0);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 320));
+    await tester.pumpAndSettle();
+    expect(reads, 1);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('action island fits every theme and keeps touch targets', (
     tester,
   ) async {

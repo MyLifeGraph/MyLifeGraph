@@ -205,6 +205,13 @@ commands. Skipped outcomes stay distinct from completion.
 
 ## Flutter Surface Order
 
+Pull-to-refresh at the primary page's top reloads Today through its existing
+command read authority, plus the latest check-in and eligible Plan Health.
+Full week reloads only when expanded. Guest refresh stays local. Concurrent
+refreshes coalesce; Task/Habit writes and projection reconciliation prevent a
+competing read. It neither regenerates a Snapshot nor replays a mutation, and
+existing stale/error states remain visible on failure.
+
 The primary Today order is:
 
 1. Today title with optional unread-Coach and Settings actions aligned

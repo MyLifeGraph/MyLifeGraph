@@ -58,9 +58,35 @@ overlength names/IDs/packages are grandfathered only unchanged; new values retai
 the normal V2 bounds.
 
 The disclosed launcher picker uses native icons, search, Clear, Social media,
-Games (Android-declared category), and collapse controls at both ends. Missing
-categories are not guessed. Domains match exact host or subdomain boundaries;
+and Games (Android-declared category). Its bounded, independently scrolling list
+keeps the Apps disclosure reachable; a fixed footer repeats the disclosure and
+selection count beside Save, above keyboard/navigation insets. Checks use the
+current theme's primary/on-primary contrast. Preset chips reflect whether all
+their installed apps are selected; tapping remains additive and never removes
+manual choices. Collapse and search preserve the draft; only Save persists it.
+Missing categories are not guessed. Domains match exact host or subdomain boundaries;
 optional common-site chips never silently select websites.
+
+### Local timer notifications
+
+Saved, enabled, unpaused plans with a future timer show their name and Android's
+live countdown in a separate silent `Blocking timers` notification channel.
+Master/app protection, Accessibility and effective app/consented-site targets
+must still be available. Multiple plans use independent stable notification tags;
+pause, deletion, disable, consent/access loss and expiry remove only this feature's
+notifications. A tap opens MyLifeGraph, with no command or Strict shortcut.
+Android 13+ notification permission is requested once after saving a timer;
+denial leaves the saved plan and enforcement unchanged. Users can disable the
+channel in Android notification settings independently of Cloud push consent.
+
+The OS chronometer renders seconds, not per-second notify calls. Existing service
+ticks, mutation/resume, clock/package/boot broadcasts and an inexact expiry alarm
+reconcile persisted truth. API 26+ also sets a notification timeout. On API 24–25,
+hard process death/Doze can delay cleanup until an allowed alarm/service/app path.
+Clock changes rebuild the countdown; no fixed timezone offset is used.
+Plan names are private on the lockscreen, with generic public copy.
+No FCM, Supabase row, Focus lifecycle, DND policy or analysis input changes.
+Own DND and OEM/system notification settings can hide this optional display.
 
 ### Usage budgets and charts
 

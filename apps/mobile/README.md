@@ -26,6 +26,31 @@ Revoked access still permits removing retained domains and reducing/removing
 budgets. Plan/Strict/Customize save failures keep drafts; pending saves freeze
 keyboard edits. Foreground refresh updates timed statuses and stops when hidden.
 
+The target editor bounds its independently scrolling app list and pins Save,
+selection counts and a disclosure icon above keyboard/navigation insets.
+Social media/Games presets reflect full installed-category selection while
+remaining additive. Larger, high-contrast checks use existing theme colors.
+Search/collapse do not save or clear targets.
+
+## Branding and native timer display
+
+Android timed blocking plans additionally show a silent native notification with
+the plan name and OS-updated countdown. Pause/disable/delete/expiry remove it;
+notification permission denial does not disable blocking. This is independent
+of FCM and Cloud consent. Tap opens the app. Android/OEM/DND display limits remain.
+The launcher/PWA/default app-brand tile now use approved Liquid Glass artwork;
+explicit theme-colored marks and status icons preserve the original silhouette.
+
+## Main-page refresh
+
+Today, Insights and Planner support pull-to-refresh at the top of their primary
+scroller; Coach does so in its chat scroller without moving the fixed composer.
+Below 600px ordinary Insights/Planner/Coach header refresh icons are omitted;
+desktop icons and explicit error retries remain. Refresh awaits existing reads,
+never sends Coach questions or replays writes, preserves drafts/filters, respects
+in-flight command guards, and keeps guest reads local. Today Full week stays
+lazy unless expanded. Existing error/stale panels retain their authority.
+
 ## Android updates
 
 Settings > Updates reads the installed package version and checks the public
@@ -166,7 +191,7 @@ Desktop restores the pre-split `593ea22` layout: calendar and Add new/preference
 left, summaries right (29%, clamped 280–360px), with no two-view toggle. The
 existing 1280px and enlarged-text fallback thresholds remain unchanged.
 On phones below 600px the Planning Add button fills the content width.
-Calendar import sits beside Refresh in the loaded page header.
+Calendar import sits in the loaded page header, beside Refresh when visible.
 The view toggle stays on its own row. This week has an outlined `+ Add` in the calendar
 heading; Planning retains a compact Add below the toggle. Only Planning shows
 `Plan around calendar events`, avoiding imported busy times without changing

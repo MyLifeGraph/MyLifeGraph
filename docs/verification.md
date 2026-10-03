@@ -31,6 +31,66 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Liquid Glass branding and blocking countdown (2026-10-03, candidate)
+
+- Base `70dec0cda4e1e933b11075602d94db827ec3cfa7`, reused working branch
+  `codex/blocking-plans-v2`. User explicitly authorizes checked PR/Main promotion,
+  existing production rollout and signed release. Includes the prior local
+  picker/pull-refresh changes below. No SQL, cloud-data, dependency/toolchain or
+  signing-identity change is needed.
+- Approved artwork is tracked and resized to Android/PWA/default app marks.
+  Explicit-colored UI marks and monochrome status icons retain original geometry.
+  Theme reference goldens explicitly exercise the tinted vector; no baseline
+  images were regenerated. Dedicated widget tests cover the default glass tile.
+- Native timer notifications use independent tags, a silent channel, private
+  plan titles and Android countdown/timeout. Permission/channel denial does not
+  undo a saved plan or opt in to FCM. Lifecycle/clock/boot/inexact-alarm reads
+  reconcile current truth without changing Focus, Strict, DND or Cloud data.
+- 236 focused Flutter tests pass (previous picker/refresh suite plus two brand
+  tests); final Flutter analysis is clean. Android JVM tests pass 44 cases,
+  including five new timer gate/boundary tests; Android lint succeeds. The first
+  local lint failed on ignored SDK-property colon escaping, corrected locally
+  without tracked SDK/configuration changes.
+- Docs, visual and Android-release source gates pass. Resized 192px launcher
+  artwork was inspected. Independent native review identified and corrected
+  repeated notification attempts for a user-disabled timer channel; unchanged
+  inputs now avoid bitmap creation/notify each tick.
+- Captured-base affected verification selects Full, but Windows execution still
+  fails on the pre-existing missing `setsid`. Complete hosted Linux verification
+  is required before Main promotion. No physical/OEM notification or launcher
+  acceptance is claimed from these local tests. Publication evidence follows.
+
+### Blocking picker and main-page pull refresh (2026-10-03, local candidate)
+
+- Task base `70dec0cda4e1e933b11075602d94db827ec3cfa7`, retained working branch
+  `codex/blocking-plans-v2`. This follow-up has local implementation authority
+  only; it is not a new published APK or production deployment. No database,
+  native channel, signing identity or dependency change is required.
+- The final targeted run passed **234 Flutter tests** across Blocking picker,
+  plans/stress regressions, AppPage navigation, Today sections/page, Planner,
+  Coach and Insights. New checks cover 103-app selection, 320px/200% text,
+  keyboard insets, pinned Save/disclosure, additive preset markings, failure
+  retention and pending-save keyboard exclusion. Actual pull gestures prove
+  read-only reload, draft/filter preservation, lazy Full week, guest isolation,
+  busy-command protection and nested horizontal-scroller exclusion.
+- Dart analysis is clean. Docs consistency, visual contracts and diff hygiene
+  pass. The repository Web gate built successfully with an input-bound cache
+  miss; it detected an input change during compilation and automatically
+  rebuilt rather than accepting stale output.
+- The optional synthetic UI catalog passed in the actual themed modal sheet.
+  Expanded/collapsed Liquid Glass captures were inspected, including the
+  selected Social media chip, contrast checks and footer/navigation spacing.
+  Bare-widget captures are not modal appearance evidence. No tracked reference
+  goldens were regenerated; captures remain ignored under `.tools/`.
+- The required captured-base affected selector selected Full and failed locally:
+  Source lacks Windows `setsid`, Backend lacks installed `ruff`, and the first
+  complete Flutter pass had 1,498 successes plus seven failures. Six were the
+  known Windows dark/light/space reference-golden differences. The seventh was
+  Today's section-composition argument-count guard; redundant refresh callback
+  wiring was removed and the unchanged guard passes in the final targeted run.
+  This is not a clean final full-suite or hosted Linux CI result; database and
+  browser gates were not reached. Physical Android acceptance remains separate.
+
 ### Android Blocking V2 (2026-10-03, pre-publication checks)
 
 - Task base `2c5549cf686e732d282820f42cc3379b4cd67f38`, working branch

@@ -31,7 +31,19 @@ class BlockingBridge(private val activity: FlutterActivity) {
         try {
             when (call.method) {
                 "status" -> result.success(plans.status())
-                "save" -> result.success(plans.save(call.arguments as Map<*, *>))
+                "save" -> {
+                    result.success(plans.save(call.arguments as Map<*, *>))
+                    // OS permission only: never enables FCM or changes Cloud consent.
+                    runCatching {
+                        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                            activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+                            !activity.getSharedPreferences("mylifegraph_blocking_timer_ui", 0).getBoolean("asked", false) &&
+                            (0 until plans.plans().length()).any { plans.plans().getJSONObject(it).optLong("untilEpochMs") > System.currentTimeMillis() }) {
+                            activity.getSharedPreferences("mylifegraph_blocking_timer_ui", 0).edit().putBoolean("asked", true).apply()
+                            activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), TIMER_PERMISSION_REQUEST)
+                        }
+                    }
+                }
                 "consent" -> {
                     result.success(plans.consent(call.argument<String>("kind") ?: "", call.argument<Boolean>("allowed") ?: true))
                     FocusBlockAccessibilityService.refreshOverlayIfRunning(activity)
@@ -144,6 +156,7 @@ class BlockingBridge(private val activity: FlutterActivity) {
         } catch (e: Exception) { fail(result, e) }
     }
     fun permissionResult(code: Int) {
+        if (code == TIMER_PERMISSION_REQUEST) { BlockingTimerNotifications.sync(activity); return }
         if (code != WIFI_REQUEST) return
         val response = wifiRequest.take() ?: return
         runCatching { plans.status() }.fold(onSuccess = response::success,
@@ -161,5 +174,5 @@ class BlockingBridge(private val activity: FlutterActivity) {
         wifiRequest.take()?.error("blocking_error", "Permission request cancelled", null)
         handler.removeCallbacksAndMessages(null); worker.shutdownNow()
     }
-    companion object { const val CHANNEL = "com.mylifegraph.app/blocking_v2"; private const val WIFI_REQUEST = 9104 }
+    companion object { const val CHANNEL = "com.mylifegraph.app/blocking_v2"; private const val WIFI_REQUEST = 9104; private const val TIMER_PERMISSION_REQUEST = 9105 }
 }

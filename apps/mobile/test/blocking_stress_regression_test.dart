@@ -384,7 +384,7 @@ void main() {
       200,
       scrollable: _mainScroll,
     );
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.drag(find.byKey(const ValueKey('blocking-editor-scroll')), const Offset(0, -500));
     await tester.pumpAndSettle();
     final chip = find.widgetWithText(InputChip, 'x.com');
     expect(chip, findsOneWidget);

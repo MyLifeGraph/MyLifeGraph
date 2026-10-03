@@ -34,6 +34,13 @@ Capability reads and sends await credential initialization, so the first read
 already names the restored choice or Standard instead of racing the stored-key load. This wait does
 not replace a subsequent explicit provider choice or bypass storage failures.
 
+Coach also supports pull-to-refresh at the top of its chat scroller, including
+empty history. It invokes the existing guarded history/capability read, never
+sends a question, and preserves the composer draft. Refresh remains blocked
+during a send, history deletion or busy cooldown. Below 600px the ordinary
+header refresh is omitted; wider screens retain it. The fixed composer/header
+are not moved into a new page scroller.
+
 The composer model control opens a bottom sheet with all three provider options
 directly selectable. Each option has independent Info opening its explanation
 in a bounded, scrollable popover without selecting that provider. Outside tap,

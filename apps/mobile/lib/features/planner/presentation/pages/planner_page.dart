@@ -291,6 +291,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       );
       return AppPage(
         title: 'Planner',
+        onRefresh: _refreshPlanner,
         compactHeader: true,
         subtitle: 'Plan your tasks and study time',
         backFallback: AppRoutes.dashboard,
@@ -298,7 +299,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         actions: [
           AppHeaderActions(
             pageActions: [
-              IconButton(
+              if (MediaQuery.sizeOf(context).width >= 600) IconButton(
                 tooltip: 'Reload Planner',
                 onPressed:
                     state.isBusy ? null : () => _reloadPlannerFromHeader(state),
@@ -407,6 +408,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     );
     return AppPage(
       title: 'Planner',
+      onRefresh: _refreshPlanner,
       maxWidth: 1440,
       compactHeader: true,
       backFallback: AppRoutes.dashboard,
@@ -414,7 +416,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       actions: [
         AppHeaderActions(
           pageActions: [
-            IconButton(
+            if (MediaQuery.sizeOf(context).width >= 600) IconButton(
               tooltip: 'Reload Planner',
               onPressed: state.isBusy
                   ? null
@@ -497,6 +499,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
   }
 
   Future<void> _reloadPlannerFromHeader(PlannerState state) async {
+    if (ref.read(plannerControllerProvider).isBusy || _updatingTaskIds.isNotEmpty) return;
     ref.invalidate(examWeekOutlookProvider);
     ref.invalidate(examPlanHealthProvider);
     final controller = ref.read(plannerControllerProvider.notifier);
@@ -505,10 +508,22 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         state.operationError != null ||
         state.projectionStatus != PlannerProjectionStatus.current) {
       await _discardPendingAndReload();
-      return;
+    } else {
+      await controller.load();
     }
-    await controller.load();
+    if (!mounted) return;
+    try {
+      await Future.wait<Object?>([
+        ref.read(examWeekOutlookProvider.future),
+        ref.read(examPlanHealthProvider.future),
+      ]);
+    } catch (_) {
+      // Independent panels show their own read errors without undoing reload.
+    }
   }
+
+  Future<void> _refreshPlanner() =>
+      _reloadPlannerFromHeader(ref.read(plannerControllerProvider));
 
   Future<void> _finishUnscheduledTask(
     PlannerUnscheduledTask task, {

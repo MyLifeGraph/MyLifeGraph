@@ -27,6 +27,7 @@ class MainActivity : FlutterActivity() {
     }
     override fun onResume() {
         super.onResume()
+        BlockingTimerNotifications.sync(applicationContext)
         FocusBlockAccessibilityService.onAppResumed(applicationContext)
         PushBridge.captureIntent(this, intent)
     }

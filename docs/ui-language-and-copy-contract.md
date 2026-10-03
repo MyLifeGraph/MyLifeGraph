@@ -607,6 +607,9 @@ schedule`, and `Always block`. Weekly selection confirms days/times in one
 compact sheet and names device time plus next-day end where relevant.
 
 Named Android plans use short Plans / Strict / Insights / Customize labels.
+The target footer shows only counts and `Save`; disclosure icons expose
+`Expand apps` / `Collapse apps` tooltips and expanded semantics. Preset chip
+selection describes the current app set, not a separate saved blocking mode.
 Focus session, Always, Add time, Daily budget and Block now are combinable
 choices, not exclusive modes. Sensitive usage/website/Wi-Fi/NFC disclosures and
 limitations remain explicit at consent/setup or inside Limits. Website protection

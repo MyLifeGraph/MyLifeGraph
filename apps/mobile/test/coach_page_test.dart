@@ -23,6 +23,45 @@ import 'support/coach_fixtures.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  testWidgets('mobile pull reloads empty Coach without sending or losing draft', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final repository = _FakeCoachRepository(historyTurns: []);
+    await _pumpPage(tester, repository);
+    expect(find.byTooltip('Refresh Coach'), findsNothing);
+    await tester.enterText(find.byKey(const Key('coach-message-field')), 'Keep this draft');
+    await tester.pumpAndSettle();
+    final reads = repository.capabilityCalls;
+    final composer = tester.getRect(find.byKey(const Key('coach-message-field')));
+    await tester.drag(find.byKey(const Key('coach-chat-scroll')), const Offset(0, 320));
+    await tester.pumpAndSettle();
+    expect(repository.capabilityCalls, reads + 1);
+    expect(repository.messages, isEmpty);
+    expect(tester.widget<TextField>(find.byKey(const Key('coach-message-field'))).controller!.text, 'Keep this draft');
+    expect(tester.getRect(find.byKey(const Key('coach-message-field'))), composer);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pull refresh cannot reload during a Coach send', (tester) async {
+    final repository = _FakeCoachRepository(block: true, historyTurns: []);
+    await _pumpPage(tester, repository);
+    await tester.enterText(find.byKey(const Key('coach-message-field')), 'Pending question');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('coach-send-button')));
+    for (var i = 0; i < 10 && repository.messages.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(repository.messages, ['Pending question']);
+    final reads = repository.capabilityCalls;
+    await tester.widget<RefreshIndicator>(find.byType(RefreshIndicator)).onRefresh();
+    await tester.pump();
+    expect(repository.capabilityCalls, reads);
+    expect(repository.messages, ['Pending question']);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
   testWidgets('composer grows upward to five lines and keeps its toolbar', (tester) async {
     await _pumpPage(tester, _FakeCoachRepository(historyTurns: []));
     final field = find.byKey(const Key('coach-message-field'));

@@ -38,16 +38,23 @@ main page through the shared header action.
 
 ## Navigation And Surface
 
-The `Import calendar (.ics)` icon beside Refresh in the loaded page header opens the
+The `Import calendar (.ics)` icon in the loaded page header opens the
 existing calendar-import screen, also available in Settings. It does not
 introduce Google synchronization or change import consent/data behavior.
+
+Pulling down the primary page at its top performs the existing read-only reload
+and awaits the independent Outlook/Plan Health reads. Writes and pending Task
+actions block competing reloads; conflict/stale reconciliation retains its
+existing authority and never replays a mutation. Below 600px the ordinary
+header reload is omitted; wider screens retain it. Explicit error/retry controls
+remain available at every width.
 
 When the configured Coach surface is enabled, the mobile and desktop
 destinations are, in order: `Today`, `Insights`, `Quick actions`, `Planner`, and
 `Coach`. Hosted/release builds require `COACH_SURFACE_ENABLED=true`; an explicit
 disabled gate omits Coach and does not restore Settings as a fallback shell item. Settings is opened from
 the shared top-right action on Today, Insights, Quick actions, Planner, Coach,
-but not Settings itself. Planner orders its `Reload Planner` action before an optional
+but not Settings itself. Where visible, Planner orders `Reload Planner` before an optional
 unread Coach result, Inbox and Settings; the same action group remains visible in
 locked, initial loading, overview-error, current, and stale-after-mutation
 states. Settings is pushed so Back returns to Planner. `/preparation-plans` and `/habits` remain

@@ -113,7 +113,7 @@ class _SparseInsightsHome extends StatelessWidget {
   final AsyncValue<PersonalPatterns?> personalPatterns;
   final AsyncValue<SleepRecommendation?> sleepRecommendation;
   final bool showPersonalPatterns;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +121,8 @@ class _SparseInsightsHome extends StatelessWidget {
         ? 'No comparable signal has enough data in this window yet.'
         : '${report.metrics.single.label} is available, but a relationship needs a second measured signal.';
     return SafeArea(
-      child: CustomScrollView(
+      child: RefreshIndicator(onRefresh: onRefresh, child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
@@ -207,7 +208,7 @@ class _SparseInsightsHome extends StatelessWidget {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }
@@ -228,7 +229,8 @@ class _InsightsHeader extends StatelessWidget {
             : Theme.of(context).textTheme.headlineLarge,
       ),
       actions: AppHeaderActions(
-        pageActions: [_InsightsRefreshButton(onRefresh: onRefresh)],
+        pageActions: [if (MediaQuery.sizeOf(context).width >= 600)
+          _InsightsRefreshButton(onRefresh: onRefresh)],
       ),
     );
   }

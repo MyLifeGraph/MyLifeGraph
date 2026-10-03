@@ -44,7 +44,7 @@ a separate creation card. Its existing modal retains all five creation choices.
 That split is mobile/tablet only. At the existing desktop breakpoint, the
 pre-split calendar-left/Add-new-below and compact-summary-right layout returns,
 including the original bounded summary width and visible five creation actions.
-Calendar import sits beside Refresh in the page header. Below 600px,
+Calendar import sits in the page header, beside Refresh when visible. Below 600px,
 Planning's Add spans the content width. Desktop keeps its creation section.
 Touch navigation supplements rather than replaces visible buttons: horizontal
 main-page swipes are deliberate and nested scrollers retain gesture priority.
@@ -159,14 +159,19 @@ visible icon or text label.
 
 The brand mark is a path joining three explicit nodes on a 24×24 grid. Its
 canonical source is
-`apps/mobile/assets/brand/app_brand_mark.svg`; `AppBrandMark` renders it in the
-app. It may appear once prominently on a screen and must not become a repeating
+`apps/mobile/assets/brand/app_brand_mark.svg`; explicit-color `AppBrandMark`
+instances and the Android notification silhouette retain that geometry.
+The default app mark uses approved silver/ice-blue Liquid Glass artwork on a
+dark blue/violet background (`app_icon_glass.png`), without recoloring other
+themes. It may appear once prominently on a screen and must not become a repeating
 background pattern.
 
-`scripts/generate_brand_assets.py` deterministically derives the Android
-launcher sizes, PWA regular and maskable icons, and favicon from the same
-geometry and palette. Android adaptive icon and splash vector resources repeat
-that exact geometry. The launch background and default web chrome use the dark
+`scripts/generate_brand_assets.py` resizes the tracked, approved
+`app_icon_glass_source.png` with Pillow (no generation/network/secrets) into
+the in-app tile, Android launcher/adaptive artwork, PWA icons and favicon.
+The source has generous central safe margins for maskable/adaptive icons.
+Android splash vector and monochrome notification icon retain the canonical
+three-node geometry. The launch background and default web chrome use the dark
 background rather than Flutter blue.
 
 The word `MyLifeGraph` remains live text. Sparkle icons are not part of the
@@ -290,8 +295,14 @@ unread Coach action comes second when present, followed by Inbox and Settings. E
 icon action owns a 44 by 44 logical-pixel target and keyboard/semantic label.
 Today, Insights, Planner, and Coach align title-left/icon-actions-right at the
 same 16-pixel mobile top/right inset. Large text moves actions above the title.
-Insights Refresh is an icon with its existing tooltip. Other pages retain their
-existing narrow-screen stacked header. The selected Settings icon uses
+Below 600px, ordinary Insights/Planner/Coach refresh icons are replaced by
+pull-to-refresh at the primary scroller's top. Wider screens keep labelled
+refresh icons; explicit failure/retry actions remain reachable at every width.
+The shared AppPage refresh wrapper is opt-in and never wraps fixed viewport
+controls. Today and Insights own their primary scrollers; Coach owns its chat
+scroller. Each uses the theme's existing progress indicator and default primary
+scroll-notification predicate, without intercepting nested horizontal gestures.
+The selected Settings icon uses
 the filled icon and selected surface without creating another route.
 
 ## Shape And Surface Roles
@@ -302,6 +313,12 @@ The shared-header shield sits before Settings. The dedicated device-tool route
 uses its own tab bar without stacking the main shell bar. Native overlay/offline
 pages use a bounded background/icon palette rather than Flutter blur shaders;
 this is a platform-specific block-screen choice, not a change to app theme tokens.
+
+Blocking target selection uses a bounded app list and fixed Save footer with
+count/disclosure. Selected checks are slightly larger and use primary/on-primary
+contrast; preset chips use existing selected colors. No new palette or Liquid
+Glass material is introduced. Large text may wrap the count but never hides Save
+or the accessible disclosure control.
 
 Watch, Calendar import and the Exam wizard use compact shared surfaces:
 primary actions first, optional details collapsed, source actions in a labelled

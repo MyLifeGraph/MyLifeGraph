@@ -23,6 +23,26 @@ import 'package:my_life_graph/features/planner/presentation/providers/planner_pr
 import 'support/planner_fixtures.dart';
 
 void main() {
+  testWidgets('mobile Planner pull only reloads reads and deduplicates busy loads', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _PlannerBackend();
+    await _pumpPlanner(tester, backend: backend);
+    expect(find.byTooltip('Reload Planner'), findsNothing);
+    final before = backend.requests.where((r) => r.path == '/v1/planner/overview').length;
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 320));
+    await tester.pumpAndSettle();
+    expect(backend.requests.where((r) => r.path == '/v1/planner/overview').length, before + 1);
+    final refresh = tester.widget<AppPage>(find.byType(AppPage)).onRefresh!;
+    final pending = Future.wait([refresh(), refresh()]);
+    await tester.pumpAndSettle();
+    await pending;
+    expect(backend.requests.where((r) => r.path == '/v1/planner/overview').length, before + 2);
+    expect(backend.requests.where((r) => r.method != 'GET'), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('bottom-navigation swipe opens existing Add menu without a mutation', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -104,7 +124,8 @@ void main() {
         final importControl = find.byKey(const ValueKey('planner-import-calendar'));
         expect(find.ancestor(of: importControl, matching: find.byType(PlannerSevenDaySection)), findsNothing);
         expect(tester.getCenter(importControl).dy,
-          tester.getCenter(find.byTooltip('Reload Planner')).dy);
+          tester.getCenter(find.byTooltip('Settings')).dy);
+        expect(find.byTooltip('Reload Planner'), findsNothing);
         await tester.ensureVisible(find.text('Planning'));
         await tester.tap(find.text('Planning'));
         await tester.pumpAndSettle();

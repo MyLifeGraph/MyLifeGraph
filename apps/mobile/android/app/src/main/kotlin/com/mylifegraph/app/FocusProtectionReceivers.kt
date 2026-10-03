@@ -14,6 +14,7 @@ class FocusProtectionBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
             FocusProtectionManager(context.applicationContext).rescheduleAfterBoot()
+            BlockingTimerNotifications.sync(context)
         }
     }
 }

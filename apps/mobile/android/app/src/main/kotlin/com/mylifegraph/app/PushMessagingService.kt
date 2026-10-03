@@ -46,7 +46,7 @@ class PushMessagingService : FirebaseMessagingService() {
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channel) else Notification.Builder(this)
         try {
             manager.notify("mylifegraph-push", id.hashCode(), builder
-                .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(copy.first).setContentText(copy.second)
+                .setSmallIcon(R.drawable.app_notification_mark).setContentTitle(copy.first).setContentText(copy.second)
                 .setStyle(Notification.BigTextStyle().bigText(copy.second)).setContentIntent(pending)
                 .setAutoCancel(true).setVisibility(Notification.VISIBILITY_PRIVATE).build())
         } catch (_: SecurityException) { /* Permission revoked between checks. */ }

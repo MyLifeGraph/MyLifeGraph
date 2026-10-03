@@ -215,6 +215,13 @@ selected signal. Normalization and evidence-timing explanations remain visible.
 
 ### Past period comparison
 
+Insights supports pull-to-refresh on both sparse and populated primary pages.
+It awaits the existing Insights, Correlations, Personal Patterns and Sleep
+Recommendation reads (and local example Skillset in demo mode); filters and
+selected Advanced pane remain unchanged. No analysis permission, formula or
+write authority changes. Below 600px this replaces the ordinary header refresh;
+desktop refresh and explicit error retries remain available.
+
 Advanced adds `Past` between Skillset and Matrix. This read-only display uses
 the existing owner-scoped 90-day Personal Patterns response and its analysis
 permission, never a new query, stored score, or correlation calculation.

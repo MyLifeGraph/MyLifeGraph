@@ -20,6 +20,7 @@ class AppPage extends StatelessWidget {
     this.backFallback,
     this.showBackForFallback = true,
     this.maxWidth = 1120,
+    this.onRefresh,
     super.key,
   });
 
@@ -36,6 +37,9 @@ class AppPage extends StatelessWidget {
   final String? backFallback;
   final bool showBackForFallback;
   final double maxWidth;
+  /// Read-only pull refresh for the ordinary page scroller. Viewport-body
+  /// pages wrap their own primary scroller to keep fixed controls in place.
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +101,7 @@ class AppPage extends StatelessWidget {
             ]);
           }
           final scrollView = CustomScrollView(
+            physics: onRefresh == null ? null : const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(child: header),
               SliverPadding(
@@ -120,10 +125,14 @@ class AppPage extends StatelessWidget {
               ),
             ],
           );
-          if (bottomPanel == null) return scrollView;
+          final refreshable = onRefresh == null ? scrollView : RefreshIndicator(
+            onRefresh: onRefresh!,
+            child: scrollView,
+          );
+          if (bottomPanel == null) return refreshable;
           final body = Column(
             children: [
-              Expanded(child: scrollView),
+              Expanded(child: refreshable),
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: constraints.maxHeight * 0.45,

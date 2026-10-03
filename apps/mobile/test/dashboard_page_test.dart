@@ -18,6 +18,33 @@ import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 import 'support/dashboard_full_week_fixture.dart';
 
 void main() {
+  testWidgets('Today pull refreshes account reads without opening lazy week or mutating', (tester) async {
+    final repository = _CountingDashboardRepository(_todaySnapshot());
+    var weekReads = 0;
+    final refresh = _RecordingProjectionRefresh();
+    await _pumpDashboard(tester, size: const Size(390, 844),
+      dashboardRepository: repository, projectionRefresh: refresh,
+      onFullWeekLoad: () => weekReads++);
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 320));
+    await tester.pumpAndSettle();
+    expect(repository.calls, 1);
+    expect(weekReads, 0);
+    expect(refresh.targetDates, isEmpty);
+    expect(find.text('Saved; Today could not reload.'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('demo Today pull avoids account command repository', (tester) async {
+    final repository = _CountingDashboardRepository(_todaySnapshot());
+    await _pumpDashboard(tester, size: const Size(390, 844),
+      dashboardRepository: repository,
+      capabilities: const AppSurfaceCapabilities(isLocalDemo: true, canUseSyncedHabits: false));
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 320));
+    await tester.pumpAndSettle();
+    expect(repository.calls, 0);
+    expect(find.text('Saved; Today could not reload.'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'All tasks filters dated and undated without changing saved tasks',
     (tester) async {
@@ -997,6 +1024,14 @@ class _StaticDashboardRepository implements DashboardRepository {
 
   @override
   Future<DashboardSnapshot> getSnapshot() async => snapshot;
+}
+
+class _CountingDashboardRepository implements DashboardRepository {
+  _CountingDashboardRepository(this.snapshot);
+  final DashboardSnapshot snapshot;
+  int calls = 0;
+  @override
+  Future<DashboardSnapshot> getSnapshot() async { calls++; return snapshot; }
 }
 
 class _FailOnceDashboardRepository implements DashboardRepository {

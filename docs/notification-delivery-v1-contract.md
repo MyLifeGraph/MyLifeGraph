@@ -80,6 +80,12 @@ be recorded separately in `verification.md` before claiming live completion.
 
 ## Existing foreground V1 contract
 
+Android blocking-plan countdowns are separate device-local status UI, not FCM
+reminders or Inbox rows. They use their own silent channel and notification tags;
+OS permission never enables account push consent. See
+[Focus Protection](android-focus-protection-v1-contract.md).
+Both kinds use the monochrome canonical app-logo silhouette as their status icon.
+
 Notification Delivery V1 adds explicit consent, deterministic stored-item
 generation, and foreground in-app delivery to the existing Inbox lifecycle. It
 does not add browser, Android, email, push, or operating-system notifications.

@@ -26,6 +26,44 @@ const _fingerprint =
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  for (final sparse in [true, false]) {
+    testWidgets('mobile pull awaits Insights reads and retains filters; sparse=$sparse', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final pending = Completer<CorrelationReport>();
+      var reads = 0, patternReads = 0, sleepReads = 0;
+      final report = CorrelationReport(windowDays: 30,
+        metrics: sparse ? const [] : correlationMetrics, points: const [], results: const []);
+      await tester.pumpWidget(ProviderScope(overrides: [
+        _demoSurfaceOverride(), _skillsetSelectionOverride(),
+        insightsProvider.overrideWith((_) async => const []),
+        correlationReportProvider.overrideWith((_) async => ++reads == 1 ? report : pending.future),
+        personalPatternsProvider.overrideWith((_) async { patternReads++; return null; }),
+        sleepRecommendationProvider.overrideWith((_) async { sleepReads++; return null; }),
+        skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
+      ], child: MaterialApp(theme: AppTheme.liquidGlass,
+        home: const Scaffold(body: InsightsPage()))));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Refresh correlations'), findsNothing);
+      await tester.tap(find.text('Advanced'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 320));
+      for (var i = 0; i < 10 && reads < 2; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(reads, 2);
+      expect(patternReads, 2);
+      expect(sleepReads, 2);
+      expect(find.byType(RefreshProgressIndicator), findsOneWidget);
+      pending.complete(report);
+      await tester.pumpAndSettle();
+      expect(find.byType(RefreshProgressIndicator), findsNothing);
+      expect(tester.widget<SegmentedButton>(find.byWidgetPredicate((widget) => widget is SegmentedButton).first).selected.single.toString(), contains('advanced'));
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets(
     'sparse Compare advances the shared window without promising data',
     (tester) async {

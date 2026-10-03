@@ -30,6 +30,21 @@ import '../../domain/entities/skillset_observations.dart';
 part '../widgets/insights_exploration_widgets.dart';
 part '../widgets/insights_summary_widgets.dart';
 
+Future<void> _refreshInsights(WidgetRef ref) async {
+  final demo = ref.read(appSurfaceCapabilitiesProvider).isLocalDemo;
+  try {
+    await Future.wait<Object?>([
+      ref.refresh(insightsProvider.future),
+      ref.refresh(correlationReportProvider.future),
+      ref.refresh(personalPatternsProvider.future),
+      ref.refresh(sleepRecommendationProvider.future),
+      if (demo) ref.refresh(skillsetProfileProvider.future),
+    ]);
+  } catch (_) {
+    // Each affected panel retains its existing honest read-error state.
+  }
+}
+
 class InsightsPage extends ConsumerWidget {
   const InsightsPage({super.key});
 
@@ -44,21 +59,18 @@ class InsightsPage extends ConsumerWidget {
     final skillset = showExampleSkillset
         ? ref.watch(skillsetProfileProvider)
         : null;
-    void retry() {
-      ref.invalidate(insightsProvider);
-      ref.invalidate(correlationReportProvider);
-      ref.invalidate(personalPatternsProvider);
-      ref.invalidate(sleepRecommendationProvider);
-    }
+    Future<void> retry() => _refreshInsights(ref);
 
     if ((insights.hasError && !insights.hasValue) ||
         (report.hasError && !report.hasValue)) {
       return AppPage(
         title: 'Insights',
+        onRefresh: retry,
         compactHeader: true,
         actions: [
           AppHeaderActions(
-            pageActions: [_InsightsRefreshButton(onRefresh: retry)],
+            pageActions: [if (MediaQuery.sizeOf(context).width >= 600)
+              _InsightsRefreshButton(onRefresh: retry)],
           ),
         ],
         children: [_InsightsLoadError(onRetry: retry)],
@@ -67,10 +79,12 @@ class InsightsPage extends ConsumerWidget {
     if (!insights.hasValue || !report.hasValue) {
       return AppPage(
         title: 'Insights',
+        onRefresh: retry,
         compactHeader: true,
         actions: [
           AppHeaderActions(
-            pageActions: [_InsightsRefreshButton(onRefresh: retry)],
+            pageActions: [if (MediaQuery.sizeOf(context).width >= 600)
+              _InsightsRefreshButton(onRefresh: retry)],
           ),
         ],
         children: const [Center(child: CircularProgressIndicator())],
@@ -140,6 +154,10 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
   set _advancedPane(_AdvancedPane value) =>
       ref.read(_advancedPaneProvider.notifier).state = value;
   final Set<String> _trendMetricIds = {'sleep_hours', 'useful_progress'};
+  Future<void>? _refreshing;
+
+  Future<void> _refresh() => _refreshing ??= _refreshInsights(ref)
+      .whenComplete(() => _refreshing = null);
 
   @override
   void didUpdateWidget(covariant _InsightsHome oldWidget) {
@@ -172,15 +190,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         personalPatterns: widget.personalPatterns,
         sleepRecommendation: widget.sleepRecommendation,
         showPersonalPatterns: widget.showPersonalPatterns,
-        onRefresh: () {
-          ref.invalidate(correlationReportProvider);
-          ref.invalidate(insightsProvider);
-          ref.invalidate(personalPatternsProvider);
-          ref.invalidate(sleepRecommendationProvider);
-          if (widget.skillset != null) {
-            ref.invalidate(skillsetProfileProvider);
-          }
-        },
+        onRefresh: _refresh,
       );
     }
     _ensureSelectedMetricsExist();
@@ -193,7 +203,8 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
     final metricA = widget.report.metricById(_metricAId);
     final metricB = widget.report.metricById(_metricBId);
     return SafeArea(
-      child: CustomScrollView(
+      child: RefreshIndicator(onRefresh: _refresh, child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
@@ -208,15 +219,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                 children: [
                   _InsightsHeader(
                     isMobile: isMobile,
-                    onRefresh: () {
-                      ref.invalidate(correlationReportProvider);
-                      ref.invalidate(insightsProvider);
-                      ref.invalidate(personalPatternsProvider);
-                      ref.invalidate(sleepRecommendationProvider);
-                      if (widget.skillset != null) {
-                        ref.invalidate(skillsetProfileProvider);
-                      }
-                    },
+                    onRefresh: _refresh,
                   ),
                   SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
                   _InsightsViewToggle(
@@ -282,7 +285,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 

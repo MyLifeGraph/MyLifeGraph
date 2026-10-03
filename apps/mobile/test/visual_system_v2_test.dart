@@ -319,7 +319,11 @@ class _VisualReference extends StatelessWidget {
                           color: Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: const AppBrandMark(size: 34),
+                        // Reference the theme-tinted vector; the glass tile is tested separately.
+                        child: AppBrandMark(
+                          size: 34,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Column(

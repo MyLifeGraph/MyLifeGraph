@@ -124,7 +124,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
               enabled: !state.isSending && !state.isLoading &&
                   !state.isDeletingHistory && state.exactRetryMessage == null,
             ),
-            IconButton(
+            if (MediaQuery.sizeOf(context).width >= 600) IconButton(
               tooltip: 'Refresh Coach',
               onPressed: state.isLoading ||
                       state.isSending ||
@@ -184,16 +184,22 @@ class _CoachPageState extends ConsumerState<CoachPage> {
             final scroll = SingleChildScrollView(
               key: const Key('coach-chat-scroll'),
               controller: _chatScrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(AppSpacing.sm, 0, AppSpacing.sm, AppSpacing.sm),
               child: compactHeight
                   ? Column(children: [timeline, const SizedBox(height: AppSpacing.sm), composer])
                   : timeline,
             );
+            final refreshable = RefreshIndicator(
+              key: const ValueKey('coach-pull-refresh'),
+              onRefresh: () => ref.read(coachControllerProvider.notifier).load(),
+              child: scroll,
+            );
             // At very small heights keep all controls reachable in this same
             // chat viewport rather than adding another page/composer scroller.
-            if (compactHeight) return _withScrollToLatest(scroll);
+            if (compactHeight) return _withScrollToLatest(refreshable);
             return Column(children: [
-              Expanded(child: _withScrollToLatest(scroll)),
+              Expanded(child: _withScrollToLatest(refreshable)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(AppSpacing.sm, 0, AppSpacing.sm, AppSpacing.sm),
                 child: composer,
