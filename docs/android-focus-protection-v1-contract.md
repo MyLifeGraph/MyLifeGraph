@@ -8,6 +8,23 @@ The current Android surface is **App blocking**, reached from the header shield
 or existing Settings entry. Its four local tabs are Plans, Strict, Insights and
 Customize. This route hides the main shell navigation to avoid stacked bars.
 Flutter uses existing themes, icon, spacing and surface tokens.
+The selected local tab adds a quiet palette-owned pill behind its unchanged
+icon/label and selected semantics; large text retains the two-column wrap.
+Plan cards show every stored weekly window, with start weekdays, local wall
+times and an explicit next-day end where needed. `Device time` distinguishes
+these native schedules from profile-timezone Planner facts; no inferred or
+example windows are displayed.
+Weekly clock/text groups are centered on the plan-card axis and wrap without
+dropping weekdays or overnight information. Status pills and plan menus retain
+their opposite corners. Customize embeds a bounded interactive Android preview
+using the same `BlockingScreenView` as the app Accessibility overlay. Its timer
+and Return replay are preview-local: no rules, attempts, lease or release change.
+Changing saved appearance recreates the view. Unsupported/web surfaces retain a
+clearly labelled approximate Flutter preview and matching centered edit action.
+The native effective `active` flag controls the accent rim, icon and summary;
+an explicit shield/status pill supplements color. Paused, expired and scheduled
+cards remain neutral. Neither a saved rule nor an enabled plan alone claims
+protection: native master, Accessibility and effective-target gates still apply.
 
 `blocking-plans-v2` is a device-channel contract, not FastAPI/Supabase. It has
 explicit registry coverage because its named constants are Kotlin/Dart, not
@@ -29,6 +46,9 @@ uses only the existing real lease; no synthetic session is created.
 
 Native writes validate targets/rules, exclude essential packages and reject
 stale revisions. Editors keep their opening revision. Cancel writes nothing.
+Opening Edit from a retained detail resolves its ID against the current status
+snapshot; removed IDs cannot be recreated. The resolved definition and revision
+remain paired while the catalog loads and throughout saving.
 Save sheets remain open on failure and cannot be dragged away during persistence.
 Revoked website/usage access stops enforcement/observation, not plan management:
 unchanged retained targets and budgets can be saved, reduced, paused or deleted;
@@ -42,7 +62,8 @@ master/app-blocking/DND switches only; named plans own targets and rules.
 Active Focus leases still prevent configuration changes. Master, app-blocking
 and granted Accessibility gate protection/status.
 
-Rapid Add/catalog opens are single-flight. Status and usage loads have independent
+Rapid Add/catalog and Strict Wi-Fi/NFC setup opens are single-flight, including
+repeated taps before the next rendered frame. Status and usage loads have independent
 generation guards, including failures; denied usage is unavailable, never zero.
 Editors retain drafts after failed persistence and freeze focused keyboard input
 while saving. Strict setup advances its expected revision only for its own
@@ -111,8 +132,21 @@ persistence batches at five seconds and flushes on service interruption or
 destruction; abrupt process death may lose the last unflushed interval.
 Returning to MyLifeGraph clears browser meter state. Attempts count blocking
 entries, not every redraw, with today/total counters.
+Usage charts display a range total from the returned daily measurements.
+Today/Week additionally show each daily magnitude directly; enlarged text wraps
+dated values rather than shrinking them. Month keeps its thirty bars and
+individual accessible tooltips, with a compact total and peak scale instead of
+thirty cramped value labels. Durations use the measured whole seconds/minutes,
+with a nonzero subsecond value shown as `<1s`; unavailable data remains unavailable.
 
 ### Strict and customization
+
+The Strict status ornament keeps its lock fixed while a theme-owned light arc
+turns once per four seconds only while actually locked. This is decoration,
+not unlock progress; the existing labelled countdown remains authoritative.
+Reduced Motion freezes the ring. Hidden routes, other tabs and inactive app
+lifecycle stop its ticker; disposal releases the controller and observer.
+The user-approved feature-local motion does not change any rule or permission.
 
 Strict guards weakening mutations natively, including V1 master/configuration,
 emergency and app-blocking release. Unlock requirements combine with AND:
@@ -125,20 +159,46 @@ authentication. The unlock request persists monotonic time/boot identity;
 reboot restarts the wait and never completes it. Completion rechecks all
 conditions natively and consumes recent NFC proof. Unlock permits changes for
 fifteen minutes, then relocks; Lock now closes the window.
+Emergency release requires Strict to be **disabled**, not merely temporarily
+unlocked for editing. Both native release entry points recheck this condition;
+the overlay hides the emergency control while Strict is enabled. Ordinary
+countdown Return remains available and never unlocks Strict or releases rules.
+The existing Unlock method summary uses compact minute units for full minutes,
+seconds for short waits and both units for a remainder; zero is `Immediate`.
+Its charger/Wi-Fi/NFC requirements remain visible on that same summary line.
+No additional explanatory line is added; the existing Limits disclosure remains.
 Permission/tag launch failures clear their pending reply before retry; completion
 and cancellation consume the reply once even if driver cleanup fails. Strict
 configuration shares the same active-Focus edit boundary as plan configuration.
 
 Strict does not prevent canonical Focus Finish, expiry, DND cleanup, calls,
-alarms, Android Settings, Home or uninstall. Customize saves title/message,
+alarms, Android Settings or uninstall. Customize saves title/message,
 fixed decorative icon, Liquid Glass/Dark/Light/Space background and return delay
-0/3/5/10/15/20 seconds or 1/3/5/10/15 minutes. Native app overlays and website
-pages apply these choices. There is one countdown-gated return button; Return
-never grants the blocked target an exception. Essential escape routes remain.
-The fixed decorative categories and background/text token pairs match the Flutter
-preview. Flutter uses its bundled vector icons to avoid missing system-font
-glyphs; native symbols are not pixel-identical and native rendering does not
-claim Flutter's glass compositor effects.
+0/1/3/5/10/15/20 seconds or 1/3/5/10/15 minutes. Native app overlays and website
+pages apply these choices. The app overlay and Android preview share native
+icons, text, bounded palette and scrollable layout, with system-bar/cutout insets.
+The six saved icon IDs (shield, work, games, social, sleep, study) resolve to
+fixed outline vectors, not font-symbol substitutes. Native preview/overlay and
+the offline website SVG use the same path definitions and theme foreground.
+All four saved backgrounds remain independent Customize choices; reopening
+restores the selected icon/background without changing protection authority.
+They do not claim Flutter's blur compositor. The website's existing offline
+document remains a separate renderer, not the exact Customize app preview.
+
+An app-blocking attempt owns one finite monotonic `BlockReturnDelay`. Home or
+opening MyLifeGraph retains that screen until its oval Return control is used;
+switching between blocked targets/redraws does not restart or extend the wait.
+The fill progresses left-to-right, snaps to ready at expiry and respects Android
+animation settings. Progress ticks at 100ms; rule/expiry checks are bounded to
+one second. Return rechecks the deadline in the service, consumes the attempt,
+removes the overlay synchronously and opens MyLifeGraph (Home fallback on launch
+failure). No target exception, Focus completion or Strict change occurs.
+Master-off/source expiry clears the screen; phone, alarms, Settings and other
+unblocked apps remain safe exits. System UI may hide the overlay without
+resetting the deadline. Home is never globally blocked without a pending attempt.
+Interrupt/destroy/dispose remove callbacks and animations. This is self-control,
+not kiosk security: OS permission revocation, uninstall and OEM lifecycle cannot
+be made tamper-proof. Installed-device evidence remains a separate requirement.
 
 ### Optional website observation
 

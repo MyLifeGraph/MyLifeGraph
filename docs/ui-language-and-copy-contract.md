@@ -610,11 +610,23 @@ Named Android plans use short Plans / Strict / Insights / Customize labels.
 The target footer shows only counts and `Save`; disclosure icons expose
 `Expand apps` / `Collapse apps` tooltips and expanded semantics. Preset chip
 selection describes the current app set, not a separate saved blocking mode.
+Saved weekly-window summaries retain `Device time` and `(+1 day)` for overnight
+ends. Usage quantities use compact duration units; `Total` and `Peak` name only
+the returned measurements. Strict's existing Unlock method uses `3m` rather
+than `180s` and adds no helper sentence. Header overflow uses `More actions` /
+`First actions` only when actions exceed the available title-bounded width.
 Focus session, Always, Add time, Daily budget and Block now are combinable
 choices, not exclusive modes. Sensitive usage/website/Wi-Fi/NFC disclosures and
 limitations remain explicit at consent/setup or inside Limits. Website protection
 must not claim browser-universal or DNS filtering; the offline return page does
 not rewrite third-party tabs. A return delay never grants access to a blocked app.
+Customize labels non-native surfaces `Approximate preview · native on Android`.
+The Android preview uses `Preview` rather than claiming a live plan countdown;
+its Return replays only its local timer. Native return copy uses compact seconds
+and minutes (`Return in 3s`, then `Return to MyLifeGraph`). `Strict mode` means
+enabled, including an unlocked editing window; emergency failure says
+`Turn off Strict mode first.` Phone/alarms/Settings safety exits remain disclosed;
+no label promises kiosk security or universal prevention of Android escape routes.
 `Silence during Focus` explicitly distinguishes DND from independent app blocks.
 Permission disclosures and warnings stay visible; `Privacy & limits` holds
 the full explanation. Package identifiers remain available as app-label tooltips.
@@ -739,6 +751,9 @@ the full explanation. Package identifiers remain available as app-label tooltips
   `Coach could not finish the answer. Open Coach to review or retry.` Closing
   this floating message is not equivalent to reading the answer and neither
   message claims background or push delivery.
+- The shared header menu uses `Page actions` / `Close actions`. Its existing
+  action labels and tooltips remain unchanged. The collapsed Coach notice dot
+  retains its notice semantics; opening or closing the menu does not read it.
 - The expandable answer label is `Data and analysis details`. It may show
   `Snapshot source coverage`, conservative source periods/counts, actual
   inspection/SQL/Python step summaries, limitations, uncertainty, and technical
@@ -751,6 +766,14 @@ the full explanation. Package identifiers remain available as app-label tooltips
   claim causation, diagnosis, automatic changes, or product mutation.
 
 ## Accessibility Copy Gate
+
+Blocking plan pills retain `Active`, `Paused`, `Expired` and `Scheduled` from
+effective native status; accent color is not the only indication. Strict's
+decorative moving ring adds no explanatory line and never claims unlock progress.
+Watch status uses `Connected`, `Not connected`, `Other device`, `Unavailable here`,
+`Checking…` or `Could not confirm`; `Sharing on/off` and actual last sync remain
+separate facts. Connected describes authorized Health Connect on this device,
+not a physical watch connection.
 
 Primary journeys must remain usable at 320 logical pixels and a 2.0 text scale.
 Text may wrap and pages/dialogs may scroll; text must not be scaled down to hide

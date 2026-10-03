@@ -281,6 +281,10 @@ an action at 320 logical pixels and 200-percent text.
 The same header controls remain available during the initial Today loading and
 load-error states. The local unread Coach control does not generate, reload, or
 acknowledge a Coach turn; it only presents the current in-memory notice.
+The shared header actions live behind the `Page actions` circle, with a retained
+unread dot. The same-row expanding menu does not reflow Today or change any
+read/write authority; Back closes the menu before leaving the page. Outside
+tap/swipe/scroll closes it without consuming the underlying page interaction.
 
 Guest/demo builds the same conceptual overview from local capture storage. It
 performs no authenticated Today, Supabase, briefing, or preparation request and

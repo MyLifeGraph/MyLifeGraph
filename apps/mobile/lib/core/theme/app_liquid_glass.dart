@@ -8,6 +8,18 @@ class AppLiquidGlass extends ThemeExtension<AppLiquidGlass> {
 
   final double strength;
 
+  /// Explicit Strict-mode status ornament, using the current theme's accent.
+  /// Static shader; its host alone controls visible/lifecycle-safe rotation.
+  static Shader strictRingShader(Rect bounds, Color highlight) => SweepGradient(
+    colors: [
+      highlight.withValues(alpha: .16),
+      highlight.withValues(alpha: .24),
+      highlight,
+      highlight.withValues(alpha: .16),
+    ],
+    stops: const [0, .62, .88, 1],
+  ).createShader(bounds);
+
   // Soft, stationary pools of light show through tinted cards as they scroll.
   // The page still has an opaque base: no previous route can bleed through.
   static const coolLight = RadialGradient(

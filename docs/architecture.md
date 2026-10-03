@@ -124,6 +124,13 @@ components own only device protection. The default app-blocking mode and all DND
 follow the temporary Focus lease; optional named app/domain plans combine
 weekly windows, timers, Always and usage budgets in separate native preferences.
 Strict unlock checks, usage charts and customization remain device-local.
+Customize embeds a read-only Android PlatformView sharing `BlockingScreenView`
+with the app Accessibility overlay; the preview consumes passed appearance and
+counters, never instantiating protection stores or recording attempts. The
+service alone owns the finite monotonic app-return gate and immediate overlay
+removal. Home retains a pending attempt, but essential system exits remain;
+Strict must be disabled for native emergency release, including during an edit
+window. These private view parameters add no backend/schema/wire-version change.
 Website observation requires separate consent and exact known address-bar IDs;
 the offline block page does not rewrite browser tabs or inspect page contents.
 These features never generate Focus or Cloud records. See

@@ -45,6 +45,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            BlockingPreviewFactory.VIEW_TYPE, BlockingPreviewFactory(),
+        )
         blockingBridge = BlockingBridge(this)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BlockingBridge.CHANNEL)
             .setMethodCallHandler { call, result -> blockingBridge?.handle(call, result) }

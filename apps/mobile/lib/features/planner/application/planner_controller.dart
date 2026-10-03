@@ -126,6 +126,7 @@ class PlannerState {
       !isBusy &&
       !requiresExactRetry &&
       !reloadSuggested &&
+      loadError == null &&
       overview != null &&
       projectionStatus == PlannerProjectionStatus.current;
 
@@ -182,7 +183,11 @@ class PlannerController extends StateNotifier<PlannerState> {
   final bool _canUseSyncedPlanner;
   final bool _isBackendConfigured;
 
-  Future<void> load() => _loadOverview();
+  Future<void>? _overviewLoad;
+
+  Future<void> load() => _overviewLoad ??= _loadOverview().whenComplete(
+    () => _overviewLoad = null,
+  );
 
   Future<void> _loadOverview() async {
     if (!mounted) return;

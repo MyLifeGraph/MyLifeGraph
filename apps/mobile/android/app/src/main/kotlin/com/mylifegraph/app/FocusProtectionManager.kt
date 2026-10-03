@@ -288,7 +288,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun emergencyRelease(sessionId: String): Map<String, Any?> {
-        check(!BlockingPlans(context).locked()) { "Unlock Strict mode first." }
+        BlockingEditPolicy.requireEmergencyAllowed(blockingPlans.strict().optBoolean("enabled"))
         val normalized = sessionId.trim()
         require(normalized.isNotEmpty()) { "Missing session id." }
         val lease = store.readLease()
@@ -389,7 +389,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun releaseAppBlocking() {
-        check(!BlockingPlans(context).locked()) { "Unlock Strict mode first." }
+        BlockingEditPolicy.requireEmergencyAllowed(blockingPlans.strict().optBoolean("enabled"))
         if (blockingMode() == "focus") {
             activeLease()?.let { emergencyRelease(it.sessionId) }
         } else {

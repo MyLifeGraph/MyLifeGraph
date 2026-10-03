@@ -9,6 +9,8 @@ import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
+import 'support/header_actions.dart';
+
 void main() {
   testWidgets('optional pull refresh ignores nested horizontal scrolling', (
     tester,
@@ -118,8 +120,9 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        await openHeaderActions(tester);
         final island = tester.getRect(
-          find.byKey(const ValueKey('header-action-island')),
+          find.byKey(const ValueKey('header-action-menu')),
         );
         expect(island.right, lessThanOrEqualTo(320));
         final reload = find.byTooltip('Reload');
@@ -137,6 +140,8 @@ void main() {
           greaterThan(0),
         );
         for (final key in ['global-header-inbox', 'global-header-settings']) {
+          await tester.ensureVisible(find.byKey(ValueKey(key)));
+          await tester.pumpAndSettle();
           final rect = tester.getRect(find.byKey(ValueKey(key)));
           expect(rect.width, greaterThanOrEqualTo(44));
           expect(rect.height, greaterThanOrEqualTo(44));
@@ -236,11 +241,17 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        final toggle = tester.getRect(find.byKey(const ValueKey('header-island-toggle')));
+        expect(toggle.top, 18);
+        expect(toggle.right, tester.view.physicalSize.width - 18);
+        await openHeaderActions(tester);
         final settings = tester.getRect(
           find.byKey(const ValueKey('global-header-settings')),
         );
-        expect(settings.top, 18);
-        expect(settings.right, tester.view.physicalSize.width - 20);
+        expect(settings.top, toggle.top);
+        expect(settings.right, lessThanOrEqualTo(tester.getRect(
+          find.byKey(const ValueKey('header-action-menu')),
+        ).right));
         expect(settings.width, greaterThanOrEqualTo(44));
         expect(settings.height, greaterThanOrEqualTo(44));
         final inbox = tester.getRect(
@@ -262,12 +273,17 @@ void main() {
       ProviderScope(child: MaterialApp.router(routerConfig: router)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('global-header-inbox')));
+    await openHeaderActions(tester);
+    // Accessibility/keyboard activation does not emit a pointer-up event.
+    tester.widget<IconButton>(
+      find.byKey(const ValueKey('global-header-inbox')),
+    ).onPressed!();
     await tester.pumpAndSettle();
     expect(find.text('Inbox page'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('app-page-back')));
     await tester.pumpAndSettle();
     expect(find.text('Today page'), findsOneWidget);
+    expect(find.byKey(const ValueKey('header-action-menu')), findsNothing);
   });
 
   for (final origin in [AppRoutes.settings, AppRoutes.planner]) {

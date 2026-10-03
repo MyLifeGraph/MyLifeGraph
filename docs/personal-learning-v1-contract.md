@@ -183,6 +183,9 @@ Overview/Advanced and the Advanced subtab also survive route recreation during
 the running app session, without retaining account data or changing any query.
 Advanced correlations remain exploratory and use profile-timezone backend
 points; unsupported reconstructed Planner and Habit histories are excluded.
+Failed Insights or correlation refreshes keep prior data and view selections,
+with a visible read-error and Retry in both sparse and populated layouts; retained
+AsyncValue data never masks a failed read as fresh success.
 Flutter presents target-based sleep as non-negative `Sleep shortfall` while
 retaining the signed API property for compatibility. Previous-night sleep,
 sleep quality, and Morning energy share the local wake/Focus date. Planned and

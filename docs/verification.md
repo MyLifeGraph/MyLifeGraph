@@ -31,6 +31,283 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Release-candidate regression audit (2026-10-03)
+
+- Task base `197540d3ebcb01e66ed84f98718bbd46c6062b28`; candidate remains on
+  `codex/three-round-regression-review`. This section supersedes the local-only
+  checks below, not their historical limitations. Publication is explicitly
+  authorized; final hosted checks and release identities must still be verified.
+- Three independent reviewers cover navigation/lifecycle, Flutter feature flows,
+  and native Blocking plus Auth restoration. New red/green tests reproduce an
+  expired restored bearer reaching hosted recovery before SDK refresh, unhandled
+  auth-stream errors, stale error display during an actual retry, and queued
+  Wi-Fi/NFC setup activations. Fixes preserve real failures, mock isolation,
+  deletion recovery, terminal transitions and existing rule authority.
+- **97 focused Flutter tests pass** across Auth restoration/recovery/repository,
+  Blocking setup/stress, root navigation and header audit. Coverage includes
+  coalesced token refresh, failed refresh, missing profiles, queued activation,
+  120 tab transitions, pending-save dismissal and interrupted swipe/resize.
+  An old Customize keyboard-save fixture now scrolls beside the real native
+  preview and mocks platform creation only; production assertions are retained.
+- The earlier full Windows run recorded **1600 passes and 7 failures**: that
+  corrected fixture plus six platform-specific reference-image differences.
+  Reference goldens are not regenerated. Windows lacks `setsid` for the full
+  source harness; full Linux CI remains the authoritative release gate.
+- Android app JVM tests and debug lint pass using existing Java 21/Android SDKs;
+  Flutter analysis, Docs, Visual and diff checks pass. Captured-base affected
+  selection requires Full. Synthetic renderer catalog passes and active/inactive
+  cards plus Strict UI are visually inspected under ignored
+  `.tools/ui-catalog/release-audit-20261003/`. Browser Planner/Settings/Back and
+  Coach navigation are checked without account-data writes.
+- No connected Android device is available. Real Google OAuth cold-start timing,
+  native surface appearance, Home/SystemUI/OEM event order and hardware NFC remain
+  physical-device acceptance, not claims inferred from tests. No schema or
+  dependency change is required by this candidate.
+
+### Saved block-screen icons and four backgrounds (2026-10-03, local only)
+
+- Base `197540d3ebcb01e66ed84f98718bbd46c6062b28`, same working branch;
+  pre-existing dirty changes are preserved. No commit, push, release, migration
+  or deployment is performed. Changes replace decorative font substitutes with
+  fixed shared vector paths; rules, Strict/Return authority and wire IDs remain.
+- **52 focused Flutter tests pass** across `blocking_ux_polish_test.dart`,
+  `blocking_plans_test.dart`, `blocking_page_test.dart`, `blocking_audit_test.dart`
+  and `blocking_screen_preview_test.dart`. Added tests save/reopen all four
+  backgrounds and selected icons and recreate native surface parameters for all
+  24 icon/tone combinations with zero product calls. These are simulated
+  platform-channel/widget checks, not physical Android rendering evidence.
+- **52 Android app JVM tests pass**, zero failures, using
+  `:app:testDebugUnitTest :app:lintDebug` with the existing temporary Java 21.
+  Native app compilation and lint pass (zero errors, 85 warnings). Fixed SVG
+  markup, all six distinct icons, unknown-ID fallback and all four foreground
+  contrast ratios are checked. Dependency versions are unchanged.
+- Flutter analysis, Docs, Visual and diff hygiene pass. Captured-base affected dry-run still selects
+  Full for the combined dirty tree; the previously documented Windows
+  missing-`setsid` full-harness gap is not a completed Full/release check. The
+  first restricted Flutter invocation produces no progress and is interrupted;
+  the cache-authorized repeat completes successfully. Installed-device
+  appearance and OEM behavior remain separate acceptance requirements.
+- Architecture and copy owners remain accurate: the existing native preview
+  seam and offline renderer stay separate, with unchanged labels, authority,
+  consent and safety limits. Mobile, native and visual owners document vectors.
+
+### Native Customize preview and finite return gate (2026-10-03, local only)
+
+- Base `197540d3ebcb01e66ed84f98718bbd46c6062b28` on
+  `codex/three-round-regression-review`; prior dirty work is preserved. No remote
+  changes, migration, release APK, commit or deployment are performed.
+- **48 focused Flutter tests pass** across the four Blocking suites from the
+  alignment follow-up plus `blocking_screen_preview_test.dart`. Tests cover
+  native surface parameters with zero product calls, unsupported-platform copy,
+  saved one-second delay/reopen, existing failed-save/retry, Back, revision,
+  narrow width and enlarged text behavior. These are widget/platform-channel
+  simulations, not actual Android PlatformView rendering or touch evidence.
+- **50 Android app JVM tests pass** (`:app:testDebugUnitTest`), including six
+  finite-delay tests: all duration boundaries, early/repeated Return, 10,000
+  Home/redraw events without extending a deadline, 20,000 completed entries,
+  invalid durations, source expiry and Strict emergency isolation. App compilation
+  and `:app:lintDebug` pass with zero errors and 84 warnings. Java 21 is supplied
+  from a checksum-verified temporary toolchain; no global SDK/dependency upgrade.
+- The first broad Gradle `testDebugUnitTest lintDebug` attempt fails in the
+  third-party file-selector Robolectric download with TLS `bad_record_mac`.
+  Targeted app tests/lint subsequently pass; this does not claim every dependency
+  project's tests pass. The native Insets API branches are corrected, and the
+  ignored local SDK property paths are escaped for the Windows lint environment.
+- Flutter analysis, Docs, Visual and diff hygiene pass. Independent native
+  implementation/review found and corrected redundant ready-state animation;
+  final review finds no further confirmed premature-return or stuck-screen case.
+  The service consumes the deadline and removes its overlay before launching;
+  preview timer/counters have no protection authority.
+- Captured-base affected selection requires Full for the combined dirty tree.
+  Its fresh Windows run reaches the existing missing-`setsid` source-harness
+  failure and hangs in harness cleanup. Interrupt and targeted process cleanup
+  attempts cannot terminate its remaining children because Windows denies access;
+  the check is still incomplete, not a pass. No completed
+  Full/hosted release pass is claimed. Existing unrelated
+  golden/backend gaps are not repaired by this scoped feature.
+- No connected ADB device is available. Real-device Home/SystemUI event order,
+  phone/alarm/Settings escapes, OEM behavior, rotation/resume/process death,
+  exact native appearance/scrolling and Return removal still need installed-device
+  acceptance. OS escape routes deliberately remain; protection is not kiosk
+  security. The website offline renderer is unchanged by the native app preview.
+
+### Blocking alignment follow-up (2026-10-03, local only)
+
+- Captured base `197540d3ebcb01e66ed84f98718bbd46c6062b28`; existing dirty
+  work is retained. Only Flutter plan-clock alignment and Customize action
+  width/spacing are added. Native overlay, device rules and persistence are
+  unchanged; no publication or deployment is performed.
+- **44 focused Flutter tests pass** across `blocking_ux_polish_test.dart`,
+  `blocking_plans_test.dart`, `blocking_page_test.dart` and
+  `blocking_audit_test.dart`. Added checks cover centered clock groups and
+  equal return/edit button widths at phone/desktop widths and 320px/200% text,
+  including scrolling to offscreen content and the disabled preview action.
+- Flutter analysis, Docs, Visual and diff hygiene pass. One opt-in renderer
+  catalog test passes and captures `.tools/ui-catalog/alignment-20261003/`;
+  Customize and plan-card images are visually reviewed. These are synthetic
+  Flutter previews, not installed-device block-screen screenshots. ADB lists
+  no connected Android device; a real app-opening overlay capture is unavailable.
+- The captured-base affected dry-run selects Full for the combined pre-existing
+  dirty checkout. This focused follow-up is not a completed Full gate or release
+  acceptance; the earlier recorded broader verification gaps remain.
+
+### Approved Blocking/header/watch polish (2026-10-03, local follow-up)
+
+- Base remains `197540d3ebcb01e66ed84f98718bbd46c6062b28` on
+  `codex/three-round-regression-review`; prior uncommitted work is preserved.
+  No commit, remote write, database mutation, APK or deployment accompanies this
+  local UX task.
+- The final targeted regression passes **99 Flutter tests** across nine Header,
+  Blocking, Strict-ring and Health Connect files. Coverage includes four fitting
+  header actions without an arrow, actual overflow/end/reset/resize and keyboard
+  activation; real weekly windows, overnight labels, short Strict wait summaries,
+  effective active/paused cards, charts at 320px/200% text, permissions and cloud
+  consent, account/device mismatch, failed reads, state reload and no implicit
+  health writes. Ring tests cover locked/off, Reduced Motion changes, TickerMode,
+  background/resume, unlocking and disposal. Existing stress tests retain rapid
+  tab/catalog interactions and stale-status/usage/save boundaries.
+- Synthetic opt-in Flutter-renderer captures are visually reviewed under
+  `.tools/ui-catalog/ux-polish-20261003/`: selected tabs and measured chart values,
+  active/inactive plan cards, fixed-lock optical Strict ring, fitting/overflow
+  headers and connected/disconnected Watch data at mobile and desktop widths.
+  The active-plan fixture supplies consistent enabled protection/Accessibility;
+  generated screenshots do not prove installed-device enforcement or pairing.
+- Independent read-only review identified a feature-local gradient definition
+  and an unreachable `Off` label. The shader now belongs to the existing optical
+  theme owner; disabled plans retain the native Pause semantics. No guard or
+  rule is weakened. The approved Strict ring is a documented feature-local
+  motion exception, not a new theme-wide animation policy.
+- Flutter static analysis, Docs/Visual and diff hygiene pass. The opt-in
+  capture run passes **3 renderer tests**; existing reference goldens are not
+  regenerated. The captured-base affected dry-run still
+  selects Full for the combined dirty checkout. This is selection evidence,
+  not a completed Full gate: the previous audit's missing backend `ruff` and
+  Windows/Linux/golden-platform gaps remain unresolved. No release-readiness
+  or physical Android verification is claimed.
+
+### Sequential bug audit (2026-10-03, local follow-up)
+
+- Task base remains `197540d3ebcb01e66ed84f98718bbd46c6062b28` on
+  `codex/three-round-regression-review`. Existing uncommitted review work is
+  preserved; this audit does not authorize publication or deployment.
+- Sequential regression rounds and independent agents reproduce four narrow
+  header defects before correction: screenreader page-action activation did not
+  dismiss the capsule; root-tab visibility loss was not observed after opening;
+  a loaded Insights heading could overlap Android/unread actions at 320px;
+  the unread Coach notice discarded its screenreader tap action. Fixes retain
+  keyboard focus, disabled/selected state, callbacks and the notice lifecycle.
+- The final expanded regression passes **279 Flutter tests** across eighteen
+  Header/navigation, Coach, Blocking, Focus, Planner, Insights and haptics files.
+  Dedicated audit coverage includes semantic activation, Enter/Space, saved
+  language selection, notice opening, disposal/reopening and 320/390px fonts.
+  Two old header tests now explicitly open the collapsed menu before looking
+  for its actions; their capability and enabled assertions are unchanged.
+- Android JVM verification passes **44 tests**, and Android debug lint succeeds.
+  These checks do not establish installed-device accessibility-service, browser
+  redirection, NFC, background enforcement or OEM behavior. No physical Android
+  acceptance, signing or APK build is claimed.
+- Flutter analysis passes. Actual Flutter-rendered Blocking pages/picker and
+  Liquid Glass header states are visually inspected in the ignored
+  `.tools/ui-catalog/audit-20261003/` catalog. Fixtures deliberately use fallback
+  app icons; native catalog icon bytes remain a separate device input.
+- Suspected stale Blocking popup mutations do not reproduce: regression tests
+  preserve refreshed target revisions, reject deleted targets and retain other
+  plans. No Blocking rule/data mutation implementation is changed in this audit.
+  Independent usability suggestions are report-only, not new product behavior.
+- The captured-base affected command selects Full for the combined candidate.
+  It is **not green** on this Windows host: the backend gate cannot import
+  `ruff`; earlier recorded Linux/process and golden-platform gaps remain.
+  Targeted passes do not substitute for a Full/hosted release gate. No schema,
+  dependency, cloud data, signing, push, merge or deployment is changed.
+
+### Same-row header island (2026-10-03, local follow-up)
+
+- Base `197540d3ebcb01e66ed84f98718bbd46c6062b28` and working branch
+  `codex/three-round-regression-review` remain unchanged. Prior review work is
+  preserved. This follow-up replaces the earlier below-header reveal with a
+  title-bounded, same-row capsule; it adds no header height. Narrow menus scroll
+  icons horizontally, retaining accessible targets and the fixed title.
+- **42 focused Flutter tests pass** across Header/navigation, Coach lifecycle
+  and guest shell. The expanded **146-test regression passes** across nine
+  Header/navigation/Coach/Planner/haptics files. Coverage includes 320/390/1200px,
+  doubled text, interrupted animation, resize, action invocation, Back/Escape,
+  Reduced Motion, icon scrolling, outside tap and pointer-wheel dismissal.
+  Outside input reaches the underlying button/scroller, rather than a barrier.
+- Flutter analysis, docs consistency, visual-contract checks and diff whitespace
+  pass. Captured-base affected selection remains Full for the combined candidate;
+  this scoped follow-up does not claim a fresh Full or hosted release pass.
+- Actual local Cloud frontend is visually checked at 390px. Opening keeps the
+  Planner title fixed in the same row; scrolling outside dismisses the capsule.
+  Settings/Back returns to a closed menu. Screenshots are the ignored local
+  `.tools/ui-catalog/island/inline-closed.jpg` and `inline-open.jpg`, not mockups.
+  Temporary viewport override is reset. No cloud-data mutation, push, merge,
+  APK, deployment or physical-device haptic acceptance is claimed.
+
+### Collapsible header action island (2026-10-03, local follow-up)
+
+- Task base remains `197540d3ebcb01e66ed84f98718bbd46c6062b28` on
+  `codex/three-round-regression-review`; prior review edits are preserved.
+  Header actions collapse into a menu circle and reveal leftward beneath the
+  full measured header. The title does not reflow; targets remain 44px. Outside
+  tap, Back, Escape, action activation and route/tab departure dismiss it.
+  Haptics respect the existing preference and Reduced Motion is immediate.
+- The new focused checks reproduce and guard against build-phase overlay
+  dismissal and vertical anchor drift on resize. They cover widths 320/390/1200,
+  doubled text size, title-position equality, rapid interrupted animation,
+  action invocation, Back, Escape and Reduced Motion. The expanded regression
+  group passes **154 tests** across nine Header/navigation/Coach/Planner/haptic
+  files; the final resize/header subset also passes **21 tests**.
+  The subsequent keyboard/accessibility dismissal follow-up passes **59 tests**
+  across five Header/navigation/Coach files, including pointer-free activation.
+  Analysis, docs consistency, visual-contract checks and diff whitespace pass.
+- Browser smoke uses the actual local Cloud frontend, not a generated mockup.
+  Closed/open smartphone screenshots are in the ignored local
+  `.tools/ui-catalog/island/` catalog. Menu resize and Settings/Back are checked
+  without account-data mutations or a provider turn. This is browser-rendered
+  evidence, not physical Android haptic acceptance.
+- Captured-base affected selection (dry run) still requires Full for the combined
+  local candidate. The previously recorded Windows release-gate limitations
+  remain unresolved; no fresh Full/hosted release pass is claimed. No schema,
+  dependency, cloud data, signing, push, merge or deployment is changed.
+
+### Three-round regression review (2026-10-03, local candidate)
+
+- Task base `197540d3ebcb01e66ed84f98718bbd46c6062b28`, working branch
+  `codex/three-round-regression-review`. Three independent agent rounds cover
+  navigation/Back/swipes, Android Blocking editor authority, and retained-data
+  Planner/Insights surfaces. Regressions were reproduced before product fixes;
+  review agents authored isolated tests and the primary executed verification.
+- Confirmed fixes prevent stale Blocking detail definitions from overwriting
+  current plans or resurrecting removed plans; preserve Coach unread notices
+  beneath Settings and cancelled adjacent-page previews; expose retained-data
+  read errors with Retry in Planner/Insights; lock Planner mutations after a
+  failed read; coalesce rapid reloads; and restore the routed root page when
+  Settings interrupts a settling swipe. No schema, native policy, dependency,
+  remote account-data or signing change is made.
+- The final targeted Flutter run passes **303 tests** across 19 files. Coverage
+  includes 25 rapid navigation cycles, Settings during ballistic settling,
+  cancelled/reduced-motion previews, pending-save Back/scrim/drag exclusion,
+  late/disposed reads, narrow/large-text layouts and failed refresh recovery.
+  Existing real pull-gesture Coach tests pass: refresh reads only, preserves
+  the draft/composer and is excluded during a pending send.
+- Android JVM verification passes **44 tests**, with zero failures/errors/skips;
+  `:app:lintDebug` succeeds. The native run excludes Flutter compilation and is
+  JVM/lint evidence, not installed-device acceptance. ADB lists no devices.
+- Read-only browser smoke checked Planner List, Settings/Back and the Coach
+  surface. No authenticated write or provider turn was used. Existing untracked
+  Windows reference-golden failure images remain outside the task changes.
+- Final `flutter analyze --no-pub`, docs consistency and visual-contract checks
+  pass; the repository Web gate builds successfully (input-bound cache miss,
+  113.95 seconds). Compilation automatically retries its transient input-change
+  detection rather than accepting incomplete output. The captured-base affected
+  selector selects Full. Its Windows run is
+  not a passing release gate: Source lacks `setsid`, Backend lacks installed
+  `ruff`, and the full Flutter suite reports **1,529 passes and six failures**
+  in the unchanged dark/light/space desktop/mobile reference-golden tests. No
+  golden baselines are rewritten; database/browser gates were not reached.
+- This candidate is local only: no push, Main promotion,
+  release, database migration or production deployment is performed.
+
 ### Notification artwork packaging correction (2026-10-03, candidate)
 
 - Parent `5043bf4a36ed8b7239e3946a53be7cfe9ce3fdae` passed complete hosted Linux

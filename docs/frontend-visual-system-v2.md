@@ -58,6 +58,8 @@ left for an earlier destination, consistently for buttons and swipes. Reduced
 motion removes the slide; auxiliary push/back navigation is unchanged.
 Incoming root pages cover outgoing content with the existing opaque background
 token during the slide, then expose the unchanged shared backdrop once settled.
+If an auxiliary page is pushed during swipe settlement, the covered pager restores
+its routed page; it cannot navigate underneath that page or change the Back target.
 Header Back visibility is route-local: opening Settings must not insert a Back
 button into the page underneath or shift its title/actions on return.
 Planner's upward creation shortcut starts only on the bottom navigation;
@@ -289,7 +291,7 @@ figures through `AppMetric` or an equivalent themed style. Text is allowed to
 wrap and surfaces are allowed to scroll; text must not be scaled down to hide
 an overflow.
 
-Main-page top actions use one shared wrapping group on Today, Insights, Quick
+Main-page top actions use one shared collapsible group on Today, Insights, Quick
 actions, Planner, Coach, and Settings. Page-specific actions come first, an
 unread Coach action comes second when present, followed by Inbox and Settings. Every
 icon action owns a 44 by 44 logical-pixel target and keyboard/semantic label.
@@ -319,6 +321,26 @@ count/disclosure. Selected checks are slightly larger and use primary/on-primary
 contrast; preset chips use existing selected colors. No new palette or Liquid
 Glass material is introduced. Large text may wrap the count but never hides Save
 or the accessible disclosure control.
+The selected blocking tab uses its theme's primary-container pill and contrasting
+icon/label. Cards show actual weekly windows, and usage magnitudes appear above
+bars where they fit, with wrapped labelled values for longer/enlarged text and
+compact range total/peak for dense Month charts. Strict adds no explanatory row.
+Blocking cards center their clock/text groups with flexible wrapping. Customize
+uses matching centered return/edit action widths in its labelled non-Android
+approximation, capped at 286px with 48px minimum heights. Android uses the real
+native app-screen renderer inside a bounded 9:16 frame (maximum 340px width).
+Saved custom tone/icon/text/delay and Strict state are creation parameters;
+the interactive preview never mutates protection. Native app overlays and preview
+share centered scrollable content, system insets and an oval left-to-right return
+fill (minimum 60dp height, wrapping text). Reduced animation settings disable
+interpolation; readiness snaps immediately and leaves no animation running.
+Native light pools and fill colors stay within the existing bounded tone palette;
+Shield, work, games, social, sleep and study use fixed 24-unit outline paths,
+rendered at 48dp in the native preview/overlay and 48px in offline SVG. The
+foreground follows the saved Glass/Dark/Light/Space background. Unknown icon
+IDs render a shield; no user markup or font-dependent substitute is rendered.
+Flutter palette/material tokens remain unchanged. Offline website pages retain
+their separate document renderer.
 
 Watch, Calendar import and the Exam wizard use compact shared surfaces:
 primary actions first, optional details collapsed, source actions in a labelled
@@ -428,7 +450,15 @@ freezes photo and stars at deterministic phase `0.37` and replaces animated
 ripple/press feedback with immediate state feedback. No drawn planets,
 ribbons, orbits, constellations, input-driven parallax, mouse/scroll tracking,
 device sensors, or other camera paths are permitted. No other theme gains
-looping decorative motion.
+looping decorative motion outside the explicitly requested Strict status ring.
+That feature-local ornament uses the current theme accent and a static shader
+defined by the Liquid Glass optical owner; only its isolated render layer turns
+once per four seconds. The central lock stays fixed. Motion requires actual
+locked state, foreground lifecycle and visible TickerMode; Reduced Motion
+freezes it. It is never styled or announced as countdown progress.
+Wearables retains its existing controls and adds an enlarged Phosphor watch
+with a short, state-derived connection label. Its finite state fade uses the
+shared state token; no continuous watch motion or new palette is introduced.
 
 Controls use at least a 44×44 logical touch target. Keyboard focus uses a
 two-pixel strong-focus outline, including buttons, icon buttons, fields,
@@ -626,6 +656,26 @@ Category color paints only the narrow left accent, never a full opaque layer
 under that translucent row; primary/secondary text retains its dark-surface contrast.
 Shared header actions form one rounded, softly raised glass island in Liquid Glass,
 with clear individual icons and unchanged 44px targets, focus and navigation.
+The resting state is a 48px circle with a menu icon. Opening reveals the existing
+actions right-to-left in the same header row, with a fixed title and anchor throughout.
+Horizontal clipping and a subtle fade use the shared 260ms emphasis curve;
+glyphs are not scaled. Reverse animation closes it; outside tap, Back, Escape,
+activation or leaving the page dismisses it. Outside swipe/scroll also closes it
+without consuming the underlying gesture. Reduced Motion is immediate.
+Selection haptics obey the existing toggle. The overlay has a legible surface,
+title-bounded width and horizontally scrollable 44px targets rather than
+wrapping or shrinking icons. Scrolling icons inside the capsule leaves it open.
+Icon targets use 44px and consume the full title-bounded capacity; no fixed icon
+count or arbitrary desktop width cap is imposed. Only measured overflow adds an
+accessible end-scroll chevron. It changes direction at the end, leaves the menu
+open on pointer/keyboard activation and disappears when resizing lets all icons
+fit. At widths below two targets, the existing swipe gets a passive edge cue
+instead of sacrificing an action's target. Title, palette and reveal remain.
+Loaded Today/Insights headings reserve the same title space as loading/error
+pages. Activation dismissal also applies to screenreader actions, not only
+pointer/keyboard input, without excluding native focus/tap semantics (including
+the unread Coach notice); tab departure is observed independently of open state.
+An unread Coach dot remains visible on the closed circle.
 Inside the island, icons omit individual sheen/background tiles and resting
 borders. Circular press/hover feedback and a two-pixel keyboard focus ring
 identify the active control without adding permanent dividers or a white wash.

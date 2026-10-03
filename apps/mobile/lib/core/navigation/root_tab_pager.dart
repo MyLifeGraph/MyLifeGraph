@@ -4,6 +4,28 @@ import 'package:flutter/material.dart';
 import '../theme/app_motion_tokens.dart';
 import '../theme/app_visual_tokens.dart';
 
+/// Read acknowledgement belongs only to the settled root destination, not to
+/// a lazily mounted neighbouring preview. Non-pager routes are visible by default.
+class RootTabVisibility extends InheritedWidget {
+  const RootTabVisibility({
+    required this.visible,
+    required super.child,
+    super.key,
+  });
+
+  final bool visible;
+
+  static bool of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<RootTabVisibility>()
+          ?.visible ??
+      true;
+
+  @override
+  bool updateShouldNotify(RootTabVisibility oldWidget) =>
+      visible != oldWidget.visible;
+}
+
 /// One route surface for the root tabs. Previews are real, lazily built pages;
 /// navigation is committed only when the pager settles, not on pointer down.
 class RootTabPager extends StatefulWidget {
@@ -25,7 +47,10 @@ class RootTabPager extends StatefulWidget {
 }
 
 class _RootTabPagerState extends State<RootTabPager> {
-  late final _controller = PageController(initialPage: widget.index, keepPage: false);
+  late final _controller = PageController(
+    initialPage: widget.index,
+    keepPage: false,
+  );
   bool _moving = false;
   int _origin = 0;
   Offset? _touchStart;
@@ -41,6 +66,22 @@ class _RootTabPagerState extends State<RootTabPager> {
 
   void _focusChanged() {
     if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (ModalRoute.of(context)?.isCurrent == false) {
+      _cancelled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            !_controller.hasClients ||
+            ModalRoute.of(context)?.isCurrent != false) {
+          return;
+        }
+        _controller.jumpToPage(widget.index);
+      });
+    }
   }
 
   @override
@@ -93,6 +134,11 @@ class _RootTabPagerState extends State<RootTabPager> {
           if (!_moving) setState(() => _moving = true);
         } else if (notification is ScrollEndNotification) {
           if (_moving) setState(() => _moving = false);
+          // A pushed page owns navigation while this route is covered. A late
+          // swipe must not change its history or leave a different page on Back.
+          if (ModalRoute.of(context)?.isCurrent == false) {
+            return false;
+          }
           final settled = _controller.page!.round().clamp(0, widget.count - 1);
           if (settled != widget.index) widget.onSettled(settled);
         }
@@ -137,7 +183,10 @@ class _RootTabPagerState extends State<RootTabPager> {
               color: _moving
                   ? context.visualTokens.background
                   : Colors.transparent,
-              child: widget.pageBuilder(context, index),
+              child: RootTabVisibility(
+                visible: !_moving && index == widget.index,
+                child: widget.pageBuilder(context, index),
+              ),
             ),
           ),
         ),

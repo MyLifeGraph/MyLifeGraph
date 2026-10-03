@@ -111,7 +111,10 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
         _cancelCoachResponse = cancelCoachResponse ?? _noCoachCancellation,
         super(const AsyncValue.loading()) {
     unawaited(_load());
-    _subscription = _repository?.authStateChanges.listen(_handleAuthChange);
+    _subscription = _repository?.authStateChanges.listen(
+      _handleAuthChange,
+      onError: _handleAuthError,
+    );
   }
 
   final AuthRepository? _repository;
@@ -136,8 +139,17 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     }
   }
 
+  void _handleAuthError(Object error, StackTrace stackTrace) {
+    if (!mounted || _terminalTransitionGeneration != null) return;
+    _authGeneration += 1;
+    state = AsyncValue.error(error, stackTrace);
+  }
+
   Future<void> _load() async {
     final generation = ++_authGeneration;
+    // A real retry replaces the old failure while pending. Ordinary successful
+    // profile refreshes retain their session so existing routes remain stable.
+    if (state.hasError) state = const AsyncValue.loading();
     if (!_recoveryStateRestored) {
       await _restorePasswordRecoveryState();
       _recoveryStateRestored = true;

@@ -48,6 +48,43 @@ Future<void> pumpPage(
 }
 
 void main() {
+  for (final (name, enabled, granted, device, android, fail, expected) in [
+    ('connected', true, true, 'device', true, false, 'Connected'),
+    ('off', false, true, 'device', true, false, 'Not connected'),
+    ('revoked', true, false, 'device', true, false, 'Not connected'),
+    ('different device', true, true, 'other', true, false, 'Other device'),
+    ('web', true, true, 'device', false, false, 'Unavailable here'),
+    ('failed read', true, true, 'device', true, true, 'Could not confirm'),
+  ]) {
+    testWidgets('watch status is honest for $name without implicit writes', (
+      tester,
+    ) async {
+      final gateway = Gateway()
+        ..current = cloud(enabled: enabled, device: device)
+        ..granted = granted
+        ..failRead = fail;
+      await pumpPage(tester, gateway, android: android);
+      expect(find.text(expected), findsOneWidget);
+      expect(gateway.commands, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('watch status changes after reloading revoked permission', (
+    tester,
+  ) async {
+    final gateway = Gateway();
+    await pumpPage(tester, gateway);
+    expect(find.text('Connected'), findsOneWidget);
+    gateway.granted = false;
+    await tester.tap(find.byTooltip('Reload'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connected'), findsNothing);
+    expect(find.text('Not connected'), findsOneWidget);
+    expect(find.text('Reconnect this device'), findsOneWidget);
+    expect(gateway.commands, isEmpty);
+  });
+
   testWidgets(
     'compact watch view keeps optional details and no implicit writes',
     (tester) async {

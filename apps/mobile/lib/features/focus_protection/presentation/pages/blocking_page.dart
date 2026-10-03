@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,6 +17,8 @@ import '../../application/focus_protection_gateway.dart';
 import '../../domain/blocking_plan.dart';
 import '../../domain/focus_protection.dart';
 import 'focus_protection_settings_page.dart';
+import '../widgets/strict_status_ring.dart';
+import '../widgets/blocking_screen_preview.dart';
 
 IconData blockingIcon(String name) => switch (name) {
   'work' => AppIcons.briefcaseOutlined,
@@ -272,6 +274,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     setState(() => _editorOpen = true);
     try {
       final editorBase = _snapshot!;
+      // A detail sheet may outlive a foreground refresh. Never pair its old
+      // definition with the new revision, or resurrect a removed plan.
+      if (plan != null) {
+        final current = editorBase.plans.where((p) => p.id == plan!.id);
+        if (current.isEmpty) {
+          setState(() => _error = 'Plan changed. Reload and try again.');
+          return;
+        }
+        plan = current.single;
+      }
       final catalog = await _catalog();
       if (catalog == null || !mounted || _configurationLocked) return;
       await showModalBottomSheet<BlockingPlan>(
@@ -459,12 +471,24 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                                     if (index == 2) unawaited(_usage());
                                   },
                             style: TextButton.styleFrom(
+                              backgroundColor: _tab == index
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.primaryContainer
+                                  : null,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadii.pill,
+                                ),
+                              ),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 4,
                                 vertical: 8,
                               ),
                               foregroundColor: _tab == index
-                                  ? Theme.of(context).colorScheme.primary
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimaryContainer
                                   : Theme.of(
                                       context,
                                     ).colorScheme.onSurfaceVariant,
@@ -476,7 +500,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                                 Text(
                                   label,
                                   textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.labelSmall,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: _tab == index
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.onPrimaryContainer
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                      ),
                                 ),
                               ],
                             ),
@@ -555,15 +588,23 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    plan.paused
-                        ? 'Paused'
-                        : plan.active
-                        ? 'Active'
-                        : plan.expired
-                        ? 'Expired'
-                        : 'Scheduled',
-                    style: Theme.of(context).textTheme.labelMedium,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppStatusPill(
+                      icon: plan.active
+                          ? AppIcons.shieldOutlined
+                          : AppIcons.schedule,
+                      tone: plan.active
+                          ? AppStatusTone.info
+                          : AppStatusTone.neutral,
+                      label: plan.paused
+                          ? 'Paused'
+                          : plan.active
+                          ? 'Active'
+                          : plan.expired
+                          ? 'Expired'
+                          : 'Scheduled',
+                    ),
                   ),
                 ),
                 PopupMenuButton<String>(
@@ -587,7 +628,13 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 ),
               ],
             ),
-            Icon(blockingIcon(plan.icon), size: 40),
+            Icon(
+              blockingIcon(plan.icon),
+              size: 40,
+              color: plan.active
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               plan.name,
@@ -595,7 +642,43 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: AppSpacing.xs),
-            Text(plan.summary, textAlign: TextAlign.center),
+            Text(
+              plan.summary,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: plan.active
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (plan.windows.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              for (final window in plan.windows)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(AppIcons.schedule, size: 16),
+                        const SizedBox(width: AppSpacing.xs),
+                        Flexible(
+                          child: Text(
+                            _windowSummary(window),
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              Text(
+                'Device time',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
             if (plan.budget > 0)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -698,9 +781,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 for (final window in plan.windows)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.sm),
-                    child: Text(
-                      '${window.days.map((d) => _dayNames[d - 1]).join(' ')} · ${_clock(window.start)}–${_clock(window.end)}${window.end < window.start ? ' (+1 day)' : ''}',
-                    ),
+                    child: Text(_windowSummary(window)),
                   ),
                 if (plan.windows.isNotEmpty) const Text('Device time'),
                 const SizedBox(height: AppSpacing.md),
@@ -723,32 +804,15 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
 
   String _clock(int m) =>
       TimeOfDay(hour: m ~/ 60, minute: m % 60).format(context);
+  String _windowSummary(BlockingWindow window) {
+    final days = window.days.toList()..sort();
+    return '${days.map((d) => _dayNames[d - 1]).join(' ')} · ${_clock(window.start)}–${_clock(window.end)}${window.end < window.start ? ' (+1 day)' : ''}';
+  }
+
   static const _dayNames = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
   List<Widget> _strict(BlockingSnapshot s) => [
     const SizedBox(height: AppSpacing.lg),
-    Center(
-      child: SizedBox.square(
-        dimension: 136,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox.expand(
-              child: CircularProgressIndicator(
-                value: s.locked ? 1 : 0,
-                strokeWidth: 6,
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest,
-              ),
-            ),
-            Icon(
-              s.locked ? AppIcons.lockOutline : AppIcons.lockResetOutlined,
-              size: 48,
-            ),
-          ],
-        ),
-      ),
-    ),
+    Center(child: StrictStatusRing(locked: s.locked)),
     const SizedBox(height: AppSpacing.md),
     Text(
       s.locked
@@ -835,11 +899,18 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     ),
   ];
   String _strictSummary(BlockingSnapshot s) => [
-    '${s.strict['waitSeconds'] ?? 180}s',
+    _waitLabel(s.strict['waitSeconds'] as int? ?? 180),
     if (s.strict['power'] == true) 'Charger',
     if (s.strict['wifi'] == true) 'Wi-Fi',
     if (s.strict['nfc'] == true) 'NFC',
   ].join(' + ');
+  String _waitLabel(int seconds) => seconds == 0
+      ? 'Immediate'
+      : seconds < 60
+      ? '${seconds}s'
+      : seconds % 60 == 0
+      ? '${seconds ~/ 60}m'
+      : '${seconds ~/ 60}m ${seconds % 60}s';
   Future<BlockingSnapshot?> _scan(bool enroll) async {
     if (_busy) return null;
     final navigator = Navigator.of(context, rootNavigator: true);
@@ -980,6 +1051,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                       if (!_snapshot!.wifiReady)
                         TextButton(
                           onPressed: () async {
+                            if (saving || _busy) return;
                             update(() => saving = true);
                             try {
                               final next = await _gateway.command(
@@ -1008,6 +1080,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                       if (_snapshot!.nfcAvailable && !_snapshot!.nfcEnrolled)
                         TextButton(
                           onPressed: () async {
+                            if (saving || _busy) return;
                             update(() => saving = true);
                             final next = await _scan(true);
                             if (next != null) expectedRevision = next.revision;
@@ -1127,60 +1200,118 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     ],
   );
   List<Widget> _custom(BlockingSnapshot s) => [
-    Theme(
-      data: AppTheme.resolve(switch (s.custom['tone']) {
-        'light' => AppThemeId.light,
-        'dark' => AppThemeId.dark,
-        'space' => AppThemeId.space,
-        _ => AppThemeId.liquidGlass,
-      }),
-      child: Builder(
-        builder: (context) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.circular(AppRadii.md),
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        _legacy?.platformSupported == true)
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: AspectRatio(
+            aspectRatio: 9 / 16,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              child: BlockingScreenPreview(
+                custom: s.custom,
+                counters: {'today': s.attemptsToday, 'total': s.attemptsTotal},
+                strictLocked: s.strict['enabled'] == true,
+              ),
+            ),
           ),
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            children: [
-              Icon(
-                blockingIcon(s.custom['icon'] as String? ?? 'shield'),
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                s.custom['title'] as String? ?? 'Stay focused',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                s.custom['message'] as String? ??
-                    'Take a breath. Choose your next step.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text('${s.attemptsToday} today · ${s.attemptsTotal} total'),
-              const SizedBox(height: AppSpacing.md),
-              OutlinedButton(
-                onPressed: null,
-                child: Text(
-                  (s.custom['waitSeconds'] as int? ?? 0) == 0
-                      ? 'Return to MyLifeGraph'
-                      : 'Return in ${s.custom['waitSeconds']}s',
+        ),
+      )
+    else ...[
+      Text(
+        'Approximate preview · native on Android',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      Theme(
+        data: AppTheme.resolve(switch (s.custom['tone']) {
+          'light' => AppThemeId.light,
+          'dark' => AppThemeId.dark,
+          'space' => AppThemeId.space,
+          _ => AppThemeId.liquidGlass,
+        }),
+        child: Builder(
+          builder: (context) => Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: BorderRadius.circular(AppRadii.md),
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              0,
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  blockingIcon(s.custom['icon'] as String? ?? 'shield'),
+                  size: 64,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  s.custom['title'] as String? ?? 'Stay focused',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  s.custom['message'] as String? ??
+                      'Take a breath. Choose your next step.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  '${s.attemptsToday} today · ${s.attemptsTotal} total',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 286,
+                    minHeight: 48,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: null,
+                      child: Text(
+                        (s.custom['waitSeconds'] as int? ?? 0) == 0
+                            ? 'Return to MyLifeGraph'
+                            : 'Return in ${s.custom['waitSeconds']}s',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
+    ],
     const SizedBox(height: AppSpacing.md),
-    FilledButton.icon(
-      onPressed: _configurationLocked || _busy ? null : () => _customize(s),
-      icon: const Icon(AppIcons.tuneOutlined),
-      label: const Text('Customize'),
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 286, minHeight: 48),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _configurationLocked || _busy
+                  ? null
+                  : () => _customize(s),
+              icon: const Icon(AppIcons.tuneOutlined),
+              label: const Text('Customize'),
+            ),
+          ),
+        ),
+      ),
     ),
   ];
   Future<void> _customize(BlockingSnapshot s) async {
@@ -1293,6 +1424,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                         items: [
                           for (final seconds in [
                             0,
+                            1,
                             3,
                             5,
                             10,
@@ -2212,14 +2344,36 @@ class _UsageBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maximum = values.fold<int>(
-      1,
-      (a, v) => (v['milliseconds'] as int).clamp(a, 2147483647),
+      0,
+      (a, v) => (v['milliseconds'] as int) > a ? v['milliseconds'] as int : a,
     );
+    final total = values.fold<int>(
+      0,
+      (sum, value) => sum + (value['milliseconds'] as int),
+    );
+    final labelsAbove =
+        values.length <= 7 &&
+        MediaQuery.textScalerOf(context).scale(12) < 18 &&
+        values.every((v) => _usageLabel(v['milliseconds'] as int).length <= 4);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Daily usage', style: Theme.of(context).textTheme.titleMedium),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            Text('Daily usage', style: Theme.of(context).textTheme.titleMedium),
+            Text('Total ${_usageLabel(total)}'),
+          ],
+        ),
         const SizedBox(height: AppSpacing.md),
+        if (values.length > 7)
+          Text(
+            'Peak ${_usageLabel(maximum)}',
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
         SizedBox(
           height: 140,
           child: Row(
@@ -2231,23 +2385,38 @@ class _UsageBars extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: Tooltip(
                       message:
-                          '${DateTime.fromMillisecondsSinceEpoch(value['dateEpochMs'] as int).day} · ${(value['milliseconds'] as int) ~/ 60000}m',
+                          '${_dateLabel(context, value)} · ${_usageLabel(value['milliseconds'] as int)}',
                       child: Semantics(
                         label:
-                            '${(value['milliseconds'] as int) ~/ 60000} minutes',
-                        child: FractionallySizedBox(
-                          heightFactor:
-                              ((value['milliseconds'] as int) / maximum).clamp(
-                                .015,
-                                1,
+                            '${_dateLabel(context, value)} · ${_usageLabel(value['milliseconds'] as int)}',
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (labelsAbove) ...[
+                              Text(
+                                _usageLabel(value['milliseconds'] as int),
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.labelSmall,
                               ),
-                          alignment: Alignment.bottomCenter,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary,
-                              borderRadius: BorderRadius.circular(AppRadii.sm),
+                              const SizedBox(height: AppSpacing.xs),
+                            ],
+                            SizedBox(
+                              height:
+                                  ((value['milliseconds'] as int) /
+                                          (maximum == 0 ? 1 : maximum))
+                                      .clamp(.015, 1) *
+                                  (labelsAbove ? 116 : 140),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadii.sm,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ),
@@ -2258,6 +2427,41 @@ class _UsageBars extends StatelessWidget {
         ),
         if (values.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.xs),
+          if (values.length <= 7 && !labelsAbove)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final largeText =
+                    MediaQuery.textScalerOf(context).scale(12) >= 18;
+                if (largeText) {
+                  return Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      for (final value in values)
+                        Text(
+                          '${_dateLabel(context, value)}: ${_usageLabel(value['milliseconds'] as int)}',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final value in values)
+                      Expanded(
+                        child: Text(
+                          _usageLabel(value['milliseconds'] as int),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          if (values.length <= 7 && !labelsAbove)
+            const SizedBox(height: AppSpacing.xs),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -2283,5 +2487,20 @@ class _UsageBars extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  String _dateLabel(BuildContext context, Map value) =>
+      MaterialLocalizations.of(context).formatShortMonthDay(
+        DateTime.fromMillisecondsSinceEpoch(value['dateEpochMs'] as int),
+      );
+
+  String _usageLabel(int milliseconds) {
+    if (milliseconds == 0) return '0m';
+    if (milliseconds < 1000) return '<1s';
+    final seconds = milliseconds ~/ 1000;
+    if (seconds < 60) return '${seconds}s';
+    return seconds % 60 == 0
+        ? '${seconds ~/ 60}m'
+        : '${seconds ~/ 60}m ${seconds % 60}s';
   }
 }

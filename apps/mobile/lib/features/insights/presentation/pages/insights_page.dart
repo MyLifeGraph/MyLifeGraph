@@ -98,6 +98,7 @@ class InsightsPage extends ConsumerWidget {
       personalPatterns: personalPatterns,
       sleepRecommendation: sleepRecommendation,
       showPersonalPatterns: !showExampleSkillset,
+      readFailed: insights.hasError || report.hasError,
     );
   }
 }
@@ -110,6 +111,7 @@ class _InsightsHome extends ConsumerStatefulWidget {
     required this.personalPatterns,
     required this.sleepRecommendation,
     required this.showPersonalPatterns,
+    required this.readFailed,
   });
 
   final List<Insight> insights;
@@ -118,6 +120,7 @@ class _InsightsHome extends ConsumerStatefulWidget {
   final AsyncValue<PersonalPatterns?> personalPatterns;
   final AsyncValue<SleepRecommendation?> sleepRecommendation;
   final bool showPersonalPatterns;
+  final bool readFailed;
 
   @override
   ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
@@ -191,6 +194,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         sleepRecommendation: widget.sleepRecommendation,
         showPersonalPatterns: widget.showPersonalPatterns,
         onRefresh: _refresh,
+        readFailed: widget.readFailed,
       );
     }
     _ensureSelectedMetricsExist();
@@ -227,6 +231,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                     onChanged: (view) => setState(() => _view = view),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  if (widget.readFailed) _InsightsLoadError(onRetry: _refresh),
                   Visibility(
                     visible: _view == _InsightsView.overview,
                     maintainState: true,

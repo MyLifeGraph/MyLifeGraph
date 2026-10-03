@@ -667,6 +667,49 @@ void main() {
     expect(controller.state.valueOrNull, isNull);
   });
 
+  test('auth stream failures become recoverable state instead of escaping',
+      () async {
+    final repository = _FakeAuthRepository(current: AppSession.authenticated(_profile()));
+    final controller = AuthController(repository);
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+
+    const failure = AuthException('Synthetic refresh failure');
+    repository.emitAuthError(failure);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.state.error, same(failure));
+    await controller.refresh();
+    expect(controller.state.hasError, isFalse);
+    expect(controller.state.valueOrNull?.profile.id, 'account-id');
+  });
+
+  test('a new session read clears an old error only while it is pending',
+      () async {
+    final repository = _FakeAuthRepository(current: AppSession.authenticated(_profile()));
+    final controller = AuthController(repository);
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+    final failedRead = Completer<AppSession?>();
+    repository.delayedCurrentSession = failedRead;
+    final failedRefresh = controller.refresh();
+    failedRead.completeError(const AuthException('Synthetic first read failure'));
+    await failedRefresh;
+    expect(controller.state.hasError, isTrue);
+
+    final retryRead = Completer<AppSession?>();
+    repository.delayedCurrentSession = retryRead;
+    final retry = controller.refresh();
+    final retryWasLoading = controller.state.isLoading;
+    final retryKeptError = controller.state.hasError;
+    retryRead.completeError(const MissingProfileInvariantException());
+    await retry;
+
+    expect(retryWasLoading, isTrue);
+    expect(retryKeptError, isFalse);
+    expect(controller.state.error, isA<MissingProfileInvariantException>());
+  });
+
   test('a delayed pre-logout profile load cannot resurrect the session',
       () async {
     final repository = _FakeAuthRepository(
@@ -1065,6 +1108,8 @@ class _FakeAuthRepository extends AuthRepository {
   void emitPasswordRecovery() {
     _authStates.add(const AuthState(AuthChangeEvent.passwordRecovery, null));
   }
+
+  void emitAuthError(Object error) => _authStates.addError(error, StackTrace.current);
 }
 
 class _RecordingCaptchaChallenge implements AuthCaptchaChallenge {
