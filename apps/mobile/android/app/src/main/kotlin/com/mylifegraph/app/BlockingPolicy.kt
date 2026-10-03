@@ -117,10 +117,13 @@ class BlockingUsageReducer(private val start: Long, private val end: Long) {
 
 /** Persist boot identity with monotonic timestamps. A reboot never completes a wait. */
 object BlockingUnlockPolicy {
+    fun started(started: Long, startBoot: Int, boot: Int, now: Long): Boolean =
+        boot >= 0 && startBoot == boot && started >= 0 && now >= started
+
     fun remaining(waitSeconds: Int, started: Long, startBoot: Int, boot: Int, now: Long): Long =
         when {
             waitSeconds == 0 -> 0
-            started < 0 || startBoot != boot || now < started -> waitSeconds * 1000L
+            !started(started, startBoot, boot, now) -> waitSeconds * 1000L
             else -> (waitSeconds * 1000L - (now - started)).coerceAtLeast(0)
         }
 

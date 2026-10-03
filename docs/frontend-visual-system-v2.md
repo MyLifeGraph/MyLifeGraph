@@ -1,5 +1,11 @@
 # Frontend Visual System V2
 
+Blocking Strict separates the active idle state from an explicitly requested
+unlock countdown; before Unblock no countdown or disabled completion is shown.
+Its existing ornament remains decorative. Android Customize places its edit
+action above the native preview. Taps retain preview interaction, while vertical
+swipes scroll the containing page; the actual blocking overlay is unchanged.
+
 The separate `apps/website` product tour defaults to Liquid Glass, with saved
 Dark, Light and Space alternatives in a compact icon dropdown. It retains the
 canonical brand mark. Responsive synthetic panels follow the app's desktop

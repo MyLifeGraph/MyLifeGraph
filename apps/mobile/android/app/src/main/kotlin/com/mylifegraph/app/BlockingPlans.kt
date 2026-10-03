@@ -49,6 +49,9 @@ class BlockingPlans(private val context: Context) {
     fun strict() = settings("strict")
     private fun released(): Boolean = prefs.getInt("release_boot", -2) == boot() &&
         prefs.getLong("release_until", 0) > SystemClock.elapsedRealtime()
+    private fun unlockStarted(currentBoot: Int = boot(), elapsed: Long = SystemClock.elapsedRealtime()): Boolean =
+        BlockingUnlockPolicy.started(prefs.getLong("unlock_start", -1),
+            prefs.getInt("unlock_boot", -2), currentBoot, elapsed)
     fun locked(): Boolean = strict().optBoolean("enabled") && !released()
     fun requireEditable() {
         BlockingEditPolicy.requireEditable(locked(), legacy.readLease()?.isActive(now()) == true)
@@ -217,7 +220,7 @@ class BlockingPlans(private val context: Context) {
         for (key in counts.keys()) { val pair = attempts(key); today += pair.first; total += pair.second }
         return mapOf("contractVersion" to CONTRACT_VERSION, "revision" to prefs.getLong("revision", 0), "plans" to arrayMap(values),
             "strict" to jsonMap(s), "locked" to locked(), "remainingMs" to remaining,
-            "unlockStarted" to (prefs.getInt("unlock_boot", -2) == boot() && prefs.getLong("unlock_start", -1) >= 0),
+            "unlockStarted" to unlockStarted(),
             "releaseRemainingMs" to (if (released()) (prefs.getLong("release_until", 0) - SystemClock.elapsedRealtime()).coerceAtLeast(0) else 0),
             "custom" to jsonMap(custom()), "websiteConsent" to websiteConsent(),
             "usageConsent" to usageConsent(), "usageGranted" to usageGranted(),
@@ -312,13 +315,16 @@ class BlockingPlans(private val context: Context) {
     }
     fun requestUnlock(): Map<String, Any?> {
         check(locked()) { "Strict mode is not locked." }
-        if (prefs.getInt("unlock_boot", -2) != boot() || prefs.getLong("unlock_start", -1) < 0) {
-            commit(prefs.edit().putLong("unlock_start", SystemClock.elapsedRealtime()).putInt("unlock_boot", boot()))
+        val currentBoot = boot()
+        val elapsed = SystemClock.elapsedRealtime()
+        check(currentBoot >= 0) { "Android boot identity is unavailable." }
+        if (!unlockStarted(currentBoot, elapsed)) {
+            commit(prefs.edit().putLong("unlock_start", elapsed).putInt("unlock_boot", currentBoot))
         }
         return status()
     }
     fun finishUnlock(): Map<String, Any?> {
-        check(prefs.getInt("unlock_boot", -2) == boot() && prefs.getLong("unlock_start", -1) >= 0) { "Start unlocking first." }
+        check(unlockStarted()) { "Start unlocking first." }
         val s = strict()
         val remaining = status()["remainingMs"] as Long
         val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -341,7 +347,7 @@ class BlockingPlans(private val context: Context) {
         if (enroll) { requireEditable(); commit(prefs.edit().putString("nfc_hash", hash)) }
         else {
             check(locked() && hash == prefs.getString("nfc_hash", null)) { "This is not your saved tag." }
-            check(prefs.getInt("unlock_boot", -2) == boot() && prefs.getLong("unlock_start", -1) >= 0) { "Start unlocking first." }
+            check(unlockStarted()) { "Start unlocking first." }
             commit(prefs.edit().putLong("nfc_verified", SystemClock.elapsedRealtime()).putInt("nfc_boot", boot()))
         }
     }

@@ -2,6 +2,9 @@
 
 ## Android blocking plans
 
+Blocking modal editors own keyboard insets. The underlying device-tool shell
+does not shrink behind them; other routes retain their existing resize behavior.
+
 The Android-only shared header shield and Settings entry open App blocking:
 Plans / Strict / Insights / Customize. The dedicated route owns its navigation;
 the main shell bar is hidden there. Flutter reuses the existing four themes and
@@ -41,6 +44,12 @@ same native `BlockingScreenView` as the actual app overlay, in a bounded phone
 frame. Its Return replays only its own preview countdown; it never records an
 attempt or changes blocking. Web/unsupported platforms label their approximation.
 Saved appearance changes recreate the native preview. Text may wrap and scroll.
+The Android preview forwards taps only: swiping over it scrolls the containing
+Customize page. Its edit action sits above the preview; the actual block overlay
+retains its native inner scrolling. Strict/active-Focus edit guards still apply.
+Strict activation shows Active and Unblock without a countdown or NFC scan. Only
+explicit Unblock starts the native monotonic wait; completion rechecks every
+condition. Invalid boot/start identity requires a fresh deliberate request.
 The six selectable icons use fixed outline vectors in native preview, actual
 app overlay and offline website SVG (a selected shield is a shield, not a
 diamond glyph). Background retains all four independently saved theme choices:

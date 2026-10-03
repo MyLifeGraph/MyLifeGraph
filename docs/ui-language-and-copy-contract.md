@@ -1,5 +1,11 @@
 # UI Language And Copy Contract
 
+Strict initially shows `Active`, the configured `Unlock method` and `Unblock`.
+Only after explicit Unblock does the countdown and guarded `Unlock` completion
+appear, with `Scan tag` when needed. The configured method is not live progress.
+Android Customize keeps its compact edit action above the true native preview;
+no extra explanatory paragraph is added.
+
 Android Settings uses `Updates`, `Check`, `Download` and the installed version.
 The one-time-per-build startup dialog says `Update available` with `Close` and
 `Download now`. Check failure says `Could not check. Try again.`, never `Up to date`;
