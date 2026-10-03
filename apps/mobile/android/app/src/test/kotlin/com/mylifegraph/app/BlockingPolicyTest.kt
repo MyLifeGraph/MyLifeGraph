@@ -166,6 +166,51 @@ class BlockingPolicyTest {
         assertEquals(0L, BlockingUnlockPolicy.remaining(180, 1000, 3, 3, 181000))
         assertEquals(0L, BlockingUnlockPolicy.remaining(0, -1, 3, 3, 0))
     }
+    @Test fun unknownBootIdentityNeverCountsAsAnElapsedUnlockRequest() {
+        assertEquals(180000L, BlockingUnlockPolicy.remaining(180, 1000, -1, -1, 999999))
+    }
+
+    @Test fun unlockRequestRequiresKnownBootAndNonfutureMonotonicStartEvenWithoutWait() {
+        assertFalse(BlockingUnlockPolicy.started(-1, 3, 3, 999999))
+        assertFalse(BlockingUnlockPolicy.started(0, -1, -1, 999999))
+        assertFalse(BlockingUnlockPolicy.started(1000, 3, 4, 999999))
+        assertFalse(BlockingUnlockPolicy.started(1000, 3, 3, 999))
+        assertTrue(BlockingUnlockPolicy.started(0, 0, 0, 0))
+        assertTrue(BlockingUnlockPolicy.started(1000, 3, 3, 1000))
+        assertTrue(BlockingUnlockPolicy.started(1000, 3, 3, 999999))
+        // An Immediate method still needs the explicit request guard before
+        // finishUnlock; remaining alone does not authorize completion.
+        assertEquals(0L, BlockingUnlockPolicy.remaining(0, -1, 3, 3, 999999))
+        assertFalse(BlockingUnlockPolicy.started(-1, 3, 3, 999999))
+    }
+
+    @Test fun repeatedRequestsKeepTheirOriginalStartAndRebootRequiresANewRequest() {
+        val requestedAt = 500000L
+        for (poll in 0..1000) {
+            val now = requestedAt + poll * 1000L
+            assertTrue(BlockingUnlockPolicy.started(requestedAt, 7, 7, now))
+            assertEquals((180000L - poll * 1000L).coerceAtLeast(0),
+                BlockingUnlockPolicy.remaining(180, requestedAt, 7, 7, now))
+            assertFalse(BlockingUnlockPolicy.started(requestedAt, 7, 8, now))
+            assertEquals(180000L, BlockingUnlockPolicy.remaining(180, requestedAt, 7, 8, now))
+        }
+    }
+
+    @Test fun strictActivationDoesNotConsumeTheWaitBeforeAnExplicitRequest() {
+        for (seconds in listOf(10, 30, 60, 180, 300, 600, 900)) {
+            for (poll in 0..500) {
+                assertEquals(seconds * 1000L,
+                    BlockingUnlockPolicy.remaining(seconds, -1, 3, 3, poll * 60000L))
+            }
+            val requestedAt = 30000000L
+            assertEquals(seconds * 1000L,
+                BlockingUnlockPolicy.remaining(seconds, requestedAt, 3, 3, requestedAt))
+            assertEquals(1L,
+                BlockingUnlockPolicy.remaining(seconds, requestedAt, 3, 3, requestedAt + seconds * 1000L - 1))
+            assertEquals(0L,
+                BlockingUnlockPolicy.remaining(seconds, requestedAt, 3, 3, requestedAt + seconds * 1000L))
+        }
+    }
     @Test fun strictConditionsAreAndNotOr() {
         for (power in listOf(false, true)) for (wifi in listOf(false, true)) for (nfc in listOf(false, true)) {
             assertEquals(power && wifi && nfc, BlockingUnlockPolicy.ready(0, true, power, true, wifi, true, nfc))

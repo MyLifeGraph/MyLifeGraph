@@ -269,8 +269,8 @@ void main() {
     expect(start.onPressed, isNull);
     await tester.tap(find.text('Strict').last);
     await tester.pump();
-    expect(find.text('Start unlock'), findsOneWidget);
-    expect(find.text('Unlock'), findsOneWidget);
+    expect(find.text('Unblock'), findsOneWidget);
+    expect(find.text('Unlock'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets(

@@ -43,10 +43,11 @@ class BlockingScreenPreview extends StatelessWidget {
         viewType: viewType,
         creationParams: parameters,
         creationParamsCodec: const StandardMessageCodec(),
-        // The native screen owns its internal scroll and buttons inside the
-        // bounded preview, including at larger Android text sizes.
+        // Keep native Return taps, but yield vertical drags to the surrounding
+        // Customize page. An eager recognizer traps users inside this tall
+        // platform surface, leaving the editor below it unreachable on phones.
         gestureRecognizers: {
-          Factory<EagerGestureRecognizer>(EagerGestureRecognizer.new),
+          Factory<TapGestureRecognizer>(TapGestureRecognizer.new),
         },
       );
     }

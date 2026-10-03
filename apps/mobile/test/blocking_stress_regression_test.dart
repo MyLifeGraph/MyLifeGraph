@@ -456,14 +456,9 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Customize').last);
     await tester.pumpAndSettle();
     final customize = find.widgetWithText(FilledButton, 'Customize');
-    // The native phone owns gestures inside its frame. Scroll the parent using
-    // its side gutter, as a user can on this wide host viewport.
-    await tester.dragFrom(
-      tester.getTopLeft(_mainScroll) + const Offset(8, 150),
-      const Offset(0, -450),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(customize);
+    // Android keeps the edit action above the native preview, immediately
+    // reachable without a side-gutter workaround or programmatic scroll.
+    expect(customize.hitTestable(), findsOneWidget);
     await tester.tap(customize);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'Saved title');

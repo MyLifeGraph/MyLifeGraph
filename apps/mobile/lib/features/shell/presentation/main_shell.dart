@@ -151,7 +151,9 @@ class _MainShellState extends ConsumerState<MainShell> {
       builder: (context, constraints) {
         if (currentPath == AppRoutes.focusProtection) {
           // The device tool owns its four-tab navigation; do not stack bars.
-          return Scaffold(body: content);
+          // Its modal editors own keyboard insets. Resizing the covered page
+          // as well can overflow its fixed header at large accessibility text.
+          return Scaffold(resizeToAvoidBottomInset: false, body: content);
         }
         final desktop = constraints.maxWidth >= 1100;
         if (desktop) {

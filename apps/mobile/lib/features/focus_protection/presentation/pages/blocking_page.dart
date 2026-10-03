@@ -840,7 +840,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 : () => _strictOptions(s),
           ),
           if (s.locked) ...[
-            if (s.remainingMs > 0)
+            if (s.unlockStarted && s.remainingMs > 0)
               Text(
                 '${(s.remainingMs + 999) ~/ 1000}s',
                 textAlign: TextAlign.center,
@@ -851,20 +851,21 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 onPressed: _busy
                     ? null
                     : () => _perform(() => _gateway.command('requestUnlock')),
-                child: const Text('Start unlock'),
+                child: const Text('Unblock'),
               ),
-            if (s.strict['nfc'] == true)
+            if (s.unlockStarted && s.strict['nfc'] == true)
               OutlinedButton.icon(
                 icon: const Icon(AppIcons.devicesOutlined),
                 onPressed: _busy ? null : () => _scan(false),
                 label: const Text('Scan tag'),
               ),
-            OutlinedButton(
-              onPressed: _busy || !s.unlockStarted || s.remainingMs > 0
-                  ? null
-                  : () => _perform(() => _gateway.command('finishUnlock')),
-              child: const Text('Unlock'),
-            ),
+            if (s.unlockStarted)
+              OutlinedButton(
+                onPressed: _busy || s.remainingMs > 0
+                    ? null
+                    : () => _perform(() => _gateway.command('finishUnlock')),
+                child: const Text('Unlock'),
+              ),
           ] else ...[
             if (s.strict['enabled'] == true)
               FilledButton(
@@ -1199,10 +1200,15 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       Text(label, textAlign: TextAlign.center),
     ],
   );
+  bool get _hasNativePreview =>
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.android &&
+      _legacy?.platformSupported == true;
+
   List<Widget> _custom(BlockingSnapshot s) => [
-    if (!kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
-        _legacy?.platformSupported == true)
+    if (_hasNativePreview) ...[
+      _customizeAction(s),
+      const SizedBox(height: AppSpacing.md),
       Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 340),
@@ -1218,8 +1224,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
             ),
           ),
         ),
-      )
-    else ...[
+      ),
+    ] else ...[
       Text(
         'Approximate preview · native on Android',
         textAlign: TextAlign.center,
@@ -1293,27 +1299,29 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           ),
         ),
       ),
+      const SizedBox(height: AppSpacing.md),
+      _customizeAction(s),
     ],
-    const SizedBox(height: AppSpacing.md),
-    Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 286, minHeight: 48),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _configurationLocked || _busy
-                  ? null
-                  : () => _customize(s),
-              icon: const Icon(AppIcons.tuneOutlined),
-              label: const Text('Customize'),
-            ),
+  ];
+
+  Widget _customizeAction(BlockingSnapshot s) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 286, minHeight: 48),
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _configurationLocked || _busy
+                ? null
+                : () => _customize(s),
+            icon: const Icon(AppIcons.tuneOutlined),
+            label: const Text('Customize'),
           ),
         ),
       ),
     ),
-  ];
+  );
   Future<void> _customize(BlockingSnapshot s) async {
     final title = TextEditingController(
       text: s.custom['title'] as String? ?? 'Stay focused',

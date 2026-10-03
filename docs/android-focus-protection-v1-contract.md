@@ -21,6 +21,10 @@ using the same `BlockingScreenView` as the app Accessibility overlay. Its timer
 and Return replay are preview-local: no rules, attempts, lease or release change.
 Changing saved appearance recreates the view. Unsupported/web surfaces retain a
 clearly labelled approximate Flutter preview and matching centered edit action.
+The embedded Android preview accepts taps, while vertical drags belong to the
+containing page rather than its native inner scroller. Its Customize action is
+above the tall preview so editing remains reachable on short screens. The actual
+blocking overlay retains its native scrolling and return authority unchanged.
 The native effective `active` flag controls the accent rim, icon and summary;
 an explicit shield/status pill supplements color. Paused, expired and scheduled
 cards remain neutral. Neither a saved rule nor an enabled plan alone claims
@@ -159,6 +163,15 @@ authentication. The unlock request persists monotonic time/boot identity;
 reboot restarts the wait and never completes it. Completion rechecks all
 conditions natively and consumes recent NFC proof. Unlock permits changes for
 fifteen minutes, then relocks; Lock now closes the window.
+Enabling Strict clears the old request and locks indefinitely; no unlock countdown
+starts until the explicit `Unblock` action. Before that request, the surface shows
+only Active, the configured method and Unblock, not a countdown, completion button
+or NFC scan. After requesting, the existing Unlock completion and any required NFC
+scan become available subject to the wait/conditions. Merely waiting, refreshing or
+reopening cannot start or complete a request. Duplicate requests preserve its
+original deadline. A request is valid only with a known matching boot identity and
+a non-future monotonic start; unknown boot cannot start a new request. Invalid or
+rebooted requests require a new deliberate Unblock; no elapsed time is credited.
 Emergency release requires Strict to be **disabled**, not merely temporarily
 unlocked for editing. Both native release entry points recheck this condition;
 the overlay hides the emergency control while Strict is enabled. Ordinary

@@ -31,6 +31,36 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Strict request and Android Customize regression (2026-10-03, candidate)
+
+- Captured task base `e6ef1378597a5ab95cec44db39cdde512ee0fca0`; branch
+  `codex/strict-unlock-customize-fixes` starts from source-equivalent main
+  `f7259435857ceb22d567f0831481833d14604259`. Publication is authorized but
+  this local section does not itself prove a new hosted release.
+- Red/green reproductions cover countdown display before an explicit Unblock,
+  AndroidView swallowing parent drag gestures, unknown boot identity accepting
+  an elapsed wait, and the covered Blocking page overflowing with a keyboard at
+  320x640/200% text. Strict activation still clears the native request timestamp;
+  no evidence showed that activation itself started the native wait.
+- **104 focused Flutter tests pass** across Strict request, Customize scrolling,
+  native preview, Blocking page/plans/audit/stress/UX and MainShell. Four themes,
+  normal/enlarged text, keyboard, save/reopen/Back, repeated drags/tab changes,
+  duplicate requests and pending-save exclusion are covered. The native surface
+  channel is simulated, not a physical Android rendering assertion.
+- Complete Flutter analysis, Docs, Visual and diff hygiene pass. Opt-in Flutter
+  renderer screenshots of Strict request states and Customize frames are visually
+  reviewed under ignored `.tools/ui-catalog/strict-customize-final/`; the native
+  platform surface is intentionally blank in this renderer. Reference goldens
+  are unchanged. Independent review finds no further confirmed regression.
+- **56 Android app JVM tests pass**, zero failures/errors; debug lint passes
+  after correcting ignored Windows SDK-property escaping and rerunning the
+  stale lint analysis/report. No lint rule or baseline is weakened. The catalog
+  run additionally passes 12 renderer/regression cases.
+- Captured-base affected dry-run selects Full. Fresh Linux CI must supply the
+  complete gate; Windows source-harness/`setsid` limitations are not a pass.
+  No database migration, dependency upgrade, provider or Focus lifecycle change.
+
+
 ### Release-candidate regression audit (2026-10-03)
 
 - Task base `197540d3ebcb01e66ed84f98718bbd46c6062b28`; candidate remains on
