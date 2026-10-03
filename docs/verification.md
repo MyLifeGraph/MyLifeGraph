@@ -31,6 +31,20 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Notification artwork packaging correction (2026-10-03, candidate)
+
+- Parent `5043bf4a36ed8b7239e3946a53be7cfe9ce3fdae` passed complete hosted Linux
+  CI `37083362116` and PR `37083341889`; PR #31 merged that exact SHA. Both signed
+  builds passed. RC16 is live on the VPS and Vercel; Cloud readiness attests the
+  unchanged 79-migration identity. Its APK publication was held after final review.
+- Final review confirmed that API 26+ resolves the launcher mipmap to adaptive
+  XML, which cannot be decoded by BitmapFactory. The notification artwork now
+  uses its dedicated PNG drawable; countdown, small icon and rule authority are
+  unchanged. A source/PNG-signature regression fails on the old reference.
+- The corrected candidate requires fresh checks and a new immutable release tag;
+  RC16's checked source/artifacts are never rewritten. Physical/OEM notification
+  acceptance remains separate.
+
 ### Liquid Glass branding and blocking countdown (2026-10-03, candidate)
 
 - Base `70dec0cda4e1e933b11075602d94db827ec3cfa7`, reused working branch

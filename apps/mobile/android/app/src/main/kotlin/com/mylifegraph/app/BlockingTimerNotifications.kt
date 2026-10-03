@@ -95,7 +95,7 @@ object BlockingTimerNotifications {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context)
             builder.setSmallIcon(R.drawable.app_notification_mark)
-                .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher))
+                .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.drawable.app_launcher_art))
                 .setContentTitle(timer.name).setContentText("App blocking · remaining")
                 .setWhen(timer.end).setUsesChronometer(true).setChronometerCountDown(true)
                 .setContentIntent(pending).setOngoing(true).setOnlyAlertOnce(true)

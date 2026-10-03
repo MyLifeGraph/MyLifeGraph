@@ -71,6 +71,8 @@ optional common-site chips never silently select websites.
 
 Saved, enabled, unpaused plans with a future timer show their name and Android's
 live countdown in a separate silent `Blocking timers` notification channel.
+The large artwork decodes the dedicated PNG drawable, not adaptive launcher XML;
+the small status-bar icon remains the monochrome graph required by Android.
 Master/app protection, Accessibility and effective app/consented-site targets
 must still be available. Multiple plans use independent stable notification tags;
 pause, deletion, disable, consent/access loss and expiry remove only this feature's

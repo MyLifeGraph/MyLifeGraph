@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -9,6 +10,21 @@ import {
 
 test('Android release configuration check passes for the repository', () => {
   assert.doesNotThrow(() => checkAndroidReleaseConfig());
+});
+
+test('blocking notification artwork decodes a PNG, not adaptive launcher XML', () => {
+  const source = readFileSync(new URL(
+    '../apps/mobile/android/app/src/main/kotlin/com/mylifegraph/app/BlockingTimerNotifications.kt',
+    import.meta.url,
+  ), 'utf8');
+  assert.match(source,
+    /BitmapFactory\.decodeResource\(\s*context\.resources,\s*R\.drawable\.app_launcher_art\s*\)/);
+  const artwork = readFileSync(new URL(
+    '../apps/mobile/android/app/src/main/res/drawable-nodpi/app_launcher_art.png',
+    import.meta.url,
+  ));
+  assert.deepEqual(artwork.subarray(0, 8),
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
 });
 
 const expectedWrapperProperties = {
