@@ -10,6 +10,7 @@ import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/navigation/app_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/widgets/app_brand_mark.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/domain/auth_failure.dart';
@@ -60,6 +61,7 @@ void main() {
     expect(email, findsOneWidget);
     expect(tester.getCenter(intro).dx, lessThan(tester.getCenter(email).dx));
     expect(find.text('Continue as guest'), findsOneWidget);
+    expect(tester.widget<AppBrandMark>(find.byType(AppBrandMark)).color, isNull);
     expect(tester.takeException(), isNull);
   });
 

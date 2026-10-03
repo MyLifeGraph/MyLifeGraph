@@ -633,7 +633,6 @@ class _IconHero extends StatelessWidget {
       alignment: Alignment.center,
       child: AppBrandMark(
         semanticLabel: 'MyLifeGraph',
-        color: colors.onPrimaryContainer,
         size: compact ? 28 : 40,
       ),
     );

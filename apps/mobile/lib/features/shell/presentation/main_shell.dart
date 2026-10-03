@@ -514,10 +514,7 @@ class _DesktopBrand extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadii.md),
           ),
           alignment: Alignment.center,
-          child: AppBrandMark(
-            color: colors.onPrimaryContainer,
-            size: 26,
-          ),
+          child: const AppBrandMark(size: 26),
         ),
         const SizedBox(width: AppSpacing.sm + 2),
         Expanded(

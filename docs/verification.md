@@ -42,6 +42,8 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   Explicit-colored UI marks and monochrome status icons retain original geometry.
   Theme reference goldens explicitly exercise the tinted vector; no baseline
   images were regenerated. Dedicated widget tests cover the default glass tile.
+  Auth and desktop shell use the untinted tile, with assertions in their existing
+  surface tests; explicitly colored component marks remain available.
 - Native timer notifications use independent tags, a silent channel, private
   plan titles and Android countdown/timeout. Permission/channel denial does not
   undo a saved plan or opt in to FCM. Lifecycle/clock/boot/inexact-alarm reads

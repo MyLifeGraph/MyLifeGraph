@@ -10,6 +10,7 @@ import 'package:my_life_graph/core/navigation/planner_add_request.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/theme/app_theme_effects.dart';
 import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
+import 'package:my_life_graph/core/widgets/app_brand_mark.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 import 'package:my_life_graph/features/shell/presentation/shell_destination_descriptor.dart';
 
@@ -652,6 +653,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('MyLifeGraph'), findsOneWidget);
+    expect(tester.widget<AppBrandMark>(find.byType(AppBrandMark)).color, isNull);
     expect(find.byKey(const ValueKey('main-nav-coach')), findsOneWidget);
     expect(find.byKey(const ValueKey('main-nav-settings')), findsNothing);
     expect(
