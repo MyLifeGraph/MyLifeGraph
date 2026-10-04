@@ -62,6 +62,14 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   the note test uses the real `reflection` scalar and adds a nonempty isolation
   assertion. No migration, grant or assertion was weakened. The corrected
   candidate requires its own complete green run before promotion.
+- The corrected run passes all **703 pgTAP assertions** before the PG17
+  restore round-trip reaches another stale exact migration-head/count fixture.
+  That fixture now requires the same 82-migration head; PostgreSQL version,
+  deletion-role safety, membership count and restored/source equality remain
+  strict. The private Pilot export separately restored with matching Auth/profile
+  counts and its 79-migration boundary; all three additions applied successfully
+  to that network-isolated RAM copy. This is point-in-time safety evidence, not
+  authorization for production restore/reopening or a deletion-journal recovery claim.
 
 ### Compact Capture / Blocking / Coach follow-up (2026-10-04, local only)
 
