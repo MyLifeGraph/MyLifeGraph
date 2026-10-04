@@ -204,10 +204,10 @@ select is(
   ),
   jsonb_build_object(
     'contract_version', 'hosted-database-contract-v1',
-    'migration_head', '20260925164043_reversible_notification_and_focus_correction.sql',
-    'migration_count', 79,
+    'migration_head', '20261004141004_optional_coach_phone_data.sql',
+    'migration_count', 82,
     'migration_identity_sha256',
-      '9e39cab2679601e92a6579248f934015361588bfab0c1785efde26a73bb0d00a',
+      'f4a506fd975a579deea717757d6aaa7c4374286df19dc0385f24c3b31a96b203',
     'prefix_head', '20260820200000_account_deletion_replayer_role_guard_v2.sql',
     'prefix_count', 69,
     'prefix_identity_sha256',
@@ -228,7 +228,7 @@ select is(
   public.get_hosted_database_contract_v1(
     '20260820200000_account_deletion_replayer_role_guard_v2.sql'
   ) ->> 'migration_head',
-  '20260925164043_reversible_notification_and_focus_correction.sql',
+  '20261004141004_optional_coach_phone_data.sql',
   'removing an intermediate migration does not disguise itself as a new head'
 );
 
@@ -236,7 +236,7 @@ select is(
   (public.get_hosted_database_contract_v1(
     '20260820200000_account_deletion_replayer_role_guard_v2.sql'
   ) ->> 'migration_count')::int,
-  78,
+  81,
   'the exact migration count detects a missing intermediate migration'
 );
 
@@ -244,7 +244,7 @@ select isnt(
   public.get_hosted_database_contract_v1(
     '20260820200000_account_deletion_replayer_role_guard_v2.sql'
   ) ->> 'migration_identity_sha256',
-  '9e39cab2679601e92a6579248f934015361588bfab0c1785efde26a73bb0d00a',
+  'f4a506fd975a579deea717757d6aaa7c4374286df19dc0385f24c3b31a96b203',
   'the migration identity digest detects a missing intermediate migration'
 );
 

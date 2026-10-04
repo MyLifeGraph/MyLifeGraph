@@ -55,6 +55,13 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 - Existing Windows reference-golden failures were independently compared and
   match earlier glyph-edge-only differences. No baseline or tolerance was changed;
   fresh canonical Linux CI remains authoritative for release.
+- First complete Linux candidate run passed all Flutter reference goldens, full
+  browser E2E, backend, web and source/docs. Database pgTAP caught two stale
+  schema inventories and a test referring to nonexistent scalar `reflection_note`.
+  Inventories now require exactly the added columns and current migration digest;
+  the note test uses the real `reflection` scalar and adds a nonempty isolation
+  assertion. No migration, grant or assertion was weakened. The corrected
+  candidate requires its own complete green run before promotion.
 
 ### Compact Capture / Blocking / Coach follow-up (2026-10-04, local only)
 

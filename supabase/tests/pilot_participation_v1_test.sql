@@ -22,7 +22,9 @@ select columns_are(
     'pilot_participation_accepted_at',
     'health_connect_settings',
     'health_connect_last_request',
-    'push_settings'
+    'push_settings',
+    'coach_phone_data',
+    'coach_phone_last_request'
   ],
   'profiles contains only the current version/time participation fields'
 );

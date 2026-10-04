@@ -12,7 +12,7 @@ account/lifecycle cancellation and explicit Save remain in force.
 
 An omitted Morning key is an older writer: the branch RPC preserves the saved
 note. An explicit empty string clears it. Notes remain in the Morning capture
-JSON for Coach/export context; the scalar `daily_logs.reflection_note` remains
+JSON for Coach/export context; the scalar `daily_logs.reflection` remains
 the Evening projection. Streak completion and correlations are unchanged.
 The additive migration and compatible API must precede the new client.
 
