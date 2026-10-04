@@ -1,5 +1,12 @@
 # UI Language And Copy Contract
 
+Optional additions use concise labels: **Note (optional)**, **Coach data**,
+**Phone usage**, **Shared data**, **Sync now**, **Add heart data** and
+**Remove heart data**. Privacy/selected-provider disclosures appear at explicit
+opt-in, not as permanent explanatory paragraphs. Missing measured values say
+**Unavailable**, never zero. Strict remains Active until explicit Unblock and
+requires staying on its screen; countdowns do not imply an automatic unlock.
+
 Strict initially shows `Active`, the configured `Unlock method` and `Unblock`.
 Only after explicit Unblock does the countdown and guarded `Unlock` completion
 appear, with `Scan tag` when needed. The configured method is not live progress.
@@ -616,7 +623,7 @@ Named Android plans use short Plans / Strict / Insights / Customize labels.
 The target footer shows only counts and `Save`; disclosure icons expose
 `Expand apps` / `Collapse apps` tooltips and expanded semantics. Preset chip
 selection describes the current app set, not a separate saved blocking mode.
-Saved weekly-window summaries retain `Device time` and `(+1 day)` for overnight
+Detailed weekly-window summaries retain `Device time` and `(+1 day)` for overnight
 ends. Usage quantities use compact duration units; `Total` and `Peak` name only
 the returned measurements. Strict's existing Unlock method uses `3m` rather
 than `180s` and adds no helper sentence. Header overflow uses `More actions` /

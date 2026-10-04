@@ -82,6 +82,39 @@ def test_missing_is_not_zero_and_provenance_is_bounded():
             HealthConnectDay(date="2026-09-14", steps_sources=[source])
 
 
+def test_vitals_read_authority_distinguishes_missing_permission_and_empty():
+    missing = HealthConnectDay(date="2026-10-04")
+    empty = HealthConnectDay(date="2026-10-04", heart_rate_read=True)
+    assert missing.heart_rate is None and not missing.heart_rate_read
+    assert empty.heart_rate is None and empty.heart_rate_read
+    for invalid in (0, -1, 301, True, 65.5, "65"):
+        with pytest.raises(ValidationError):
+            HealthConnectDay(date="2026-10-04", heart_rate_read=True, heart_rate=invalid)
+    for changes in ({"heart_rate": 65}, {"resting_heart_rate_sources": ["com.watch"]}):
+        with pytest.raises(ValidationError):
+            HealthConnectDay(date="2026-10-04", **changes)
+
+
+def test_vitals_consent_cannot_be_enabled_without_valid_base_sharing():
+    for settings in (
+        {"vitals_enabled": True},
+        {"vitals_enabled": True, "vitals_consent_version": "health-vitals-cloud-consent-v1"},
+        {"vitals_enabled": "true"},
+    ):
+        with pytest.raises(ValidationError):
+            HealthConnectState(timezone="UTC", window_start="2026-09-28",
+                               window_end="2026-10-04", **settings)
+
+
+def test_vitals_commands_require_separate_consent_and_no_device_override():
+    valid = command(command="enable_vitals", device_id=None, consent_version=None,
+                    vitals_consent_version="health-vitals-cloud-consent-v1")
+    assert HealthConnectCommand.model_validate(valid).command == "enable_vitals"
+    for changes in ({"vitals_consent_version": None}, {"device_id": str(uuid4())}):
+        with pytest.raises(ValidationError):
+            HealthConnectCommand.model_validate({**valid, **changes})
+
+
 @pytest.mark.parametrize("value", [True, "10", -1, float("nan"), 1501])
 def test_sleep_is_a_bounded_number_not_a_coerced_value(value):
     with pytest.raises(ValidationError):
@@ -179,6 +212,13 @@ def test_persistence_errors_do_not_leak_health_or_credentials():
 def test_repository_scopes_read_and_writes_to_owner():
     class Client:
         async def select(self, table, params):
+            if table == "behavioral_events":
+                assert params["user_id"] == "eq.owner"
+                assert params["source"] == "eq.health_connect"
+                assert params["metadata->>timezone"] == "eq.Europe/Berlin"
+                assert params["metadata->>date"].startswith("eq.")
+                assert "health_connect_resting_heart_rate" in params["event_type"]
+                return []
             assert table == "profiles"
             assert params["id"] == "eq.owner"
             assert "health_connect_last_request" not in params["select"]

@@ -1,5 +1,24 @@
 # MyLifeGraph Mobile App
 
+Approved local polish: Morning adds a directly visible compact optional note and
+reviewed dictation; Evening adds a right-side microphone at the original field
+height without moving its other inputs.
+Health Connect shows source-backed Sleep/Steps/Heart rate/Resting cards with
+separate heart-data consent and no synthetic Stress value. Coach's header menu
+contains optional **Coach data** controls for cloud phone summaries, separate
+from local Blocking consent. Daily app time, Top apps and Blocking attempts stay
+directly visible; Reload/Delete share a row. Study motivation remains unchanged
+behind its existing backend capability gate, above the new Morning note.
+
+Blocking cards support direct edit, persistent drag-handle order and accessible
+Move up/down actions. Cards show short rule/time summaries and target counts;
+full weekly windows remain in the editor/details. Customize keeps a native draft preview above icon, accent,
+layout, background and delay controls, with Save fixed outside the scroll area.
+All themes remain supported. Strict Unblock waits only on the visible foreground
+Strict screen; leaving or restarting resets the pending request. The finite
+block-screen Return timer and Android essential exits are unchanged. Planner
+creation, rescheduling and drag/drop are explicitly outside this change.
+
 ## Android blocking plans
 
 Blocking modal editors own keyboard insets. The underlying device-tool shell

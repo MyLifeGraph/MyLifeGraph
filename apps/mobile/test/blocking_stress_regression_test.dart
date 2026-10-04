@@ -212,7 +212,7 @@ void main() {
       await tester.ensureVisible(save);
       await tester.tap(save);
       await tester.pumpAndSettle();
-      final submitted = gateway.arguments.last;
+      final submitted = gateway.arguments.singleWhere((args) => args.containsKey('waitSeconds'));
       expect(submitted['revision'], 4);
       expect(submitted['waitSeconds'], 60);
       expect(submitted['nfc'], true);
@@ -297,10 +297,13 @@ void main() {
   ) async {
     final gateway = _Gateway();
     await _pumpPage(tester, gateway);
+    await _openInsights(tester);
+    await tester.pumpAndSettle();
     gateway.delayedStatus = Completer<BlockingSnapshot>();
     await tester.tap(find.byTooltip('Refresh'));
     await tester.pump();
-    await _openInsights(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Month'));
+    await tester.pump();
     gateway.delayedStatus!.complete(
       BlockingSnapshot({...snapshot(), 'attemptsToday': 42}),
     );
@@ -351,7 +354,8 @@ void main() {
     await tester.pumpAndSettle();
     final button = find.widgetWithText(OutlinedButton, 'Allow usage access');
     expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
-    expect(gateway.calls, ['status']);
+    expect(gateway.calls, ['status', 'strictVisibility']);
+    expect(gateway.opened, isEmpty);
   });
 
   testWidgets('retained daily budget can be turned Off after revoked access', (
@@ -472,7 +476,7 @@ void main() {
     expect(tester.testTextInput.hasAnyClients, isFalse);
     gateway.pendingSave!.complete(BlockingSnapshot(snapshot()));
     await tester.pumpAndSettle();
-    expect((gateway.arguments.single['custom'] as Map)['title'], 'Saved title');
+    expect((gateway.arguments.singleWhere((args) => args.containsKey('custom'))['custom'] as Map)['title'], 'Saved title');
   });
 
   testWidgets('timer-only expired plan is not labeled Scheduled', (
@@ -527,10 +531,11 @@ void main() {
       gateway.calls.where((v) => v == 'status').length,
       greaterThanOrEqualTo(2),
     );
-    final before = gateway.calls.length;
+    final before = gateway.calls.where((v) => v == 'status').length;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump(const Duration(minutes: 2));
-    expect(gateway.calls.length, before);
+    expect(gateway.calls.where((v) => v == 'status').length, before);
+    expect(gateway.calls.last, 'strictVisibility');
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
   });

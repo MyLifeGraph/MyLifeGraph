@@ -33,6 +33,11 @@ from app.models.coach import (
 )
 from app.services.coach_agent_service import CoachAgentService, PreparedCoachTurn
 from app.services.coach_service import CoachServiceError
+from app.api.deps.supabase import get_supabase_client
+from app.services.coach_phone_data import CoachPhoneDataService
+from app.models.coach_phone_data import PhoneCommand, PhoneState
+from fastapi import HTTPException, Response
+import httpx
 
 
 router = APIRouter(prefix="/coach", tags=["coach"])
@@ -44,6 +49,29 @@ _ACTIVITY_MESSAGES = {
     "Checking relevant history …",
     "Testing the data with isolated analysis …",
 }
+
+
+@router.get("/phone-data", response_model=PhoneState)
+async def read_phone_data(request: Request, response: Response,
+                          principal: Principal = Depends(get_current_principal)):
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return await CoachPhoneDataService(get_supabase_client(request)).read(principal.user_id)
+    except Exception as error:
+        raise HTTPException(503, "Phone data unavailable. Reload before retrying.") from error
+
+
+@router.post("/phone-data", response_model=PhoneState)
+async def write_phone_data(command: PhoneCommand, request: Request, response: Response,
+                           principal: Principal = Depends(get_current_principal)):
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return await CoachPhoneDataService(get_supabase_client(request)).apply(principal.user_id, command)
+    except httpx.HTTPStatusError as error:
+        status = 409 if error.response.status_code == 409 else 503
+        raise HTTPException(status, "Phone sharing changed or is unavailable. Reload before retrying.") from error
+    except Exception as error:
+        raise HTTPException(503, "Phone data unavailable. Reload before retrying.") from error
 
 
 @router.get(

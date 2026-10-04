@@ -13,90 +13,253 @@ import 'package:my_life_graph/features/quick_action/presentation/pages/morning_c
 import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
 import 'package:my_life_graph/features/quick_action/presentation/widgets/capture_date_picker.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'support/ui_catalog_capture.dart';
 
 void main() {
-  testWidgets('opening during a repeated DST hour retains the known current instant', (tester) async {
-    await _pumpPage(tester, _NoSleepPlanMorningStore(),
-      currentInstant: DateTime.utc(2026, 10, 25, 1, 30), timezoneName: 'Europe/Berlin');
-    expect(tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).at(1)).value, '02:30');
-    expect(find.textContaining('could not be loaded'), findsNothing);
-  });
+  if (captureUiCatalog) {
+    testWidgets('compact morning note catalog', (tester) async {
+      await loadCatalogFonts();
+      final now = DateTime(2026, 9, 25, 9);
+      final morning = _savedMorning(now, estimatedMinutes: 480).forEditing();
+      await _pumpPage(
+        tester,
+        _MorningStore(
+          initial: DailyCaptureEntry(
+            entryDate: morning.entryDate,
+            morning: morning,
+          ),
+        ),
+        currentInstant: now,
+        viewSize: const Size(390, 1200),
+        theme: AppTheme.liquidGlass,
+        skillsetEnabled: true,
+      );
+      await _tapVisible(tester, find.text('Next'));
+      expect(find.text('Study motivation (optional)'), findsOneWidget);
+      await captureCatalog(tester, 'morning-after');
+    });
+  }
+  testWidgets(
+    'Morning note is optional, tracks dirty edits, saves and reopens',
+    (tester) async {
+      final now = DateTime(2026, 9, 25, 9);
+      final morning = _savedMorning(now, estimatedMinutes: 480).forEditing();
+      final store = _MorningStore(
+        initial: DailyCaptureEntry(
+          entryDate: morning.entryDate,
+          morning: morning,
+        ),
+      );
+      await _pumpPage(tester, store, currentInstant: now);
+      await _tapVisible(tester, find.text('Next'));
+      expect(find.byType(ExpansionTile), findsNothing);
+      expect(tester.widget<TextField>(find.byType(TextField)).maxLines, 2);
+      await tester.enterText(find.byType(TextField), 'Ready for the exam.');
+      await tester.pump();
+      tester
+          .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+          .onChanged(DateTime(2026, 9, 24));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, find.text('Save'));
+      final saved = store.attempts.single;
+      expect(saved.reflectionNote, 'Ready for the exam.');
+      expect(saved.sleepQuality, morning.sleepQuality);
+      expect(saved.energy, morning.energy);
+      expect(saved.estimatedSleepMinutes, morning.estimatedSleepMinutes);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpPage(
+        tester,
+        _MorningStore(
+          initial: DailyCaptureEntry(
+            entryDate: saved.entryDate,
+            morning: saved,
+          ),
+        ),
+        currentInstant: now,
+      );
+      await _tapVisible(tester, find.text('Next'));
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Ready for the exam.',
+      );
+    },
+  );
+  testWidgets(
+    'opening during a repeated DST hour retains the known current instant',
+    (tester) async {
+      await _pumpPage(
+        tester,
+        _NoSleepPlanMorningStore(),
+        currentInstant: DateTime.utc(2026, 10, 25, 1, 30),
+        timezoneName: 'Europe/Berlin',
+      );
+      expect(
+        tester
+            .widget<CaptureClockControl>(find.byType(CaptureClockControl).at(1))
+            .value,
+        '02:30',
+      );
+      expect(find.textContaining('could not be loaded'), findsNothing);
+    },
+  );
 
-  testWidgets('unresolvable prior sleep plan leaves Morning editable', (tester) async {
-    await _pumpPage(tester, _MorningStore(sleepPlan: _latestSleepPlan().copyWith(
-      entryDate: '2026-03-28', plannedSleepTime: '02:30')),
-      currentInstant: DateTime.utc(2026, 3, 29, 8), timezoneName: 'Europe/Berlin');
+  testWidgets('unresolvable prior sleep plan leaves Morning editable', (
+    tester,
+  ) async {
+    await _pumpPage(
+      tester,
+      _MorningStore(
+        sleepPlan: _latestSleepPlan().copyWith(
+          entryDate: '2026-03-28',
+          plannedSleepTime: '02:30',
+        ),
+      ),
+      currentInstant: DateTime.utc(2026, 3, 29, 8),
+      timezoneName: 'Europe/Berlin',
+    );
     expect(find.textContaining('could not be loaded'), findsNothing);
-    final start = tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first);
+    final start = tester.widget<CaptureClockControl>(
+      find.byType(CaptureClockControl).first,
+    );
     expect(start.value, isNull);
     start.onChanged('23:00');
     await tester.pumpAndSettle();
-    expect(tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first).value, '23:00');
+    expect(
+      tester
+          .widget<CaptureClockControl>(find.byType(CaptureClockControl).first)
+          .value,
+      '23:00',
+    );
   });
   for (final zone in ['Europe/Berlin', 'UTC', 'Asia/Kathmandu']) {
-    testWidgets('watch acceptance, edit, save and reload use $zone', (tester) async {
+    testWidgets('watch acceptance, edit, save and reload use $zone', (
+      tester,
+    ) async {
       final now = DateTime.utc(2026, 9, 26, 12);
-      final watch = HealthSleepSuggestion.parse({
-        'started_at': '2026-09-26T02:39:00Z',
-        'woke_at': '2026-09-26T09:21:00Z',
-      }, '2026-09-26', zone, now)!;
+      final watch = HealthSleepSuggestion.parse(
+        {
+          'started_at': '2026-09-26T02:39:00Z',
+          'woke_at': '2026-09-26T09:21:00Z',
+        },
+        '2026-09-26',
+        zone,
+        now,
+      )!;
       final store = _NoSleepPlanMorningStore();
-      await _pumpPage(tester, store, currentInstant: now, watchSleep: watch,
-        timezoneName: zone);
+      await _pumpPage(
+        tester,
+        store,
+        currentInstant: now,
+        watchSleep: watch,
+        timezoneName: zone,
+      );
       final startClock = dailyCaptureClock(watch.startedAt);
       final wakeClock = dailyCaptureClock(watch.wokeAt);
       expect(find.text('Watch sleep\n$startClock–$wakeClock'), findsOneWidget);
       await tester.tap(find.text('Use times'));
       await tester.pumpAndSettle();
-      CaptureClockControl clock(int index) => tester.widget<CaptureClockControl>(
-        find.byType(CaptureClockControl).at(index));
+      CaptureClockControl clock(int index) =>
+          tester.widget<CaptureClockControl>(
+            find.byType(CaptureClockControl).at(index),
+          );
       expect(clock(0).value, startClock);
       expect(clock(1).value, wakeClock);
       // Re-enter the displayed value: it must not shift the stored instant.
       clock(0).onChanged(startClock);
       await tester.pumpAndSettle();
       expect(clock(1).value, wakeClock);
-      tester.widget<CaptureSleepTargetControl>(find.byType(CaptureSleepTargetControl))
-        .onChanged(480);
+      tester
+          .widget<CaptureSleepTargetControl>(
+            find.byType(CaptureSleepTargetControl),
+          )
+          .onChanged(480);
       await tester.pump();
       await _tapVisible(tester, find.text('Next'));
       await _performSemanticTap(tester, 'morning sleep quality 7 of 10');
       await _performSemanticTap(tester, 'morning energy 6 of 10');
       await _tapVisible(tester, find.text('Save'));
       final saved = store.attempts.single;
-      expect(saved.estimatedSleepStartedAt!.toUtc(), DateTime.utc(2026, 9, 26, 2, 39));
+      expect(
+        saved.estimatedSleepStartedAt!.toUtc(),
+        DateTime.utc(2026, 9, 26, 2, 39),
+      );
       expect(saved.wokeAt!.toUtc(), DateTime.utc(2026, 9, 26, 9, 21));
       expect(saved.estimatedSleepMinutes, 402);
-      final reloaded = MorningCalibrationDraft.fromJson(saved.toMetadataJson(),
-        entryDate: saved.entryDate);
+      final reloaded = MorningCalibrationDraft.fromJson(
+        saved.toMetadataJson(),
+        entryDate: saved.entryDate,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
-      await _pumpPage(tester, _MorningStore(initial: DailyCaptureEntry(
-        entryDate: saved.entryDate, morning: reloaded)),
-        currentInstant: now, watchSleep: watch, timezoneName: zone);
+      await _pumpPage(
+        tester,
+        _MorningStore(
+          initial: DailyCaptureEntry(
+            entryDate: saved.entryDate,
+            morning: reloaded,
+          ),
+        ),
+        currentInstant: now,
+        watchSleep: watch,
+        timezoneName: zone,
+      );
       expect(clock(0).value, startClock);
       expect(clock(1).value, wakeClock);
       expect(find.text('Use times'), findsNothing);
     });
   }
-  testWidgets('watch times are offered once and manual edits remain authoritative', (tester) async {
-    final store = _NoSleepPlanMorningStore();
-    await _pumpPage(tester, store, currentInstant: DateTime(2026, 9, 25, 9),
-      watchSleep: HealthSleepSuggestion(DateTime(2026, 9, 24, 23), DateTime(2026, 9, 25, 7)));
-    expect(find.text('Use times'), findsOneWidget);
-    await tester.tap(find.text('Use times'));
-    await tester.pumpAndSettle();
-    expect(find.text('Use times'), findsNothing);
-    expect(tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first).value, '23:00');
-    tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first).onChanged('22:00');
-    await tester.pumpAndSettle();
-    expect(tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first).value, '22:00');
-    expect(store.attempts, isEmpty);
-    tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker)).onChanged(DateTime(2026, 9, 24));
-    await tester.pumpAndSettle();
-    expect(find.text('Discard changes?'), findsOneWidget);
-    await tester.tap(find.text('Keep editing')); await tester.pumpAndSettle();
-    expect(tester.widget<CaptureClockControl>(find.byType(CaptureClockControl).first).value, '22:00');
-  });
+  testWidgets(
+    'watch times are offered once and manual edits remain authoritative',
+    (tester) async {
+      final store = _NoSleepPlanMorningStore();
+      await _pumpPage(
+        tester,
+        store,
+        currentInstant: DateTime(2026, 9, 25, 9),
+        watchSleep: HealthSleepSuggestion(
+          DateTime(2026, 9, 24, 23),
+          DateTime(2026, 9, 25, 7),
+        ),
+      );
+      expect(find.text('Use times'), findsOneWidget);
+      await tester.tap(find.text('Use times'));
+      await tester.pumpAndSettle();
+      expect(find.text('Use times'), findsNothing);
+      expect(
+        tester
+            .widget<CaptureClockControl>(find.byType(CaptureClockControl).first)
+            .value,
+        '23:00',
+      );
+      tester
+          .widget<CaptureClockControl>(find.byType(CaptureClockControl).first)
+          .onChanged('22:00');
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CaptureClockControl>(find.byType(CaptureClockControl).first)
+            .value,
+        '22:00',
+      );
+      expect(store.attempts, isEmpty);
+      tester
+          .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+          .onChanged(DateTime(2026, 9, 24));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CaptureClockControl>(find.byType(CaptureClockControl).first)
+            .value,
+        '22:00',
+      );
+    },
+  );
   testWidgets('backfill saves the selected day without inventing sleep times', (
     tester,
   ) async {
@@ -157,8 +320,12 @@ void main() {
     'morning sleep step derives duration before the final check-in save',
     (tester) async {
       final semantics = tester.ensureSemantics();
-      final store = _MorningStore(sleepPlan: _latestSleepPlan().copyWith(
-        entryDate: '2026-08-19', plannedSleepTime: '23:00'));
+      final store = _MorningStore(
+        sleepPlan: _latestSleepPlan().copyWith(
+          entryDate: '2026-08-19',
+          plannedSleepTime: '23:00',
+        ),
+      );
       await _pumpPage(tester, store, currentInstant: DateTime(2026, 8, 20, 7));
 
       expect(find.text('MORNING · SLEEP'), findsOneWidget);
@@ -279,7 +446,14 @@ void main() {
     final store = _MorningStore(
       initial: DailyCaptureEntry(entryDate: saved.entryDate, morning: saved),
     );
-    await _pumpPage(tester, store, watchSleep: HealthSleepSuggestion(now.subtract(const Duration(hours: 6)), now));
+    await _pumpPage(
+      tester,
+      store,
+      watchSleep: HealthSleepSuggestion(
+        now.subtract(const Duration(hours: 6)),
+        now,
+      ),
+    );
     expect(find.text('Use times'), findsNothing);
 
     await _tapVisible(tester, find.text('Next'));
@@ -305,7 +479,10 @@ void main() {
       viewSize: const Size(320, 700),
       textScale: 2,
       disableAnimations: true,
-      watchSleep: HealthSleepSuggestion(DateTime(2026, 9, 24, 23), DateTime(2026, 9, 25, 7)),
+      watchSleep: HealthSleepSuggestion(
+        DateTime(2026, 9, 24, 23),
+        DateTime(2026, 9, 25, 7),
+      ),
     );
 
     expect(tester.takeException(), isNull);
@@ -564,6 +741,7 @@ Future<void> _pumpPage(
   DateTime? currentInstant,
   HealthSleepSuggestion? watchSleep,
   String? timezoneName,
+  ThemeData? theme,
 }) async {
   final router = GoRouter(
     initialLocation: '/morning-calibration',
@@ -592,16 +770,26 @@ Future<void> _pumpPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        healthSleepSuggestionProvider.overrideWith((ref, day) async => watchSleep),
+        healthSleepSuggestionProvider.overrideWith(
+          (ref, day) async => watchSleep,
+        ),
         optionalSkillsetCaptureProvider.overrideWithValue(skillsetEnabled),
         skillsetDimensionsProvider.overrideWith((ref) => <String>{}),
         profileLocalDateSourceProvider.overrideWithValue(
           SessionProfileLocalDateSource(
-            session: timezoneName == null ? null : AppSession.authenticated(AppProfile(
-              id: 'timezone-user', email: 'timezone@example.test', name: 'Timezone',
-              timezone: timezoneName, role: AppRole.user, onboardingDone: true,
-              authProvider: 'email',
-            )),
+            session: timezoneName == null
+                ? null
+                : AppSession.authenticated(
+                    AppProfile(
+                      id: 'timezone-user',
+                      email: 'timezone@example.test',
+                      name: 'Timezone',
+                      timezone: timezoneName,
+                      role: AppRole.user,
+                      onboardingDone: true,
+                      authProvider: 'email',
+                    ),
+                  ),
             currentInstant: currentInstant == null
                 ? DateTime.now
                 : () => currentInstant,
@@ -612,6 +800,8 @@ Future<void> _pumpPage(
         quickCheckInStoreProvider.overrideWithValue(store),
       ],
       child: MaterialApp.router(
+        debugShowCheckedModeBanner: false,
+        theme: theme,
         routerConfig: router,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(

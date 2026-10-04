@@ -297,7 +297,9 @@ def _filter_observed_inputs(
         daily_logs=[row for row in inputs.daily_logs if visible(row)],
         behavioral_events=[
             row for row in inputs.behavioral_events
-            if row.get("source") != "quick_note" and visible(row)
+            if row.get("source") != "quick_note"
+            and row.get("event_type") not in {"health_connect_heart_rate", "health_connect_resting_heart_rate"}
+            and visible(row)
         ],
         tasks=[row for row in inputs.tasks if visible(row)],
         habits=[row for row in inputs.habits if visible(row)],

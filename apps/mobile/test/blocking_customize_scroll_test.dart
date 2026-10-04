@@ -11,6 +11,7 @@ import 'package:my_life_graph/features/focus_protection/application/blocking_gat
 import 'package:my_life_graph/features/focus_protection/application/focus_protection_gateway.dart';
 import 'package:my_life_graph/features/focus_protection/domain/focus_protection.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/pages/blocking_page.dart';
+import 'package:my_life_graph/features/focus_protection/presentation/widgets/blocking_custom_editor.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
 import 'blocking_plans_test.dart' show FakeBlockingGateway;
@@ -171,7 +172,16 @@ void main() {
           await tester.pumpAndSettle();
           tester.view.viewInsets = const FakeViewPadding(bottom: 220);
           await tester.pumpAndSettle();
-          final title = find.byType(TextField).first;
+          final title = find.byWidgetPredicate((widget) =>
+              widget is TextField && widget.decoration?.labelText == 'Title');
+          final editorScroll = find.descendant(
+            of: find.descendant(
+              of: find.byType(BlockingCustomEditor),
+              matching: find.byType(ListView),
+            ),
+            matching: find.byType(Scrollable),
+          ).first;
+          await tester.scrollUntilVisible(title, 150, scrollable: editorScroll);
           await tester.enterText(title, 'A deliberate pause');
           // Typing does not touch the native saved customization yet.
           expect(gateway.saveAttempts, 0);
@@ -190,14 +200,15 @@ void main() {
           );
           await tester.tap(customize);
           await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(title, 150, scrollable: editorScroll);
           expect(
             tester
-                .widget<TextField>(find.byType(TextField).first)
+                .widget<TextField>(title)
                 .controller!
                 .text,
             'A deliberate pause',
           );
-          await tester.enterText(find.byType(TextField).first, 'Unsaved draft');
+          await tester.enterText(title, 'Unsaved draft');
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           expect(find.byType(BlockingPage), findsOneWidget);

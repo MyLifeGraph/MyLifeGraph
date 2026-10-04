@@ -20,6 +20,22 @@ TODAY = date(2026, 7, 2)
 NOW = datetime(2026, 7, 2, 12, tzinfo=timezone.utc)
 
 
+def test_optional_vitals_do_not_change_snapshot_counts_evidence_or_numeric_state():
+    baseline = sample_inputs()
+    vitals = [{"id": f"vital-{metric}", "source": "health_connect", "event_type": metric,
+               "value": 65, "occurred_at": "2026-07-02T09:00:00Z",
+               "created_at": "2026-07-02T09:01:00Z"}
+              for metric in ("health_connect_heart_rate", "health_connect_resting_heart_rate")]
+    rows = []
+    for inputs in [baseline, replace(baseline, behavioral_events=[*baseline.behavioral_events, *vitals])]:
+        repository = FakeSnapshotRepository(inputs)
+        run(SnapshotAggregator(repository=repository, today_provider=lambda: TODAY,
+                               now_provider=lambda: NOW).generate_snapshot(
+            user_id="principal-user-123", request=SnapshotGenerateRequest()))
+        rows.append(repository.persist_calls[0]["row"])
+    assert rows[0] == rows[1]
+
+
 class FakeSnapshotRepository:
     def __init__(self, inputs: SnapshotInputRows | None = None) -> None:
         self.inputs = inputs or sample_inputs()
@@ -814,6 +830,9 @@ def test_snapshot_repository_reads_metadata_and_widens_event_utc_bounds():
     assert "metadata" in _param_values(schedule_params, "select")[0].split(",")
     assert _param_values(daily_params, "limit") == ["7"]
     assert _param_values(event_params, "limit") == ["200"]
+    assert _param_values(event_params, "event_type") == [
+        "not.in.(health_connect_heart_rate,health_connect_resting_heart_rate)",
+    ]
 
 
 def test_snapshot_repository_paginates_complete_action_fact_windows():

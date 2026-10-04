@@ -7,6 +7,15 @@ results belong in [Verification](verification.md#current-verified-baseline).
 
 ## Current delivery boundary
 
+The local approved-polish candidate adds Morning notes/dictation, source-backed
+Wearable cards with separately consented heart data, optional Coach phone
+summaries, persisted Blocking order/direct edit, draft Customize controls and
+foreground-only Strict waits. Planner/exam/habit redesign is deliberately held.
+Three additive migrations and API/client changes are pending verification and
+rollout; the current user explicitly authorizes PR, merge and production release
+after successful verification. Authorization does not waive any gate. See the Capture, Health,
+Coach and Android Focus Protection owners and current verification evidence.
+
 - The source contains the consolidated follow-ups on
   `codex/checkin-reminders-history-focus`, including the isolated product website,
   Liquid Glass, recent-day Capture, check-in push settings, wearable suggestions

@@ -20,6 +20,7 @@ import '../../domain/skillset_signals.dart';
 import '../widgets/optional_skillset_controls.dart';
 import '../../../../composition/health_connect_providers.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../composition/widgets/capture_note_field.dart';
 
 class MorningCalibrationPage extends ConsumerStatefulWidget {
   const MorningCalibrationPage({super.key, this.proposal});
@@ -34,6 +35,8 @@ class MorningCalibrationPage extends ConsumerStatefulWidget {
 class _MorningCalibrationPageState
     extends ConsumerState<MorningCalibrationPage> {
   late MorningCalibrationDraft _draft;
+  final _noteController = TextEditingController();
+  bool _dictating = false;
   MorningCalibrationDraft? _cleanDraft;
   bool _sleepTouched = false;
   var _stepIndex = 0;
@@ -73,6 +76,12 @@ class _MorningCalibrationPageState
   }
 
   @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final proposalOwnerMatches =
         widget.proposal == null ||
@@ -87,7 +96,7 @@ class _MorningCalibrationPageState
           ? 'Review suggestions. Unmentioned answers stay unchanged. Saving updates today\'s Morning check-in.'
           : 'Review suggestions and fill any gaps before saving.',
       progress: (_stepIndex + 1) / _steps.length,
-      canGoBack: _stepIndex > 0,
+      canGoBack: _stepIndex > 0 && !_dictating,
       canContinue: _canUseCurrentStep,
       isLastStep: _stepIndex == _steps.length - 1,
       isLoading: _isLoading,
@@ -122,7 +131,7 @@ class _MorningCalibrationPageState
                   CaptureDatePicker(
                     date: DateTime.parse(_draft.entryDate),
                     today: ref.read(profileLocalDateSourceProvider).today(),
-                    enabled: !_isLoading && !_isSaving,
+                    enabled: !_isLoading && !_isSaving && !_dictating,
                     onChanged: _changeDate,
                   ),
                 _buildStep(step.kind),
@@ -303,12 +312,22 @@ class _MorningCalibrationPageState
               ),
             ),
           ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureNoteField(
+          controller: _noteController,
+          maxLines: 2,
+          enabled: !_isSaving && !_isLoading,
+          onChanged: (text) =>
+              setState(() => _draft = _draft.copyWith(reflectionNote: text)),
+          onBusyChanged: (value) => setState(() => _dictating = value),
+        ),
       ],
     );
   }
 
   bool get _canUseCurrentStep =>
       !_isLoading &&
+      !_dictating &&
       _proposalMatchesContext &&
       _safeCaptureLoaded &&
       (!_eveningPlanUnavailable || _continueWithoutEveningPlan) &&
@@ -436,6 +455,7 @@ class _MorningCalibrationPageState
 
   Future<void> _save() async {
     if (_isSaving ||
+        _dictating ||
         _stepIndex != _steps.length - 1 ||
         !_safeCaptureLoaded ||
         !_proposalMatchesContext ||
@@ -547,7 +567,13 @@ class _MorningCalibrationPageState
           final now = ref.read(currentInstantProvider)().toUtc();
           next = next.copyWith(
             // Now is unambiguous even during a repeated DST hour.
-            wokeAt: DateTime.utc(now.year, now.month, now.day, now.hour, now.minute),
+            wokeAt: DateTime.utc(
+              now.year,
+              now.month,
+              now.day,
+              now.hour,
+              now.minute,
+            ),
           );
         }
         if (widget.proposal == null &&
@@ -559,7 +585,9 @@ class _MorningCalibrationPageState
               entryDate: next.entryDate,
               estimatedSleepStartedAt: sleepPlan!.plannedSleepTime!,
               wokeAt: _clock(next.wokeAt!),
-              timezoneName: ref.read(profileLocalDateSourceProvider).timezoneName,
+              timezoneName: ref
+                  .read(profileLocalDateSourceProvider)
+                  .timezoneName,
             );
             next = next.withSleepInterval(
               estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
@@ -567,7 +595,8 @@ class _MorningCalibrationPageState
             );
           } on ProfileTimezoneException {
             // An unresolved plan hint must not block manual entry or Watch use.
-            _saveError = 'That time is ambiguous or unavailable in your timezone. Choose another time.';
+            _saveError =
+                'That time is ambiguous or unavailable in your timezone. Choose another time.';
           }
         }
         if (!_proposalApplied && widget.proposal != null) {
@@ -577,6 +606,7 @@ class _MorningCalibrationPageState
         }
         setState(() {
           _draft = next;
+          _noteController.text = next.reflectionNote ?? '';
           _cleanDraft = widget.proposal == null
               ? next
               : saved ??
@@ -619,7 +649,9 @@ class _MorningCalibrationPageState
   }
 
   Future<void> _changeDate(DateTime date) async {
-    if (_isLoading || _isSaving || widget.proposal != null) return;
+    if (_isLoading || _isSaving || _dictating || widget.proposal != null) {
+      return;
+    }
     if (dailyCaptureEntryDate(date) == _draft.entryDate) return;
     if (_cleanDraft != null && !identical(_draft, _cleanDraft)) {
       if (!await confirmCaptureDiscard(context) || !mounted || _isSaving) {
@@ -632,6 +664,7 @@ class _MorningCalibrationPageState
         entryDate: dailyCaptureEntryDate(date),
       );
       _stepIndex = 0;
+      _noteController.clear();
       _cleanDraft = null;
       _sleepTouched = false;
       _safeCaptureLoaded = false;

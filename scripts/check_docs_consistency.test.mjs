@@ -21,6 +21,7 @@ import {
   findStaleClaimErrors,
   findVerificationEvidenceErrors,
   isHistoricalDocument,
+  listMarkdownFiles,
   loadCurrentContractsMetadata,
   runDocumentationChecks,
   validateCurrentContractsMetadata,
@@ -70,6 +71,13 @@ test('Markdown links require an existing file and heading anchor', () => {
       );
     },
   );
+});
+
+test('generated pytest cache is not repository documentation', () => {
+  withFixture({
+    'docs/feature.md': '# Feature',
+    'services/ai_service/.pytest_cache/README.md': '# Generated cache',
+  }, (root) => assert.deepEqual(listMarkdownFiles(root), ['docs/feature.md']));
 });
 
 test('documented route checks understand multiline FastAPI decorators and parameters', () => {

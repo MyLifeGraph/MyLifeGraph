@@ -84,7 +84,9 @@ class _RevisionGateway extends BlockingGateway {
   }
 }
 
-Future<void> _openDetail(WidgetTester tester, _RevisionGateway gateway) async {
+Future<void> _openDetail(WidgetTester tester, _RevisionGateway gateway, {
+  bool openEditor = true,
+}) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(800, 1000);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -108,6 +110,7 @@ Future<void> _openDetail(WidgetTester tester, _RevisionGateway gateway) async {
     ),
   );
   await tester.pumpAndSettle();
+  if (!openEditor) return;
   final card = find
       .ancestor(of: find.text('Study'), matching: find.byType(InkWell))
       .first;
@@ -117,7 +120,7 @@ Future<void> _openDetail(WidgetTester tester, _RevisionGateway gateway) async {
   await tester.tap(card.hitTestable());
   await tester.pumpAndSettle();
   expect(find.byType(BottomSheet), findsOneWidget);
-  expect(find.widgetWithText(FilledButton, 'Edit'), findsOneWidget);
+  expect(find.byType(BlockingPlanEditor), findsOneWidget);
 }
 
 Future<void> _resumeWithState(
@@ -140,10 +143,8 @@ Future<void> _resumeWithState(
 }
 
 Future<void> _attemptDetailSave(WidgetTester tester) async {
-  await tester.tap(find.widgetWithText(FilledButton, 'Edit'));
-  await tester.pumpAndSettle();
-  // Rejecting an obsolete detail is also safe. If an editor opens, saving
-  // without changing its fields must retain the current native definition.
+  // Card taps now open the editor directly. Its opening revision must still
+  // reject an obsolete draft without replacing the current native definition.
   if (find.byType(BlockingPlanEditor).evaluate().isNotEmpty) {
     final save = find.widgetWithText(FilledButton, 'Save');
     await tester.ensureVisible(save);
@@ -157,7 +158,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(stubNativeBlockingPreview);
 
-  testWidgets('resumed detail edit does not roll back a renamed native plan', (
+  testWidgets('resumed direct editor does not roll back a renamed native plan', (
     tester,
   ) async {
     final gateway = _RevisionGateway();
@@ -186,7 +187,7 @@ void main() {
     );
   });
 
-  testWidgets('resumed detail edit cannot recreate a deleted native plan', (
+  testWidgets('resumed direct editor cannot recreate a deleted native plan', (
     tester,
   ) async {
     final gateway = _RevisionGateway();
@@ -197,7 +198,7 @@ void main() {
   });
 
   testWidgets(
-    'current detail editor saves successfully under its own revision',
+    'direct card editor saves successfully under its own revision',
     (tester) async {
       final gateway = _RevisionGateway();
       final original = BlockingSnapshot(gateway.state).plans.single;
@@ -216,7 +217,7 @@ void main() {
 
   for (final systemBack in [false, true]) {
     testWidgets(
-      'refreshed detail edit ${systemBack ? 'Back' : 'Close'} keeps native plans unchanged',
+      'refreshed direct editor ${systemBack ? 'Back' : 'Close'} keeps native plans unchanged',
       (tester) async {
         final gateway = _RevisionGateway();
         await _openDetail(tester, gateway);
@@ -227,8 +228,6 @@ void main() {
           always: true,
         );
         await _resumeWithState(tester, gateway, const [current]);
-        await tester.tap(find.widgetWithText(FilledButton, 'Edit'));
-        await tester.pumpAndSettle();
         expect(find.byType(BlockingPlanEditor), findsOneWidget);
         await tester.enterText(find.byType(TextField).first, 'Unsaved draft');
         if (systemBack) {
@@ -253,9 +252,11 @@ void main() {
     'status refresh during catalog retains opening revision and draft',
     (tester) async {
       final gateway = _RevisionGateway();
-      await _openDetail(tester, gateway);
+      await _openDetail(tester, gateway, openEditor: false);
       gateway.pendingCatalog = Completer<List<Map>>();
-      await tester.tap(find.widgetWithText(FilledButton, 'Edit'));
+      final card = find.ancestor(of: find.text('Study'), matching: find.byType(InkWell)).first;
+      await tester.ensureVisible(card);
+      await tester.tap(card);
       await tester.pumpAndSettle();
       expect(find.byType(BlockingPlanEditor), findsNothing);
       const current = BlockingPlan(
@@ -296,8 +297,6 @@ void main() {
   ) async {
     final gateway = _RevisionGateway();
     await _openDetail(tester, gateway);
-    await tester.tap(find.widgetWithText(FilledButton, 'Edit'));
-    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'Confirmed draft');
     gateway.pendingSaveReply = Completer<void>();
     final save = find.widgetWithText(FilledButton, 'Save');

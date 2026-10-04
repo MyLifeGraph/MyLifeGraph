@@ -24,8 +24,26 @@ import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_se
 import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'support/ui_catalog_capture.dart';
 
 void main() {
+  if (captureUiCatalog) {
+    testWidgets('compact evening note catalog', (tester) async {
+      await loadCatalogFonts();
+      await _pumpEveningPage(tester, _RecordingCaptureStore(),
+        viewSize: const Size(390, 844), theme: AppTheme.liquidGlass,
+        currentInstant: DateTime(2026, 9, 25, 21), skillsetEnabled: true);
+      for (final label in ['evening mood 7 of 10', 'evening energy 6 of 10', 'evening stress 3 of 10']) {
+        await _tapVisible(tester, find.bySemanticsLabel(label));
+      }
+      await _tapVisible(tester, find.text('Next'));
+      tester.widget<CaptureClockControl>(find.byType(CaptureClockControl)).onChanged('23:00');
+      await tester.pump();
+      await _tapVisible(tester, find.text('Next'));
+      await captureCatalog(tester, 'evening-after');
+    });
+  }
   testWidgets('Evening backfill writes only the selected date', (tester) async {
     final store = _RecordingCaptureStore();
     await _pumpEveningPage(tester, store, currentInstant: DateTime(2026, 9, 25, 21));
@@ -619,6 +637,7 @@ Future<void> _pumpEveningPage(
   double textScale = 1,
   bool disableAnimations = false,
   bool skillsetEnabled = false,
+  ThemeData? theme,
 }) async {
   final router = GoRouter(
     initialLocation: '/quick-mood-check-in',
@@ -671,6 +690,8 @@ Future<void> _pumpEveningPage(
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
       ],
       child: MaterialApp.router(
+        debugShowCheckedModeBanner: false,
+        theme: theme,
         routerConfig: router,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(

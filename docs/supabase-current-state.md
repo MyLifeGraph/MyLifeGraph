@@ -8,8 +8,23 @@ migration is recorded in [Verification](verification.md#current-verified-baselin
 including the post-apply function identity and permission checks. Inspect live
 history before future rollout; repository inventory alone is not live evidence.
 
-The latest repository migration is `20260925164043_reversible_notification_and_focus_correction.sql`.
-It extends the notification ledger/RPC with `restore` and adds service-only
+The latest repository migration is `20261004141004_optional_coach_phone_data.sql`.
+New local candidate migrations (application is not inferred):
+
+- `20261004135731_optional_morning_note.sql`: preserves omitted Morning notes,
+  validates explicit bounded notes, keeps existing scalar projections and grants.
+- `20261004140306_optional_health_vitals.sql`: extends the existing service-only
+  Health RPC with separate `health-vitals-cloud-consent-v1`, optional authoritative
+  heart/resting-heart reads, source-backed daily BPM and deletion controls.
+- `20261004141004_optional_coach_phone_data.sql`: backend-owned
+  `profiles.coach_phone_data` plus private `coach_phone_last_request`, protected
+  against direct client insert/update. Service-only `apply_coach_phone_data_v1`
+  uses owner locking, deletion guard, exact replay, revision, device and consent.
+  `coach-phone-data-v1`/`coach-phone-consent-v1` data joins the existing profile
+  export/Coach snapshot; replay is excluded. No new table or correlation source.
+
+The earlier `20260925164043_reversible_notification_and_focus_correction.sql`
+extends the notification ledger/RPC with `restore` and adds service-only
 `correct_focus_time_v1(uuid,uuid,uuid,timestamptz,integer)` plus
 `private.focus_time_corrections`. This forced-RLS audit/replay ledger has no
 client or direct service-role write grants. Owner/session foreign keys cascade

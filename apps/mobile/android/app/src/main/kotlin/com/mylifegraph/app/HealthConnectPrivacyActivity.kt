@@ -10,7 +10,7 @@ class HealthConnectPrivacyActivity : Activity() {
         super.onCreate(savedInstanceState)
         AlertDialog.Builder(this)
             .setTitle("Health Connect · optional")
-            .setMessage("MyLifeGraph reads steps and sleep only after you agree. Enable sharing in Garmin Connect first.\n\nDaily totals are uploaded to your MyLifeGraph account and kept separate from manual check-ins. Your selected Coach can read them; relevant results may be sent to its AI provider. No routes, heart rate or raw sleep notes are read.\n\nSettings → Health Connect lets you stop uploads or delete imported data. You can revoke Android access in Health Connect. Account export and deletion include these observations.")
+            .setMessage("MyLifeGraph reads steps and sleep only after you agree. Enable sharing in your watch app first.\n\nDaily totals are uploaded to your MyLifeGraph account and kept separate from manual check-ins. Heart-rate and resting-heart-rate averages require additional consent and permissions. Your selected Coach can read imported data; relevant results may be sent to its AI provider. No routes, raw sleep notes or stress data are read. This is not medical advice.\n\nSettings → Health Connect lets you stop uploads, remove heart data or delete all imports. You can revoke Android access in Health Connect. Account export and deletion include these observations.")
             .setPositiveButton("Close") { _, _ -> finish() }
             .setOnCancelListener { finish() }
             .show()

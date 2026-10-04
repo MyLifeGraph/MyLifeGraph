@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +10,10 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/focus_protection/application/blocking_gateway.dart';
 import 'package:my_life_graph/features/focus_protection/application/focus_protection_gateway.dart';
 import 'package:my_life_graph/features/focus_protection/domain/blocking_plan.dart';
+import 'package:my_life_graph/features/focus_protection/domain/focus_protection.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/pages/blocking_page.dart';
+import 'package:my_life_graph/features/focus_protection/presentation/widgets/blocking_custom_editor.dart';
+import 'package:my_life_graph/features/focus_protection/presentation/widgets/blocking_screen_preview.dart';
 import 'support/ui_catalog_capture.dart';
 
 Map<String, Object> snapshot({bool locked = false}) => {
@@ -73,8 +77,252 @@ class FakeBlockingGateway extends BlockingGateway {
   };
 }
 
+class _OrderGateway extends BlockingGateway {
+  List<BlockingPlan> plans = [
+    for (final id in ['A', 'B', 'C'])
+      BlockingPlan(
+        id: id,
+        name: 'Plan $id',
+        apps: {'example.app'},
+        always: true,
+      ),
+  ];
+  int revision = 3, saves = 0;
+  bool fail = false;
+  Completer<void>? pending;
+  @override
+  Future<List<Map>> catalog() async => [
+    {'packageName': 'example.app', 'label': 'Example', 'category': 'Other'},
+  ];
+  @override
+  Future<BlockingSnapshot> command(
+    String name, [
+    Map<String, Object>? args,
+  ]) async {
+    if (name == 'save') {
+      saves++;
+      await pending?.future;
+      if (fail || args!['revision'] != revision) {
+        throw StateError('Save conflict');
+      }
+      plans = (args['plans'] as List)
+          .map((value) => BlockingPlan.fromMap(value as Map))
+          .toList();
+      revision++;
+    }
+    return BlockingSnapshot({
+      ...snapshot(),
+      'revision': revision,
+      'plans': plans.map((p) => p.toMap()).toList(),
+    });
+  }
+}
+
+class _OrderLegacy extends UnsupportedFocusProtectionGateway {
+  @override
+  Future<FocusProtectionStatus> readStatus() async {
+    final value = await super.readStatus();
+    return FocusProtectionStatus(
+      platformSupported: true,
+      accessibilityEnabled: true,
+      notificationPolicyGranted: false,
+      lease: null,
+      configuration: value.configuration.copyWith(
+        consentVersions: {
+          focusProtectionAppCatalogConsent: focusProtectionConsentVersion,
+        },
+      ),
+    );
+  }
+}
+
+Future<void> _openOrder(WidgetTester tester, _OrderGateway gateway) async {
+  tester.view.physicalSize = const Size(390, 1200);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        blockingGatewayProvider.overrideWithValue(gateway),
+        focusProtectionGatewayProvider.overrideWithValue(_OrderLegacy()),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.liquidGlass,
+        home: const Scaffold(body: BlockingPage()),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _showCustomControl(WidgetTester tester, Finder control) async {
+  final scroller = find
+      .descendant(
+        of: find.byType(BlockingCustomEditor),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  await tester.scrollUntilVisible(control, 180, scrollable: scroller);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets(
+    'plan reorder persists exact identity order and failed save leaves previous order',
+    (tester) async {
+      final gateway = _OrderGateway();
+      await _openOrder(tester, gateway);
+      final list = find.byType(ReorderableListView);
+      tester.widget<ReorderableListView>(list).onReorderItem!(0, 2);
+      await tester.pumpAndSettle();
+      expect(gateway.plans.map((p) => p.id), ['B', 'C', 'A']);
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(find.text('Plan B')).dy,
+        lessThan(tester.getTopLeft(find.text('Plan C')).dy),
+      );
+      gateway.fail = true;
+      tester.widget<ReorderableListView>(list).onReorderItem!(2, 0);
+      await tester.pumpAndSettle();
+      expect(gateway.plans.map((p) => p.id), ['B', 'C', 'A']);
+      expect(
+        tester.getTopLeft(find.text('Plan B')).dy,
+        lessThan(tester.getTopLeft(find.text('Plan A')).dy),
+      );
+      expect(find.textContaining('Save conflict'), findsOneWidget);
+    },
+  );
+  testWidgets('pause and resume retain manual plan order', (tester) async {
+    final gateway = _OrderGateway();
+    await _openOrder(tester, gateway);
+    for (final action in ['Pause', 'Resume', 'Pause 10m']) {
+      await tester.tap(find.byTooltip('Plan options').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+      expect(gateway.plans.map((p) => p.id), ['A', 'B', 'C']);
+    }
+  });
+  testWidgets('tapping compact card directly opens its editor', (tester) async {
+    final gateway = _OrderGateway();
+    await _openOrder(tester, gateway);
+    await tester.tap(find.text('Plan B'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsOneWidget);
+    expect(gateway.saves, 0);
+  });
+  testWidgets('reorder is single flight and uses opening revision', (
+    tester,
+  ) async {
+    final gateway = _OrderGateway()..pending = Completer<void>();
+    await _openOrder(tester, gateway);
+    final list = tester.widget<ReorderableListView>(
+      find.byType(ReorderableListView),
+    );
+    list.onReorderItem!(0, 2);
+    list.onReorderItem!(1, 0);
+    await tester.pump();
+    expect(gateway.saves, 1);
+    gateway.revision++;
+    gateway.pending!.complete();
+    await tester.pumpAndSettle();
+    expect(gateway.plans.map((p) => p.id), ['A', 'B', 'C']);
+    expect(find.textContaining('Save conflict'), findsOneWidget);
+  });
+  testWidgets(
+    'Customize draft preview follows icon accent layout and cancel writes nothing',
+    (tester) async {
+      var saves = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.liquidGlass,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => BlockingCustomEditor(
+                    custom: const {
+                      'title': 'Original',
+                      'message': 'Original message',
+                    },
+                    iconBuilder: blockingIcon,
+                    error: () => null,
+                    onSave: (_) async {
+                      saves++;
+                      return true;
+                    },
+                  ),
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('sleep'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<BlockingScreenPreview>(find.byType(BlockingScreenPreview))
+            .custom['icon'],
+        'sleep',
+      );
+      await _showCustomControl(tester, find.byTooltip('violet'));
+      final accentRow = tester.getRect(
+        find.byKey(const ValueKey('blocking-accent-options')),
+      );
+      final swatches = [
+        'theme',
+        'mint',
+        'blue',
+        'violet',
+        'rose',
+      ].map((id) => tester.getRect(find.byTooltip(id))).toList();
+      expect(
+        swatches.first.left - accentRow.left,
+        closeTo(accentRow.right - swatches.last.right, 1),
+      );
+      for (final swatch in swatches) {
+        expect(swatch.width, closeTo(swatches.first.width, 1));
+        expect(swatch.height, greaterThanOrEqualTo(48));
+      }
+      await tester.tap(find.byTooltip('violet'));
+      await tester.pumpAndSettle();
+      await _showCustomControl(tester, find.text('Compact'));
+      await tester.tap(
+        find.ancestor(
+          of: find.text('Compact'),
+          matching: find.byType(ChoiceChip),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Scroll back to the lazy preview; changed draft remains local.
+      await tester.drag(find.byType(ListView).last, const Offset(0, 1500));
+      await tester.pumpAndSettle();
+      final draft = tester
+          .widget<BlockingScreenPreview>(find.byType(BlockingScreenPreview))
+          .custom;
+      expect(draft['accent'], 'violet');
+      expect(draft['layout'], 'compact');
+      expect(draft['title'], 'Original');
+      expect(saves, 0);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(saves, 0);
+      expect(find.byType(BlockingCustomEditor), findsNothing);
+    },
+  );
   testWidgets('non-Android header never loads Android account capabilities', (
     tester,
   ) async {
@@ -158,41 +406,64 @@ void main() {
     },
   );
   if (captureUiCatalog) {
-    testWidgets('blocking visual catalog', (tester) async {
-      await loadCatalogFonts();
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      for (final width in [390.0, 900.0]) {
-        tester.view.physicalSize = Size(width, 844);
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              blockingGatewayProvider.overrideWithValue(FakeBlockingGateway()),
-              focusProtectionGatewayProvider.overrideWithValue(
-                UnsupportedFocusProtectionGateway(),
+    testWidgets(
+      'blocking visual catalog',
+      (tester) async {
+        await loadCatalogFonts();
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        for (final width in [390.0, 900.0]) {
+          tester.view.physicalSize = Size(width, 844);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                blockingGatewayProvider.overrideWithValue(
+                  FakeBlockingGateway(),
+                ),
+                focusProtectionGatewayProvider.overrideWithValue(
+                  UnsupportedFocusProtectionGateway(),
+                ),
+              ],
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                theme: AppTheme.liquidGlass,
+                home: const Scaffold(body: BlockingPage()),
               ),
-            ],
-            child: MaterialApp(
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.liquidGlass,
-              home: const Scaffold(body: BlockingPage()),
             ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        await captureCatalog(tester, 'blocking-plans-${width.toInt()}');
-        for (final tab in ['Strict', 'Insights', 'Customize']) {
-          await tester.tap(find.text(tab).last);
+          );
           await tester.pumpAndSettle();
+          await captureCatalog(tester, 'blocking-plans-${width.toInt()}');
+          for (final tab in ['Strict', 'Insights', 'Customize']) {
+            await tester.tap(find.text(tab).last);
+            await tester.pumpAndSettle();
+            await captureCatalog(
+              tester,
+              'blocking-${tab.toLowerCase()}-${width.toInt()}',
+            );
+          }
+          await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
+          await tester.pumpAndSettle();
+          await captureCatalog(tester, 'blocking-editor-${width.toInt()}');
+          await _showCustomControl(tester, find.text('More delays'));
+          final choices = ['Compact', 'Balanced', 'Spacious']
+              .map(
+                (label) =>
+                    tester.getSize(find.widgetWithText(ChoiceChip, label)),
+              )
+              .toList();
+          expect(choices[0].width, closeTo(choices[1].width, .1));
+          expect(choices[1].width, closeTo(choices[2].width, .1));
+          expect(choices[0].height, closeTo(choices[2].height, .1));
           await captureCatalog(
             tester,
-            'blocking-${tab.toLowerCase()}-${width.toInt()}',
+            'blocking-editor-controls-${width.toInt()}',
           );
+          await tester.pumpWidget(const SizedBox());
         }
-        await tester.pumpWidget(const SizedBox());
-      }
-    });
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.windows),
+    );
   }
   test(
     'plan roundtrip retains combinations and never writes transient status',
@@ -552,7 +823,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
     await tester.pumpAndSettle();
     final delay = find.byType(DropdownButtonFormField<int>);
-    await tester.ensureVisible(delay);
+    await _showCustomControl(tester, delay);
     await tester.tap(delay);
     await tester.pumpAndSettle();
     await tester.tap(find.text('1s').last);
@@ -564,6 +835,7 @@ void main() {
     expect(gateway.custom['waitSeconds'], 1);
     await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
     await tester.pumpAndSettle();
+    await _showCustomControl(tester, delay);
     expect(tester.widget<DropdownButtonFormField<int>>(delay).initialValue, 1);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
@@ -599,13 +871,10 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
       await tester.pumpAndSettle();
       final fields = find.byType(DropdownButtonFormField<String>);
-      await tester.ensureVisible(fields.first);
-      await tester.tap(fields.first);
+      await tester.tap(find.byTooltip(icon));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(icon).last);
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(fields.last);
-      await tester.tap(fields.last);
+      await _showCustomControl(tester, fields);
+      await tester.tap(fields);
       await tester.pumpAndSettle();
       await tester.tap(find.text(label).last);
       await tester.pumpAndSettle();
@@ -619,14 +888,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<DropdownButtonFormField<String>>(fields.first)
-            .initialValue,
+            .widget<BlockingScreenPreview>(find.byType(BlockingScreenPreview))
+            .custom['icon'],
         icon,
       );
+      await _showCustomControl(tester, fields);
       expect(
-        tester
-            .widget<DropdownButtonFormField<String>>(fields.last)
-            .initialValue,
+        tester.widget<DropdownButtonFormField<String>>(fields).initialValue,
         tone,
       );
       expect(tester.takeException(), isNull);

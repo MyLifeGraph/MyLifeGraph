@@ -31,6 +31,119 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Final approved polish and release review (2026-10-04, candidate)
+
+- Base remains `81daeeeb8edcc50fadc4e670e1a7fbc539eb2366`; end-to-end publication
+  is explicitly authorized. Remote main was independently read at this base,
+  no existing candidate PR was found, and the last published release was RC19.
+- Study Motivation was not deleted: the catalog fixture had disabled its
+  capability. The corrected real-renderer capture includes it above the note.
+  Existing selection/save behavior and the capability gate remain unchanged.
+- **60 focused Flutter tests pass**, including current catalog renders, direct
+  phone categories, equal Accent geometry and four-theme Customize scrolling.
+  An independent **41-test Flutter selection passes** (overlapping this count),
+  including Strict leave/reset, 120 tab changes and four new menu revision tests.
+  The suspected stale-menu race was disproved: refreshed callbacks preserve
+  current fields/revision, and removed plans cannot be resurrected. No speculative
+  product fix was made.
+- Independent data review passes **112 backend tests** (35 Capture, 65
+  Phone/Health/Snapshot, 12 ownership/export) plus Ruff. A reproduced raw-note
+  length mismatch is fixed: whitespace cannot bypass the SQL 500-character bound.
+- Catalog pixels are synthetic Flutter-renderer output, not physical Android
+  evidence. Three additive migrations still require fresh Linux migration/pgTAP
+  gates and separate reviewed Cloud application; no live mutation is claimed here.
+- Existing Windows reference-golden failures were independently compared and
+  match earlier glyph-edge-only differences. No baseline or tolerance was changed;
+  fresh canonical Linux CI remains authoritative for release.
+
+### Compact Capture / Blocking / Coach follow-up (2026-10-04, local only)
+
+- Same captured base `81daeeeb8edcc50fadc4e670e1a7fbc539eb2366` and working
+  branch `codex/approved-capture-health-blocking`; earlier candidate work is
+  preserved. No publication, migration or production mutation in this follow-up.
+- **112 targeted Flutter tests pass**, including opt-in real-renderer catalog
+  captures, four-theme compact notes, 320px/200% text, note save/reopen/dictation,
+  Coach consent/cancellation/actions, equal layout choice geometry, Strict reset,
+  and compact timing/overlap/overnight/DST summaries. Captures are synthetic
+  widgets under ignored `.tools/ui-catalog/compact-followup-20261004/`, not APK
+  or device evidence. Strict visual redesign remains held for user review.
+- The complete Flutter suite was run twice. Final result: **1662 passed, 6
+  failed**. Remaining failures are the dark/light/space mobile/desktop component
+  reference goldens in `visual_system_v2_test.dart`; current versus master images
+  were inspected. This task does not change that reference test, its baselines,
+  AppTheme or AppSurface. The goldens were not regenerated merely to pass. A
+  canonical-platform comparison remains required; the full suite is not green.
+- Full-run findings fixed: app/site count overflow at large text; Customize
+  focused text fields now read-only during Save. Existing pending-save guards
+  remain asserted. Older Blocking fixtures now exercise direct edit and account
+  for Strict visibility commands; Coach fixtures supply the new capability
+  dependency. No CAS, lifecycle, cancellation or consent assertion was removed.
+- Flutter analysis reports no issues. Docs and visual-source gates pass. The
+  captured-base affected selector reaches Full but Windows source verification
+  still fails at missing `setsid`; database/browser gates have not passed here.
+  Initial Bash PATH/sandbox attempts failed before that retry. Earlier unexecuted
+  SQL/real-device limitations below still apply; no security gate is waived.
+- App-scoped Android `:app:testDebugUnitTest :app:lintDebug` succeeds with the
+  existing JDK 21: 65 app JVM tests, zero failures/errors. The broader Gradle
+  invocation including dependency-owned tests fails in `file_selector_android`
+  while Robolectric downloads an artifact (TLS `bad_record_mac` / tag mismatch).
+  An initial invocation used the installed Studio JDK 25 and failed during
+  toolchain setup; no SDK/dependency upgrade or TLS bypass was made. The app-only
+  pass does not replace the broader failed gate or installed-device acceptance.
+
+
+### Approved Capture, Wearables and Blocking polish (2026-10-04, local candidate)
+
+- Captured base `81daeeeb8edcc50fadc4e670e1a7fbc539eb2366`, working branch
+  `codex/approved-capture-health-blocking`. No commit, push, PR, live migration,
+  deployment or release is claimed. Planner/editor/replanning ideas remain held.
+- Capture review: **75 focused Flutter tests pass** and **32 Python contract
+  tests pass**. Omitted Morning notes preserve old context; explicit empty
+  notes clear it; dictation is reviewed and bounded. Evening layout is retained.
+- Health review: **28 Flutter tests pass**, including four themes at 320px/200%
+  text, and **45 Python Health/snapshot tests pass**. Missing permission/read
+  differs from authoritative empty data; extra vitals require separate consent;
+  reconnect cannot inherit it; numeric snapshots exclude the new vitals.
+- Final backend selection: **108 tests pass** across owner catalog/reader,
+  export bounds, Capture, Health, snapshot aggregation and Phone data. This
+  overlaps the counts above; they are not additive totals. Changed Python files
+  pass Ruff. An expanded run including existing POSIX snapshot-file tests had
+  **91 passes, one failure and one setup error** under Windows (POSIX mode and
+  read-only-file cleanup, plus the inherited pytest-temp ACL). Those checks are
+  still required on Linux; no security assertion was weakened to obtain a pass.
+- Independent Blocking/Phone review: **44 Flutter tests pass**, covering
+  reorder/save failure, Strict leave/resume/reset, all preview variants, phone
+  consent/account changes, single-flight commands and pinned CAS revisions.
+  A later 36-test UI/preview run also passes; these selections overlap.
+- Final combined Flutter selection: **151 tests pass** across Capture notes,
+  data source, Morning/Evening pages, Coach dictation button/request, Health,
+  Blocking plans/Strict/preview and Phone data. It includes opt-in synthetic
+  catalog captures. One earlier invocation named a nonexistent dictation test
+  file; the corrected complete invocation is the passing result recorded here.
+- **65 Android JVM tests pass**, Kotlin compilation and debug lint pass. The
+  Phone day-window helper uses API24-compatible Calendar/TimeZone, with DST and
+  differing profile/device day starts covered. Real UsageStats availability,
+  Health Connect permission/record coverage, OS navigation and NFC remain
+  installed-device acceptance, not facts inferred from mocks.
+- Flutter analysis and local debug web compilation succeed. Docs, visual
+  contract and diff hygiene checks pass. Synthetic renderer captures under
+  ignored `.tools/ui-catalog/approved-polish-20261004/` are inspected; they are
+  test fixtures, not screenshots of a production account or physical Android.
+- The captured-base affected selector selects Full. Its Windows run cannot
+  complete the source harness (`setsid` missing); its default Python lacks Ruff.
+  The existing test venv supplies the focused checks above. Direct `dart analyze`
+  also encounters an SDK performance-IPC shutdown error on Windows; the normal
+  Flutter analyzer subsequently completes without issues. Do not
+  interpret these environment limitations as a completed Full CI run.
+- Migrations `20261004135731`, `20261004140306` and `20261004141004` and the
+  three rollback-only SQL regression files are prepared but **not executed**:
+  Docker/WSL and a disposable test database are unavailable here. Do not apply
+  them to a retained or live database as a substitute for isolated verification.
+  Reviewed migration execution and backend-before-client rollout remain needed.
+- Docs checking ignores generated `.pytest_cache`, just like other generated
+  caches; a regression fixture covers this Windows ACL failure. No source,
+  contract, migration inventory or security checks are skipped by that filter.
+
 ### Strict request and Android Customize regression (2026-10-03, candidate)
 
 - Captured task base `e6ef1378597a5ab95cec44db39cdde512ee0fca0`; branch

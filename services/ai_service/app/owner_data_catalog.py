@@ -146,7 +146,7 @@ OWNER_DATA_CATALOG = (
         "timezone_revision,preparation_budget_revision,role,auth_provider,"
         "onboarding_completed_at,setup_revision,"
         "pilot_participation_notice_version,pilot_participation_accepted_at,"
-        "health_connect_settings,push_settings,created_at,updated_at",
+        "health_connect_settings,coach_phone_data,push_settings,created_at,updated_at",
         owner_column="id",
         cursor_column="id",
     ),

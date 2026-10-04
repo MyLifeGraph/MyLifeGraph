@@ -7,11 +7,45 @@ import pytest
 from app.contracts.daily_capture_v4 import (
     parse_daily_capture_sleep_episode,
     parse_daily_capture_sleep_plan,
+    validate_daily_capture_branch,
 )
 
 
 ROW_DATE = date(2026, 8, 4)
 _OMIT = object()
+
+
+@pytest.mark.parametrize("note", ["", "  ", "A calmer morning.", "x" * 500])
+def test_optional_morning_note_accepts_clear_and_bounded_context(note):
+    raw = _branch("morning", "daily-capture-v5", _OMIT)
+    baseline = parse_daily_capture_sleep_episode(
+        raw, row_date=ROW_DATE, container_version="daily-capture-v5",
+    )
+    raw["reflection_note"] = note
+    assert validate_daily_capture_branch(raw, row_date=ROW_DATE, branch="morning") == ()
+    assert parse_daily_capture_sleep_episode(
+        raw, row_date=ROW_DATE, container_version="daily-capture-v5",
+    ) == baseline
+
+
+@pytest.mark.parametrize(
+    "note",
+    [None, 5, True, [], {}, "x" * 501, "x" * 500 + " ", " " + "x" * 500, " " * 501],
+)
+def test_optional_morning_note_rejects_invalid_values(note):
+    raw = _branch("morning", "daily-capture-v5", _OMIT)
+    raw["reflection_note"] = note
+    assert "morning.invalid_reflection_note" in validate_daily_capture_branch(
+        raw, row_date=ROW_DATE, branch="morning",
+    )
+
+
+def test_morning_note_does_not_extend_legacy_v4_write_shape():
+    raw = _branch("morning", "daily-capture-v4", _OMIT)
+    raw["reflection_note"] = "Only current V5 writers add this field."
+    assert "morning.unexpected_fields" in validate_daily_capture_branch(
+        raw, row_date=ROW_DATE, branch="morning",
+    )
 
 
 def _branch(kind: str, version: str, compatibility: object) -> dict[str, object]:

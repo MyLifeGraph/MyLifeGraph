@@ -8,6 +8,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_life_graph/features/quick_action/domain/skillset_signals.dart';
 
 void main() {
+  test('Morning note survives guest reload and explicit clear without changing measurements', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = GuestQuickCheckInDataSource();
+    final baseline = _morning();
+    expect(baseline.toMetadataJson().containsKey('reflection_note'), isFalse);
+    final noted = baseline.copyWith(reflectionNote: '  A calm start.  ');
+    await store.saveMorning(noted);
+    var saved = (await store.loadToday(DateTime.parse(_entryDate)))!.morning!;
+    expect(saved.reflectionNote, 'A calm start.');
+    expect(saved.forEditing().reflectionNote, 'A calm start.');
+    final withoutNote = Map<String, dynamic>.of(saved.toMetadataJson())
+      ..remove('reflection_note');
+    expect(withoutNote, baseline.toMetadataJson());
+    await store.saveMorning(saved.copyWith(reflectionNote: ''));
+    saved = (await store.loadToday(DateTime.parse(_entryDate)))!.morning!;
+    expect(saved.reflectionNote, '');
+    expect(saved.toMetadataJson()['reflection_note'], '');
+    expect(() => baseline.copyWith(reflectionNote: 'x' * 501).validate(),
+      throwsFormatException);
+    for (final invalid in [3, true, <String>[]]) {
+      expect(() => MorningCalibrationDraft.fromJson({
+        ...baseline.toMetadataJson(), 'reflection_note': invalid,
+      }, entryDate: _entryDate), throwsFormatException);
+    }
+  });
   test('optional signals survive save, reload, edit and clearing without changing core values', () async {
     SharedPreferences.setMockInitialValues({});
     final store = GuestQuickCheckInDataSource();

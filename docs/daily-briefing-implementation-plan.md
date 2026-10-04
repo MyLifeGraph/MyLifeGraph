@@ -1,5 +1,21 @@
 # Daily Briefing Implementation Plan
 
+## Optional Morning context
+
+Morning V5 accepts optional `reflection_note` (at most 500 characters). The
+directly visible two-line **Note (optional)** field follows the existing answers;
+Evening keeps its existing four-line note position and height. Both put the
+microphone at the right edge without an extra footer. Dictation appends
+reviewable text, rejects an overlong combined draft without truncation, and
+never populates numerical answers. Existing recording consent, source selection,
+account/lifecycle cancellation and explicit Save remain in force.
+
+An omitted Morning key is an older writer: the branch RPC preserves the saved
+note. An explicit empty string clears it. Notes remain in the Morning capture
+JSON for Coach/export context; the scalar `daily_logs.reflection_note` remains
+the Evening projection. Streak completion and correlations are unchanged.
+The additive migration and compatible API must precede the new client.
+
 ## Capture editing safeguards
 
 Morning and Evening track unsaved edits, including optional text and reviewed

@@ -19,6 +19,8 @@ import '../../domain/focus_protection.dart';
 import 'focus_protection_settings_page.dart';
 import '../widgets/strict_status_ring.dart';
 import '../widgets/blocking_screen_preview.dart';
+import '../widgets/blocking_custom_editor.dart';
+import '../widgets/blocking_plan_summary.dart';
 
 IconData blockingIcon(String name) => switch (name) {
   'work' => AppIcons.briefcaseOutlined,
@@ -38,12 +40,28 @@ class BlockingPage extends ConsumerStatefulWidget {
 class _BlockingPageState extends ConsumerState<BlockingPage>
     with WidgetsBindingObserver {
   BlockingSnapshot? _snapshot;
+  final _timingLabels = Expando<(int, bool, String)>();
+
+  String _timingLabel(BlockingPlan plan, bool usageGranted) {
+    final now = DateTime.now();
+    final minute = now.millisecondsSinceEpoch ~/ 60000;
+    final cached = _timingLabels[plan];
+    if (cached != null && cached.$1 == minute && cached.$2 == usageGranted) {
+      return cached.$3;
+    }
+    final label = blockingPlanTiming(plan, now: now, usageGranted: usageGranted);
+    _timingLabels[plan] = (minute, usageGranted, label);
+    return label;
+  }
   FocusProtectionStatus? _legacy;
   String? _error;
   bool _busy = false, _editorOpen = false, _foreground = true;
   int _tab = 0, _days = 7, _generation = 0, _usageGeneration = 0;
   Map? _insights;
   Timer? _timer;
+  BlockingGateway? _sessionGateway;
+  bool _routeVisible = true;
+  bool _unlockDialog = false;
   BlockingGateway get _gateway => ref.read(blockingGatewayProvider);
   bool get _configurationLocked =>
       _snapshot?.locked == true || _legacy?.lease?.isActive == true;
@@ -51,23 +69,59 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _sessionGateway = _gateway;
     unawaited(_load());
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(_closeStrictSession());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _closeStrictSession() async {
+    try {
+      await _sessionGateway?.command('strictVisibility', {'visible': false});
+    } catch (_) {
+      /* No native session on unsupported hosts. */
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    unawaited(_syncStrictVisibility());
     if (_foreground) {
       unawaited(_load());
     } else {
       _timer?.cancel();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = ModalRoute.of(context)?.isCurrent ?? true;
+    if (visible != _routeVisible) {
+      _routeVisible = visible;
+      unawaited(_syncStrictVisibility());
+    }
+  }
+
+  Future<void> _syncStrictVisibility() async {
+    final generation = ++_generation;
+    try {
+      final value = await _gateway.command('strictVisibility', {
+        'visible': _foreground && (_routeVisible || _unlockDialog) && _tab == 1,
+      });
+      if (!mounted || generation != _generation) return;
+      setState(() => _snapshot = value);
+      _pollUnlock(value);
+    } catch (_) {
+      // Unsupported/web hosts have no native Strict session. Explicit unlock
+      // remains guarded by the native bridge and reports any real failure.
     }
   }
 
@@ -100,7 +154,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   String _message(Object e) => e.toString().replaceFirst('Exception: ', '');
   void _pollUnlock(BlockingSnapshot value) {
     _timer?.cancel();
-    if (!_foreground) return;
+    if (!_foreground || (!_routeVisible && !_unlockDialog)) return;
     final delays = <int>[];
     if (_tab == 1 &&
         value.locked &&
@@ -130,7 +184,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
 
   Future<bool> _perform(Future<BlockingSnapshot> Function() action) async {
     if (_busy) return false;
-    ++_generation;
+    final generation = ++_generation;
     ++_usageGeneration;
     setState(() {
       _busy = true;
@@ -138,18 +192,26 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     });
     try {
       final value = await action();
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() => _snapshot = value);
         _pollUnlock(value);
       }
       return true;
     } catch (e) {
-      if (mounted) setState(() => _error = _message(e));
+      if (mounted && generation == _generation) {
+        setState(() => _error = _message(e));
+      }
       return false;
     } finally {
       if (mounted) {
         setState(() => _busy = false);
-        if (_snapshot case final value?) _pollUnlock(value);
+        // Leaving Strict can cancel a native request before its earlier reply
+        // reaches Flutter. Re-read authority rather than restoring that reply.
+        if (generation != _generation) {
+          await _load();
+        } else if (_snapshot case final value?) {
+          _pollUnlock(value);
+        }
       }
     }
   }
@@ -328,7 +390,19 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     }
     if (!mounted) return;
     final others = _snapshot!.plans.where((p) => p.id != plan.id).toList();
+    List<BlockingPlan> replace(BlockingPlan value) => _snapshot!.plans
+        .map((item) => item.id == value.id ? value : item)
+        .toList();
     switch (action) {
+      case 'up':
+      case 'down':
+        final ordered = [..._snapshot!.plans];
+        final from = ordered.indexWhere((item) => item.id == plan.id);
+        final to = from + (action == 'up' ? -1 : 1);
+        if (from >= 0 && to >= 0 && to < ordered.length) {
+          ordered.insert(to, ordered.removeAt(from));
+          await _save(ordered);
+        }
       case 'delete':
         await _save(others);
       case 'duplicate':
@@ -341,18 +415,19 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           ),
         ]);
       case 'pause':
-        await _save([...others, plan.copyWith(enabled: false)]);
+        await _save(replace(plan.copyWith(enabled: false)));
       case 'resume':
-        await _save([...others, plan.copyWith(enabled: true, pausedUntil: 0)]);
+        await _save(replace(plan.copyWith(enabled: true, pausedUntil: 0)));
       case '10m':
-        await _save([
-          ...others,
-          plan.copyWith(
-            pausedUntil: DateTime.now()
-                .add(const Duration(minutes: 10))
-                .millisecondsSinceEpoch,
+        await _save(
+          replace(
+            plan.copyWith(
+              pausedUntil: DateTime.now()
+                  .add(const Duration(minutes: 10))
+                  .millisecondsSinceEpoch,
+            ),
           ),
-        ]);
+        );
     }
   }
 
@@ -467,6 +542,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                                 ? null
                                 : () {
                                     setState(() => _tab = index);
+                                    unawaited(_syncStrictVisibility());
                                     _pollUnlock(s);
                                     if (index == 2) unawaited(_usage());
                                   },
@@ -542,17 +618,22 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     const SizedBox(height: AppSpacing.sm),
     AppSurface(
       variant: AppSurfaceVariant.subtle,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
         children: [
-          Text('Quick Block', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          FilledButton.icon(
+          const Icon(AppIcons.playArrow),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Quick Block',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          FilledButton(
             onPressed: _configurationLocked || _busy || _editorOpen
                 ? null
                 : () => _edit(null, true),
-            icon: const Icon(AppIcons.playArrow),
-            label: const Text('Start'),
+            child: const Text('Start'),
           ),
         ],
       ),
@@ -577,129 +658,200 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
         child: Text('No plans yet.'),
       ),
-    for (final plan in s.plans) ...[
-      AppSurface(
-        variant: AppSurfaceVariant.interactive,
-        selected: plan.active,
-        onTap: () => _detail(plan),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+    ReorderableListView.builder(
+      shrinkWrap: true,
+      primary: false,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: s.plans.length,
+      onReorderItem: (oldIndex, newIndex) {
+        if (_configurationLocked || _busy || _editorOpen) return;
+        final plans = [...s.plans];
+        if (oldIndex == newIndex) return;
+        plans.insert(newIndex, plans.removeAt(oldIndex));
+        unawaited(_save(plans, expectedRevision: s.revision));
+      },
+      itemBuilder: (context, index) {
+        final plan = s.plans[index];
+        final timing = _timingLabel(plan, s.usageGranted);
+        final editable = !_configurationLocked && !_busy && !_editorOpen;
+        final palette = Theme.of(context).colorScheme;
+        return Padding(
+          key: ValueKey(plan.id),
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: AppSurface(
+            variant: AppSurfaceVariant.interactive,
+            selected: plan.active,
+            onTap: editable ? () => _edit(plan) : () => _detail(plan),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: AppStatusPill(
-                      icon: plan.active
-                          ? AppIcons.shieldOutlined
-                          : AppIcons.schedule,
-                      tone: plan.active
-                          ? AppStatusTone.info
-                          : AppStatusTone.neutral,
-                      label: plan.paused
-                          ? 'Paused'
-                          : plan.active
-                          ? 'Active'
-                          : plan.expired
-                          ? 'Expired'
-                          : 'Scheduled',
-                    ),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color:
+                        (plan.active
+                                ? palette.primary
+                                : palette.onSurfaceVariant)
+                            .withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                  ),
+                  child: Icon(
+                    blockingIcon(plan.icon),
+                    size: 28,
+                    color: plan.active
+                        ? palette.primary
+                        : palette.onSurfaceVariant,
                   ),
                 ),
-                PopupMenuButton<String>(
-                  tooltip: 'Plan options',
-                  enabled: !_configurationLocked && !_busy && !_editorOpen,
-                  icon: const Icon(AppIcons.moreHoriz),
-                  onSelected: (value) => unawaited(_menu(plan, value)),
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    const PopupMenuItem(
-                      value: 'duplicate',
-                      child: Text('Duplicate'),
-                    ),
-                    PopupMenuItem(
-                      value: plan.paused ? 'resume' : 'pause',
-                      child: Text(plan.paused ? 'Resume' : 'Pause'),
-                    ),
-                    const PopupMenuItem(value: '10m', child: Text('Pause 10m')),
-                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppStatusPill(
+                        icon: plan.active
+                            ? AppIcons.shieldOutlined
+                            : AppIcons.schedule,
+                        tone: plan.active
+                            ? AppStatusTone.success
+                            : AppStatusTone.neutral,
+                        label: plan.paused
+                            ? 'Paused'
+                            : plan.active
+                            ? 'Active'
+                            : plan.expired
+                            ? 'Expired'
+                            : 'Scheduled',
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        plan.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        blockingPlanKinds(plan, DateTime.now()),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (!const [
+                        'Active',
+                        'Paused',
+                        'Expired',
+                        'Scheduled',
+                      ].contains(timing))
+                        Text(
+                          timing,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(AppIcons.squaresFour, size: 16),
+                              const SizedBox(width: 4),
+                              Flexible(child: Text('${plan.apps.length} apps')),
+                            ],
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(AppIcons.publicOutlined, size: 16),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text('${plan.sites.length} sites'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-            Icon(
-              blockingIcon(plan.icon),
-              size: 40,
-              color: plan.active
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              plan.name,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              plan.summary,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: plan.active
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (plan.windows.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              for (final window in plan.windows)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(AppIcons.schedule, size: 16),
-                        const SizedBox(width: AppSpacing.xs),
-                        Flexible(
-                          child: Text(
-                            _windowSummary(window),
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
+                SizedBox(
+                  width: 44,
+                  child: Column(
+                    children: [
+                      PopupMenuButton<String>(
+                        tooltip: 'Plan options',
+                        enabled: editable,
+                        icon: const Icon(AppIcons.moreHoriz, size: 20),
+                        onSelected: (value) => unawaited(_menu(plan, value)),
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Text('Edit'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'duplicate',
+                            child: Text('Duplicate'),
+                          ),
+                          PopupMenuItem(
+                            value: plan.paused ? 'resume' : 'pause',
+                            child: Text(plan.paused ? 'Resume' : 'Pause'),
+                          ),
+                          const PopupMenuItem(
+                            value: '10m',
+                            child: Text('Pause 10m'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text('Delete'),
+                          ),
+                          if (index > 0)
+                            const PopupMenuItem(
+                              value: 'up',
+                              child: Text('Move up'),
+                            ),
+                          if (index < s.plans.length - 1)
+                            const PopupMenuItem(
+                              value: 'down',
+                              child: Text('Move down'),
+                            ),
+                        ],
+                      ),
+                      ReorderableDragStartListener(
+                        index: index,
+                        enabled: editable,
+                        child: Semantics(
+                          label: 'Reorder ${plan.name}',
+                          child: SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: Center(
+                              child: SizedBox(
+                                width: 14,
+                                child: Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  children: List.generate(
+                                    6,
+                                    (_) => Container(
+                                      width: 4,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: palette.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              Text(
-                'Device time',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ],
-            if (plan.budget > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                child: LinearProgressIndicator(
-                  value: (plan.usedMs / (plan.budget * 60000)).clamp(0, 1),
-                ),
-              ),
-            const SizedBox(height: AppSpacing.xs),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: AppSpacing.md,
-              children: [
-                Text('${plan.apps.length} apps'),
-                Text('${plan.sites.length} sites'),
               ],
             ),
-          ],
-        ),
-      ),
-      const SizedBox(height: AppSpacing.sm),
-    ],
+          ),
+        );
+      },
+    ),
     Wrap(
       spacing: AppSpacing.xs,
       children: [
@@ -937,11 +1089,15 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         ),
       ),
     );
+    _unlockDialog = !enroll;
     unawaited(navigator.push(route));
     final saved = await _perform(
       () => _gateway.command('nfc', {'enroll': enroll}),
     );
     if (route.isActive) navigator.removeRoute(route);
+    _unlockDialog = false;
+    if (mounted) _routeVisible = ModalRoute.of(context)?.isCurrent ?? true;
+    unawaited(_syncStrictVisibility());
     return saved ? _snapshot : null;
   }
 
@@ -1323,197 +1479,21 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     ),
   );
   Future<void> _customize(BlockingSnapshot s) async {
-    final title = TextEditingController(
-      text: s.custom['title'] as String? ?? 'Stay focused',
-    );
-    final message = TextEditingController(
-      text:
-          s.custom['message'] as String? ??
-          'Take a breath. Choose your next step.',
-    );
-    var wait = s.custom['waitSeconds'] as int? ?? 0,
-        icon = s.custom['icon'] as String? ?? 'shield',
-        tone = s.custom['tone'] as String? ?? 'glass';
-    var saving = false;
-    String? saveError;
+    if (_busy || _configurationLocked) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       enableDrag: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, update) => PopScope(
-          canPop: !saving,
-          child: SafeArea(
-            child: AbsorbPointer(
-              absorbing: saving,
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.md,
-                    AppSpacing.md,
-                    MediaQuery.viewInsetsOf(ctx).bottom + AppSpacing.md,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Block screen',
-                              style: Theme.of(ctx).textTheme.titleLarge,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Close',
-                            onPressed: saving ? null : () => Navigator.pop(ctx),
-                            icon: const Icon(AppIcons.close),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      TextField(
-                        controller: title,
-                        readOnly: saving,
-                        maxLength: 60,
-                        decoration: const InputDecoration(labelText: 'Title'),
-                      ),
-                      TextField(
-                        controller: message,
-                        readOnly: saving,
-                        maxLength: 200,
-                        maxLines: 3,
-                        decoration: const InputDecoration(labelText: 'Message'),
-                      ),
-                      DropdownButtonFormField<String>(
-                        initialValue: icon,
-                        decoration: const InputDecoration(labelText: 'Icon'),
-                        items: [
-                          for (final name in _iconNames)
-                            DropdownMenuItem(
-                              value: name,
-                              child: Row(
-                                children: [
-                                  Icon(blockingIcon(name)),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Text(name),
-                                ],
-                              ),
-                            ),
-                        ],
-                        onChanged: (v) => update(() => icon = v!),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      DropdownButtonFormField<String>(
-                        initialValue: tone,
-                        decoration: const InputDecoration(
-                          labelText: 'Background',
-                        ),
-                        items: [
-                          for (final (id, label) in [
-                            ('glass', 'Liquid Glass'),
-                            ('dark', 'Dark'),
-                            ('light', 'Light'),
-                            ('space', 'Space'),
-                          ])
-                            DropdownMenuItem(value: id, child: Text(label)),
-                        ],
-                        onChanged: (v) => update(() => tone = v!),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      DropdownButtonFormField<int>(
-                        initialValue: wait,
-                        decoration: const InputDecoration(
-                          labelText: 'Return delay',
-                        ),
-                        items: [
-                          for (final seconds in [
-                            0,
-                            1,
-                            3,
-                            5,
-                            10,
-                            15,
-                            20,
-                            60,
-                            180,
-                            300,
-                            600,
-                            900,
-                          ])
-                            DropdownMenuItem(
-                              value: seconds,
-                              child: Text(
-                                seconds == 0
-                                    ? 'Immediately'
-                                    : seconds < 60
-                                    ? '${seconds}s'
-                                    : '${seconds ~/ 60}m',
-                              ),
-                            ),
-                        ],
-                        onChanged: (v) => update(() => wait = v!),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      if (saveError != null)
-                        Semantics(liveRegion: true, child: Text(saveError!)),
-                      FilledButton(
-                        onPressed: saving
-                            ? null
-                            : () async {
-                                FocusScope.of(ctx).unfocus();
-                                update(() {
-                                  saving = true;
-                                  saveError = null;
-                                });
-                                final saved = await _save(
-                                  s.plans,
-                                  custom: {
-                                    'title': title.text.trim(),
-                                    'message': message.text.trim(),
-                                    'waitSeconds': wait,
-                                    'icon': icon,
-                                    'tone': tone,
-                                  },
-                                  expectedRevision: s.revision,
-                                );
-                                if (!ctx.mounted) return;
-                                if (saved) {
-                                  Navigator.pop(ctx);
-                                } else {
-                                  update(() {
-                                    saving = false;
-                                    saveError =
-                                        _error ?? 'Could not save. Try again.';
-                                  });
-                                }
-                              },
-                        child: saving
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Save'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+      builder: (_) => BlockingCustomEditor(
+        custom: s.custom,
+        iconBuilder: blockingIcon,
+        strictEnabled: s.strict['enabled'] == true,
+        error: () => _error,
+        onSave: (custom) =>
+            _save(s.plans, custom: custom, expectedRevision: s.revision),
       ),
     );
-    // Bottom-sheet reverse animation may still use these controllers.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    title.dispose();
-    message.dispose();
   }
 }
 

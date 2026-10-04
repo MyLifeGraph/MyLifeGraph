@@ -499,6 +499,7 @@ class MorningCalibrationDraft {
     this.estimatedSleepMinutes,
     this.sleepTargetMinutes,
     this.sourceEveningCaptureId,
+    this.reflectionNote,
     this.branchVersion = dailyCaptureV5,
     this.isCompatibilityBranch = false,
     String? legacyDayShapeCode,
@@ -530,6 +531,10 @@ class MorningCalibrationDraft {
   }) {
     if (json['capture_kind'] != 'morning' || json['entry_date'] != entryDate) {
       throw const FormatException('Morning capture identity is invalid.');
+    }
+    final reflectionNote = json['reflection_note'];
+    if (json.containsKey('reflection_note') && reflectionNote is! String) {
+      throw const FormatException('Morning note must be text.');
     }
     final branch = _captureBranchIdentity(
       json,
@@ -578,6 +583,7 @@ class MorningCalibrationDraft {
       sourceEveningCaptureId: _optionalString(
         json['source_evening_capture_id'],
       ),
+      reflectionNote: (reflectionNote as String?)?.trim(),
       skillset: json['skillset'] == null
           ? null
           : SkillsetSignals.fromJson(json['skillset'], morning: true),
@@ -605,6 +611,8 @@ class MorningCalibrationDraft {
   final int? estimatedSleepMinutes;
   final int? sleepTargetMinutes;
   final String? sourceEveningCaptureId;
+  /// Optional context only; null preserves an older writer's omitted field.
+  final String? reflectionNote;
   final String branchVersion;
   final bool isCompatibilityBranch;
   final String? _legacyDayShapeCode;
@@ -642,6 +650,7 @@ class MorningCalibrationDraft {
     Object? estimatedSleepMinutes = _unset,
     Object? sleepTargetMinutes = _unset,
     Object? sourceEveningCaptureId = _unset,
+    Object? reflectionNote = _unset,
     String? branchVersion,
     bool? isCompatibilityBranch,
     Object? legacyDayShapeCode = _unset,
@@ -674,6 +683,9 @@ class MorningCalibrationDraft {
       sourceEveningCaptureId: identical(sourceEveningCaptureId, _unset)
           ? this.sourceEveningCaptureId
           : sourceEveningCaptureId as String?,
+      reflectionNote: identical(reflectionNote, _unset)
+          ? this.reflectionNote
+          : reflectionNote as String?,
       branchVersion: branchVersion ?? this.branchVersion,
       isCompatibilityBranch:
           isCompatibilityBranch ?? this.isCompatibilityBranch,
@@ -686,6 +698,7 @@ class MorningCalibrationDraft {
   MorningCalibrationDraft normalized() => copyWith(
     captureId: captureId.trim(),
     sourceEveningCaptureId: sourceEveningCaptureId?.trim(),
+    reflectionNote: reflectionNote?.trim(),
   );
 
   MorningCalibrationDraft forEditing({EveningShutdownDraft? sleepPlan}) =>
@@ -720,6 +733,9 @@ class MorningCalibrationDraft {
     bool requireSleepQuality = true,
     bool preservingCompatibility = false,
   }) {
+    if (reflectionNote != null && reflectionNote!.length > 500) {
+      throw const FormatException('Keep the optional note under 500 characters.');
+    }
     _validateCaptureIdentity(
       captureId: captureId,
       entryDate: entryDate,
@@ -795,6 +811,7 @@ class MorningCalibrationDraft {
       'branch_version': value.branchVersion,
       if (!value.isV5) 'compatibility': true,
       'capture_kind': 'morning',
+      if (value.reflectionNote != null) 'reflection_note': value.reflectionNote,
       'entry_date': value.entryDate,
       'capture_id': value.captureId,
       'captured_at': value.capturedAt.toUtc().toIso8601String(),

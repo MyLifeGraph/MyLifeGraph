@@ -20,6 +20,8 @@ import '../providers/coach_providers.dart';
 import '../widgets/coach_dictation_button.dart';
 import '../../../../composition/widgets/speech_settings_sheet.dart';
 import '../../../../composition/widgets/assistant_language_button.dart';
+import '../../../../composition/widgets/coach_phone_data_sheet.dart';
+import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../widgets/coach_uncertainty_view.dart';
 
 class CoachPage extends ConsumerStatefulWidget {
@@ -150,6 +152,9 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       actions: [
         AppHeaderActions(
           pageActions: [
+            IconButton(tooltip: 'Coach data', icon: const Icon(AppIcons.deviceMobile),
+              onPressed: !ref.watch(appSurfaceCapabilitiesProvider).canUseSyncedExecution || state.isSending
+                ? null : () => showCoachPhoneData(context)),
             AssistantLanguageButton(
               scope: 'coach',
               enabled: !state.isSending && !state.isLoading &&

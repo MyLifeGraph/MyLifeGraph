@@ -1,5 +1,36 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+## Optional phone summaries
+
+`coach-phone-data-v1` adds authenticated `GET /v1/coach/phone-data` and
+`POST /v1/coach/phone-data`. The Coach header menu opens **Coach data**. Phone
+usage is off by default; `coach-phone-consent-v1` separately discloses cloud
+storage and access by the selected Coach provider. It does not reuse the local
+App Blocking consent. Android Usage Access is an additional OS permission.
+The compact consent keeps shared categories, cloud storage, selected-provider
+access and deletion limits visible; Privacy details expands exclusions and
+independence from App Blocking. Daily app time, Top apps and Blocking attempts
+are directly visible without expanding a category list. Reload
+and Delete sit together; Sync now remains a separate explicit action.
+
+Enable and **Sync now** deliberately collect seven profile-timezone days of
+foreground app minutes, up to ten top app names, and today's blocking-attempt
+count when its native day boundary matches. Unavailable counts remain null.
+These are app-use aggregates, not guaranteed screen-on time or medical evidence.
+No messages, notification contents, URLs or browsing history are collected.
+The sheet shows the saved sample and timestamp; no invisible background upload
+or automatic refresh on every Coach message is promised.
+
+`profiles.coach_phone_data` is backend-owned, device-bound, revision-checked
+and covered by the shared owner/deletion lock. Disable and Delete clear the
+summary and revoke sharing; delayed uploads fail CAS/device/consent checks.
+Account changes invalidate the open sheet and its requests. The existing
+owner-scoped Coach snapshot and account export include this bounded profile
+context, not its private replay payload. No behavioral event or manual Capture
+is generated, and no existing correlation input changes. Earlier Coach replies
+and an already prepared turn are not retroactively rewritten by deletion.
+Deploy reviewed SQL before the API's expanded profile snapshot projection.
+
 Reviewed voice Capture accepts explicit `7 am`, `11 pm`, and `23 Uhr 30` clock
 evidence as well as existing colon-form clocks. Output remains canonical HH:mm.
 A stated duration alone cannot invent either clock; corrections require their

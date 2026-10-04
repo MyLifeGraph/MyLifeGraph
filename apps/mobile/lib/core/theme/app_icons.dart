@@ -6,6 +6,11 @@ import 'package:flutter/widgets.dart';
 /// used only for compact status marks.
 class AppIcons {
   const AppIcons._();
+  static const heart = IconData(0xe2a8, fontFamily: 'PhosphorRegular', fontPackage: 'phosphor_flutter');
+  static const heartbeat = IconData(0xe2ac, fontFamily: 'PhosphorRegular', fontPackage: 'phosphor_flutter');
+  static const footprints = IconData(0xea88, fontFamily: 'PhosphorRegular', fontPackage: 'phosphor_flutter');
+  static const deviceMobile = IconData(0xe1e0, fontFamily: 'PhosphorRegular', fontPackage: 'phosphor_flutter');
+  static const squaresFour = IconData(0xe464, fontFamily: 'PhosphorRegular', fontPackage: 'phosphor_flutter');
 
   static const watch = IconData(
     0xe4e6,

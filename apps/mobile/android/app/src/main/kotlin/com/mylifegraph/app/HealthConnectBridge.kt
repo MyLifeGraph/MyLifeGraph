@@ -12,6 +12,8 @@ import android.health.connect.ReadRecordsResponse
 import android.health.connect.TimeInstantRangeFilter
 import android.health.connect.datatypes.SleepSessionRecord
 import android.health.connect.datatypes.StepsRecord
+import android.health.connect.datatypes.HeartRateRecord
+import android.health.connect.datatypes.RestingHeartRateRecord
 import android.os.Build
 import android.os.OutcomeReceiver
 import android.annotation.TargetApi
@@ -37,13 +39,13 @@ class HealthConnectBridge(private val activity: Activity) {
         try {
             when (call.method) {
                 "status" -> result.success(status())
-                "requestPermission" -> {
+                "requestVitals", "requestPermission" -> {
                     if (permissionResult != null) {
                         result.error("busy", "A permission request is already open.", null)
-                    } else if (granted()) result.success(status())
+                    } else if (call.method != "requestVitals" && granted()) result.success(status())
                     else {
                         permissionResult = result
-                        activity.requestPermissions(PERMISSIONS, PERMISSION_REQUEST)
+                        activity.requestPermissions(if (call.method == "requestVitals") VITAL_PERMISSIONS else PERMISSIONS, PERMISSION_REQUEST)
                     }
                 }
                 "openSettings" -> {
@@ -58,7 +60,7 @@ class HealthConnectBridge(private val activity: Activity) {
                     val now = Instant.now()
                     check(end == now.atZone(zone).toLocalDate()) { "The sync day changed. Please retry." }
                     reading = true
-                    readDay(zone, end.minusDays(6), end, now, mutableListOf(), result)
+                    readDay(zone, end.minusDays(6), end, now, mutableListOf(), result, call.argument<Boolean>("vitals") == true)
                 }
                 "readSleep" -> {
                     check(granted()) { "Sleep access is required." }
@@ -142,7 +144,7 @@ class HealthConnectBridge(private val activity: Activity) {
 
     @TargetApi(34)
     private fun readDay(zone: ZoneId, day: LocalDate, end: LocalDate, captured: Instant,
-                        days: MutableList<Map<String, Any?>>, result: MethodChannel.Result) {
+                        days: MutableList<Map<String, Any?>>, result: MethodChannel.Result, vitals: Boolean) {
         if (disposed) return
         val manager = activity.getSystemService(HealthConnectManager::class.java)
         if (manager == null) {
@@ -153,14 +155,24 @@ class HealthConnectBridge(private val activity: Activity) {
         val start = day.atStartOfDay(zone).toInstant()
         val finish = minOf(day.plusDays(1).atStartOfDay(zone).toInstant(), captured)
         val range = TimeInstantRangeFilter.Builder().setStartTime(start).setEndTime(finish).build()
-        val request = AggregateRecordsRequest.Builder<Long>(range)
+        val heart = vitals && activity.checkSelfPermission(VITAL_PERMISSIONS[0]) == PackageManager.PERMISSION_GRANTED
+        val resting = vitals && activity.checkSelfPermission(VITAL_PERMISSIONS[1]) == PackageManager.PERMISSION_GRANTED
+        val builder = AggregateRecordsRequest.Builder<Long>(range)
             .addAggregationType(StepsRecord.STEPS_COUNT_TOTAL)
-            .addAggregationType(SleepSessionRecord.SLEEP_DURATION_TOTAL).build()
+            .addAggregationType(SleepSessionRecord.SLEEP_DURATION_TOTAL)
+        if (heart) builder.addAggregationType(HeartRateRecord.BPM_AVG)
+        if (resting) builder.addAggregationType(RestingHeartRateRecord.BPM_AVG)
+        val request = builder.build()
         manager.aggregate(request, activity.mainExecutor,
             object : OutcomeReceiver<AggregateRecordsResponse<Long>, HealthConnectException> {
                 override fun onResult(response: AggregateRecordsResponse<Long>) {
                     if (disposed) return
                     days.add(mapOf("date" to day.toString(),
+                        "heart_rate_read" to heart, "resting_heart_rate_read" to resting,
+                        "heart_rate" to if (heart) response.get(HeartRateRecord.BPM_AVG) else null,
+                        "resting_heart_rate" to if (resting) response.get(RestingHeartRateRecord.BPM_AVG) else null,
+                        "heart_rate_sources" to if (heart) response.getDataOrigins(HeartRateRecord.BPM_AVG).map { it.packageName }.sorted() else emptyList<String>(),
+                        "resting_heart_rate_sources" to if (resting) response.getDataOrigins(RestingHeartRateRecord.BPM_AVG).map { it.packageName }.sorted() else emptyList<String>(),
                         "steps" to response.get(StepsRecord.STEPS_COUNT_TOTAL),
                         "sleep_minutes" to response.get(SleepSessionRecord.SLEEP_DURATION_TOTAL)?.div(60000.0),
                         "steps_sources" to response.getDataOrigins(StepsRecord.STEPS_COUNT_TOTAL).map { it.packageName }.sorted(),
@@ -169,7 +181,7 @@ class HealthConnectBridge(private val activity: Activity) {
                         reading = false
                         result.success(mapOf("captured_at" to captured.toString(), "days" to days))
                     } else {
-                        try { readDay(zone, day.plusDays(1), end, captured, days, result) }
+                        try { readDay(zone, day.plusDays(1), end, captured, days, result, vitals) }
                         catch (_: Exception) { onFailure(result) }
                     }
                 }
@@ -186,5 +198,6 @@ class HealthConnectBridge(private val activity: Activity) {
         const val CHANNEL = "com.mylifegraph.app/health_connect"
         const val PERMISSION_REQUEST = 9301
         private val PERMISSIONS = arrayOf("android.permission.health.READ_STEPS", "android.permission.health.READ_SLEEP")
+        private val VITAL_PERMISSIONS = arrayOf("android.permission.health.READ_HEART_RATE", "android.permission.health.READ_RESTING_HEART_RATE")
     }
 }

@@ -18,6 +18,9 @@ class _UnlockGateway extends BlockingGateway {
   bool started = false, locked = true;
   int? remaining;
   Completer<void>? pendingRequest;
+  Completer<void>? pendingNfc;
+  Completer<void>? pendingVisibility;
+  bool visible = false;
   final calls = <String>[];
 
   @override
@@ -26,19 +29,34 @@ class _UnlockGateway extends BlockingGateway {
     Map<String, Object>? args,
   ]) async {
     calls.add(name);
-    if (name == 'requestUnlock') {
-      await pendingRequest?.future;
-      started = true;
+    if (name == 'strictVisibility') {
+      visible = args!['visible'] == true;
+      if (!visible) started = false;
+      final result = value();
+      final pending = pendingVisibility;
+      pendingVisibility = null;
+      await pending?.future;
+      return result;
     }
+    if (name == 'requestUnlock') {
+      if (!visible) throw StateError('Strict screen hidden');
+      started = true;
+      final result = value();
+      await pendingRequest?.future;
+      return result;
+    }
+    if (name == 'nfc') await pendingNfc?.future;
     if (name == 'finishUnlock') locked = false;
-    return BlockingSnapshot({
-      ...snapshot(locked: locked),
-      'plans': <Map<String, Object>>[],
-      'strict': {'enabled': true, 'waitSeconds': waitSeconds, 'nfc': nfc},
-      'unlockStarted': started,
-      'remainingMs': remaining ?? waitSeconds * 1000,
-    });
+    return value();
   }
+
+  BlockingSnapshot value() => BlockingSnapshot({
+    ...snapshot(locked: locked),
+    'plans': <Map<String, Object>>[],
+    'strict': {'enabled': true, 'waitSeconds': waitSeconds, 'nfc': nfc},
+    'unlockStarted': started,
+    'remainingMs': remaining ?? waitSeconds * 1000,
+  });
 }
 
 Future<void> _open(WidgetTester tester, _UnlockGateway gateway) async {
@@ -107,29 +125,103 @@ void main() {
     expect(find.text('Unlocked · 15m'), findsOneWidget);
   });
 
-  testWidgets(
-    'queued Unblock taps request once and returning retains request',
-    (tester) async {
-      final gateway = _UnlockGateway()..pendingRequest = Completer<void>();
-      await _open(tester, gateway);
-      final button = find.widgetWithText(FilledButton, 'Unblock');
-      await tester.tap(button);
-      await tester.tap(button);
-      expect(gateway.calls.where((c) => c == 'requestUnlock'), hasLength(1));
-      gateway.pendingRequest!.complete();
+  testWidgets('queued Unblock taps request once and leaving resets request', (
+    tester,
+  ) async {
+    final gateway = _UnlockGateway()..pendingRequest = Completer<void>();
+    await _open(tester, gateway);
+    final button = find.widgetWithText(FilledButton, 'Unblock');
+    await tester.tap(button);
+    await tester.tap(button);
+    expect(gateway.calls.where((c) => c == 'requestUnlock'), hasLength(1));
+    gateway.pendingRequest!.complete();
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 20; i++) {
+      await tester.tap(find.text('Plans'));
       await tester.pumpAndSettle();
-      for (var i = 0; i < 20; i++) {
-        await tester.tap(find.text('Plans'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Strict'));
-        await tester.pumpAndSettle();
-      }
-      expect(gateway.calls.where((c) => c == 'requestUnlock'), hasLength(1));
+      await tester.tap(find.text('Strict'));
+      await tester.pumpAndSettle();
+    }
+    expect(gateway.calls.where((c) => c == 'requestUnlock'), hasLength(1));
+    expect(find.text('180s'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Unblock'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('late request reply cannot restore countdown after leaving', (
+    tester,
+  ) async {
+    final gateway = _UnlockGateway()..pendingRequest = Completer<void>();
+    await _open(tester, gateway);
+    await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+    await tester.pump();
+    await tester.tap(find.text('Plans'));
+    await tester.pump();
+    await tester.tap(find.text('Strict'));
+    await tester.pump();
+    gateway.pendingRequest!.complete();
+    await tester.pumpAndSettle();
+    expect(gateway.started, isFalse);
+    expect(find.text('180s'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Unblock'), findsOneWidget);
+  });
+
+  testWidgets('late visibility reply cannot replace newer request', (
+    tester,
+  ) async {
+    final gateway = _UnlockGateway();
+    await _open(tester, gateway);
+    final stale = Completer<void>();
+    gateway.pendingVisibility = stale;
+    await tester.tap(find.text('Strict'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+    await tester.pumpAndSettle();
+    expect(find.text('180s'), findsOneWidget);
+    stale.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('180s'), findsOneWidget);
+  });
+
+  testWidgets(
+    'NFC dialog is part of unlock screen and completion keeps request',
+    (tester) async {
+      final gateway = _UnlockGateway(nfc: true)..pendingNfc = Completer<void>();
+      await _open(tester, gateway);
+      await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Scan tag'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Hold your NFC tag nearby'), findsOneWidget);
+      expect(gateway.started, isTrue);
+      gateway.pendingNfc!.complete();
+      await tester.pumpAndSettle();
+      expect(gateway.started, isTrue);
       expect(find.text('180s'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Unblock'), findsNothing);
-      expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('background and screen lock reset and require new Unblock', (
+    tester,
+  ) async {
+    final gateway = _UnlockGateway();
+    await _open(tester, gateway);
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.paused,
+      AppLifecycleState.hidden,
+    ]) {
+      await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(state);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(gateway.started, isFalse);
+      expect(find.widgetWithText(FilledButton, 'Unblock'), findsOneWidget);
+    }
+  });
 
   testWidgets('Immediate still requires explicit request before completion', (
     tester,

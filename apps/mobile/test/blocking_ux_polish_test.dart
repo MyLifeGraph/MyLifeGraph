@@ -177,7 +177,7 @@ void main() {
       expect(tester.widget<OutlinedButton>(returnButton).onPressed, isNull);
       expect(tester.takeException(), isNull);
     });
-    testWidgets('weekly time groups remain centered at $width/$scale', (
+    testWidgets('weekly detail is not repeated on compact cards at $width/$scale', (
       tester,
     ) async {
       await _open(tester, width: width, scale: scale);
@@ -185,18 +185,7 @@ void main() {
         'Mo Tu · 22:00–07:00 (+1 day)',
         'We Su · 10:00–11:00',
       ]) {
-        await tester.scrollUntilVisible(find.text(label), 120);
-        await tester.pumpAndSettle();
-        final row = find
-            .ancestor(of: find.text(label), matching: find.byType(Row))
-            .first;
-        final surface = find
-            .ancestor(of: row, matching: find.byType(AppSurface))
-            .first;
-        expect(
-          tester.getCenter(row).dx,
-          closeTo(tester.getCenter(surface).dx, 0.1),
-        );
+        expect(find.text(label), findsNothing);
       }
       expect(tester.takeException(), isNull);
     });
@@ -211,7 +200,8 @@ void main() {
         width: width,
         scale: scale,
       );
-      await tester.scrollUntilVisible(find.text('Active'), 180);
+      await tester.scrollUntilVisible(find.text('Active'), 180,
+        scrollable: find.byType(Scrollable).first);
       await tester.pumpAndSettle();
       expect(find.text('Active'), findsOneWidget);
       final active = tester.widget<AppSurface>(
@@ -220,7 +210,8 @@ void main() {
             .first,
       );
       expect(active.selected, isTrue);
-      await tester.scrollUntilVisible(find.text('Night'), 180);
+      await tester.scrollUntilVisible(find.text('Night'), 180,
+        scrollable: find.byType(Scrollable).first);
       await tester.pumpAndSettle();
       expect(find.text('Scheduled'), findsOneWidget);
       final inactive = tester.widget<AppSurface>(
@@ -229,6 +220,10 @@ void main() {
             .first,
       );
       expect(inactive.selected, isFalse);
+      await tester.tap(find.text('Night'));
+      await tester.pumpAndSettle();
+      expect(find.text('Mo Tu We Th Fr · 22:00–07:00 (+1 day)'), findsOneWidget);
+      expect(find.text('Device time'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -245,13 +240,13 @@ void main() {
       expect(paused.selected, isFalse);
     },
   );
-  testWidgets('plan cards show every real window and overnight device time', (
+  testWidgets('plan cards keep windows in details instead of the overview', (
     tester,
   ) async {
     await _open(tester);
-    expect(find.text('Mo Tu · 22:00–07:00 (+1 day)'), findsOneWidget);
-    expect(find.text('We Su · 10:00–11:00'), findsOneWidget);
-    expect(find.text('Device time'), findsOneWidget);
+    expect(find.text('Mo Tu · 22:00–07:00 (+1 day)'), findsNothing);
+    expect(find.text('We Su · 10:00–11:00'), findsNothing);
+    expect(find.text('Device time'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -1,5 +1,12 @@
 # Android Focus Protection V1 Contract
 
+Customize adds bounded `accent` (`theme`, `mint`, `blue`, `violet`, `rose`) and
+`layout` (`compact`, `balanced`, `spacious`) fields to the existing custom map.
+Missing fields retain theme/balanced defaults. Its native draft preview uses the
+same renderer as the overlay, six icon choices, four backgrounds, unchanged
+title/message limits and Return delays. Save stays outside the scroll area.
+Cancel writes nothing; native revision and Strict/Focus edit locks still apply.
+
 Status: implemented repository boundary, 2026-08-01.
 
 ## Named Blocking Plans V2
@@ -8,15 +15,25 @@ The current Android surface is **App blocking**, reached from the header shield
 or existing Settings entry. Its four local tabs are Plans, Strict, Insights and
 Customize. This route hides the main shell navigation to avoid stacked bars.
 Flutter uses existing themes, icon, spacing and surface tokens.
+Compact plan cards open their editor on one tap when editable; locked cards
+retain read-only details. Dedicated six-dot handles reorder plans, with
+accessible Move up/down menu alternatives. The saved plan-array order is
+presentation-only: it never changes OR-combined enforcement. Reordering uses
+the opening revision and preserves the prior view on failure. Edit, Pause,
+Resume and temporary Pause replace a plan in place rather than moving it.
 The selected local tab adds a quiet palette-owned pill behind its unchanged
 icon/label and selected semantics; large text retains the two-column wrap.
-Plan cards show every stored weekly window, with start weekdays, local wall
+Plan cards show short rule labels, native active status, a finite end for
+single-rule timers/weekly windows, or daily allowance remaining. Missing usage
+access is unavailable, not unused allowance. Combined OR rules conservatively
+retain Active rather than promising one rule's end is the end of protection.
+Details/editors show every stored weekly window, with start weekdays, local wall
 times and an explicit next-day end where needed. `Device time` distinguishes
 these native schedules from profile-timezone Planner facts; no inferred or
 example windows are displayed.
-Weekly clock/text groups are centered on the plan-card axis and wrap without
-dropping weekdays or overnight information. Status pills and plan menus retain
-their opposite corners. Customize embeds a bounded interactive Android preview
+Detailed weekly clock/text groups wrap without dropping weekdays or overnight
+information. Compact cards retain status pills, target counts and plan menus.
+Customize embeds a bounded interactive Android preview
 using the same `BlockingScreenView` as the app Accessibility overlay. Its timer
 and Return replay are preview-local: no rules, attempts, lease or release change.
 Changing saved appearance recreates the view. Unsupported/web surfaces retain a
@@ -159,8 +176,16 @@ Wi-Fi name and enrolled NFC tag. Wi-Fi setup requests location permission to
 obtain an unredacted SSID; unknown/disconnected networks fail closed. NFC
 enrollment requires two matching scans; changing IDs are rejected. Only the
 tag-ID hash is stored. SSIDs and NFC IDs are self-control checks, not strong
-authentication. The unlock request persists monotonic time/boot identity;
-reboot restarts the wait and never completes it. Completion rechecks all
+authentication. The unlock request uses monotonic time/boot identity and belongs
+to one continuously foreground, visible Strict screen. Leaving that tab or
+route, opening Permissions, backgrounding, locking the screen, or recreating the
+Android Activity cancels the request and NFC proof. Reboot never completes it.
+Returning shows Unblock and requires a new deliberate request; it does not
+automatically start a new countdown. Native bridge visibility/foreground gates
+also guard request, NFC scan and completion, independently of Flutter display.
+The in-app NFC scan dialog belongs to the same visible unlock screen; closing it
+does not itself reset the wait, while backgrounding during it still does.
+Completion rechecks all
 conditions natively and consumes recent NFC proof. Unlock permits changes for
 fifteen minutes, then relocks; Lock now closes the window.
 Enabling Strict clears the old request and locks indefinitely; no unlock countdown
@@ -168,7 +193,8 @@ starts until the explicit `Unblock` action. Before that request, the surface sho
 only Active, the configured method and Unblock, not a countdown, completion button
 or NFC scan. After requesting, the existing Unlock completion and any required NFC
 scan become available subject to the wait/conditions. Merely waiting, refreshing or
-reopening cannot start or complete a request. Duplicate requests preserve its
+reopening cannot start or complete a request. Late pre-exit command/status
+responses cannot restore cancelled countdowns in Flutter. Duplicate requests preserve its
 original deadline. A request is valid only with a known matching boot identity and
 a non-future monotonic start; unknown boot cannot start a new request. Invalid or
 rebooted requests require a new deliberate Unblock; no elapsed time is credited.
@@ -197,6 +223,9 @@ All four saved backgrounds remain independent Customize choices; reopening
 restores the selected icon/background without changing protection authority.
 They do not claim Flutter's blur compositor. The website's existing offline
 document remains a separate renderer, not the exact Customize app preview.
+On web/desktop, Customize shows a clearly labelled, read-only illustrative
+preview using the same saved choices; it does not pretend to be a native
+Android surface or run a real return timer. Long text remains scrollable.
 
 An app-blocking attempt owns one finite monotonic `BlockReturnDelay`. Home or
 opening MyLifeGraph retains that screen until its oval Return control is used;

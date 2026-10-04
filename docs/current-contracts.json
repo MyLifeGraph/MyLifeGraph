@@ -259,10 +259,58 @@
       "key": "coachLanguage",
       "version": "coach-language-v1",
       "sources": [
-        {"path": "apps/mobile/lib/features/coach/domain/coach.dart", "symbol": "coachLanguageContractVersion"},
-        {"path": "services/ai_service/app/models/coach.py", "symbol": "COACH_LANGUAGE_CONTRACT_VERSION"}
+        {
+          "path": "apps/mobile/lib/features/coach/domain/coach.dart",
+          "symbol": "coachLanguageContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/coach.py",
+          "symbol": "COACH_LANGUAGE_CONTRACT_VERSION"
+        }
       ],
-      "owners": ["apps/mobile/README.md", "docs/phase-10-controlled-coach-plan.md", "services/ai_service/README.md"]
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/phase-10-controlled-coach-plan.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "coachPhoneConsent",
+      "version": "coach-phone-consent-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/composition/widgets/coach_phone_data_sheet.dart",
+          "symbol": "coachPhoneConsentVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/coach_phone_data.py",
+          "symbol": "COACH_PHONE_CONSENT_VERSION"
+        }
+      ],
+      "owners": [
+        "docs/phase-10-controlled-coach-plan.md",
+        "docs/supabase-current-state.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "coachPhoneData",
+      "version": "coach-phone-data-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/composition/widgets/coach_phone_data_sheet.dart",
+          "symbol": "coachPhoneDataVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/coach_phone_data.py",
+          "symbol": "COACH_PHONE_DATA_VERSION"
+        }
+      ],
+      "owners": [
+        "docs/phase-10-controlled-coach-plan.md",
+        "docs/supabase-current-state.md"
+      ]
     },
     {
       "coverage": "shared_named",
@@ -544,6 +592,25 @@
       ],
       "owners": [
         "docs/health-connect-v1-contract.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "healthVitalsConsent",
+      "version": "health-vitals-cloud-consent-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/health_connect/domain/health_connect_state.dart",
+          "symbol": "healthVitalsConsentVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/health_connect.py",
+          "symbol": "HEALTH_VITALS_CONSENT_VERSION"
+        }
+      ],
+      "owners": [
+        "docs/health-connect-v1-contract.md",
+        "docs/supabase-current-state.md"
       ]
     },
     {

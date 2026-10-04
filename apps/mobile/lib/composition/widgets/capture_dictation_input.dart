@@ -8,18 +8,21 @@ class CaptureDictationInput extends StatelessWidget {
     required this.enabled,
     required this.onText,
     required this.onBusyChanged,
+    this.idleBuilder,
     super.key,
   });
 
   final bool enabled;
   final ValueChanged<String> onText;
   final ValueChanged<bool> onBusyChanged;
+  final Widget Function(Widget microphone)? idleBuilder;
 
   @override
   Widget build(BuildContext context) => CoachDictationButton(
     enabled: enabled,
     onText: (text, _) => onText(text),
     onBusyChanged: onBusyChanged,
+    idleBuilder: idleBuilder,
     consentTitle: 'Dictate your check-in',
     consentEnding: 'Stop to review your words. Nothing is saved yet.',
   );

@@ -5,6 +5,7 @@ import '../../../composition/health_connect_providers.dart';
 import '../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_feature_palette.dart';
 import '../../../core/theme/app_motion_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page.dart';
@@ -177,6 +178,16 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+              if (cloud != null) ...[
+                _metrics(cloud.latest),
+                const SizedBox(height: AppSpacing.sm),
+                if (view.supported && cloud.enabled && ownDevice)
+                  TextButton.icon(
+                    icon: const Icon(AppIcons.heartbeat),
+                    onPressed: editable ? () => _vitals(cloud.vitalsEnabled) : null,
+                    label: Text(cloud.vitalsEnabled ? 'Remove heart data' : 'Add heart data'),
+                  ),
+              ],
               if (view.busy) const LinearProgressIndicator(),
               if (view.error != null)
                 Text(
@@ -226,7 +237,7 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
           AppCard(
             child: ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Android permissions'),
+              title: const Text('Data permissions'),
               trailing: const Icon(AppIcons.chevronRight),
               onTap: view.busy ? null : _openPermissions,
             ),
@@ -264,7 +275,63 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
     }
   }
 
+  Widget _metrics(Map<String, dynamic> data) {
+    String value(String key, String unit) => data[key] is num ? '${(data[key] as num).round()}$unit' : 'Unavailable';
+    final sleep = data['sleep_minutes'] as num?;
+    final entries = [
+      ('Sleep', sleep == null ? 'Unavailable' : '${sleep.round() ~/ 60}h ${sleep.round() % 60}m', AppIcons.bedtimeOutlined, AppFeaturePalette.sleep),
+      ('Steps', value('steps', ''), AppIcons.footprints, AppFeaturePalette.steps),
+      ('Heart rate', value('heart_rate', ' bpm'), AppIcons.heart, AppFeaturePalette.heart),
+      ('Resting', value('resting_heart_rate', ' bpm'), AppIcons.heartbeat, AppFeaturePalette.resting),
+    ];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('Today', style: Theme.of(context).textTheme.labelMedium),
+      const SizedBox(height: 8),
+      LayoutBuilder(builder: (context, constraints) {
+        final columns = constraints.maxWidth < 280 || MediaQuery.textScalerOf(context).scale(1) > 1.5 ? 1 : 2;
+        return Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final (label, text, icon, color) in entries)
+            SizedBox(width: (constraints.maxWidth - (columns - 1) * 8) / columns,
+              child: AppSurface(variant: AppSurfaceVariant.subtle, padding: const EdgeInsets.all(12), child: Row(children: [
+                Icon(icon, color: Theme.of(context).brightness == Brightness.light ? Color.lerp(color, Colors.black, .4) : color, size: 28),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(label, style: Theme.of(context).textTheme.labelMedium),
+                  Text(text, style: Theme.of(context).textTheme.titleSmall),
+                ])),
+              ])),
+            ),
+        ]);
+      }),
+      const SizedBox(height: 8),
+      AppSurface(variant: AppSurfaceVariant.subtle, padding: const EdgeInsets.all(12), child: Row(children: [
+        const Icon(AppIcons.personOutlineRounded, color: AppFeaturePalette.resting),
+        const SizedBox(width: 12),
+        const Expanded(child: Text('Stress · Unavailable')),
+        const Tooltip(message: 'No supported Health Connect stress source. Check-in stress stays separate.', child: Icon(AppIcons.infoOutline, size: 20)),
+      ])),
+    ]);
+  }
+
+  Future<void> _vitals(bool enabled) async {
+    final controller = ref.read(healthConnectProvider.notifier);
+    final accepted = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text(enabled ? 'Remove heart data?' : 'Share heart data?'),
+      content: Text(enabled
+        ? 'Stops heart-data sharing and removes imported heart values. Sleep, steps and earlier Coach answers stay unchanged.'
+        : 'Daily heart-rate and resting-heart-rate averages will be stored in your cloud account and available to your selected Coach provider. No medical conclusions. You can remove them here.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(enabled ? 'Remove' : 'Agree'))],
+    ));
+    if (accepted != true || !mounted || !identical(controller, ref.read(healthConnectProvider.notifier))) return;
+    await controller.setVitals(!enabled);
+    if (mounted && ref.read(healthConnectProvider).error == null) {
+      if (enabled) { await controller.load(); } else { await controller.sync(); }
+    }
+  }
+
   Future<void> _connect() async {
+    final controller = ref.read(healthConnectProvider.notifier);
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -286,8 +353,7 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
         ],
       ),
     );
-    if (accepted != true || !mounted) return;
-    final controller = ref.read(healthConnectProvider.notifier);
+    if (accepted != true || !mounted || !identical(controller, ref.read(healthConnectProvider.notifier))) return;
     await controller.connect();
     if (mounted && ref.read(healthConnectProvider).error == null) {
       await controller.sync();
@@ -295,6 +361,7 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
   }
 
   Future<void> _delete() async {
+    final controller = ref.read(healthConnectProvider.notifier);
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -314,10 +381,8 @@ class _HealthConnectPageState extends ConsumerState<HealthConnectPage> {
         ],
       ),
     );
-    if (accepted == true && mounted) {
-      await ref
-          .read(healthConnectProvider.notifier)
-          .disconnect(deleteData: true);
+    if (accepted == true && mounted && identical(controller, ref.read(healthConnectProvider.notifier))) {
+      await controller.disconnect(deleteData: true);
     }
   }
 }

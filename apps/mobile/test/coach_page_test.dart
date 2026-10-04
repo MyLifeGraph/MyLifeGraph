@@ -9,6 +9,7 @@ import 'package:my_life_graph/core/widgets/app_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/composition/coach_credentials_providers.dart';
+import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/features/coach/application/coach_credentials_controller.dart';
 import 'package:my_life_graph/features/coach/data/coach_api_data_source.dart';
@@ -170,6 +171,15 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            appSurfaceCapabilitiesProvider.overrideWithValue(
+              const AppSurfaceCapabilities(
+                isLocalDemo: false,
+                canUseSyncedHabits: true,
+                canUseSyncedExecution: true,
+                canAccessCoachBackend: true,
+                canShowCoachSurface: true,
+              ),
+            ),
             coachRepositoryProvider.overrideWithValue(repository),
             coachCredentialsProvider.overrideWith((ref) => credentials),
           ],
@@ -581,6 +591,15 @@ Future<void> _pumpPage(WidgetTester tester, CoachRepository repository,
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        appSurfaceCapabilitiesProvider.overrideWithValue(
+          const AppSurfaceCapabilities(
+            isLocalDemo: false,
+            canUseSyncedHabits: true,
+            canUseSyncedExecution: true,
+            canAccessCoachBackend: true,
+            canShowCoachSurface: true,
+          ),
+        ),
         coachRepositoryProvider.overrideWithValue(repository),
         coachLocalDictationProvider.overrideWithValue(allowLocalDictation),
         coachActiveProfileIdProvider.overrideWithValue(

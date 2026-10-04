@@ -32,6 +32,7 @@ const CONTRACT_SOURCE_SUFFIXES = [
 ];
 
 const IGNORED_DIRECTORIES = new Set([
+  '.pytest_cache',
   '.dart_tool',
   '.git',
   '.idea',

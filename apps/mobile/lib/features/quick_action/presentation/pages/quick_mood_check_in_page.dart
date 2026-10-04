@@ -20,6 +20,7 @@ import '../widgets/capture_date_picker.dart';
 import '../../../../composition/skillset_providers.dart';
 import '../../domain/skillset_signals.dart';
 import '../widgets/optional_skillset_controls.dart';
+import '../../../../composition/widgets/capture_note_field.dart';
 
 class QuickMoodCheckInPage extends ConsumerStatefulWidget {
   const QuickMoodCheckInPage({super.key, this.proposal});
@@ -43,6 +44,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   var _isLoading = true;
   var _safeCaptureLoaded = false;
   var _isSaving = false;
+  bool _dictating = false;
   var _proposalApplied = false;
   (String, DateTime)? _voiceBaseline;
   var _revisingSavedCapture = false;
@@ -108,7 +110,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           ? 'Review suggestions. Unmentioned answers stay unchanged. Saving updates today\'s Evening check-in.'
           : 'Review suggestions and fill any gaps before saving.',
       progress: (_stepIndex + 1) / _steps.length,
-      canGoBack: _stepIndex > 0,
+      canGoBack: _stepIndex > 0 && !_dictating,
       canContinue:
           _safeCaptureLoaded && _canContinue && _proposalMatchesContext,
       isLastStep: _stepIndex == _steps.length - 1,
@@ -137,7 +139,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
                   CaptureDatePicker(
                     date: DateTime.parse(_draft.entryDate),
                     today: ref.read(profileLocalDateSourceProvider).today(),
-                    enabled: !_isLoading && !_isSaving,
+                    enabled: !_isLoading && !_isSaving && !_dictating,
                     onChanged: _changeDate,
                   ),
                 _buildStep(step.kind),
@@ -284,12 +286,13 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         ],
         Text('Optional notes', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.md),
-        _optionalNoteField(
+        CaptureNoteField(
           controller: _reflectionController,
-          maxLength: 500,
-          maxLines: 4,
           label: 'Reflection (optional)',
           hint: 'How did the day feel?',
+          enabled: !_isLoading && !_isSaving,
+          onChanged: (_) => setState(() {}),
+          onBusyChanged: (value) => setState(() => _dictating = value),
         ),
         if (_todayFocusSessions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
@@ -396,7 +399,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   bool get _canContinue {
-    if (_isLoading) {
+    if (_isLoading || _dictating) {
       return false;
     }
     return switch (_steps[_stepIndex].kind) {
@@ -426,7 +429,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _save() async {
-    if (_isSaving || !_safeCaptureLoaded || !_proposalMatchesContext) {
+    if (_isSaving || _dictating || !_safeCaptureLoaded || !_proposalMatchesContext) {
       return;
     }
     final draft = _draft.copyWith(

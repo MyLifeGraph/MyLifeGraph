@@ -33,7 +33,7 @@ import kotlin.math.max
  */
 class BlockingScreenView(
     context: Context,
-    custom: JSONObject,
+    private val custom: JSONObject,
     counters: JSONObject,
     summary: String,
     strictLocked: Boolean,
@@ -44,6 +44,18 @@ class BlockingScreenView(
     private val colors = BlockingScreenIcon.colors(tone)
     private val backgroundColor = Color.parseColor(colors.first)
     private val textColor = Color.parseColor(colors.second)
+    private val spacing = when (custom.optString("layout", "balanced")) {
+        "compact" -> .7f
+        "spacious" -> 1.3f
+        else -> 1f
+    }
+    private val accentColor = Color.parseColor(when (custom.optString("accent", "theme")) {
+        "mint" -> if (tone == "light") "#226A55" else "#82CBB4"
+        "blue" -> if (tone == "light") "#315E8A" else "#90B7E7"
+        "violet" -> if (tone == "light") "#65508F" else "#B2A3EA"
+        "rose" -> if (tone == "light") "#894760" else "#DD9EB3"
+        else -> colors.second
+    })
     private val content = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
@@ -202,7 +214,7 @@ class BlockingScreenView(
 
     private fun row(top: Int = 0) = LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
-    ).apply { topMargin = dp(top) }
+    ).apply { topMargin = (dp(top) * spacing).toInt() }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
@@ -216,7 +228,7 @@ class BlockingScreenView(
     private inner class OutlineIconView(context: Context, name: String) : View(context) {
         private val paths = BlockingScreenIcon.paths(name).map { PathParser.createPathFromPathData(it) }
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = textColor
+            color = accentColor
             style = Paint.Style.STROKE
             strokeWidth = 1.75f
             strokeCap = Paint.Cap.ROUND
@@ -245,7 +257,9 @@ class BlockingScreenView(
             "space" -> "#20244A"
             else -> "#10141B"
         })
-        private val fill = Color.parseColor(when (tone) {
+        private val fill = if (custom.optString("accent", "theme") != "theme")
+            Color.argb(65, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+        else Color.parseColor(when (tone) {
             "light" -> "#D9F3EA"
             "dark" -> "#173B32"
             "space" -> "#292E5C"

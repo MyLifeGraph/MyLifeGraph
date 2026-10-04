@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/constants/app_spacing.dart';
+import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/navigation/root_tab_pager.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/widgets/app_page.dart';
@@ -487,6 +488,15 @@ Future<void> _pumpApp(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        appSurfaceCapabilitiesProvider.overrideWithValue(
+          const AppSurfaceCapabilities(
+            isLocalDemo: false,
+            canUseSyncedHabits: true,
+            canUseSyncedExecution: true,
+            canAccessCoachBackend: true,
+            canShowCoachSurface: true,
+          ),
+        ),
         coachActiveProfileIdProvider.overrideWithValue('profile-1'),
         coachRepositoryProvider.overrideWithValue(repository),
       ],

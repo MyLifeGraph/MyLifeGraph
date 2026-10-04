@@ -19,6 +19,7 @@ import java.util.concurrent.Executors
 
 class BlockingBridge(private val activity: FlutterActivity) {
     private val plans = BlockingPlans(activity)
+    private val strictSession = StrictScreenSession { plans.cancelUnlockRequest() }
     private val handler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val nfcRequest = BlockingPendingRequest<MethodChannel.Result>()
@@ -31,6 +32,16 @@ class BlockingBridge(private val activity: FlutterActivity) {
         try {
             when (call.method) {
                 "status" -> result.success(plans.status())
+                "phoneStatus" -> result.success(CoachPhoneUsage(activity).status())
+                "phonePermission" -> { activity.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); result.success(null) }
+                "phoneData" -> {
+                    check(call.argument<Boolean>("consented") == true) { "Phone sharing consent is required." }
+                    val zone = requireNotNull(call.argument<String>("timezone"))
+                    worker.execute {
+                        val data = runCatching { CoachPhoneUsage(activity).read(zone) }
+                        handler.post { if (!disposed) data.fold(onSuccess = result::success, onFailure = { fail(result, it) }) }
+                    }
+                }
                 "save" -> {
                     result.success(plans.save(call.arguments as Map<*, *>))
                     // OS permission only: never enables FCM or changes Cloud consent.
@@ -64,12 +75,19 @@ class BlockingBridge(private val activity: FlutterActivity) {
                     }
                 }
                 "strict" -> result.success(plans.setStrict(call.arguments as Map<*, *>))
-                "requestUnlock" -> result.success(plans.requestUnlock())
-                "finishUnlock" -> result.success(plans.finishUnlock())
+                "strictVisibility" -> {
+                    val visible = call.argument<Boolean>("visible") == true
+                    strictSession.visibility(visible)
+                    if (!visible) cancelNfc("Unlock wait reset.")
+                    result.success(plans.status())
+                }
+                "requestUnlock" -> { strictSession.requireVisible(); result.success(plans.requestUnlock()) }
+                "finishUnlock" -> { strictSession.requireVisible(); result.success(plans.finishUnlock()) }
                 "relock" -> result.success(plans.relock())
                 "nfc" -> {
                     val enroll = call.argument<Boolean>("enroll") == true
                     if (enroll) plans.requireEditable()
+                    else strictSession.requireVisible()
                     val adapter = NfcAdapter.getDefaultAdapter(activity)
                     check(adapter != null && adapter.isEnabled) { "Enable NFC first." }
                     check(nfcRequest.pending == null) { "A tag scan is already running." }
@@ -168,8 +186,10 @@ class BlockingBridge(private val activity: FlutterActivity) {
         runCatching { NfcAdapter.getDefaultAdapter(activity)?.disableReaderMode(activity) }
         response.error("blocking_error", message, null)
     }
-    fun paused() { cancelNfc("Scan cancelled. Keep the app open.") }
+    fun resumed() { strictSession.resumed() }
+    fun paused() { strictSession.paused(); cancelNfc("Scan cancelled. Keep the app open.") }
     fun dispose() {
+        strictSession.paused()
         disposed = true; cancelNfc("Scan cancelled.")
         wifiRequest.take()?.error("blocking_error", "Permission request cancelled", null)
         handler.removeCallbacksAndMessages(null); worker.shutdownNow()

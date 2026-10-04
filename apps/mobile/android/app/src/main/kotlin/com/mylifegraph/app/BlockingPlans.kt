@@ -281,6 +281,8 @@ class BlockingPlans(private val context: Context) {
         require(appearance.optInt("waitSeconds") in 0..900)
         require(appearance.optString("tone", "glass") in setOf("glass", "dark", "light", "space"))
         require(appearance.optString("icon", "shield") in setOf("shield", "work", "games", "social", "sleep", "study"))
+        require(appearance.optString("accent", "theme") in setOf("theme", "mint", "blue", "violet", "rose"))
+        require(appearance.optString("layout", "balanced") in setOf("compact", "balanced", "spacious"))
         commit(prefs.edit().putString("plans", values.toString()).putString("custom", appearance.toString())
             .putLong("revision", prefs.getLong("revision", 0) + 1))
         FocusBlockAccessibilityService.refreshOverlayIfRunning(context)
@@ -312,6 +314,11 @@ class BlockingPlans(private val context: Context) {
         commit(prefs.edit().putString("strict", s.toString()).putLong("revision", prefs.getLong("revision", 0) + 1).remove("unlock_start")
             .remove("release_until").remove("nfc_verified"))
         return status()
+    }
+    fun cancelUnlockRequest() {
+        if (!prefs.contains("unlock_start") && !prefs.contains("nfc_verified")) return
+        commit(prefs.edit().remove("unlock_start").remove("unlock_boot")
+            .remove("nfc_verified").remove("nfc_boot"))
     }
     fun requestUnlock(): Map<String, Any?> {
         check(locked()) { "Strict mode is not locked." }

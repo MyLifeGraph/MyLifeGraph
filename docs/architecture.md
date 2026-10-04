@@ -1,5 +1,18 @@
 # Architecture
 
+Optional context additions preserve authority boundaries: Morning reflection
+stays in the Capture branch JSON rather than Evening/numeric projections;
+consented Health Connect heart averages remain imported observations, excluded
+from existing generic Snapshot event counts; phone summaries live only in a
+backend-owned profile field consumed by owner-scoped Coach snapshots/export.
+All mutations retain owner locks, revision/replay guards and bearer ownership.
+New SQL must precede API/client rollout; local source does not prove deployment.
+
+Strict unlock-wait visibility is enforced in the Android bridge and reset on
+Activity pause/disposal/recreation as well as Flutter route/tab exits. Customize
+uses the same native renderer as the blocking overlay; editor drafts do not
+mutate saved plans until a revision-checked Save succeeds.
+
 ## Android release discovery
 
 The isolated client-side [app updater](android-app-updates.md) reads public GitHub

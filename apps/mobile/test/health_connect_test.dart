@@ -32,6 +32,9 @@ class Gateway extends HealthConnectGateway {
   int nativeReads = 0;
   int deviceReads = 0;
   int sleepReads = 0;
+  int vitalsRequests = 0;
+  @override
+  Future<void> requestVitals() async { vitalsRequests++; }
   @override
   Future<Map<String, dynamic>> readSleep(String date, String timezone) async {
     sleepReads++;
@@ -74,6 +77,23 @@ class Gateway extends HealthConnectGateway {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('vitals state requires independent consent and valid metric values', () {
+    final base = <String, dynamic>{
+      'contract_version': healthConnectContractVersion,
+      'enabled': false, 'revision': 0, 'timezone': 'UTC',
+      'window_end': '2026-10-04',
+    };
+    for (final changes in <Map<String, dynamic>>[
+      {'vitals_enabled': true},
+      {'vitals_enabled': 'true'},
+      {'latest': {'date': '2026-10-04', 'sleep_minutes': 'unknown'}},
+      {'latest': {'date': '2026-10-04', 'heart_rate': -5}},
+    ]) {
+      expect(() => HealthConnectState.fromJson({...base, ...changes}),
+        throwsFormatException);
+    }
+    expect(HealthConnectState.fromJson(base).latest, isEmpty);
+  });
   test('watch suggestion requires consent, platform, permission and bound device', () async {
     final gateway = Gateway();
     final controller = HealthConnectController(gateway, android: true);

@@ -48,6 +48,16 @@ class HealthConnectController extends StateNotifier<HealthConnectViewState> {
   }
 
   Future<void> openSettings() => gateway.openSettings();
+  Future<void> setVitals(bool enabled) => _run(() async {
+    final cloud = state.cloud;
+    if (cloud == null || !android) return;
+    if (enabled) await gateway.requestVitals();
+    if (!mounted) return;
+    final updated = await gateway.command(cloud, enabled ? 'enable_vitals' : 'disable_vitals');
+    if (!mounted) return;
+    state = HealthConnectViewState(cloud: updated, supported: state.supported,
+      granted: state.granted, deviceId: state.deviceId);
+  });
 
   Future<void> load() => _run(() async {
     final cloud = await gateway.read();
@@ -95,12 +105,14 @@ class HealthConnectController extends StateNotifier<HealthConnectViewState> {
     }
     final data = await gateway.readDays(cloud);
     if (!mounted) return;
-    final updated = await gateway.command(
+    await gateway.command(
       cloud,
       'sync',
       deviceId: cloud.deviceId,
       sample: data,
     );
+    if (!mounted) return;
+    final updated = await gateway.read();
     if (mounted) {
       state = HealthConnectViewState(
         cloud: updated,

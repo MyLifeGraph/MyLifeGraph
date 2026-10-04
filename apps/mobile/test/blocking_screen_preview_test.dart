@@ -68,7 +68,7 @@ void main() {
   );
 
   testWidgets(
-    'non-Android host explicitly marks native preview unavailable',
+    'non-Android host labels its illustrative preview and stays read-only',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -78,11 +78,50 @@ void main() {
         ),
       );
       expect(find.byType(AndroidView), findsNothing);
-      expect(
-        find.text('Native preview is available on Android.'),
-        findsOneWidget,
-      );
+      expect(find.text('Web preview · Native on Android'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      expect(
+        tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+        isNull,
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
+  testWidgets(
+    'illustrative preview scrolls long text at enlarged text scale in every theme',
+    (tester) async {
+      for (final tone in ['glass', 'dark', 'light', 'space']) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: MediaQuery(
+                data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+                child: SizedBox(
+                  width: 320,
+                  height: 480,
+                  child: BlockingScreenPreview(
+                    custom: {
+                      'title': 'A long personal focus title ' * 2,
+                      'message': 'Choose your next step with care. ' * 6,
+                      'layout': 'spacious',
+                      'tone': tone,
+                      'icon': 'study',
+                    },
+                    counters: const {},
+                    strictLocked: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.scrollUntilVisible(find.byType(OutlinedButton), 200);
+        expect(find.byType(OutlinedButton).hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
     },
     variant: TargetPlatformVariant.only(TargetPlatform.windows),
   );

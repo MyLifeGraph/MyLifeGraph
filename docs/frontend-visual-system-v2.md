@@ -1,5 +1,23 @@
 # Frontend Visual System V2
 
+Wearable metric cards use `AppFeaturePalette` moon/footsteps/heart/pulse accents
+from the approved design, darkened on Light for contrast; surfaces still use the
+existing theme. Optional missing metrics say Unavailable. Cards switch to one
+column at narrow/large-text layouts rather than clipping data.
+Blocking list cards align icon, title/status and six-dot reorder handle; active
+status is conveyed by text and shape as well as color. Customize's fixed Save
+is outside its bounded scroll region. Icon/accent/layout are draft-only and all
+four backgrounds retain the shared native block-screen renderer.
+The five existing accent choices fill equal-width slots across their row,
+with symmetric outer spacing and a minimum 48px height. The three layout
+choices have equal outer dimensions and centered artwork;
+large text stacks them at full width. Morning's optional note is always visible
+and two lines high; Evening retains its original four-line geometry. Both use
+a right-side microphone instead of increasing footer padding. Coach phone-data
+actions put Reload/Delete side by side, with Sync separate; the three categories
+are directly visible, while saved sample data and
+privacy detail are disclosures, while cloud/provider consent stays visible.
+
 Blocking Strict separates the active idle state from an explicitly requested
 unlock countdown; before Unblock no countdown or disabled completion is shown.
 Its existing ornament remains decorative. Android Customize places its edit
@@ -328,10 +346,11 @@ contrast; preset chips use existing selected colors. No new palette or Liquid
 Glass material is introduced. Large text may wrap the count but never hides Save
 or the accessible disclosure control.
 The selected blocking tab uses its theme's primary-container pill and contrasting
-icon/label. Cards show actual weekly windows, and usage magnitudes appear above
+icon/label. Cards show compact timing summaries; detailed weekly windows remain
+in the editor/details. Usage magnitudes appear above
 bars where they fit, with wrapped labelled values for longer/enlarged text and
 compact range total/peak for dense Month charts. Strict adds no explanatory row.
-Blocking cards center their clock/text groups with flexible wrapping. Customize
+Blocking cards align compact text beside their icon with flexible wrapping. Customize
 uses matching centered return/edit action widths in its labelled non-Android
 approximation, capped at 286px with 48px minimum heights. Android uses the real
 native app-screen renderer inside a bounded 9:16 frame (maximum 340px width).

@@ -175,12 +175,21 @@ def validate_daily_capture_branch(
     required = (
         _MORNING_V5_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
     )
-    optional = (_MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS) | {"skillset"}
+    optional = (
+        _MORNING_OPTIONAL_KEYS | {"reflection_note"}
+        if branch == "morning"
+        else _EVENING_OPTIONAL_KEYS
+    ) | {"skillset"}
     issues: list[str] = []
     if required - set(raw):
         issues.append(f"{branch}.missing_fields")
     if set(raw) - required - optional:
         issues.append(f"{branch}.unexpected_fields")
+    if branch == "morning" and "reflection_note" in raw and (
+        not isinstance(raw["reflection_note"], str)
+        or len(raw["reflection_note"]) > 500
+    ):
+        issues.append("morning.invalid_reflection_note")
     if "skillset" in raw and not valid_skillset_signals(
         raw["skillset"], morning=branch == "morning",
     ):

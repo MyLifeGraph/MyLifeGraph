@@ -1,5 +1,10 @@
 # Stabilization Write And Projection Consistency Contract
 
+Morning V5's optional `reflection_note` uses the existing branch CAS and replay
+identity. Omitted keys preserve saved context; an explicit empty string clears
+it. This does not change the Evening scalar reflection or numerical projections.
+Dictation is draft-only and cannot save or overwrite Capture answers implicitly.
+
 ## Optional edits and reconciliation
 
 Unsaved Morning/Evening values require confirmation before route/date departure.

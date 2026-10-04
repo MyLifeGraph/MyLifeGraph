@@ -6,13 +6,16 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/composition/health_connect_providers.dart';
 import 'package:my_life_graph/features/health_connect/application/health_connect_controller.dart';
 import 'package:my_life_graph/features/health_connect/presentation/health_connect_page.dart';
+import 'package:my_life_graph/features/health_connect/domain/health_connect_state.dart';
 import 'health_connect_test.dart' show Gateway, cloud;
+import 'support/ui_catalog_capture.dart';
 
 Future<void> pumpPage(
   WidgetTester tester,
   Gateway gateway, {
   bool android = true,
   double scale = 1,
+  AppThemeId theme = AppThemeId.liquidGlass,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(320, 900);
@@ -33,7 +36,7 @@ Future<void> pumpPage(
         ),
       ],
       child: MaterialApp(
-        theme: AppTheme.liquidGlass,
+        theme: AppTheme.resolve(theme),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
@@ -48,6 +51,48 @@ Future<void> pumpPage(
 }
 
 void main() {
+  if (captureUiCatalog) {
+    testWidgets('Wearable dashboard approved design catalog', (tester) async {
+      await loadCatalogFonts();
+      final gateway = Gateway()..current = const HealthConnectState(
+        enabled: true, revision: 1, timezone: 'Europe/Berlin',
+        windowEnd: '2026-10-04', deviceId: 'device', vitalsEnabled: true,
+        latest: {'date': '2026-10-04', 'steps': 6432, 'sleep_minutes': 468,
+          'heart_rate': 72, 'resting_heart_rate': 58},
+      );
+      await pumpPage(tester, gateway);
+      tester.view.physicalSize = const Size(390, 1000);
+      await captureCatalog(tester, 'wearables-approved');
+    });
+  }
+  for (final theme in AppThemeId.values) {
+    testWidgets('vitals dashboard fits 320 pixels and 200% text in $theme', (tester) async {
+      final gateway = Gateway()..current = const HealthConnectState(
+        enabled: true, revision: 1, timezone: 'Europe/Berlin',
+        windowEnd: '2026-10-04', deviceId: 'device',
+        latest: {'date': '2026-10-04', 'steps': 10482, 'sleep_minutes': 468,
+          'heart_rate': 78, 'resting_heart_rate': 58},
+      );
+      await pumpPage(tester, gateway, theme: theme, scale: 2);
+      expect(find.text('7h 48m'), findsOneWidget);
+      expect(find.text('10482'), findsOneWidget);
+      expect(find.text('78 bpm'), findsOneWidget);
+      expect(find.text('58 bpm'), findsOneWidget);
+      expect(find.text('Stress · Unavailable'), findsOneWidget);
+      expect(gateway.commands, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Add heart data'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add heart data'));
+      await tester.pumpAndSettle();
+      expect(find.text('Share heart data?'), findsOneWidget);
+      expect(gateway.vitalsRequests, 0);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(gateway.commands, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final (name, enabled, granted, device, android, fail, expected) in [
     ('connected', true, true, 'device', true, false, 'Connected'),
     ('off', false, true, 'device', true, false, 'Not connected'),
@@ -94,12 +139,14 @@ void main() {
       expect(find.text('Sync now'), findsOneWidget);
       expect(find.textContaining('last 7 days'), findsNothing);
       expect(gateway.commands, isEmpty);
+      await tester.scrollUntilVisible(find.text('Details'), 300);
       await tester.tap(find.text('Details'));
       await tester.pumpAndSettle();
       expect(
         find.textContaining('Manual check-ins stay separate'),
         findsOneWidget,
       );
+      await tester.ensureVisible(find.text('Sync now'));
       await tester.tap(find.text('Sync now'));
       await tester.pumpAndSettle();
       expect(gateway.commands, ['sync']);

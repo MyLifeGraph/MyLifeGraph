@@ -24,6 +24,7 @@ class HealthConnectGateway {
       );
 
   Future<void> openSettings() => channel.invokeMethod<void>('openSettings');
+  Future<void> requestVitals() => channel.invokeMethod<void>('requestVitals');
 
   Future<Map<String, dynamic>> readSleep(String date, String timezone) async =>
       Map<String, dynamic>.from(
@@ -53,6 +54,7 @@ class HealthConnectGateway {
           'request_id': newClientUuid(),
           'expected_revision': state.revision,
           'command': command,
+          if (command == 'enable_vitals') 'vitals_consent_version': healthVitalsConsentVersion,
           'device_id': deviceId,
           'consent_version': command == 'connect'
               ? healthConnectConsentVersion
@@ -70,6 +72,7 @@ class HealthConnectGateway {
         await channel.invokeMapMethod<String, dynamic>('readDays', {
               'timezone': state.timezone,
               'window_end': state.windowEnd,
+              'vitals': state.vitalsEnabled,
             }) ??
             {},
       );

@@ -186,6 +186,13 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 
 ## Account Export
 
+Optional phone summaries (`coach-phone-data-v1`, consent
+`coach-phone-consent-v1`) are included as `profiles.coach_phone_data`.
+The private `coach_phone_last_request` is excluded. Disabling phone sharing or
+deleting shared data clears only this context, not chat replies or Blocking plans.
+Full profile deletion removes both fields. Heart-rate imports remain source-tagged
+Health Connect observations with separate vitals consent and deletion controls.
+
 The additive Health Connect account preference is exported as
 `profiles.health_connect_settings`; its private latest-request replay payload
 is excluded. Source-tagged health observations are already in `behavioral_events`.

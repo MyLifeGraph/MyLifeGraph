@@ -1,5 +1,18 @@
 # MyLifeGraph AI Service
 
+Optional context endpoints: authenticated `GET /v1/coach/phone-data` reads
+`coach-phone-data-v1` state; `POST /v1/coach/phone-data` accepts explicit
+enable/sync/disable/delete. `coach-phone-consent-v1` is independent of local
+Blocking consent. Bearer ownership, service-only profile RPC, revision/device
+binding, deletion guard and exact replay protect sharing. See the
+[Coach owner](../../docs/phase-10-controlled-coach-plan.md#optional-phone-summaries).
+Deploy the additive profile migration before the API's expanded Coach snapshot.
+
+Health Connect keeps V1 compatibility with separate optional vitals consent and
+today's metric projection. Morning V5 accepts a bounded optional note without
+changing scalar Capture projections. SQL/API/client rollout must be verified
+separately; repository changes alone are not deployment evidence.
+
 For the full service inventory and local-versus-published changes, see the
 [development handoff](../../docs/development-handoff.md). This API remains
 separate from the optional speech sidecar and Vercel/Android clients; FCM's
