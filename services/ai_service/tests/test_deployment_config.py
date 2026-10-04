@@ -184,6 +184,15 @@ def test_hosted_cors_requires_one_canonical_https_hostname() -> None:
 
 
 def test_hosted_cors_wraps_admission_rate_and_body_errors(monkeypatch) -> None:
+    # This tests CORS around admission errors, not real-time window rollover.
+    # Two immediate requests can otherwise straddle a monotonic minute boundary.
+    admission_controller = main.PublicAdmissionController
+    monkeypatch.setattr(
+        main,
+        "PublicAdmissionController",
+        lambda settings: admission_controller(settings, clock=lambda: 30.0),
+    )
+
     async def scenario() -> None:
         monkeypatch.setattr(
             main,

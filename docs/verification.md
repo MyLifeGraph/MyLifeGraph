@@ -70,6 +70,12 @@ Local migration tests never substitute for inspecting the actual Cloud project.
   counts and its 79-migration boundary; all three additions applied successfully
   to that network-isolated RAM copy. This is point-in-time safety evidence, not
   authorization for production restore/reopening or a deletion-journal recovery claim.
+- A CORS/admission test could straddle a monotonic minute boundary. Injecting
+  59.999 then 60.001 reproduced the failure; the test now uses the existing
+  clock seam with a fixed instant. All status, CORS and Retry-After assertions
+  remain intact, and production admission logic is unchanged. The 29-test
+  deployment/admission selection and 100 repeated scenarios pass. The final
+  candidate still requires its own complete green Linux run.
 
 ### Compact Capture / Blocking / Coach follow-up (2026-10-04, local only)
 
