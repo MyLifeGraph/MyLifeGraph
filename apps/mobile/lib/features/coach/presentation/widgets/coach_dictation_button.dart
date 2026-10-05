@@ -9,6 +9,7 @@ import 'package:record/record.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/network/api_failure.dart';
+import '../../../../core/navigation/root_tab_pager.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../domain/coach_dictation_request.dart';
@@ -64,6 +65,18 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
     WidgetsBinding.instance.addObserver(this);
   }
 
+  bool get _visible =>
+      ModalRoute.of(context)?.isCurrent != false && RootTabVisibility.of(context);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Pushed pages and pager neighbours can keep this widget mounted. The
+    // consent dialog is allowed to cover an idle button before recording starts.
+    final visible = _visible;
+    if (!visible && _busy) unawaited(_cancel());
+  }
+
   @override
   void dispose() {
     _generation++;
@@ -108,7 +121,7 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
   }
 
   Future<void> _start() async {
-    if (_busy || _askingConsent || !widget.enabled) return;
+    if (_busy || _askingConsent || !widget.enabled || !_visible) return;
     _profile = ref.read(coachActiveProfileIdProvider);
     if (_profile == null) return;
     final speech = ref.read(speechSettingsProvider);
@@ -165,6 +178,7 @@ class _CoachDictationButtonState extends ConsumerState<CoachDictationButton>
         !mounted ||
         consentGeneration != _generation ||
         !widget.enabled ||
+        !_visible ||
         ref.read(coachActiveProfileIdProvider) != _profile ||
         source != ref.read(speechSettingsProvider).source ||
         !identical(consent, ref.read(consentProvider.notifier))) {

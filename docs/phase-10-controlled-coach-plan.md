@@ -876,6 +876,9 @@ limits. Automatic stop never sends. While transcribing, only discard is enabled.
 If sending becomes unavailable, recognized text stays in the draft.
 Cancel, leaving the route, backgrounding or
 profile changes discard local recording state. Guest/mock cannot upload audio.
+Leaving includes a pushed page covering the still-mounted Coach and a hidden
+root tab. Both cancel recording/transcription and invalidate late draft results;
+the explicit pre-recording consent dialog does not count as leaving.
 The independent sidecar does not change Coach provider, history or reply contracts.
 Dictation transport lives in Coach data behind a cancellable domain request and
 the shared `ApiClient` exception boundary. The recording widget does not import

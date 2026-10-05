@@ -339,11 +339,11 @@ void main() {
     await tester.tap(setting.hitTestable());
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('transparent rule, not an AI estimate'),
+      find.textContaining('Across all exam and assignment plans.'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('Existing reservations are not changed.'),
+      find.textContaining('Existing reservations stay unchanged.'),
       findsOneWidget,
     );
     expect(find.textContaining('marked Needs review'), findsNothing);

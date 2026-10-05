@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:my_life_graph/core/constants/app_radii.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:my_life_graph/core/theme/app_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +20,7 @@ import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../../core/widgets/app_surface.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
+import 'package:my_life_graph/composition/widgets/preparation_budget_control.dart';
 import '../../application/deadline_plan_controller.dart';
 import '../../application/assignment_series_controller.dart';
 import '../../application/multi_exam_plan_controller.dart';
@@ -68,6 +70,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
 class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   bool _sourceEditorOpened = false;
   bool _editorOpen = false;
+  bool _reviewOpen = false;
   bool _seriesEditorOpen = false;
   bool _targetPlanRequested = false;
   bool _targetPlanLoading = false;
@@ -347,6 +350,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
             replanContext: _DeadlineReplanContext.missed,
           ),
           onConfirm: () => _confirmPlan(plan),
+          onReviewPreview: () => _openExamReview(plan.id),
           onReviewBalance: childLink == null
               ? null
               : () => _openExamBalance(childLink.balanceId),
@@ -1195,76 +1199,89 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         isScrollControlled: true,
         useRootNavigator: true,
         useSafeArea: true,
-        builder: (_) => _DeadlinePlanEditorSheet(
-          planId: sourcePlan?.id ?? retainedDraft?.planId ?? newClientUuid(),
-          baseRevision:
-              sourcePlan?.latestRevision ?? retainedDraft?.baseRevision ?? 0,
-          healthPlanId: sourcePlan?.isActive == true ? sourcePlan?.id : null,
-          healthBaseRevision: sourcePlan?.isActive == true
-              ? sourcePlan?.latestRevision
-              : null,
-          existing: existing,
-          startingAgain: restartFrom != null,
-          remainingMinutes: restartFrom?.progress.remainingMinutes,
-          trackedFocusMinutes: sourcePlan?.progress.trackedFocusMinutes ?? 0,
-          accountDailyPreparationBudgetKnown: preparationWorkload.hasValue,
-          accountDailyPreparationBudgetMinutes:
-              preparationWorkload.valueOrNull?.dailyPreparationBudgetMinutes,
-          retainedDraft: retainedDraft,
-          initialKind: sourcePlan?.kind ?? restartFrom?.kind ?? presetKind,
-          lockKind:
-              sourcePlan != null ||
-              lockPresetKind && presetKind != null && loadedPrefill == null,
-          initialTitle:
-              existing?.title ?? loadedPrefill?.title ?? widget.initialTitle,
-          initialDeadlineAt:
-              existing?.deadlineAt ??
-              prefillDeadline ??
-              widget.initialDeadlineAt,
-          initialDeadlineOn: retainedDraft == null && existing == null
-              ? prefillDeadlineOn ?? widget.initialDeadlineOn
-              : null,
-          sourceKind: restartFrom != null
-              ? DeadlinePlanSourceKind.manual
-              : retainedDraft?.sourceKind ??
-                    existing?.sourceKind ??
-                    (calendarSource
-                        ? DeadlinePlanSourceKind.calendarEvent
-                        : DeadlinePlanSourceKind.manual),
-          sourceCalendarEventId: restartFrom != null
-              ? null
-              : retainedDraft?.sourceCalendarEventId ??
-                    existing?.sourceCalendarEventId ??
-                    (calendarSource ? loadedPrefill?.eventId : null),
-          sourceCalendarEventFingerprint: restartFrom != null
-              ? null
-              : retainedDraft?.sourceCalendarEventFingerprint ??
-                    existing?.sourceCalendarEventFingerprint ??
-                    (calendarSource ? loadedPrefill?.sourceFingerprint : null),
-          initialSourceStatus: restartFrom != null
-              ? DeadlinePlanSourceStatus.notApplicable
-              : existing?.sourceStatus ??
-                    (calendarSource
-                        ? switch (loadedPrefill?.status) {
-                            DeadlineCalendarPrefillStatus.current =>
-                              DeadlinePlanSourceStatus.current,
-                            DeadlineCalendarPrefillStatus.stale =>
-                              DeadlinePlanSourceStatus.stale,
-                            _ => DeadlinePlanSourceStatus.unavailable,
-                          }
-                        : DeadlinePlanSourceStatus.notApplicable),
-          startWithExistingSummary:
-              sourcePlan?.isActive == true &&
-              sourcePlan?.pendingRevision == null &&
-              retainedDraft == null,
-          replanContext: replanContext,
-          currentTime: widget.currentTime,
-          profileToday: profileToday,
-          profileTimezone: profileTimezone,
-          savedExamHealth: savedExamHealth,
-          onOpenPlanner: () => context.go(AppRoutes.planner),
-          onPreviewHealth: (draft) =>
-              ref.read(examPlanHealthRepositoryProvider).preview(draft),
+        backgroundColor: Theme.of(context).colorScheme.surface.withAlpha(255),
+        clipBehavior: Clip.antiAlias,
+        builder: (_) => _DeadlineSheetSurface(
+          child: _DeadlinePlanEditorSheet(
+            planId: sourcePlan?.id ?? retainedDraft?.planId ?? newClientUuid(),
+            baseRevision:
+                sourcePlan?.latestRevision ?? retainedDraft?.baseRevision ?? 0,
+            healthPlanId: sourcePlan?.isActive == true ? sourcePlan?.id : null,
+            healthBaseRevision: sourcePlan?.isActive == true
+                ? sourcePlan?.latestRevision
+                : null,
+            existing: existing,
+            startingAgain: restartFrom != null,
+            remainingMinutes: restartFrom?.progress.remainingMinutes,
+            trackedFocusMinutes: sourcePlan?.progress.trackedFocusMinutes ?? 0,
+            accountDailyPreparationBudgetKnown: preparationWorkload.hasValue,
+            accountDailyPreparationBudgetMinutes:
+                preparationWorkload.valueOrNull?.dailyPreparationBudgetMinutes,
+            budgetControlBuilder: (onSaved) => PreparationBudgetControl(
+              onSaved: onSaved,
+              fallbackKnown: preparationWorkload.hasValue,
+              fallbackMinutes: preparationWorkload
+                  .valueOrNull
+                  ?.dailyPreparationBudgetMinutes,
+            ),
+            retainedDraft: retainedDraft,
+            initialKind: sourcePlan?.kind ?? restartFrom?.kind ?? presetKind,
+            lockKind:
+                sourcePlan != null ||
+                lockPresetKind && presetKind != null && loadedPrefill == null,
+            initialTitle:
+                existing?.title ?? loadedPrefill?.title ?? widget.initialTitle,
+            initialDeadlineAt:
+                existing?.deadlineAt ??
+                prefillDeadline ??
+                widget.initialDeadlineAt,
+            initialDeadlineOn: retainedDraft == null && existing == null
+                ? prefillDeadlineOn ?? widget.initialDeadlineOn
+                : null,
+            sourceKind: restartFrom != null
+                ? DeadlinePlanSourceKind.manual
+                : retainedDraft?.sourceKind ??
+                      existing?.sourceKind ??
+                      (calendarSource
+                          ? DeadlinePlanSourceKind.calendarEvent
+                          : DeadlinePlanSourceKind.manual),
+            sourceCalendarEventId: restartFrom != null
+                ? null
+                : retainedDraft?.sourceCalendarEventId ??
+                      existing?.sourceCalendarEventId ??
+                      (calendarSource ? loadedPrefill?.eventId : null),
+            sourceCalendarEventFingerprint: restartFrom != null
+                ? null
+                : retainedDraft?.sourceCalendarEventFingerprint ??
+                      existing?.sourceCalendarEventFingerprint ??
+                      (calendarSource
+                          ? loadedPrefill?.sourceFingerprint
+                          : null),
+            initialSourceStatus: restartFrom != null
+                ? DeadlinePlanSourceStatus.notApplicable
+                : existing?.sourceStatus ??
+                      (calendarSource
+                          ? switch (loadedPrefill?.status) {
+                              DeadlineCalendarPrefillStatus.current =>
+                                DeadlinePlanSourceStatus.current,
+                              DeadlineCalendarPrefillStatus.stale =>
+                                DeadlinePlanSourceStatus.stale,
+                              _ => DeadlinePlanSourceStatus.unavailable,
+                            }
+                          : DeadlinePlanSourceStatus.notApplicable),
+            startWithExistingSummary:
+                sourcePlan?.isActive == true &&
+                sourcePlan?.pendingRevision == null &&
+                retainedDraft == null,
+            replanContext: replanContext,
+            currentTime: widget.currentTime,
+            profileToday: profileToday,
+            profileTimezone: profileTimezone,
+            savedExamHealth: savedExamHealth,
+            onOpenPlanner: () => context.go(AppRoutes.planner),
+            onPreviewHealth: (draft) =>
+                ref.read(examPlanHealthRepositoryProvider).preview(draft),
+          ),
         ),
       );
     } finally {
@@ -1286,8 +1303,153 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           _calendarCreatedPlanId = _expandedPlanId;
         }
       });
-      _showMessage('Preparation preview created. Review and confirm it.');
+      if (draft.kind == DeadlinePlanKind.exam) {
+        await _openExamReview(changedPlanId ?? draft.planId);
+      } else {
+        _showMessage('Preparation preview created. Review and confirm it.');
+      }
     }
+  }
+
+  Future<void> _openExamReview(String planId) async {
+    if (_reviewOpen || _editorOpen || !mounted) return;
+    setState(() => _reviewOpen = true);
+    VoidCallback? action;
+    try {
+      action = await showModalBottomSheet<VoidCallback>(
+        context: context,
+        useRootNavigator: true,
+        useSafeArea: true,
+        isScrollControlled: true,
+        backgroundColor: Theme.of(context).colorScheme.surface.withAlpha(255),
+        clipBehavior: Clip.antiAlias,
+        builder: (sheetContext) => _DeadlineSheetSurface(
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              key: const ValueKey('deadline-review-sheet'),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Review study plan',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey('deadline-review-close'),
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(AppIcons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Consumer(
+                        builder: (context, reviewRef, _) {
+                          if (!reviewRef
+                              .watch(appSurfaceCapabilitiesProvider)
+                              .canUseDeadlinePlanner) {
+                            return const Text(
+                              'Synced preparation plans unavailable',
+                            );
+                          }
+                          final state = reviewRef.watch(
+                            deadlinePlanControllerProvider,
+                          );
+                          final series = reviewRef.watch(
+                            assignmentSeriesControllerProvider,
+                          );
+                          final multi = reviewRef.watch(
+                            multiExamPlanControllerProvider,
+                          );
+                          final plan = _planById(state.plans, planId);
+                          final zone = reviewRef
+                              .watch(profileLocalDateSourceProvider)
+                              .timezoneName;
+                          final health = reviewRef
+                              .watch(examPlanHealthProvider)
+                              .valueOrNull;
+                          final controller = reviewRef.read(
+                            deadlinePlanControllerProvider.notifier,
+                          );
+                          if (plan == null || plan.pendingRevision == null) {
+                            return const Text(
+                              'This preview is no longer available. Close and review your plans.',
+                            );
+                          }
+                          final childLink = multi
+                              .proposedChildLinks['${plan.id}:${plan.pendingRevision!.revision}'];
+                          void leave(VoidCallback callback) =>
+                              Navigator.of(sheetContext).pop(callback);
+                          return _DeadlinePlanCard(
+                            key: ValueKey('deadline-review-plan-${plan.id}'),
+                            reviewSheet: true,
+                            plan: plan,
+                            expanded: true,
+                            isBusy:
+                                state.isBusy || series.isBusy || multi.isBusy,
+                            exactRetryLocked:
+                                state.requiresExactRetry ||
+                                series.requiresExactRetry ||
+                                multi.requiresExactRetry,
+                            confirmLabel: widget.focusedReplan
+                                ? 'Confirm reservations and return to Planner'
+                                : 'Confirm reservations',
+                            operationError: _operationPlanId == plan.id
+                                ? state.operationError
+                                : null,
+                            examHealth: _healthForPlan(health, plan.id),
+                            childBalanceId: childLink?.balanceId,
+                            childMetadataUnavailable:
+                                multi.metadataStatus !=
+                                MultiExamPlanMetadataStatus.current,
+                            profileTimezone: zone,
+                            onToggle: () {},
+                            onAdjust: () =>
+                                leave(() => _openEditor(plan: plan)),
+                            onPlanAgain: () =>
+                                leave(() => _openEditor(restartFrom: plan)),
+                            onReplanMissed: () => leave(
+                              () => _openEditor(
+                                plan: plan,
+                                replanContext: _DeadlineReplanContext.missed,
+                              ),
+                            ),
+                            onConfirm: () => leave(() => _confirmPlan(plan)),
+                            onReviewBalance: childLink == null
+                                ? null
+                                : () => leave(
+                                    () => _openExamBalance(childLink.balanceId),
+                                  ),
+                            onComplete: () => leave(() => _completePlan(plan)),
+                            onCancel: () => leave(() => _cancelPlan(plan)),
+                            onStartBlock: (block) =>
+                                leave(() => _startBlock(plan, block)),
+                            onRetry: controller.retryExact,
+                            onReload: controller.load,
+                            onDismissError: controller.clearOperationError,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reviewOpen = false);
+    }
+    if (mounted) action?.call();
   }
 
   Future<void> _openAssignmentSeriesEditor({
@@ -1303,15 +1465,24 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         _seriesEditorOpen) {
       return;
     }
-    final profileTimezone = ref.read(profileLocalDateSourceProvider).timezoneName;
+    final profileTimezone = ref
+        .read(profileLocalDateSourceProvider)
+        .timezoneName;
     if (profileTimezone == null) {
-      _showMessage('Your current profile timezone is unavailable. Reload your account before editing preparation times.');
+      _showMessage(
+        'Your current profile timezone is unavailable. Reload your account before editing preparation times.',
+      );
       return;
     }
     try {
-      profileDateTimeAt(instant: widget.currentTime ?? DateTime.now(), timezoneName: profileTimezone);
+      profileDateTimeAt(
+        instant: widget.currentTime ?? DateTime.now(),
+        timezoneName: profileTimezone,
+      );
     } on ProfileTimezoneException {
-      _showMessage('Your current profile timezone is unavailable. Reload your account before editing preparation times.');
+      _showMessage(
+        'Your current profile timezone is unavailable. Reload your account before editing preparation times.',
+      );
       return;
     }
     _seriesEditorOpen = true;
@@ -1641,6 +1812,24 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
   }
+}
+
+/// Keeps underlying page text out of focused forms while using the existing
+/// theme's material and optical lighting, not a separate feature palette.
+class _DeadlineSheetSurface extends StatelessWidget {
+  const _DeadlineSheetSurface({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surface.withAlpha(255),
+      gradient: Theme.of(context).extension<AppLiquidGlass>() == null
+          ? null
+          : AppLiquidGlass.backdrop,
+    ),
+    child: Material(type: MaterialType.transparency, child: child),
+  );
 }
 
 ExamPlanHealthItem? _healthForPlan(ExamPlanHealth? health, String planId) {

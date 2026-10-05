@@ -173,7 +173,9 @@ Strict guards weakening mutations natively, including V1 master/configuration,
 emergency and app-blocking release. Unlock requirements combine with AND:
 immediate or 10s/30s/1m/3m/5m/10m/15m wait, connected charger, enrolled current
 Wi-Fi name and enrolled NFC tag. Wi-Fi setup requests location permission to
-obtain an unredacted SSID; unknown/disconnected networks fail closed. NFC
+obtain an unredacted SSID; unknown/disconnected networks fail closed. During an
+authorized editing window, a retained Wi-Fi condition can still be removed
+while disconnected; adding or re-enabling it requires an available SSID. NFC
 enrollment requires two matching scans; changing IDs are rejected. Only the
 tag-ID hash is stored. SSIDs and NFC IDs are self-control checks, not strong
 authentication. The unlock request uses monotonic time/boot identity and belongs

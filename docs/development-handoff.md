@@ -7,13 +7,20 @@ results belong in [Verification](verification.md#current-verified-baseline).
 
 ## Current delivery boundary
 
-The local approved-polish candidate adds Morning notes/dictation, source-backed
+The recorded RC20 baseline includes Morning notes/dictation, source-backed
 Wearable cards with separately consented heart data, optional Coach phone
 summaries, persisted Blocking order/direct edit, draft Customize controls and
-foreground-only Strict waits. Planner/exam/habit redesign is deliberately held.
-Three additive migrations and API/client changes are pending verification and
-rollout; the current user explicitly authorizes PR, merge and production release
-after successful verification. Authorization does not waive any gate. See the Capture, Health,
+foreground-only Strict waits, with the three additive migrations. See current
+Verification evidence rather than assuming a checkout is deployed.
+
+The next approved candidate simplifies the Exam editor and dedicated preview
+review, retaining every planning input, capacity check, explicit confirmation
+and cancellation. The shared account budget is editable there; an unset budget
+only proposes 8 h in the unsaved dialog, while existing and per-Exam limits remain
+unchanged. Broader Planner/habit redesign is still held. It also includes the
+physical audit's dictation visibility, Deadline lifecycle and Strict Wi-Fi
+corrections. Publication is authorized only after current checks succeed; no new
+migration or server contract is introduced. See Deadline, Account controls,
 Coach and Android Focus Protection owners and current verification evidence.
 
 - The source contains the consolidated follow-ups on

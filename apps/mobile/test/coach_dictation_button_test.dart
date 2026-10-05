@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/navigation/root_tab_pager.dart';
 import 'package:my_life_graph/features/coach/domain/coach_dictation_request.dart';
 import 'package:my_life_graph/features/coach/presentation/providers/coach_providers.dart';
 import 'package:my_life_graph/features/coach/presentation/widgets/coach_dictation_button.dart';
@@ -205,6 +206,129 @@ void main() {
           await tester.pumpWidget(const SizedBox());
           await Future<void>.delayed(const Duration(milliseconds: 20));
         });
+      },
+    );
+  }
+
+  for (final (hiddenByTab, transcribing) in [
+    (false, false),
+    (false, true),
+    (true, false),
+    (true, true),
+  ]) {
+    testWidgets(
+      '${hiddenByTab ? 'hidden root tab' : 'pushed Settings'} '
+      'cancels dictation and discards late results '
+      '(transcribing: $transcribing)',
+      (tester) async {
+        final originalPlatform = RecordPlatform.instance;
+        final platform = _RecordingPlatform();
+        RecordPlatform.instance = platform;
+        addTearDown(() => RecordPlatform.instance = originalPlatform);
+        final navigator = GlobalKey<NavigatorState>();
+        final tabVisible = ValueNotifier<bool>(true);
+        addTearDown(tabVisible.dispose);
+        final request = _PendingDictation();
+        final deliveries = <(String, bool)>[];
+        try {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                coachActiveProfileIdProvider.overrideWithValue('profile-a'),
+                coachAccessTokenProvider.overrideWithValue(() => 'test-token'),
+                coachDictationRequestFactoryProvider.overrideWithValue(
+                  () => request,
+                ),
+              ],
+              child: MaterialApp(
+                navigatorKey: navigator,
+                home: ValueListenableBuilder<bool>(
+                  valueListenable: tabVisible,
+                  builder: (_, visible, child) => RootTabVisibility(
+                    visible: visible,
+                    child: child!,
+                  ),
+                  child: Scaffold(
+                    body: CoachDictationButton(
+                      enabled: true,
+                      onText: (text, send) => deliveries.add((text, send)),
+                      onBusyChanged: (_) {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.tap(find.byTooltip('Dictate'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Record'));
+          await tester.pumpAndSettle();
+          expect(find.text('30s'), findsOneWidget);
+          platform.audio.add(Uint8List(3200));
+          await tester.pump();
+          if (transcribing) {
+            await tester.runAsync(() async {
+              await tester.tap(find.byKey(const Key('coach-dictation-stop')));
+              await Future<void>.delayed(const Duration(milliseconds: 20));
+            });
+            await tester.pump();
+            expect(request.calls, 1);
+          }
+
+          // A normal pushed page leaves the recording widget mounted below it.
+          await tester.runAsync(() async {
+            if (hiddenByTab) {
+              tabVisible.value = false;
+            } else {
+              unawaited(
+                navigator.currentState!.push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const Scaffold(body: Text('Settings')),
+                  ),
+                ),
+              );
+            }
+            await tester.pump();
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+          });
+          await tester.pump(const Duration(milliseconds: 400));
+          if (!hiddenByTab) expect(find.text('Settings'), findsOneWidget);
+          expect(
+            find.byType(CoachDictationButton, skipOffstage: false),
+            findsOneWidget,
+          );
+          if (transcribing) {
+            request.result.complete('Late hidden-route transcription');
+            await tester.pump();
+            expect(
+              deliveries,
+              isEmpty,
+              reason: 'Leaving Coach must discard pending transcription.',
+            );
+          }
+          expect(request.cancelled, isTrue);
+          expect(platform.calls, contains('cancel'));
+          await tester.pump(const Duration(seconds: 31));
+          expect(
+            request.calls,
+            transcribing ? 1 : 0,
+            reason: 'A covered recording must not auto-upload after 30s.',
+          );
+          if (hiddenByTab) {
+            tabVisible.value = true;
+          } else {
+            navigator.currentState!.pop();
+          }
+          await tester.pumpAndSettle();
+          expect(find.byTooltip('Dictate'), findsOneWidget);
+          expect(deliveries, isEmpty);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await tester.runAsync(() async {
+            await tester.pumpWidget(const SizedBox());
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+          });
+        }
       },
     );
   }

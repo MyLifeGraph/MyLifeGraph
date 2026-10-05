@@ -48,6 +48,8 @@ obsolete usage results/errors cannot replace the selected range.
 Revoked access still permits removing retained domains and reducing/removing
 budgets. Plan/Strict/Customize save failures keep drafts; pending saves freeze
 keyboard edits. Foreground refresh updates timed statuses and stops when hidden.
+An authorized Strict edit can remove a retained Wi-Fi requirement while offline;
+adding it still requires Wi-Fi readiness.
 
 The target editor bounds its independently scrolling app list and pins Save,
 selection counts and a disclosure icon above keyboard/navigation insets.
@@ -126,10 +128,27 @@ Device time remains intentional for guest flows and Android app-blocking rules.
 Compact Watch settings retain connect/sync, permission access and overflow
 stop/delete actions with unchanged consent. Calendar import groups source and
 file selection, hides the never-imported empty events card and keeps Last import
-details; desktop puts events alongside the source. The Exam editor keeps all
-inputs in three compact steps, with profile-local date/time controls and
-responsive paired preferences. These presentation changes reuse existing
+details; desktop puts events alongside the source. The Exam editor shows title,
+profile-local date/time and Study time in one form. Optional Study settings
+expand as a grouped panel with a short summary and Back to exam details, without
+losing input; all limits, start/busy-time choices and
+capacity checks remain. Its shared account-budget control edits the same daily
+limit as Settings: an unset limit proposes 8h in the dialog, saved only by
+explicit confirmation. Existing limits and per-plan defaults are unchanged.
+Pending Exam previews show To plan/Proposed/Unplaced, compact study blocks and
+optional Plan details. A successful Exam proposal opens Review study plan;
+Close/Back keeps the preview, and Review preview reopens it from the card.
+Confirm/Edit/Discard reuse the existing guarded flows. Confirmation remains
+separate from creating a preview. The focused sheets prevent background text
+bleed while retaining each theme's palette and Liquid Glass lighting.
+These presentation changes reuse existing
 Liquid Glass tokens and all original mutation/confirmation boundaries.
+The single-plan editor scrolls its fields independently of the action footer.
+The compact Exam heading stays visible while scrolling; short keyboard-constrained
+viewports move it into the scroll area to preserve reachable actions.
+Cancel/Create preview stay above the keyboard; non-Exam single-plan paths retain
+Back/Continue. Large text stacks the actions without hiding fields or changing
+validation.
 
 Morning/Evening warn before discarding unsaved edits through Back/date changes.
 This does not persist incomplete forms or protect browser refreshes. A connected
@@ -381,8 +400,10 @@ display-only logarithmic scaling makes normal speech visible without modifying
 audio, and reduced motion removes transitions rather than level feedback. The input
 becomes a recording bar: X discards, square Stop inserts text for review, and Send
 transcribes and explicitly sends through the existing Coach flow. Automatic stop
-only inserts text; it never sends. Recording stops on leaving
-the page or backgrounding. See [Speech setup](../../services/speech_service/README.md).
+only inserts text; it never sends. Recording and pending transcription are
+cancelled when another page covers Coach, its root tab becomes hidden, or the
+app backgrounds; late results cannot update the draft. The pre-recording
+consent dialog remains usable. See [Speech setup](../../services/speech_service/README.md).
 The recording widget uses a cancellable domain request; HTTP and transport
 errors stay in Coach data and `ApiClient`. Discard/account change suppress late
 text and errors. Uploads set `followRedirects: false` for native adapters;

@@ -596,16 +596,58 @@ backend anti-replay ledgers and export no request fingerprint.
 
 ## Flutter Surface
 
-The compact single-plan editor uses New exam/Edit plan, Study time and Study
-rhythm with a short step count. Date and time controls show the profile timezone
+Concurrent plan-list reloads share one pending read. Successful writes completed
+during that read overlay only their plan IDs, so its older feed cannot replace a
+newer result and unrelated feed rows remain available. The overlay expires with
+that read; a later explicit reload is authoritative. Read/write success and
+failure after controller disposal do not touch disposed state. A durable lifecycle
+write still attempts its projection refresh once and always releases the shared
+mutation gate. Reload follows existing explicit ambiguous-request reconciliation
+semantics; it grants no mutation authority.
+
+The compact Exam editor uses a prominent New exam/Edit plan heading with Close,
+paired date/time inputs and uniform estimate shortcuts. Optional Study settings
+expand into an outlined group, replacing the basic fields with a short summary;
+Back to exam details restores the maintained draft. Basic-field validation
+returns to those fields. New locked Exams communicate their kind in the heading
+rather than a duplicate badge; existing-plan kinds remain explicitly read-only.
+Other single-plan kinds retain their existing steps. Date and time controls show the profile timezone
 once; the time control can edit an already selected date without repeating the
 date picker. DST/future-date validation is unchanged. The locked kind stays
 visible and read-only. Estimates, all hour presets and Custom focus minutes
-remain explicit. Daily limit/clear days and start/busy-time controls share rows
-on wide screens and stack on phones or large text. Check capacity, its complete
+remain explicit. Daily limit/clear days share a row when space allows and stack
+on narrow screens or large text; Start and Busy times use full-width controls.
+Check capacity, its complete
 result/errors and explicit preview/confirmation remain. Optional methodology
 lives under Details; the reservation confirmation rule stays visible. No
-new defaults, draft semantics, backend fields or calculation rules are introduced.
+backend fields or calculation rules are introduced. Per-plan defaults are unchanged.
+
+The single-plan editor keeps its action footer outside the form scroll area
+and above keyboard/system insets. Exams expose Cancel/Create preview immediately;
+other single-plan kinds retain Cancel/Back and Continue/Create preview. Actions remain
+visible while entering a title or estimate; large text stacks the same actions.
+The compact Exam heading and Close stay above the scroll area when height allows;
+with a short keyboard-constrained viewport they scroll with the fields so the
+action footer remains reachable. All fields remain scrollable, including
+capacity details and preferences.
+The saved replan summary and separate Assignment Series editor are unchanged.
+Successful Exam proposals open a dedicated Review study plan sheet. Close,
+Back and outside dismissal preserve the staged proposal without confirming or
+discarding it. Review preview on the underlying card reopens the same proposal.
+The sheet watches current plan/balance/capability state and reuses the card's
+mutation guards; missing pending revisions remove its action surface. Lifecycle
+actions close the sheet before opening the existing edit/confirmation flows.
+Failures remain recoverable on the underlying page. No additional write occurs
+when entering or dismissing review. The focused sheet has an opaque themed base
+so the underlying page's text cannot bleed through it.
+Pending Exam cards show To plan, Proposed and Unplaced upfront, with compact
+dated study blocks. Estimate/progress and placement explanations live under
+Plan details. Critical source, balance, timezone and unresolved-write warnings
+stay visible. The sheet uses centered divided metrics, grouped Plan details and
+responsive icon/label controls. Confirmation is full-width and new-draft
+Edit/Discard share a row. Long content and large text remain scrollable.
+An active plan with a replacement preview retains its existing active lifecycle
+actions; it must not present active cancellation as merely discarding a draft.
 
 The saved replan review uses concise instructions and wrapping value groups for
 preferred Focus blocks, the plan's daily maximum and clear days. Recovery and
@@ -653,8 +695,13 @@ the future scope according to lifecycle. The Exam editor remains the
 established single-plan flow. Neither editor renders prior-work input or
 prior-credit summary copy.
 
-Settings exposes the optional account-wide daily budget with explicit
-rule-based copy and no AI claim. Preparation editors read the authenticated
+Settings and the Exam Study settings share an editable optional account-wide
+daily budget using the existing revision-safe account command. A null saved
+budget preselects 480 minutes only in the dialog: opening or cancelling does not
+save it. Existing limits, null meaning no global cap, and per-plan limits remain
+unchanged. This is an upper bound, not a study recommendation. Successful saves
+invalidate capacity previews and workload, never automatically reschedule.
+Preparation editors read the authenticated
 workload summary to distinguish a known account budget from unavailable data.
 Planner has no standalone seven-day workload card or expandable workload-day
 detail. The unused widget and its isolated tests have been removed; summary

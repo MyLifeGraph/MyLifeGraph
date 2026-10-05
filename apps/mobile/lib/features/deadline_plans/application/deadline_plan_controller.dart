@@ -16,9 +16,8 @@ enum DeadlinePlanOperation {
 
 enum DeadlinePlanMutationKind { proposal, confirm, complete, cancel }
 
-typedef DeadlinePlanProjectionRefresh = Future<void> Function({
-  required bool managedTaskChanged,
-});
+typedef DeadlinePlanProjectionRefresh =
+    Future<void> Function({required bool managedTaskChanged});
 
 enum DeadlinePlanConflictKind {
   revision,
@@ -42,26 +41,24 @@ class DeadlinePlanPendingMutation {
   factory DeadlinePlanPendingMutation.proposal({
     required String requestId,
     required DeadlinePlanProposalDraft draft,
-  }) =>
-      DeadlinePlanPendingMutation._(
-        kind: DeadlinePlanMutationKind.proposal,
-        requestId: requestId,
-        planId: draft.planId,
-        draft: draft,
-      );
+  }) => DeadlinePlanPendingMutation._(
+    kind: DeadlinePlanMutationKind.proposal,
+    requestId: requestId,
+    planId: draft.planId,
+    draft: draft,
+  );
 
   factory DeadlinePlanPendingMutation.lifecycle({
     required DeadlinePlanMutationKind kind,
     required String requestId,
     required String planId,
     required int expectedRevision,
-  }) =>
-      DeadlinePlanPendingMutation._(
-        kind: kind,
-        requestId: requestId,
-        planId: planId,
-        expectedRevision: expectedRevision,
-      );
+  }) => DeadlinePlanPendingMutation._(
+    kind: kind,
+    requestId: requestId,
+    planId: planId,
+    expectedRevision: expectedRevision,
+  );
 
   final DeadlinePlanMutationKind kind;
   final String requestId;
@@ -83,15 +80,15 @@ class DeadlinePlanState {
   });
 
   factory DeadlinePlanState.loading() => const DeadlinePlanState(
-        isLoading: true,
-        plans: [],
-        loadError: null,
-        operation: DeadlinePlanOperation.idle,
-        operationError: null,
-        pendingMutation: null,
-        reloadSuggested: false,
-        lastChangedPlanId: null,
-      );
+    isLoading: true,
+    plans: [],
+    loadError: null,
+    operation: DeadlinePlanOperation.idle,
+    operationError: null,
+    pendingMutation: null,
+    reloadSuggested: false,
+    lastChangedPlanId: null,
+  );
 
   final bool isLoading;
   final List<DeadlinePlan> plans;
@@ -139,10 +136,10 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
     required DeadlinePlanRepository repository,
     required DeadlinePlanProjectionRefresh projectionRefresh,
     PreparationMutationGate? mutationGate,
-  })  : _repository = repository,
-        _projectionRefresh = projectionRefresh,
-        _mutationGate = mutationGate ?? PreparationMutationGate(),
-        super(DeadlinePlanState.loading()) {
+  }) : _repository = repository,
+       _projectionRefresh = projectionRefresh,
+       _mutationGate = mutationGate ?? PreparationMutationGate(),
+       super(DeadlinePlanState.loading()) {
     Future<void>.microtask(load);
   }
 
@@ -150,19 +147,45 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
   final DeadlinePlanProjectionRefresh _projectionRefresh;
   final PreparationMutationGate _mutationGate;
 
-  Future<void> load() async {
-    if (state.isBusy) return;
+  Future<void>? _plansLoad;
+  Map<String, DeadlinePlan>? _pendingReadMutationResults;
+
+  Future<void> load() =>
+      _plansLoad ??= _loadPlans().whenComplete(() => _plansLoad = null);
+
+  Future<void> _loadPlans() async {
+    if (!mounted || state.isBusy) return;
+    // A write can finish while this read is pending (for example after an
+    // account-budget refresh in an open editor). Keep its newer plan result,
+    // but still adopt unrelated rows from the feed. The overlay belongs only
+    // to this read; a later explicit reload remains authoritative.
+    final mutationResults = <String, DeadlinePlan>{};
+    _pendingReadMutationResults = mutationResults;
     state = DeadlinePlanState.loading();
     try {
       final feed = await _repository.getPlans();
-      state = state.copyWith(isLoading: false, plans: feed.plans);
+      if (!mounted) return;
+      final feedIds = feed.plans.map((plan) => plan.id).toSet();
+      state = state.copyWith(
+        isLoading: false,
+        plans: List.unmodifiable([
+          for (final plan in feed.plans) mutationResults[plan.id] ?? plan,
+          for (final plan in mutationResults.values)
+            if (!feedIds.contains(plan.id)) plan,
+        ]),
+      );
     } catch (error) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, loadError: error);
+    } finally {
+      _pendingReadMutationResults = null;
     }
   }
 
   Future<bool> propose(DeadlinePlanProposalDraft draft) {
-    if (state.isBusy || state.requiresExactRetry) return Future.value(false);
+    if (!mounted || state.isBusy || state.requiresExactRetry) {
+      return Future.value(false);
+    }
     return _applyProposal(
       DeadlinePlanPendingMutation.proposal(
         requestId: newClientUuid(),
@@ -173,7 +196,10 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
 
   Future<bool> confirm(DeadlinePlan plan) {
     final revision = plan.pendingRevision?.revision;
-    if (revision == null || state.isBusy || state.requiresExactRetry) {
+    if (!mounted ||
+        revision == null ||
+        state.isBusy ||
+        state.requiresExactRetry) {
       return Future.value(false);
     }
     return _applyLifecycle(
@@ -188,7 +214,10 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
 
   Future<bool> complete(DeadlinePlan plan) {
     final revision = plan.activeRevision?.revision;
-    if (revision == null || state.isBusy || state.requiresExactRetry) {
+    if (!mounted ||
+        revision == null ||
+        state.isBusy ||
+        state.requiresExactRetry) {
       return Future.value(false);
     }
     return _applyLifecycle(
@@ -205,7 +234,10 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
     final expectedRevision = plan.isDraft
         ? plan.pendingRevision?.revision
         : plan.activeRevision?.revision;
-    if (expectedRevision == null || state.isBusy || state.requiresExactRetry) {
+    if (!mounted ||
+        expectedRevision == null ||
+        state.isBusy ||
+        state.requiresExactRetry) {
       return Future.value(false);
     }
     return _applyLifecycle(
@@ -219,6 +251,7 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
   }
 
   Future<bool> retryExact() {
+    if (!mounted) return Future.value(false);
     final pending = state.pendingMutation;
     if (pending == null || state.isBusy) return Future.value(false);
     return pending.kind == DeadlinePlanMutationKind.proposal
@@ -227,12 +260,12 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
   }
 
   void clearOperationError() {
-    if (state.isBusy || state.requiresExactRetry) return;
+    if (!mounted || state.isBusy || state.requiresExactRetry) return;
     state = state.copyWith(operationError: null, reloadSuggested: false);
   }
 
   void includeReadPlan(DeadlinePlan plan) {
-    if (state.isLoading || state.isBusy) return;
+    if (!mounted || state.isLoading || state.isBusy) return;
     final plans = [...state.plans];
     final index = plans.indexWhere((candidate) => candidate.id == plan.id);
     if (index == -1) {
@@ -285,30 +318,28 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
       );
       final plan = switch (pending.kind) {
         DeadlinePlanMutationKind.confirm => _repository.confirm(
-            planId: args.planId,
-            requestId: args.requestId,
-            expectedRevision: args.expectedRevision,
-          ),
+          planId: args.planId,
+          requestId: args.requestId,
+          expectedRevision: args.expectedRevision,
+        ),
         DeadlinePlanMutationKind.complete => _repository.complete(
-            planId: args.planId,
-            requestId: args.requestId,
-            expectedRevision: args.expectedRevision,
-          ),
+          planId: args.planId,
+          requestId: args.requestId,
+          expectedRevision: args.expectedRevision,
+        ),
         DeadlinePlanMutationKind.cancel => _repository.cancel(
-            planId: args.planId,
-            requestId: args.requestId,
-            expectedRevision: args.expectedRevision,
-          ),
+          planId: args.planId,
+          requestId: args.requestId,
+          expectedRevision: args.expectedRevision,
+        ),
         DeadlinePlanMutationKind.proposal => throw StateError(
-            'Proposal cannot use the lifecycle mutation path.',
-          ),
+          'Proposal cannot use the lifecycle mutation path.',
+        ),
       };
       final savedPlan = await plan;
       _recordSuccess(savedPlan);
       try {
-        await _projectionRefresh(
-          managedTaskChanged: savedPlan.taskId != null,
-        );
+        await _projectionRefresh(managedTaskChanged: savedPlan.taskId != null);
       } catch (_) {
         // The lifecycle write is already durable; projection refresh is best
         // effort and must not turn the successful mutation into a retry.
@@ -323,6 +354,8 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
   }
 
   void _recordSuccess(DeadlinePlan plan) {
+    if (!mounted) return;
+    _pendingReadMutationResults?[plan.id] = plan;
     final plans = [...state.plans];
     final index = plans.indexWhere((candidate) => candidate.id == plan.id);
     if (index == -1) {
@@ -341,6 +374,7 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
   }
 
   void _recordFailure(Object error, DeadlinePlanPendingMutation pending) {
+    if (!mounted) return;
     final exact = deadlinePlanMutationRequiresExactRetry(error);
     state = state.copyWith(
       operation: DeadlinePlanOperation.idle,

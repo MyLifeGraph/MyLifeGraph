@@ -25,6 +25,8 @@ class _DeadlinePlanCard extends StatefulWidget {
     required this.onRetry,
     required this.onReload,
     required this.onDismissError,
+    this.reviewSheet = false,
+    this.onReviewPreview,
   });
 
   final DeadlinePlan plan;
@@ -49,6 +51,8 @@ class _DeadlinePlanCard extends StatefulWidget {
   final Future<bool> Function() onRetry;
   final Future<void> Function() onReload;
   final VoidCallback onDismissError;
+  final bool reviewSheet;
+  final VoidCallback? onReviewPreview;
 
   @override
   State<_DeadlinePlanCard> createState() => _DeadlinePlanCardState();
@@ -73,15 +77,17 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
     final onStartBlock = widget.onStartBlock;
     final revision = plan.displayedRevision;
     if (revision == null) {
-      return AppCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _StatusPill(
-              label: _statusLabel(plan.status),
-              tone: _statusTone(plan.status),
-            ),
-            const SizedBox(height: AppSpacing.sm),
+      final content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StatusPill(
+            label: _statusLabel(plan.status),
+            tone: _statusTone(plan.status),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (widget.reviewSheet)
+            Text(plan.title, style: Theme.of(context).textTheme.titleLarge)
+          else
             InkWell(
               onTap: widget.onToggle,
               child: Row(
@@ -99,17 +105,18 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 ],
               ),
             ),
-            if (widget.expanded) ...[
-              const SizedBox(height: AppSpacing.xs),
-              const Text(
-                'This unconfirmed preview was discarded. It created no task or reserved preparation blocks.',
-              ),
-            ],
+          if (widget.expanded || widget.reviewSheet) ...[
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'This unconfirmed preview was discarded. It created no task or reserved preparation blocks.',
+            ),
           ],
-        ),
+        ],
       );
+      return widget.reviewSheet ? content : AppCard(child: content);
     }
     final pending = plan.pendingRevision != null;
+    final compactPreview = pending && revision.kind == DeadlinePlanKind.exam;
     final isBalanceChild = widget.childBalanceId != null;
     final active = plan.activeRevision;
     final sourceNeedsReview =
@@ -136,7 +143,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
     final remaining = pending
         ? revision.remainingMinutesAtProposal
         : plan.progress.remainingMinutes;
-    if (!widget.expanded) {
+    if (!widget.expanded && !widget.reviewSheet) {
       return AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,10 +226,20 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
         ),
       );
     }
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.reviewSheet)
+          _DeadlineReviewHeader(
+            revision: revision,
+            profileTimezone: widget.profileTimezone,
+            statusLabel: pending ? 'Preview' : _statusLabel(plan.status),
+            statusTone: pending
+                ? AppStatusTone.attention
+                : _statusTone(plan.status),
+            sourceNeedsReview: sourceNeedsReview,
+          )
+        else ...[
           Wrap(
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.xs,
@@ -268,49 +285,50 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           Text(
             _profileDeadlineCopy(revision.deadlineAt, widget.profileTimezone),
           ),
-          if (revision.kind == DeadlinePlanKind.exam &&
-              widget.examHealth != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _SavedExamHealthSummary(exam: widget.examHealth!),
-          ],
-          if (pending &&
-              (isBalanceChild || widget.childMetadataUnavailable)) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isBalanceChild
-                        ? 'Part of an Exam balance preview'
-                        : 'Checking Exam balance ownership',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    isBalanceChild
-                        ? 'This child revision cannot be confirmed alone. Review and confirm or discard the complete Exam balance.'
-                        : 'Single confirmation stays unavailable until shared-preview metadata loads safely.',
-                  ),
-                  if (widget.onReviewBalance != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    OutlinedButton.icon(
-                      key: ValueKey('deadline-review-balance-${plan.id}'),
-                      onPressed: widget.onReviewBalance,
-                      icon: const Icon(AppIcons.visibilityOutlined),
-                      label: const Text('Review Exam balance'),
-                    ),
-                  ],
-                ],
-              ),
+        ],
+        if (revision.kind == DeadlinePlanKind.exam &&
+            widget.examHealth != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _SavedExamHealthSummary(exam: widget.examHealth!),
+        ],
+        if (pending && (isBalanceChild || widget.childMetadataUnavailable)) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(AppRadii.sm),
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isBalanceChild
+                      ? 'Part of an Exam balance preview'
+                      : 'Checking Exam balance ownership',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  isBalanceChild
+                      ? 'This child revision cannot be confirmed alone. Review and confirm or discard the complete Exam balance.'
+                      : 'Single confirmation stays unavailable until shared-preview metadata loads safely.',
+                ),
+                if (widget.onReviewBalance != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton.icon(
+                    key: ValueKey('deadline-review-balance-${plan.id}'),
+                    onPressed: widget.onReviewBalance,
+                    icon: const Icon(AppIcons.visibilityOutlined),
+                    label: const Text('Review Exam balance'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+        if (!compactPreview)
           AppInfoSectionDisclosure(
             heading: 'How new previews place time',
             description:
@@ -322,25 +340,33 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             descriptionStyle: Theme.of(context).textTheme.bodySmall,
             keyPrefix: 'deadline-plan-info',
           ),
-          if (pending && revision.timingPreference.usedLearnedPattern)
-            Text(
-              revision.timingPreference.fellBackToSetup
-                  ? 'Learned timing considered · Setup fallback · '
-                        '${revision.timingPreference.evidenceCount} rated sessions'
-                  : 'Learned timing applied · '
-                        '${revision.timingPreference.evidenceCount} rated sessions',
-              key: const Key('deadline-learned-timing-applied'),
-              style: Theme.of(context).textTheme.bodySmall,
-            )
-          else if (pending && revision.timingPreference.warning != null)
-            Text(
-              'Personal pattern unavailable · Setup timing used',
-              key: const Key('deadline-learned-timing-fallback'),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
+        if (pending && revision.timingPreference.usedLearnedPattern)
+          Text(
+            revision.timingPreference.fellBackToSetup
+                ? 'Learned timing considered · Setup fallback · '
+                      '${revision.timingPreference.evidenceCount} rated sessions'
+                : 'Learned timing applied · '
+                      '${revision.timingPreference.evidenceCount} rated sessions',
+            key: const Key('deadline-learned-timing-applied'),
+            style: Theme.of(context).textTheme.bodySmall,
+          )
+        else if (pending && revision.timingPreference.warning != null)
+          Text(
+            'Personal pattern unavailable · Setup timing used',
+            key: const Key('deadline-learned-timing-fallback'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
             ),
-          const SizedBox(height: AppSpacing.md),
+          ),
+        const SizedBox(height: AppSpacing.md),
+        if (compactPreview)
+          _DeadlinePreviewMetrics(
+            remaining: remaining,
+            proposed: revision.plannedMinutes,
+            unplaced: revision.unscheduledMinutes,
+            centered: widget.reviewSheet,
+          )
+        else ...[
           Wrap(
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.sm,
@@ -371,100 +397,110 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
-          if (revision.unscheduledMinutes > 0) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Some study time does not fit. Raise the daily limit, start earlier, reduce clear days or adjust your estimate.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ],
-          if (sourceNeedsReview) ...[
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              'Imported event changed or unavailable. Check the deadline before confirming.',
-            ),
-          ],
-          if (plan.record.attentionReasons.contains('timezone_changed')) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-              ),
-              child: const Text(
-                'Timezone changed; reservations stayed in place. Create a new preview to change times.',
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.md),
+        ],
+        if (revision.unscheduledMinutes > 0) ...[
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            pending
-                ? plan.isActive
-                      ? 'Preview only. Your current plan stays until you confirm.'
-                      : 'Preview only. Confirm to reserve these times.'
-                : 'Reserved in MyLifeGraph only',
-          ),
-          if (plan.isActive) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Start a block to focus on its remaining time.',
-              style: Theme.of(context).textTheme.bodySmall,
+            'Some study time does not fit. Raise the daily limit, start earlier, reduce clear days or adjust your estimate.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
             ),
-          ],
-          if (missedMinutes >= 5) ...[
-            const SizedBox(height: AppSpacing.md),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Plan needs attention',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+          ),
+        ],
+        if (sourceNeedsReview) ...[
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'Imported event changed or unavailable. Check the deadline before confirming.',
+          ),
+        ],
+        if (plan.record.attentionReasons.contains('timezone_changed')) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+            ),
+            child: const Text(
+              'Timezone changed; reservations stayed in place. Create a new preview to change times.',
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          pending
+              ? plan.isActive
+                    ? 'Preview only. Your current plan stays until you confirm.'
+                    : 'Preview only. Confirm to reserve these times.'
+              : 'Reserved in MyLifeGraph only',
+        ),
+        if (plan.isActive) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Start a block to focus on its remaining time.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (missedMinutes >= 5) ...[
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Plan needs attention',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${missedBlocks.length} missed ${missedBlocks.length == 1 ? 'block' : 'blocks'} · ${_duration(missedMinutes)} still uncredited. Start if time is free, or replan.',
+                ),
+                if (pending) ...[
                   const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '${missedBlocks.length} missed ${missedBlocks.length == 1 ? 'block' : 'blocks'} · ${_duration(missedMinutes)} still uncredited. Start if time is free, or replan.',
-                  ),
-                  if (pending) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    const Text(
-                      'Current reservations still need attention until you confirm the replacement.',
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.sm),
-                  FilledButton.icon(
-                    key: ValueKey('deadline-replan-missed-${plan.id}'),
-                    onPressed: canMutate ? onReplanMissed : null,
-                    icon: const Icon(AppIcons.autorenew),
-                    label: const Text('Replan remaining time'),
+                  const Text(
+                    'Current reservations still need attention until you confirm the replacement.',
                   ),
                 ],
-              ),
+                const SizedBox(height: AppSpacing.sm),
+                FilledButton.icon(
+                  key: ValueKey('deadline-replan-missed-${plan.id}'),
+                  onPressed: canMutate ? onReplanMissed : null,
+                  icon: const Icon(AppIcons.autorenew),
+                  label: const Text('Replan remaining time'),
+                ),
+              ],
             ),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          if (revision.blocks.isNotEmpty ||
-              active?.blocks.isNotEmpty == true) ...[
-            Text(
-              'Study blocks · ${widget.profileTimezone ?? 'Timezone unavailable'}',
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-          ],
-          for (final block in _visibleBlocks(
-            revision.blocks,
-            showAll: _showAllDisplayedBlocks,
-          ))
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
+        if (revision.blocks.isNotEmpty ||
+            active?.blocks.isNotEmpty == true) ...[
+          Text(
+            'Study blocks · ${widget.profileTimezone ?? 'Timezone unavailable'}',
+            style: widget.reviewSheet
+                ? Theme.of(context).textTheme.titleMedium
+                : Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        for (final block in _visibleBlocks(
+          revision.blocks,
+          showAll: _showAllDisplayedBlocks,
+        ))
+          if (compactPreview)
+            _DeadlinePreviewBlockTile(
+              block: block,
+              profileTimezone: widget.profileTimezone,
+              reviewSheet: widget.reviewSheet,
+            )
+          else
             _DeadlineBlockTile(
               block: block,
               profileTimezone: widget.profileTimezone,
@@ -477,157 +513,504 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                       block.state == DeadlinePlanBlockState.missed),
               onStart: () => onStartBlock(block),
             ),
-          if (revision.blocks.length > _collapsedBlockLimit)
-            TextButton.icon(
-              key: ValueKey('deadline-toggle-blocks-${plan.id}'),
-              onPressed: () => setState(
-                () => _showAllDisplayedBlocks = !_showAllDisplayedBlocks,
+        if (revision.blocks.length > _collapsedBlockLimit)
+          TextButton.icon(
+            key: ValueKey('deadline-toggle-blocks-${plan.id}'),
+            onPressed: () => setState(
+              () => _showAllDisplayedBlocks = !_showAllDisplayedBlocks,
+            ),
+            icon: Icon(
+              _showAllDisplayedBlocks
+                  ? AppIcons.expandLess
+                  : AppIcons.expandMore,
+            ),
+            label: Text(
+              _showAllDisplayedBlocks
+                  ? 'Show fewer blocks'
+                  : 'Show all ${revision.blocks.length} blocks',
+            ),
+          ),
+        if (compactPreview) ...[
+          const SizedBox(height: AppSpacing.sm),
+          ExpansionTile(
+            key: ValueKey(
+              'deadline-preview-details-${plan.id}-${revision.revision}',
+            ),
+            tilePadding: widget.reviewSheet
+                ? const EdgeInsets.symmetric(horizontal: AppSpacing.md)
+                : EdgeInsets.zero,
+            childrenPadding: widget.reviewSheet
+                ? const EdgeInsets.all(AppSpacing.md)
+                : const EdgeInsets.only(bottom: AppSpacing.md),
+            shape: widget.reviewSheet ? _reviewDetailsShape(context) : null,
+            collapsedShape: widget.reviewSheet
+                ? _reviewDetailsShape(context)
+                : null,
+            leading: widget.reviewSheet ? const Icon(AppIcons.tune) : null,
+            title: const Text('Plan details'),
+            subtitle: Text(
+              '${_duration(tracked)} tracked · ${_duration(remaining)} remaining',
+            ),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: AppSpacing.lg,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    _ProgressValue(
+                      label: 'Proposed estimate',
+                      value: _duration(estimate),
+                    ),
+                    _ProgressValue(
+                      label: 'Tracked focus',
+                      value: _duration(tracked),
+                    ),
+                    _ProgressValue(
+                      label: 'Remaining',
+                      value: _duration(remaining),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: AppSpacing.md),
+              LinearProgressIndicator(
+                value: (accounted / estimate).clamp(0, 1).toDouble(),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              if (revision.recoveryMinutes > 0)
+                Text(
+                  '${_duration(revision.preferredSessionMinutes)} focus + '
+                  '${_duration(revision.recoveryMinutes)} recovery per full block. '
+                  'Recovery reserves time but adds no study minutes, progress or preparation budget.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              AppInfoSectionDisclosure(
+                heading: 'How new previews place time',
+                description:
+                    '${_deadlineAllocationDescription(revision.kind)} ${_planningWindowDescription(revision.bestEnergyWindow)} ${widget.profileTimezone == null ? 'Your current profile timezone is unavailable, so local preparation times stay hidden.' : 'Preparation blocks use your profile timezone: ${widget.profileTimezone}.'}'
+                    '${plan.isActive ? '\n\nLinked Focus completed after this plan was first activated counts toward the plan as a whole and fills reserved blocks in chronological order. Starting from a row only prefills its remaining duration.' : ''}',
+                headingStyle: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                descriptionStyle: Theme.of(context).textTheme.bodySmall,
+                keyPrefix: 'deadline-plan-info',
+              ),
+            ],
+          ),
+        ],
+        if (pending && active != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          const Divider(),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Currently reserved until you confirm',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(active.title),
+          Text(
+            '${_duration(active.plannedMinutes)} stays reserved until confirmation.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final block in _visibleBlocks(
+            active.blocks,
+            showAll: _showAllActiveBlocks,
+          ))
+            _DeadlineBlockTile(
+              block: block,
+              profileTimezone: widget.profileTimezone,
+              canStart:
+                  block.plannedMinutes - block.creditedTrackedMinutes >= 5 &&
+                  (block.state == DeadlinePlanBlockState.upcoming ||
+                      block.state == DeadlinePlanBlockState.partial ||
+                      block.state == DeadlinePlanBlockState.missed),
+              onStart: () => onStartBlock(block),
+            ),
+          if (active.blocks.length > _collapsedBlockLimit)
+            TextButton.icon(
+              key: ValueKey('deadline-toggle-active-blocks-${plan.id}'),
+              onPressed: () =>
+                  setState(() => _showAllActiveBlocks = !_showAllActiveBlocks),
               icon: Icon(
-                _showAllDisplayedBlocks
+                _showAllActiveBlocks
                     ? AppIcons.expandLess
                     : AppIcons.expandMore,
               ),
               label: Text(
-                _showAllDisplayedBlocks
-                    ? 'Show fewer blocks'
-                    : 'Show all ${revision.blocks.length} blocks',
+                _showAllActiveBlocks
+                    ? 'Show fewer active blocks'
+                    : 'Show all ${active.blocks.length} active blocks',
               ),
             ),
-          if (pending && active != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            const Divider(),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Currently reserved until you confirm',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(active.title),
-            Text(
-              '${_duration(active.plannedMinutes)} stays reserved until confirmation.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            for (final block in _visibleBlocks(
-              active.blocks,
-              showAll: _showAllActiveBlocks,
-            ))
-              _DeadlineBlockTile(
-                block: block,
-                profileTimezone: widget.profileTimezone,
-                canStart:
-                    block.plannedMinutes - block.creditedTrackedMinutes >= 5 &&
-                    (block.state == DeadlinePlanBlockState.upcoming ||
-                        block.state == DeadlinePlanBlockState.partial ||
-                        block.state == DeadlinePlanBlockState.missed),
-                onStart: () => onStartBlock(block),
-              ),
-            if (active.blocks.length > _collapsedBlockLimit)
-              TextButton.icon(
-                key: ValueKey('deadline-toggle-active-blocks-${plan.id}'),
-                onPressed: () => setState(
-                  () => _showAllActiveBlocks = !_showAllActiveBlocks,
-                ),
-                icon: Icon(
-                  _showAllActiveBlocks
-                      ? AppIcons.expandLess
-                      : AppIcons.expandMore,
-                ),
-                label: Text(
-                  _showAllActiveBlocks
-                      ? 'Show fewer active blocks'
-                      : 'Show all ${active.blocks.length} active blocks',
-                ),
-              ),
-          ],
-          if (widget.operationError != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            _InlineOperationError(
-              error: widget.operationError!,
-              exactRetryLocked: widget.exactRetryLocked,
-              isBusy: widget.isBusy,
-              onRetry: widget.onRetry,
-              onReload: widget.onReload,
-              onDismiss: widget.onDismissError,
-            ),
-          ],
+        ],
+        if (widget.operationError != null) ...[
           const SizedBox(height: AppSpacing.md),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (pending) ...[
-                FilledButton.icon(
-                  onPressed:
-                      canMutate &&
-                          !sourceNeedsReview &&
-                          !isBalanceChild &&
-                          !widget.childMetadataUnavailable
-                      ? onConfirm
-                      : null,
-                  icon: const Icon(AppIcons.eventAvailableOutlined),
-                  label: Text(widget.confirmLabel),
+          _InlineOperationError(
+            error: widget.operationError!,
+            exactRetryLocked: widget.exactRetryLocked,
+            isBusy: widget.isBusy,
+            onRetry: widget.onRetry,
+            onReload: widget.onReload,
+            onDismiss: widget.onDismissError,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        if (widget.reviewSheet && pending) ...[
+          const Divider(),
+          const SizedBox(height: AppSpacing.sm),
+          const Center(child: Text('Preview only.')),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        Column(
+          crossAxisAlignment: compactPreview
+              ? CrossAxisAlignment.stretch
+              : CrossAxisAlignment.start,
+          children: [
+            if (pending) ...[
+              if (compactPreview &&
+                  !widget.reviewSheet &&
+                  widget.onReviewPreview != null) ...[
+                OutlinedButton(
+                  key: ValueKey('deadline-open-review-${plan.id}'),
+                  onPressed: isBusy ? null : widget.onReviewPreview,
+                  child: const Text('Review preview'),
                 ),
                 const SizedBox(height: AppSpacing.sm),
               ],
-              if (plan.isTerminal)
-                OutlinedButton.icon(
-                  key: ValueKey('deadline-plan-again-${plan.id}'),
-                  onPressed: isBusy || exactRetryLocked
-                      ? null
-                      : widget.onPlanAgain,
-                  icon: const Icon(AppIcons.refresh),
-                  label: const Text('Plan again'),
-                ),
-              if (!plan.isTerminal)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              FilledButton.icon(
+                onPressed:
+                    canMutate &&
+                        !sourceNeedsReview &&
+                        !isBalanceChild &&
+                        !widget.childMetadataUnavailable
+                    ? onConfirm
+                    : null,
+                icon: const Icon(AppIcons.eventAvailableOutlined),
+                label: Text(widget.confirmLabel),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+            if (plan.isTerminal)
+              OutlinedButton.icon(
+                key: ValueKey('deadline-plan-again-${plan.id}'),
+                onPressed: isBusy || exactRetryLocked
+                    ? null
+                    : widget.onPlanAgain,
+                icon: const Icon(AppIcons.refresh),
+                label: const Text('Plan again'),
+              ),
+            if (!plan.isTerminal)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _DeadlinePlanActionButton(
+                      label: 'Edit plan',
+                      tooltip: 'Adjust estimate or plan',
+                      icon: AppIcons.tune,
+                      horizontalWhenFits: widget.reviewSheet,
+                      onPressed: canMutate ? onAdjust : null,
+                    ),
+                  ),
+                  if (plan.isActive) ...[
+                    SizedBox(
+                      width: compactPreview ? AppSpacing.sm : AppSpacing.xs,
+                    ),
                     Expanded(
                       child: _DeadlinePlanActionButton(
-                        label: 'Edit plan',
-                        tooltip: 'Adjust estimate or plan',
-                        icon: AppIcons.tune,
-                        onPressed: canMutate ? onAdjust : null,
+                        label: 'Complete',
+                        tooltip: 'Mark preparation complete',
+                        icon: AppIcons.checkCircleOutline,
+                        horizontalWhenFits: widget.reviewSheet,
+                        onPressed: canMutate ? onComplete : null,
                       ),
                     ),
-                    if (plan.isActive) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: _DeadlinePlanActionButton(
-                          label: 'Complete',
-                          tooltip: 'Mark preparation complete',
-                          icon: AppIcons.checkCircleOutline,
-                          onPressed: canMutate ? onComplete : null,
-                        ),
-                      ),
-                    ],
-                    if (plan.isActive || plan.isDraft) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: _DeadlinePlanActionButton(
-                          label: plan.isDraft ? 'Discard preview' : 'Remove',
-                          tooltip: plan.isDraft
-                              ? 'Discard preview'
-                              : 'Remove plan from calendar',
-                          icon: AppIcons.deleteOutline,
-                          onPressed: canMutate ? onCancel : null,
-                        ),
-                      ),
-                    ],
                   ],
-                ),
-            ],
-          ),
-        ],
-      ),
+                  if (plan.isActive || plan.isDraft) ...[
+                    SizedBox(
+                      width: compactPreview ? AppSpacing.sm : AppSpacing.xs,
+                    ),
+                    Expanded(
+                      child: _DeadlinePlanActionButton(
+                        label: plan.isDraft ? 'Discard preview' : 'Remove',
+                        tooltip: plan.isDraft
+                            ? 'Discard preview'
+                            : 'Remove plan from calendar',
+                        icon: AppIcons.deleteOutline,
+                        horizontalWhenFits: widget.reviewSheet,
+                        onPressed: canMutate ? onCancel : null,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+          ],
+        ),
+      ],
     );
+    return widget.reviewSheet ? content : AppCard(child: content);
   }
+
+  RoundedRectangleBorder _reviewDetailsShape(BuildContext context) =>
+      RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+      );
 
   Iterable<DeadlinePlanBlock> _visibleBlocks(
     List<DeadlinePlanBlock> blocks, {
     required bool showAll,
   }) => showAll ? blocks : blocks.take(_collapsedBlockLimit);
+}
+
+class _DeadlineReviewHeader extends StatelessWidget {
+  const _DeadlineReviewHeader({
+    required this.revision,
+    required this.profileTimezone,
+    required this.statusLabel,
+    required this.statusTone,
+    required this.sourceNeedsReview,
+  });
+
+  final DeadlinePlanRevision revision;
+  final String? profileTimezone;
+  final String statusLabel;
+  final AppStatusTone statusTone;
+  final bool sourceNeedsReview;
+
+  @override
+  Widget build(BuildContext context) {
+    DateTime? localDeadline;
+    if (profileTimezone != null) {
+      try {
+        localDeadline = profileDateTimeAt(
+          instant: revision.deadlineAt,
+          timezoneName: profileTimezone!,
+        );
+      } on ProfileTimezoneException {
+        // Keep the same unavailable-time truth as the ordinary plan card.
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(revision.title, style: Theme.of(context).textTheme.titleLarge),
+            _StatusPill(label: statusLabel, tone: statusTone),
+            if (sourceNeedsReview)
+              const _StatusPill(
+                label: 'Source changed',
+                tone: AppStatusTone.attention,
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (localDeadline == null)
+          Text(_profileDeadlineCopy(revision.deadlineAt, profileTimezone))
+        else ...[
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(AppIcons.calendarTodayOutlined, size: 20),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      'Finish by ${DateFormat.yMMMd().format(localDeadline)}',
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(AppIcons.schedule, size: 20),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(child: Text(DateFormat.Hm().format(localDeadline))),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(profileTimezone!, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ],
+    );
+  }
+}
+
+class _DeadlinePreviewMetrics extends StatelessWidget {
+  const _DeadlinePreviewMetrics({
+    required this.remaining,
+    required this.proposed,
+    required this.unplaced,
+    this.centered = false,
+  });
+
+  final int remaining;
+  final int proposed;
+  final int unplaced;
+  final bool centered;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      borderRadius: BorderRadius.circular(AppRadii.sm),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked =
+            constraints.maxWidth < 240 ||
+            MediaQuery.textScalerOf(context).scale(14) > 21;
+        final width = stacked
+            ? constraints.maxWidth
+            : (constraints.maxWidth - AppSpacing.sm * 2) / 3;
+        final metrics = [
+          ('To plan', remaining),
+          ('Proposed', proposed),
+          ('Unplaced', unplaced),
+        ];
+        if (centered) {
+          final values = [
+            for (final metric in metrics)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _duration(metric.$2),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    metric.$1,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+          ];
+          if (stacked) {
+            return Column(
+              children: [
+                for (var index = 0; index < values.length; index++) ...[
+                  if (index > 0) const Divider(height: AppSpacing.lg),
+                  values[index],
+                ],
+              ],
+            );
+          }
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < values.length; index++) ...[
+                  if (index > 0) const VerticalDivider(width: AppSpacing.md),
+                  Expanded(child: values[index]),
+                ],
+              ],
+            ),
+          );
+        }
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final metric in metrics)
+              SizedBox(
+                width: width,
+                child: _ProgressValue(
+                  label: metric.$1,
+                  value: _duration(metric.$2),
+                ),
+              ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _DeadlinePreviewBlockTile extends StatelessWidget {
+  const _DeadlinePreviewBlockTile({
+    required this.block,
+    required this.profileTimezone,
+    this.reviewSheet = false,
+  });
+
+  final DeadlinePlanBlock block;
+  final String? profileTimezone;
+  final bool reviewSheet;
+
+  @override
+  Widget build(BuildContext context) {
+    final localCopy = _deadlineBlockLocalCopy(block, profileTimezone);
+    return Container(
+      key: ValueKey('deadline-block-${block.id}'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(AppIcons.calendarTodayOutlined, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(localCopy.$1),
+                    if (localCopy.$2.isNotEmpty)
+                      Text(
+                        localCopy.$2,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    if (!reviewSheet)
+                      Text('${_duration(block.plannedMinutes)} focus'),
+                  ],
+                ),
+                Text(
+                  '${reviewSheet ? '${_duration(block.plannedMinutes)} focus · ' : ''}'
+                  '${_blockLabel(block.state)}'
+                  '${block.creditedTrackedMinutes > 0 ? ' · ${_duration(block.creditedTrackedMinutes)} tracked' : ''}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (block.recoveryMinutes > 0)
+                  Text(
+                    '+ ${_duration(block.recoveryMinutes)} recovery · ${localCopy.$3}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DeadlinePlanActionButton extends StatelessWidget {
@@ -636,12 +1019,14 @@ class _DeadlinePlanActionButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
+    this.horizontalWhenFits = false,
   });
 
   final String label;
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
+  final bool horizontalWhenFits;
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -653,15 +1038,31 @@ class _DeadlinePlanActionButton extends StatelessWidget {
           horizontal: AppSpacing.xs,
           vertical: AppSpacing.sm,
         ),
-        minimumSize: const Size(44, 64),
+        minimumSize: Size(44, horizontalWhenFits ? 48 : 64),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(height: AppSpacing.xs),
-          Text(label, textAlign: TextAlign.center),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (horizontalWhenFits &&
+              constraints.maxWidth >= 140 &&
+              MediaQuery.textScalerOf(context).scale(16) <= 20) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(child: Text(label, textAlign: TextAlign.center)),
+              ],
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20),
+              const SizedBox(height: AppSpacing.xs),
+              Text(label, textAlign: TextAlign.center),
+            ],
+          );
+        },
       ),
     ),
   );

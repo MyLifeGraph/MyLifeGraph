@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/widgets/preparation_budget_control.dart';
 import '../../../../composition/widgets/health_connect_settings_entry.dart';
 import '../../../../composition/widgets/push_settings_entry.dart';
 import '../../../../composition/widgets/app_updates_entry.dart';
@@ -37,7 +38,6 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _isSigningOut = false;
   bool _isSavingTimezone = false;
-  bool _isSavingPreparationBudget = false;
   bool _isExporting = false;
   bool _isDeleting = false;
   bool _isSavingHaptics = false;
@@ -166,32 +166,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 : null,
           ),
         ),
-        AppCard(
+        const AppCard(
           padding: EdgeInsets.zero,
-          child: ListTile(
-            key: const ValueKey('daily-preparation-budget-setting'),
-            enabled: syncedAccount && !_isSavingPreparationBudget,
-            leading: _isSavingPreparationBudget
-                ? const SizedBox.square(
-                    dimension: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(AppIcons.speedOutlined),
-            title: const Text('Daily preparation budget'),
-            subtitle: Text(
-              !syncedAccount
-                  ? 'Available only for a synced account.'
-                  : profile?.dailyPreparationBudgetMinutes == null
-                  ? 'Not set. Existing per-plan limits still apply.'
-                  : '${_formatMinutes(profile!.dailyPreparationBudgetMinutes!)} total per day across confirmed preparation plans.',
-            ),
-            trailing: syncedAccount && !_isSavingPreparationBudget
-                ? const Icon(AppIcons.editOutlined)
-                : null,
-            onTap: syncedAccount && !_isSavingPreparationBudget
-                ? _chooseDailyPreparationBudget
-                : null,
-          ),
+          child: PreparationBudgetControl(compact: false),
         ),
         const AppSectionHeader(title: 'Tools and connections'),
         if (syncedAccount) const HealthConnectSettingsEntry(),
@@ -466,68 +443,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  Future<void> _chooseDailyPreparationBudget() async {
-    final profile = ref.read(authControllerProvider).valueOrNull?.profile;
-    if (profile == null) return;
-    final choice = await showDialog<_PreparationBudgetChoice>(
-      context: context,
-      builder: (_) => _PreparationBudgetDialog(
-        current: profile.dailyPreparationBudgetMinutes,
-      ),
-    );
-    if (!mounted ||
-        choice == null ||
-        choice.minutes == profile.dailyPreparationBudgetMinutes) {
-      return;
-    }
-    final repository = ref.read(accountSettingsRepositoryProvider);
-    final authController = ref.read(authControllerProvider.notifier);
-    setState(() => _isSavingPreparationBudget = true);
-    try {
-      final saved = await repository.updateDailyPreparationBudget(
-        choice.minutes,
-        expectedRevision: profile.preparationBudgetRevision,
-      );
-      authController.updateDailyPreparationBudget(
-        saved.minutes,
-        revision: saved.revision,
-      );
-      await ref
-          .read(projectionRefreshCoordinatorProvider)
-          .preparationBudgetChanged();
-      if (mounted) {
-        _showMessage(
-          saved.minutes == null
-              ? 'Account-wide preparation budget removed.'
-              : 'Daily preparation budget set to '
-                    '${_formatMinutes(saved.minutes!)}.',
-        );
-      }
-    } on AccountPreparationBudgetRejectedException {
-      if (mounted) {
-        _showMessage('Choose 25 to 480 minutes in five-minute steps.');
-      }
-    } on AccountPreparationBudgetUpdateOutcomeUnknownException {
-      if (mounted) {
-        _showMessage(
-          'The budget update could not be confirmed. Retry the same value or sign in again before choosing another.',
-        );
-      }
-    } on AccountSettingConflictException {
-      if (mounted) {
-        _showMessage(
-          'Preparation budget changed elsewhere. Reload Settings and try again.',
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        _showMessage('Could not update the preparation budget. Try again.');
-      }
-    } finally {
-      if (mounted) setState(() => _isSavingPreparationBudget = false);
-    }
-  }
-
   Future<void> _exportData() async {
     final accountRepository = ref.read(accountSettingsRepositoryProvider);
     final exportSaver = ref.read(accountExportSaverProvider);
@@ -715,14 +630,6 @@ String _exportFileName(DateTime utcNow) {
   String two(int value) => value.toString().padLeft(2, '0');
   return 'mylifegraph-export-${utcNow.year}-${two(utcNow.month)}-'
       '${two(utcNow.day)}.json';
-}
-
-String _formatMinutes(int minutes) {
-  final hours = minutes ~/ 60;
-  final remainder = minutes % 60;
-  if (hours == 0) return '$minutes min';
-  if (remainder == 0) return '${hours}h';
-  return '${hours}h ${remainder}m';
 }
 
 String _appearanceLabel(AppThemeId id) => switch (id) {
@@ -956,112 +863,6 @@ class _TimezoneDialogState extends State<_TimezoneDialog> {
 
   String get _selectedTimezone =>
       _selected == _customValue ? _customController.text : _selected ?? '';
-}
-
-class _PreparationBudgetChoice {
-  const _PreparationBudgetChoice(this.minutes);
-
-  final int? minutes;
-}
-
-class _PreparationBudgetDialog extends StatefulWidget {
-  const _PreparationBudgetDialog({required this.current});
-
-  final int? current;
-
-  @override
-  State<_PreparationBudgetDialog> createState() =>
-      _PreparationBudgetDialogState();
-}
-
-class _PreparationBudgetDialogState extends State<_PreparationBudgetDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.current?.toString() ?? '');
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final minutes = int.tryParse(_controller.text.trim());
-    final valid = minutes != null && isValidDailyPreparationBudget(minutes);
-    return AlertDialog(
-      scrollable: true,
-      title: const Text('Daily preparation budget'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Set the most preparation time you want reserved per day across all confirmed exam and assignment plans.',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'This is a transparent rule, not an AI estimate. Existing reservations are not changed.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              key: const ValueKey('daily-preparation-budget-input'),
-              controller: _controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Total preparation minutes per day',
-                helperText: '25–480 minutes, in five-minute steps.',
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.xs,
-              children: [
-                for (final preset in const [60, 120, 180, 240, 360, 480])
-                  ChoiceChip(
-                    label: Text(_formatMinutes(preset)),
-                    selected: minutes == preset,
-                    onSelected: (_) {
-                      _controller.text = '$preset';
-                      setState(() {});
-                    },
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        if (widget.current != null)
-          TextButton(
-            onPressed: () =>
-                Navigator.of(context).pop(const _PreparationBudgetChoice(null)),
-            child: const Text('Remove budget'),
-          ),
-        FilledButton(
-          onPressed: valid
-              ? () =>
-                    Navigator.of(context).pop(_PreparationBudgetChoice(minutes))
-              : null,
-          child: const Text('Save budget'),
-        ),
-      ],
-    );
-  }
 }
 
 class _DeleteAccountDialog extends StatefulWidget {

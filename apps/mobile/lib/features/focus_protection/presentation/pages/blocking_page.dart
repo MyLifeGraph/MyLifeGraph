@@ -1201,7 +1201,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Current Wi-Fi'),
                         value: wifi,
-                        onChanged: _snapshot!.wifiReady
+                        onChanged: wifi || _snapshot!.wifiReady
                             ? (v) => update(() => wifi = v)
                             : null,
                       ),

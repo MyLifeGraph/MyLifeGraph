@@ -136,6 +136,13 @@ neither cache operation resends the committed account-setting mutation.
 
 ## Daily Preparation Budget
 
+Settings and Exam Study settings use the same composition-owned budget control.
+An authenticated synced profile is required for editing; workload-only fallback
+values are read-only. With no saved limit, the dialog initially proposes 480
+minutes (8h); nothing is persisted until Save budget. Existing values, Cancel,
+Remove budget, custom 5-minute increments and per-plan caps retain their semantics.
+This initial choice is a maximum, not prescribed effort or inferred availability.
+
 The current budget is an authoritative daily cap for
 `exam-plan-health-v1`. A successful budget mutation invalidates the local
 Health projection; a timezone mutation also invalidates it because deadlines,

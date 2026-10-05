@@ -49,6 +49,71 @@ const _berlinProfile = AppProfile(
 
 void main() {
   final now = DateTime(2026, 7, 18, 10);
+  for (final sample in [
+    (const Size(393, 851), 1.0, 373.0, AppTheme.liquidGlass),
+    (const Size(320, 740), 2.0, 300.0, AppTheme.liquidGlass),
+    (const Size(851, 393), 1.0, 180.0, AppTheme.dark),
+    (const Size(390, 844), 1.0, 320.0, AppTheme.light),
+    (const Size(390, 844), 1.0, 320.0, AppTheme.space),
+    (const Size(320, 740), 2.0, 300.0, AppTheme.dark),
+    (const Size(320, 740), 2.0, 300.0, AppTheme.light),
+    (const Size(320, 740), 2.0, 300.0, AppTheme.space),
+  ]) {
+  testWidgets('Exam keyboard pins actions ${sample.$1} ${sample.$2} ${sample.$4.brightness}',
+      (tester) async {
+    final size = sample.$1;
+    final keyboardHeight = sample.$3;
+    addTearDown(tester.view.resetViewInsets);
+    if (captureUiCatalog) await loadCatalogFonts();
+    final repository = _FakeDeadlinePlanRepository();
+    await _pumpPage(
+      tester,
+      repository: repository,
+      size: size,
+      theme: sample.$4,
+      textScaler: TextScaler.linear(sample.$2),
+      page: DeadlinePlansPage(
+        initialKind: DeadlinePlanKind.exam,
+        initialDeadlineAt: DateTime(2026, 7, 25, 18),
+        currentTime: now,
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('deadline-plan-title')),
+      'QA-Device-20261004-Exam',
+    );
+    tester.view.viewInsets = FakeViewPadding(bottom: keyboardHeight);
+    await tester.pumpAndSettle();
+    final preview = find.widgetWithText(FilledButton, 'Create preview');
+    final cancel = find.widgetWithText(TextButton, 'Cancel');
+    final keyboardTop = size.height - keyboardHeight;
+    expect(tester.getRect(preview).bottom, lessThanOrEqualTo(keyboardTop));
+    expect(tester.getRect(cancel).bottom, lessThanOrEqualTo(keyboardTop));
+    expect(tester.getRect(preview).top, greaterThanOrEqualTo(0));
+    expect(preview.hitTestable(), findsOneWidget);
+    expect(cancel.hitTestable(), findsOneWidget);
+    if (captureUiCatalog && size.width == 393) {
+      await captureCatalog(tester, 'exam-keyboard-pinned-actions');
+    }
+    await tester.tap(preview);
+    await tester.pumpAndSettle();
+    expect(find.text('Enter 30 minutes to 500 hours of total preparation.'), findsOneWidget);
+    expect(repository.proposalDrafts, isEmpty);
+    expect(find.text('Continue'), findsNothing);
+    expect(find.widgetWithText(TextButton, 'Back'), findsNothing);
+    expect(preview.hitTestable(), findsOneWidget);
+    expect(cancel.hitTestable(), findsOneWidget);
+    expect(tester.getRect(preview).bottom, lessThanOrEqualTo(keyboardTop));
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('deadline-plan-title'))).controller!.text,
+        'QA-Device-20261004-Exam');
+    await tester.tap(cancel);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('deadline-editor-footer')), findsNothing);
+    expect(repository.proposalDrafts, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+  }
+
   for (final sample in [('Europe/Berlin', 12, 45), ('UTC', 14, 45), ('Asia/Kathmandu', 9, 0)]) {
     testWidgets('Assignment picker saves profile-local deadline ${sample.$1}', (tester) async {
       final seriesRepository = _FakeAssignmentSeriesRepository(
@@ -91,7 +156,7 @@ void main() {
     });
   }
   for (final size in [const Size(320, 900), const Size(1280, 1000)]) {
-    testWidgets('compact Exam keeps all steps usable at ${size.width} and large text', (tester) async {
+    testWidgets('compact Exam keeps basics and study settings usable at ${size.width} and large text', (tester) async {
       final repository = _FakeDeadlinePlanRepository();
       await _pumpPage(tester, repository: repository, size: size,
         textScaler: const TextScaler.linear(2),
@@ -102,10 +167,9 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
-      await _tap(tester, find.text('Continue'));
       await _tap(tester, find.byKey(const ValueKey('deadline-estimate-20h')));
       expect(tester.takeException(), isNull);
-      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
       await _tap(tester, find.byKey(const ValueKey('preparation-session-custom')));
       await tester.enterText(find.byKey(const ValueKey('preparation-session-minutes')), '60');
       await tester.pumpAndSettle();
@@ -132,13 +196,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Exam settings scrolling keeps heading and Close pinned on phone', (tester) async {
+    final repository = _FakeDeadlinePlanRepository();
+    await _pumpPage(tester, repository: repository, size: const Size(390, 844),
+      page: DeadlinePlansPage(initialKind: DeadlinePlanKind.exam,
+        initialTitle: 'Algorithms exam', initialDeadlineAt: DateTime(2026, 7, 30, 10), currentTime: now));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+    final heading = find.byKey(const ValueKey('deadline-editor-heading'));
+    final close = find.byKey(const ValueKey('deadline-editor-close'));
+    final headingTop = tester.getTopLeft(heading);
+    final body = find.ancestor(
+      of: find.byKey(const ValueKey('deadline-study-settings')),
+      matching: find.byType(SingleChildScrollView)).first;
+    await tester.drag(body, const Offset(0, -450));
+    await tester.pumpAndSettle();
+    final scrollable = find.descendant(of: body, matching: find.byType(Scrollable)).first;
+    expect(tester.state<ScrollableState>(scrollable).position.pixels, greaterThan(0));
+    expect(tester.getTopLeft(heading), headingTop);
+    expect(heading.hitTestable(), findsOneWidget);
+    expect(close.hitTestable(), findsOneWidget);
+    await tester.tap(close);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('deadline-editor-footer')), findsNothing);
+    expect(repository.proposalDrafts, isEmpty);
+    expect(repository.confirmCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   if (captureUiCatalog) {
     testWidgets('catalog exam screenshots', (tester) async {
       await loadCatalogFonts();
       for (final wide in [false, true]) {
         await _pumpPage(
           tester,
-          repository: _FakeDeadlinePlanRepository(),
+          repository: _FakeDeadlinePlanRepository(proposalResults: [_twoHourExamPreview()]),
           size: wide ? const Size(1280, 1000) : const Size(390, 1000),
           page: DeadlinePlansPage(
             initialKind: DeadlinePlanKind.exam,
@@ -147,16 +238,163 @@ void main() {
             currentTime: DateTime(2026, 7, 18, 9),
           ),
         );
-        await captureCatalog(tester, 'exam-1-${wide ? 'desktop' : 'mobile'}');
-        await _tap(tester, find.text('Continue'));
-        await captureCatalog(tester, 'exam-2-${wide ? 'desktop' : 'mobile'}');
-        await _tap(tester, find.byKey(const ValueKey('deadline-estimate-20h')));
-        await _tap(tester, find.text('Continue'));
-        await captureCatalog(tester, 'exam-3-${wide ? 'desktop' : 'mobile'}');
+        await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
+        await captureCatalog(tester, 'exam-basics-${wide ? 'desktop' : 'mobile'}');
+        await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+        await captureCatalog(tester, 'exam-settings-${wide ? 'desktop' : 'mobile'}');
+        await _tap(tester, find.byKey(const ValueKey('preparation-session-custom')));
+        await tester.enterText(find.byKey(const ValueKey('preparation-session-minutes')), '40');
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.ensureVisible(find.byKey(const ValueKey('deadline-daily-cap')));
+        await tester.pumpAndSettle();
+        await captureCatalog(tester, 'exam-settings-custom-${wide ? 'desktop' : 'mobile'}');
+        await _tap(tester, find.text('Create preview'));
+        expect(find.byKey(const ValueKey('deadline-review-sheet')), findsOneWidget);
+        await tester.pumpAndSettle();
+        await captureCatalog(tester, 'exam-preview-${wide ? 'desktop' : 'mobile'}');
         await tester.pumpWidget(const SizedBox());
       }
     });
   }
+  for (final closeWithBack in [false, true]) {
+    testWidgets('Exam review ${closeWithBack ? 'Back' : 'Close'} keeps staged preview and reopens without writes', (tester) async {
+      final repository = _FakeDeadlinePlanRepository(proposalResults: [_twoHourExamPreview()]);
+      await _pumpPage(tester, repository: repository,
+        page: DeadlinePlansPage(initialKind: DeadlinePlanKind.exam,
+          initialTitle: 'Algorithms exam', initialDeadlineAt: DateTime(2026, 7, 30, 10), currentTime: now));
+      await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
+      await _tap(tester, find.text('Create preview'));
+      expect(find.byKey(const ValueKey('deadline-review-sheet')), findsOneWidget);
+      expect(find.text('Review study plan'), findsOneWidget);
+      expect(find.byKey(const ValueKey('deadline-plan-$deadlinePlanId')), findsOneWidget);
+      expect(find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')).hitTestable(), findsNothing);
+      expect(repository.proposalDrafts, hasLength(1));
+      if (closeWithBack) {
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+      } else {
+        await _tap(tester, find.byKey(const ValueKey('deadline-review-close')));
+      }
+      expect(find.byKey(const ValueKey('deadline-review-sheet')), findsNothing);
+      await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+      expect(find.byKey(const ValueKey('deadline-review-sheet')), findsOneWidget);
+      expect(_inExamReview(find.text('Algorithms exam')), findsOneWidget);
+      expect(repository.proposalDrafts, hasLength(1));
+      expect(repository.confirmCalls, 0);
+      expect(repository.cancelCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('Exam review Edit opens exact saved preview without a write', (tester) async {
+    final repository = _FakeDeadlinePlanRepository(feeds: [DeadlinePlanFeed(plans: [_twoHourExamPreview()])]);
+    await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(initialPlanId: deadlinePlanId, currentTime: now));
+    await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+    await _tap(tester, _inExamReview(find.text('Edit plan')));
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsNothing);
+    expect(find.byKey(const ValueKey('deadline-editor-footer')), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('deadline-plan-title'))).controller!.text, 'Algorithms exam');
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('deadline-estimate-2h'))).selected, isTrue);
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+    expect(tester.widget<TextFormField>(find.byKey(const ValueKey('preparation-session-minutes'))).initialValue, '40');
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('deadline-daily-cap'))).controller!.text, '120');
+    await _tap(tester, find.text('Cancel'));
+    expect(repository.proposalDrafts, isEmpty);
+    expect(repository.confirmCalls, 0);
+    expect(repository.cancelCalls, 0);
+    await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsOneWidget);
+  });
+
+  testWidgets('Exam review Discard requires explicit second confirmation', (tester) async {
+    final repository = _FakeDeadlinePlanRepository(feeds: [DeadlinePlanFeed(plans: [_twoHourExamPreview()])]);
+    await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(initialPlanId: deadlinePlanId, currentTime: now));
+    await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+    await _tap(tester, _inExamReview(find.text('Discard preview')));
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsNothing);
+    expect(find.text('Discard preparation preview?'), findsOneWidget);
+    expect(repository.cancelCalls, 0);
+    await _tap(tester, find.descendant(of: find.byType(AlertDialog), matching: find.text('Keep plan')));
+    expect(repository.cancelCalls, 0);
+    await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+    await _tap(tester, _inExamReview(find.text('Discard preview')));
+    await _tap(tester, find.descendant(of: find.byType(AlertDialog), matching: find.text('Discard preview')));
+    expect(repository.cancelCalls, 1);
+    expect(repository.cancelRevisions, [1]);
+    expect(repository.confirmCalls, 0);
+    expect(repository.proposalDrafts, isEmpty);
+    expect(find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')), findsNothing);
+  });
+
+  testWidgets('Exam review confirmation failure returns to accessible page recovery', (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [DeadlinePlanFeed(plans: [_twoHourExamPreview()])],
+      confirmError: StateError('response lost'));
+    await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(initialPlanId: deadlinePlanId, currentTime: now));
+    await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+    await _tap(tester, _inExamReview(find.text('Confirm reservations')));
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsNothing);
+    expect(repository.confirmCalls, 0);
+    await _tap(tester, find.descendant(of: find.byType(AlertDialog), matching: find.text('Keep as preview')));
+    expect(repository.confirmCalls, 0);
+    await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+    await _tap(tester, _inExamReview(find.text('Confirm reservations')));
+    await _tap(tester, find.descendant(of: find.byType(AlertDialog), matching: find.text('Confirm reservations')));
+    expect(repository.confirmCalls, 1);
+    expect(repository.confirmRevisions, [1]);
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.ensureVisible(find.text('Retry unchanged'));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry unchanged').hitTestable(), findsOneWidget);
+    expect(repository.cancelCalls, 0);
+    expect(repository.proposalDrafts, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final sample in [(320.0, 2.0), (390.0, 1.0)]) {
+    testWidgets('Exam review modal actions and details fit ${sample.$1}/${sample.$2}', (tester) async {
+      final repository = _FakeDeadlinePlanRepository(feeds: [DeadlinePlanFeed(plans: [_twoHourExamPreview()])]);
+      await _pumpPage(tester, repository: repository, size: Size(sample.$1, 844),
+        textScaler: TextScaler.linear(sample.$2),
+        page: DeadlinePlansPage(initialPlanId: deadlinePlanId, currentTime: now));
+      final review = find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId'));
+      // The long, expanded three-block card is lazily built below the header.
+      await tester.scrollUntilVisible(review, 300, scrollable: _pageScrollable());
+      await tester.pumpAndSettle();
+      expect(review.hitTestable(), findsOneWidget);
+      await _tap(tester, review);
+      expect(find.byKey(const ValueKey('deadline-review-close')).hitTestable(), findsOneWidget);
+      expect(_inExamReview(find.text('To plan')), findsOneWidget);
+      expect(_inExamReview(find.text('Proposed')), findsOneWidget);
+      expect(_inExamReview(find.text('Unplaced')), findsOneWidget);
+      for (final label in ['Confirm reservations', 'Edit plan', 'Discard preview']) {
+        final action = _inExamReview(find.text(label));
+        await tester.ensureVisible(action);
+        await tester.pumpAndSettle();
+        expect(action.hitTestable(), findsOneWidget);
+        expect(tester.getRect(action).right, lessThanOrEqualTo(sample.$1));
+      }
+      await _tap(tester, _inExamReview(find.byKey(const ValueKey('deadline-preview-details-$deadlinePlanId-1'))));
+      expect(_inExamReview(find.text('Proposed estimate')), findsOneWidget);
+      await _tap(tester, find.byKey(const ValueKey('deadline-review-close')));
+      expect(repository.proposalDrafts, isEmpty);
+      expect(repository.confirmCalls, 0);
+      expect(repository.cancelCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('active replacement review never labels active cancellation as draft discard', (tester) async {
+    final repository = _FakeDeadlinePlanRepository(feeds: [DeadlinePlanFeed(plans: [_plan(pending: true)])]);
+    await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(initialPlanId: deadlinePlanId, currentTime: now));
+    await _tap(tester, find.byKey(const ValueKey('deadline-open-review-$deadlinePlanId')));
+    expect(_inExamReview(find.text('Currently reserved until you confirm')), findsOneWidget);
+    expect(_inExamReview(find.text('Discard preview')), findsNothing);
+    expect(_inExamReview(find.byTooltip('Remove plan from calendar')), findsOneWidget);
+    expect(repository.confirmCalls, 0);
+    expect(repository.cancelCalls, 0);
+  });
   testWidgets('Plan again creates a separate preview without restoring reservations', (tester) async {
     final repository = _FakeDeadlinePlanRepository(useProposedIdentity: true, feeds: [DeadlinePlanFeed(plans: [_plan(status: 'cancelled')])]);
     await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(currentTime: DateTime(2026, 7, 18, 9)));
@@ -164,9 +402,7 @@ void main() {
     await _tapPlanAction(tester, 'Plan again');
     expect(repository.proposalDrafts, isEmpty);
     expect(repository.confirmCalls, 0);
-    await _tap(tester, find.text('Continue'));
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
-    await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Create preview'));
     final draft = repository.proposalDrafts.single;
     expect(draft.planId, isNot(deadlinePlanId));
@@ -764,6 +1000,12 @@ void main() {
     expect(find.text('New exam'), findsOneWidget);
     expect(find.byKey(const ValueKey('deadline-locked-kind')), findsOneWidget);
     expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
+    expect(find.text('Continue'), findsNothing);
+    expect(find.text('1 / 3'), findsNothing);
+    expect(find.widgetWithText(TextButton, 'Back'), findsNothing);
+    expect(find.byKey(const ValueKey('deadline-study-settings')), findsOneWidget);
+    expect(find.byKey(const ValueKey('deadline-daily-cap')), findsNothing);
+    expect(find.byKey(const ValueKey('deadline-estimate-2h')), findsOneWidget);
   });
 
   testWidgets('new Exam keeps the 120 minute daily default', (tester) async {
@@ -779,9 +1021,8 @@ void main() {
       ),
     );
 
-    await _tap(tester, find.text('Continue'));
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
-    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
 
     final dailyCap = tester.widget<TextField>(
       find.byKey(const ValueKey('deadline-daily-cap')),
@@ -790,6 +1031,104 @@ void main() {
     await _tap(tester, find.text('Create preview'));
     expect(repository.proposalDrafts.single.maxDailyMinutes, 120);
     expect(repository.proposalDrafts.single.kind, DeadlinePlanKind.exam);
+  });
+
+  testWidgets('single-page Exam validates title estimate and date before proposing',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository();
+    await _pumpPage(tester, repository: repository,
+      page: DeadlinePlansPage(initialKind: DeadlinePlanKind.exam, currentTime: now));
+    final create = find.widgetWithText(FilledButton, 'Create preview');
+    await _tap(tester, create);
+    expect(find.text('Enter an exam title.'), findsOneWidget);
+    expect(repository.proposalDrafts, isEmpty);
+    await tester.enterText(find.byKey(const ValueKey('deadline-plan-title')), 'Algorithms exam');
+    await _tap(tester, create);
+    expect(find.text('Enter 30 minutes to 500 hours of total preparation.'), findsOneWidget);
+    expect(repository.proposalDrafts, isEmpty);
+    for (final hours in [2, 5, 10, 20, 30]) {
+      expect(tester.widget<ChoiceChip>(find.byKey(ValueKey('deadline-estimate-${hours}h'))).selected, isFalse);
+    }
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
+    await _tap(tester, create);
+    expect(find.text('Review all required plan values.'), findsOneWidget);
+    expect(repository.proposalDrafts, isEmpty);
+    await _tap(tester, find.widgetWithIcon(OutlinedButton, AppIcons.eventOutlined));
+    Navigator.of(tester.element(find.byType(DatePickerDialog))).pop(DateTime(2026, 7, 25));
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(TimePickerDialog))).pop(const TimeOfDay(hour: 14, minute: 45));
+    await tester.pumpAndSettle();
+    await _tap(tester, create);
+    final draft = repository.proposalDrafts.single;
+    expect(draft.title, 'Algorithms exam');
+    expect(draft.estimatedTotalMinutes, 120);
+    expect(draft.creditedPriorMinutes, 0);
+    expect(draft.deadlineAt.toUtc(), DateTime.utc(2026, 7, 25, 12, 45));
+    expect(repository.confirmCalls, 0);
+  });
+
+  testWidgets('full Exam edit keeps exact saved custom settings through collapse',
+      (tester) async {
+    final json = deadlinePlanEnvelope();
+    final values = json['active_revision'] as Map<String, dynamic>;
+    values['preferred_session_minutes'] = 65;
+    values['max_daily_minutes'] = 175;
+    values['buffer_days'] = 2;
+    final plan = DeadlinePlanResponse.fromJson(json).plan;
+    final revision = plan.activeRevision!;
+    final repository = _FakeDeadlinePlanRepository(feeds: [DeadlinePlanFeed(plans: [plan])]);
+    await _pumpPage(tester, repository: repository, page: DeadlinePlansPage(currentTime: now));
+    await _tapPlanAction(tester, 'Edit plan');
+    await _tap(tester, find.text('Change values'));
+    expect(find.byKey(const ValueKey('deadline-daily-cap')), findsNothing);
+    expect(find.text('Continue'), findsNothing);
+    final settings = find.byKey(const ValueKey('deadline-study-settings'));
+    await _tap(tester, settings);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('deadline-daily-cap'))).controller!.text, '175');
+    final custom = find.byKey(const ValueKey('preparation-session-minutes'));
+    expect(tester.widget<TextFormField>(custom).initialValue, '65');
+    expect(find.text('2 clear days'), findsWidgets);
+    await _tap(tester, settings);
+    expect(custom, findsNothing);
+    await _tap(tester, settings);
+    expect(tester.widget<TextFormField>(custom).initialValue, '65');
+    await _tap(tester, find.text('Create preview'));
+    final draft = repository.proposalDrafts.single;
+    expect(draft.planId, plan.id);
+    expect(draft.baseRevision, plan.latestRevision);
+    expect(draft.kind, revision.kind);
+    expect(draft.title, revision.title);
+    expect(draft.deadlineAt, revision.deadlineAt);
+    expect(draft.estimatedTotalMinutes, revision.estimatedTotalMinutes);
+    expect(draft.creditedPriorMinutes, revision.creditedPriorMinutes);
+    expect(draft.preferredSessionMinutes, revision.preferredSessionMinutes);
+    expect(draft.maxDailyMinutes, revision.maxDailyMinutes);
+    expect(draft.bufferDays, revision.bufferDays);
+    expect(draft.planningStartOn, revision.planningStartOn);
+    expect(draft.sourceKind, revision.sourceKind);
+    expect(draft.sourceCalendarEventId, revision.sourceCalendarEventId);
+    expect(draft.sourceCalendarEventFingerprint, revision.sourceCalendarEventFingerprint);
+    expect(draft.useCalendarAvailability, revision.useCalendarAvailability);
+    expect(repository.confirmCalls, 0);
+  });
+
+  testWidgets('cancel Exam after editing expanded settings writes no proposal',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository();
+    await _pumpPage(tester, repository: repository,
+      page: DeadlinePlansPage(initialKind: DeadlinePlanKind.exam,
+        initialTitle: 'Unsaved exam', initialDeadlineAt: DateTime(2026, 7, 25, 17),
+        currentTime: now));
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-10h')));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+    await tester.enterText(find.byKey(const ValueKey('deadline-daily-cap')), '175');
+    await _tap(tester, find.byKey(const ValueKey('preparation-session-custom')));
+    await tester.enterText(find.byKey(const ValueKey('preparation-session-minutes')), '65');
+    await _tap(tester, find.widgetWithText(TextButton, 'Cancel'));
+    expect(find.byKey(const ValueKey('deadline-editor-footer')), findsNothing);
+    expect(repository.proposalDrafts, isEmpty);
+    expect(repository.confirmCalls, 0);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Preparation renders all Health states and numbers',
@@ -920,13 +1259,12 @@ void main() {
       ),
       size: const Size(390, 844),
     );
-    await _tap(tester, find.text('Continue'));
     for (final hours in [20, 30]) {
       final preset = find.byKey(ValueKey('deadline-estimate-${hours}h'));
       await _tap(tester, preset);
       expect(tester.widget<ChoiceChip>(preset).selected, isTrue);
     }
-    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
     await _tap(tester, find.byKey(const ValueKey('preparation-session-custom')));
     final minutes = find.byKey(const ValueKey('preparation-session-minutes'));
     for (final invalid in ['24', '181', '']) {
@@ -936,9 +1274,11 @@ void main() {
       expect(find.text('Enter 25–180 minutes.'), findsOneWidget);
     }
     await tester.enterText(minutes, '65');
-    await _tap(tester, find.text('Back'));
-    await _tap(tester, find.text('Continue'));
-    expect(tester.widget<TextFormField>(minutes).initialValue, '65');
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+    expect(minutes, findsNothing);
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+    final input = find.descendant(of: minutes, matching: find.byType(EditableText));
+    expect(tester.widget<EditableText>(input).controller.text, '65');
     await _tap(tester, find.text('Create preview'));
     expect(repository.proposalDrafts.single.estimatedTotalMinutes, 1800);
     expect(repository.proposalDrafts.single.preferredSessionMinutes, 65);
@@ -1007,9 +1347,8 @@ void main() {
       ),
     );
 
-    await _tap(tester, find.text('Continue'));
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
-    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
     final check = find.byKey(const ValueKey('exam-plan-health-preview'));
     await tester.ensureVisible(check);
     await tester.tap(check);
@@ -1061,15 +1400,12 @@ void main() {
       if (find.text('Change values').evaluate().isNotEmpty) {
         await _tap(tester, find.text('Change values'));
       }
-      await _tap(tester, find.text('Continue'));
-      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
       await _tap(
         tester,
         find.byKey(const ValueKey('exam-plan-health-preview')),
       );
       final preview = healthRepository.previewDrafts.single;
-      await _tap(tester, find.text('Back'));
-      await _tap(tester, find.text('Back'));
       await _tap(tester, find.widgetWithText(TextButton, 'Cancel'));
       return preview;
     }
@@ -1292,7 +1628,8 @@ void main() {
     );
     expect(find.byKey(const ValueKey('deadline-locked-kind')), findsOneWidget);
     expect(find.text('One preparation plan with one deadline.'), findsNothing);
-    expect(find.text('Exam'), findsOneWidget);
+    expect(find.text('New exam'), findsOneWidget);
+    expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
 
     await _tap(tester, find.text('Cancel'));
     await _tap(tester, find.text('Plan preparation'));
@@ -1307,7 +1644,7 @@ void main() {
     );
   });
 
-  testWidgets('wizard requires an explicit estimate without prior-work choice',
+  testWidgets('single-page Exam requires an explicit estimate without prior-work choice',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository();
     await _pumpPage(
@@ -1322,8 +1659,7 @@ void main() {
 
     await _tap(tester, find.text('Plan preparation'));
     await _tap(tester, find.text('Exam'));
-    await _tap(tester, find.text('Continue'));
-    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.text('Create preview'));
     expect(
       find.text('Enter 30 minutes to 500 hours of total preparation.'),
       findsOneWidget,
@@ -1333,10 +1669,10 @@ void main() {
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
     expect(find.textContaining('cannot estimate this for you'), findsNothing);
     await _tap(tester,
-        find.byTooltip('Show information about How much study time?'));
+        find.byTooltip('Show information about Study time'));
     expect(find.textContaining('cannot estimate this for you'), findsOneWidget);
-    await _tap(tester, find.text('Continue'));
-    expect(find.text('3 / 3'), findsOneWidget);
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+    expect(find.text('3 / 3'), findsNothing);
     expect(find.textContaining('prior work'), findsNothing);
     expect(
       find.text('Daily limit'),
@@ -1370,21 +1706,56 @@ void main() {
 
     await _tap(tester, find.text('Plan preparation'));
     await _tap(tester, find.text('Exam'));
-    await _tap(tester, find.text('Continue'));
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
-    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
 
     expect(
-      find.textContaining('All plans: 2 h / day.'),
+      find.text('All plans · 2h/day'),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('edit-preparation-budget')), findsOneWidget);
     expect(find.textContaining('Daily budget is shared'), findsNothing);
     await _tap(tester,
         find.byKey(const ValueKey('deadline-planning-details')));
     expect(find.textContaining('Daily budget is shared'), findsOneWidget);
   });
 
-  testWidgets('three-step same-day preview needs explicit confirmation',
+  for (final sample in [(320.0, 2.0), (390.0, 1.0)]) {
+    testWidgets('pending Exam preview keeps metrics and details at ${sample.$1}/${sample.$2}',
+        (tester) async {
+      final plan = _plan(status: 'draft');
+      final repository = _FakeDeadlinePlanRepository(feeds: [DeadlinePlanFeed(plans: [plan])]);
+      await _pumpPage(tester, repository: repository,
+        size: Size(sample.$1, 844), textScaler: TextScaler.linear(sample.$2),
+        page: DeadlinePlansPage(initialPlanId: deadlinePlanId, currentTime: now));
+      await tester.scrollUntilVisible(find.text('To plan'), 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      for (final metric in [('To plan', '4 h 5 min'), ('Proposed', '50 min'), ('Unplaced', '3 h 15 min')]) {
+        final label = find.text(metric.$1);
+        expect(label, findsOneWidget);
+        final group = find.ancestor(of: label, matching: find.byType(Column)).first;
+        expect(find.descendant(of: group, matching: find.text(metric.$2)), findsOneWidget);
+      }
+      expect(find.text('Proposed estimate'), findsNothing);
+      expect(find.text('Tracked focus'), findsNothing);
+      final details = find.byKey(const ValueKey('deadline-preview-details-$deadlinePlanId-1'));
+      await _tap(tester, details);
+      expect(find.text('Proposed estimate'), findsOneWidget);
+      expect(find.text('Tracked focus'), findsOneWidget);
+      await _tap(tester, details);
+      expect(find.text('Proposed estimate'), findsNothing);
+      final confirm = find.text('Confirm reservations');
+      await tester.ensureVisible(confirm);
+      await tester.pumpAndSettle();
+      expect(confirm.hitTestable(), findsOneWidget);
+      expect(repository.proposalDrafts, isEmpty);
+      expect(repository.confirmCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('single-page same-day preview needs explicit confirmation',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository(
       proposalResults: [_plan(status: 'draft')],
@@ -1411,9 +1782,11 @@ void main() {
     expect(repository.proposalDrafts, hasLength(1));
     expect(repository.proposalDrafts.single.bufferDays, 0);
     expect(repository.confirmCalls, 0);
-    expect(find.text('Confirm reservations'), findsOneWidget);
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsOneWidget);
+    expect(_inExamReview(find.text('Confirm reservations')), findsOneWidget);
 
-    await _tap(tester, find.text('Confirm reservations'));
+    await _tap(tester, _inExamReview(find.text('Confirm reservations')));
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsNothing);
     expect(find.text('Reserve these focus blocks?'), findsOneWidget);
     await _tap(
       tester,
@@ -1467,13 +1840,11 @@ void main() {
       find.textContaining('will no longer depend on the imported event'),
       findsOneWidget,
     );
-    await _tap(tester, find.text('Continue'));
     expect(
       find.textContaining('before this plan was first activated'),
       findsNothing,
     );
     expect(find.textContaining('25 min linked Focus'), findsOneWidget);
-    await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Create preview'));
 
     final draft = repository.proposalDrafts.single;
@@ -1507,7 +1878,8 @@ void main() {
     );
 
     await _tap(tester, find.text('Edit plan'));
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsNothing);
+    expect(find.byKey(const ValueKey('deadline-study-settings')), findsOneWidget);
     expect(find.text('Create preview with these values'), findsNothing);
     expect(repository.proposalDrafts, isEmpty);
   });
@@ -1792,8 +2164,8 @@ void main() {
       revision.useCalendarAvailability,
     );
     expect(repository.confirmCalls, 0);
-    expect(find.text('Confirm reservations'), findsOneWidget);
-    expect(find.text('Currently reserved until you confirm'), findsOneWidget);
+    expect(_inExamReview(find.text('Confirm reservations')), findsOneWidget);
+    expect(_inExamReview(find.text('Currently reserved until you confirm')), findsOneWidget);
   });
 
   testWidgets('compact replan blocks a saved finish-by time in the past',
@@ -1823,7 +2195,8 @@ void main() {
     expect(repository.proposalDrafts, isEmpty);
 
     await _tap(tester, find.text('Change values'));
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsNothing);
+    expect(find.byKey(const ValueKey('deadline-study-settings')), findsOneWidget);
   });
 
   testWidgets('large active plan initially renders only six block rows',
@@ -2092,8 +2465,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
-    await _tap(tester, find.text('Continue'));
-    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
     final dailyCap = tester.widget<TextField>(
       find.byKey(const ValueKey('deadline-daily-cap')),
     );
@@ -2215,24 +2587,27 @@ void main() {
     );
     await _tap(tester, find.text('Edit event details'));
     await _tap(tester, find.text('Exam'));
-    await _tap(tester, find.text('Continue'));
-    expect(find.text('How much study time?'), findsOneWidget);
+    expect(find.text('New exam'), findsOneWidget);
+    expect(find.text('Continue'), findsNothing);
     expect(find.textContaining('Try topics'), findsNothing);
     await _tap(tester, find.text('Create preview'));
     expect(repository.proposalDrafts, isEmpty);
     expect(find.textContaining('Enter 30 minutes'), findsOneWidget);
     await _tap(tester, find.text('2 h'));
     expect(find.byKey(const ValueKey('deadline-daily-cap')), findsNothing);
-    await _tap(tester, find.text('Adjust plan'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
     expect(find.byKey(const ValueKey('deadline-daily-cap')), findsOneWidget);
     expect(find.textContaining('Clear days have no study blocks'), findsNothing);
     await _tap(tester,
         find.byKey(const ValueKey('deadline-planning-details')));
     expect(find.textContaining('Clear days have no study blocks'), findsOneWidget);
-    await _tap(tester, find.text('Adjust plan'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
     await _tap(tester, find.text('Create preview'));
     expect(repository.proposalDrafts.single.sourceCalendarEventId, deadlineCalendarEventId);
     expect(repository.proposalDrafts.single.estimatedTotalMinutes, 120);
+    expect(find.byKey(const ValueKey('deadline-review-sheet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('deadline-review-plan-$deadlinePlanId')), findsOneWidget);
+    await _tap(tester, find.byKey(const ValueKey('deadline-review-close')));
     expect(find.byKey(const ValueKey('deadline-plan-$deadlinePlanId')), findsOneWidget);
     expect(repository.confirmCalls, 0);
     expect(tester.takeException(), isNull);
@@ -2416,7 +2791,8 @@ void main() {
     expect(repository.proposalDrafts, isEmpty);
 
     await _tap(tester, find.text('Change values'));
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsNothing);
+    expect(find.byKey(const ValueKey('deadline-study-settings')), findsOneWidget);
     expect(find.byKey(const ValueKey('deadline-plan-title')), findsOneWidget);
     expect(repository.proposalDrafts, isEmpty);
   });
@@ -2449,14 +2825,21 @@ void main() {
       );
       expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
 
-      await _tap(tester, find.text('Continue'));
-      await _tap(tester, find.text('Continue'));
+      if (kind == DeadlinePlanKind.exam) {
+        await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
+      } else {
+        await _tap(tester, find.text('Continue'));
+        await _tap(tester, find.text('Continue'));
+      }
       final dailyCap = tester.widget<TextField>(
         find.byKey(const ValueKey('deadline-daily-cap')),
       );
       expect(dailyCap.controller!.text, '$expectedDailyCap');
       await _tap(tester, find.text('Create preview'));
       expect(repository.proposalDrafts.single.kind, kind);
+      if (kind == DeadlinePlanKind.exam) {
+        await _tap(tester, find.byKey(const ValueKey('deadline-review-close')));
+      }
 
       await _pumpPage(
         tester,
@@ -2520,11 +2903,11 @@ void main() {
     expect(repository.proposalDrafts, hasLength(1));
     expect(repository.confirmCalls, 0);
     expect(
-      find.text('Currently reserved until you confirm'),
+      _inExamReview(find.text('Currently reserved until you confirm')),
       findsOneWidget,
     );
     expect(
-      find.text('Confirm reservations and return to Planner'),
+      _inExamReview(find.text('Confirm reservations and return to Planner')),
       findsOneWidget,
     );
   });
@@ -2626,7 +3009,7 @@ void main() {
     await _tap(tester, find.text('Create preview with these values'));
     await _tap(
       tester,
-      find.text('Confirm reservations and return to Planner').first,
+      _inExamReview(find.text('Confirm reservations and return to Planner')),
     );
     await _tap(
       tester,
@@ -2763,7 +3146,7 @@ void main() {
     expect(find.text('Retry requested plan'), findsOneWidget);
   });
 
-  testWidgets('narrow high-text-scale wizard does not overflow',
+  testWidgets('narrow high-text-scale Exam form does not overflow',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository();
     await _pumpPage(
@@ -2797,7 +3180,10 @@ void main() {
       find.byKey(const ValueKey('preparation-kind-exam')),
     );
     expect(tester.takeException(), isNull);
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsNothing);
+    expect(find.text('New exam'), findsOneWidget);
+    expect(find.byKey(const ValueKey('deadline-study-settings')), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Create preview').hitTestable(), findsOneWidget);
   });
 
   testWidgets('narrow high-text-scale replan summary does not overflow',
@@ -2835,9 +3221,8 @@ const deadlineCalendarEventId = '88888888-8888-4888-8888-888888888888';
 Future<void> _completeNewWizard(WidgetTester tester) async {
   await _tap(tester, find.text('Plan preparation'));
   await _tap(tester, find.text('Exam'));
-  await _tap(tester, find.text('Continue'));
   await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
-  await _tap(tester, find.text('Continue'));
+  await _tap(tester, find.byKey(const ValueKey('deadline-study-settings')));
   expect(find.text('0 clear days'), findsWidgets);
   await _tap(tester, find.text('Create preview'));
 }
@@ -2876,11 +3261,20 @@ Future<void> _tapPlanAction(WidgetTester tester, String label) async {
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
-  await tester.ensureVisible(finder.first);
+  // An expanded tile's center is in its body, not its toggle header.
+  final target = tester.widget(finder.first) is ExpansionTile
+      ? find.descendant(of: finder.first, matching: find.byType(ListTile)).first
+      : finder.first;
+  await tester.ensureVisible(target);
   await tester.pumpAndSettle();
-  await tester.tap(finder.first);
+  await tester.tap(target);
   await tester.pumpAndSettle();
 }
+
+Finder _inExamReview(Finder finder) => find.descendant(
+  of: find.byKey(const ValueKey('deadline-review-sheet')),
+  matching: finder,
+);
 
 Finder _pageScrollable() => find
     .descendant(
@@ -2901,6 +3295,7 @@ Future<void> _pumpPage(
     canUseDeadlinePlanner: true,
   ),
   Size size = const Size(1200, 1800),
+  ThemeData? theme,
   TextScaler textScaler = TextScaler.noScaling,
   bool settle = true,
   ProfileLocalDateSource profileDateSource =
@@ -2957,7 +3352,7 @@ Future<void> _pumpPage(
           child: child!,
         ),
         home: Scaffold(body: page),
-        theme: captureUiCatalog ? AppTheme.liquidGlass : null,
+        theme: theme ?? (captureUiCatalog ? AppTheme.liquidGlass : null),
         debugShowCheckedModeBanner: false,
       ),
     ),
@@ -3162,6 +3557,47 @@ DeadlinePlan _plan({String status = 'active', bool pending = false}) =>
       deadlinePlanEnvelope(status: status, pending: pending),
     ).plan;
 
+DeadlinePlan _twoHourExamPreview() {
+  final json = deadlinePlanEnvelope(status: 'draft', pendingTitle: 'Algorithms exam');
+  final plan = json['plan'] as Map<String, dynamic>;
+  plan['original_estimated_total_minutes'] = 120;
+  plan['original_credited_prior_minutes'] = 0;
+  json['progress'] = {
+    'estimated_total_minutes': 120,
+    'credited_prior_minutes': 0,
+    'tracked_focus_minutes': 0,
+    'accounted_minutes': 0,
+    'remaining_minutes': 120,
+    'completion_suggested': false,
+  };
+  final revision = deadlineRevision(
+    title: 'Algorithms exam', state: 'proposed', estimatedTotalMinutes: 120,
+    creditedPriorMinutes: 0, trackedFocusMinutes: 0, plannedMinutes: 120,
+    unscheduledMinutes: 0,
+    blocks: [
+      for (var index = 0; index < 3; index++)
+        {
+          ...deadlineBlock(
+            id: '22222222-2222-4222-8222-22222222222${index + 2}',
+            sequence: index + 1, plannedMinutes: 40),
+          'starts_at': '2026-07-${20 + index}T08:00:00Z',
+          'ends_at': '2026-07-${20 + index}T08:40:00Z',
+          'reserved_ends_at': '2026-07-${20 + index}T08:40:00Z',
+          'local_date': '2026-07-${20 + index}',
+          'local_end_time': '10:40:00',
+        },
+    ],
+  );
+  revision['deadline_at'] = '2026-07-30T08:00:00Z';
+  revision['preferred_session_minutes'] = 40;
+  revision['buffer_days'] = 0;
+  revision['use_calendar_availability'] = false;
+  revision.remove('availability_connection_id');
+  revision.remove('availability_import_id');
+  json['pending_revision'] = revision;
+  return DeadlinePlanResponse.fromJson(json).plan;
+}
+
 DeadlinePlan _planWithKind(
   DeadlinePlanKind kind, {
   int maxDailyMinutes = 120,
@@ -3301,6 +3737,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
     List<DeadlinePlan>? proposalResults,
     List<Object>? proposalErrors,
     this.confirmResult,
+    this.confirmError,
     this.completeError,
     this.targetedPlan,
     this.targetedError,
@@ -3314,6 +3751,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   final List<DeadlinePlan> proposalResults;
   final List<Object> proposalErrors;
   final DeadlinePlan? confirmResult;
+  final Object? confirmError;
   final Object? completeError;
   final DeadlinePlan? targetedPlan;
   final Object? targetedError;
@@ -3323,6 +3761,9 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   final List<String> proposalRequestIds = [];
   int feedCalls = 0;
   int confirmCalls = 0;
+  int cancelCalls = 0;
+  final List<int> confirmRevisions = [];
+  final List<int> cancelRevisions = [];
   int getPlanCalls = 0;
 
   @override
@@ -3374,6 +3815,8 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
     required int expectedRevision,
   }) async {
     confirmCalls++;
+    confirmRevisions.add(expectedRevision);
+    if (confirmError case final error?) throw error;
     return confirmResult ?? _plan();
   }
 
@@ -3392,8 +3835,11 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
     required String planId,
     required String requestId,
     required int expectedRevision,
-  }) async =>
-      _plan(status: 'cancelled');
+  }) async {
+    cancelCalls++;
+    cancelRevisions.add(expectedRevision);
+    return _plan(status: 'cancelled');
+  }
 }
 
 PreparationWorkload _workload({int? budget = 120}) => PreparationWorkload(

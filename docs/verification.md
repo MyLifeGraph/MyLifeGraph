@@ -31,6 +31,161 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Final Exam and Android audit candidate (2026-10-05)
+
+- Task base remains `e30b78c24409263c9d7ae80f188e8b73672acba3`. The user
+  explicitly authorizes PR, protected Main promotion, a new signed APK and
+  affected existing production rollout after successful checks. This is candidate
+  evidence, not a claim that publication has already happened.
+- Three independent reviews checked original Exam fields/validation, preview
+  navigation and mutation authority, dictation visibility, Strict Wi-Fi and
+  account-budget identity/revision boundaries. No planning input was removed.
+- Two additional Deadline races were demonstrated with deterministic completers:
+  a successful write followed by an older pending feed, and a write response
+  after disposal. Before the fixes, 6 new regression cases failed; afterward all
+  19 controller tests pass. A read-scoped per-plan overlay retains newer writes
+  and unrelated feed rows; a later reload remains authoritative. Disposed writes
+  avoid state access, preserve best-effort lifecycle refresh and release the gate.
+- The final combined run passes **243 Flutter tests**, covering Deadline page/
+  controller, account repository and budget/Settings, Coach dictation/page,
+  root pager, Strict Wi-Fi/request, Customize scrolling and Blocking stress.
+  Full Flutter analysis reports no issues. Docs (19 tests), visual source guard
+  (1 test) and diff hygiene pass. The eight real, font-loaded renderer captures
+  described below remain the visual evidence; no new physical-device acceptance
+  is claimed by this candidate run.
+- Complete seven-gate Linux CI, exact Main/PR identity, signed artifact metadata
+  and production health/readiness/commit identities are mandatory publication
+  gates. Local Windows harness limitations below do not waive them. This
+  candidate introduces no SQL, backend algorithm or dependency changes; the
+  existing hosted migration prefix must still be checked before promotion.
+- Final immutable CI and artifact identities will be attached to the public
+  release after the gates succeed. Signing identity and required checks remain
+  unchanged; unrelated generated media and local failure captures are excluded.
+
+### Exam reference-fidelity follow-up (2026-10-05, local only)
+
+- Base remains `e30b78c24409263c9d7ae80f188e8b73672acba3`; earlier unpublished
+  audit work is preserved. This entry supersedes the earlier compact-form visual
+  evidence below. No API, schema, calculation or reservation authority changed.
+- **149 combined Flutter tests pass** across Deadline page/controller, account
+  repository, shared budget control and Settings. Added coverage checks review
+  Close/Back/reopen without writes, exact edit values, explicit discard/confirm,
+  recoverable confirmation failure, active replacement semantics, narrow review
+  actions, and the fixed editor heading while settings scroll.
+- Existing keyboard tests reproduced an overflow at 320 px/200% text after
+  fixing the heading. A height-aware scrolling-header fallback resolves it while
+  retaining pinned actions; all four themes pass. Assignment-to-Exam expansion
+  state is also reset correctly without replacing an edited daily limit.
+- One opt-in, font-loaded renderer catalog test passes and emits eight inspected
+  mobile/desktop captures: basics, default settings, custom settings and review.
+  These are synthetic Flutter renderer screenshots, not AI mockups and not an
+  installed Android APK. Fixed heading, equal-width unclipped presets, opaque
+  sheet material and modal dismissal were visually checked against the approved
+  references. Existing confirmation and warning content remains intentionally.
+- Full Flutter analysis reports no issues. Docs (19 tests), visual source guard
+  (1 test) and diff hygiene pass. The captured-base affected dry-run still selects
+  Full because of earlier untracked media artifacts. Full Linux/DB/E2E and a new
+  build are not claimed by this presentation-only follow-up; the earlier Windows
+  environment blockers below have not been resolved here.
+- No commit, push, APK installation, release or deployment was performed.
+
+### Compact Exam form and shared budget control (2026-10-05, local only)
+
+- Task base: `e30b78c24409263c9d7ae80f188e8b73672acba3`. Existing unpublished
+  Android audit changes are preserved. No schema, API, planning algorithm or
+  reservation semantics change. Exam Outlook and public architecture owners
+  remain accurate; the budget widget uses the existing composition seam.
+- The combined Deadline page/controller, account repository, budget-control and
+  Settings widget run passes **140 tests**. Coverage includes single-form
+  validation, exact draft settings after collapse, Calendar/DST and Assignment
+  regressions, explicit preview confirmation, account conflicts/unknown outcomes,
+  null-to-480 draft cancellation/save and account change/disposal during saves.
+- Eight keyboard/layout cases span all four themes, 320 px at 200% text,
+  portrait and landscape. A reproduced footer overflow after a long validation
+  error was fixed with a bounded, scrollable error area that keeps actions
+  reachable. Preview metrics/details are checked at 320 px/200% and 390 px.
+- Font-loaded, synthetic Flutter renderer captures cover mobile and desktop
+  basics, expanded settings and pending preview; these are not physical-phone
+  evidence. No changed APK has been installed or released in this task.
+- Full Flutter analysis reports no issues after correcting two new brace-style
+  findings. Docs (19 tests), visual source guard (1 test) and diff hygiene pass. The
+  captured-base affected gate selects Full because the checkout also contains
+  prior untracked media artifacts. Its Windows source harness still reports
+  missing `setsid`, and its selected Python lacks `ruff`; the complete gate is
+  not claimed green. These blockers precede the database and browser lanes.
+- The separate credential-free `verify:web` debug build completed successfully
+  (cache miss, 78.25 seconds). Flutter emitted `File modified during build. Build
+  must be rerun.` before completing compilation with exit zero; this is recorded
+  rather than described as a warning-free release build.
+- No commit, push, migration, deployment or release was performed.
+
+### Approved Exam keyboard footer (2026-10-05, local only)
+
+- The single-plan wizard now separates the scrolling fields from its action
+  footer. Five keyboard-inset cases cover all four themes, 320 px at 200% text,
+  landscape, immediate action hit-testing and Back/Cancel retaining draft values
+  without writes. The Deadline page/controller run passes **94 tests**.
+- A font-loaded Flutter renderer capture of the Liquid Glass editor passes and
+  was visually reviewed. Its blank lower area represents simulated IME insets,
+  not an actual Android keyboard. The changed UI has not been installed on the
+  physical phone. Existing date, preview and confirmation tests remain green.
+- Docs (19 tests), visual source guard (1 test) and diff hygiene pass. No
+  issues were found by Flutter analysis of the changed editor and page tests.
+  No
+  backend/schema or Exam Outlook behavior changes; its owner remains accurate.
+  No commit, push, deployment or release is part of this local follow-up.
+
+### Physical Android audit and local corrections (2026-10-04, unpublished)
+
+- Task base: `e30b78c24409263c9d7ae80f188e8b73672acba3`. The physical Samsung
+  SM-S931B runs Android 16, 1080x2340 at density 480 and font scale 1.0.
+  The signed RC20 APK was checksum-verified and installed in place over RC19;
+  no uninstall or app-data reset was used. This installed release does **not**
+  contain the local corrections described below.
+- Independent deterministic reproductions confirmed overlapping Deadline feed
+  reads overwriting completion state, read completion after controller disposal,
+  Coach dictation surviving covered routes/hidden tabs, and inability to remove
+  a retained Wi-Fi condition during authorized offline Strict editing. Minimal
+  local fixes preserve existing mutation, consent and native enforcement authority.
+- **172 combined Flutter tests pass** across Dictation, Coach, root pager,
+  Blocking, Strict and Deadline controller/page coverage. A subsequent dedicated
+  **one-test keyboard reachability check passes**: Exam actions initially extend
+  beneath the keyboard, but scrolling reveals both and Continue remains usable.
+  This is a design proposal only, not a product fix. Flutter analysis passes
+  without issues; docs (19 tests), visual (1 test) and diff hygiene pass.
+  Web verification and its explicit `--no-cache` repeat both exit successfully
+  and produce a bundle (89.31s and 115.4s respectively). Both emit Flutter's
+  `File modified during build. Build must be rerun.` diagnostic before reporting
+  successful compilation; this caveat is retained rather than called a clean
+  production build. No bundle was published.
+- Physical, isolated demo-account evidence covers Exam creation, capacity read,
+  explicit reservation confirmation, calendar projection, reopening, editing
+  cancellation by Android Back gesture, and removal from the active calendar.
+  The labelled audit Exam remains only in demo history. Personal records and
+  existing device Blocking plans were not changed. Morning previous-day selection
+  leaves absent historical sleep times blank; no Capture save was performed.
+- Installed-device checks also cover Today/Insights swipes, Settings round trips,
+  the speech-source sheet including installed Parakeet, header action overflow,
+  Customize preview scrolling, and Strict request cancellation on tab departure
+  and background/resume. With explicit device-wide permission, a normal Strict
+  unlock completed, a separate QA-only AccuBattery plan was saved and enforced,
+  and screenshot-only checks confirmed Home retains the overlay and Return opens
+  MyLifeGraph. The QA plan was then deleted and Lock now restored active Strict
+  with the original one-minute method; Chrome/Arbeit were unchanged. Native
+  attempt counters include the QA attempts. XML dumps suppress Accessibility
+  services, so they were excluded from the decisive overlay test sequence.
+  These checks do not establish website blocking,
+  NFC/charger/Wi-Fi enforcement, push delivery, microphone inference, Health
+  ingestion, all themes, or exhaustive whole-app correctness.
+- The normal affected selector was executed with the captured base. Existing
+  untracked media/golden outputs broaden it to Full. This Windows attempt stops
+  on unavailable `setsid` in the source harness and missing Ruff in the selected
+  backend interpreter. It also caught an unused new-test import, which was
+  removed before the clean analysis. No green full/DB/E2E gate is claimed.
+  Screenshot/ADB evidence and the clearly labelled AI design proposal remain
+  private under ignored `.tools/device-audit-20261004/`, not repository artifacts.
+  No commit, push, production deployment or new APK release was made by this audit.
+
 ### Final approved polish and release review (2026-10-04, candidate)
 
 - Base remains `81daeeeb8edcc50fadc4e670e1a7fbc539eb2366`; end-to-end publication

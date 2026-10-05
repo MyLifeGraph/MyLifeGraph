@@ -81,9 +81,17 @@ Health Connect uses `Connect`, `Sync now`, `Stop sharing` and `Delete imported d
 Its compact summary is `Watch data`, `Sharing on/off`, and `Sleep · Steps`;
 secondary instructions live under `Details`, not the consent dialog.
 Calendar's empty source says `No file imported`; its read-only disclosure is
-`Original calendar unchanged`. Exam uses `Study time`, `Study rhythm`,
-`Daily limit`, `Busy times` and `Check capacity`, with optional planning
-details collapsed and `Review and confirm to reserve study time.` visible.
+`Original calendar unchanged`. Exam uses `Study time`, optional `Study settings`,
+`Daily limit`, `Clear days`, `Busy times` and `Check capacity`, with optional
+planning details collapsed and `Preview first. Confirm to reserve time.` visible.
+The account-wide edit row says `All plans` and the saved limit or `No limit`;
+it is distinct from the individual Exam daily limit. Pending Exam preview metrics
+are `To plan`, `Proposed`, `Unplaced`, with optional `Plan details`. Invalid input
+has a visible error beside the pinned action area rather than a hidden snackbar.
+Expanded Exam settings use a title/estimate summary and `Back to exam details`.
+The dedicated `Review study plan` sheet uses `Close` without implying discard;
+`Review preview` reopens it. Confirmation and active-plan removal retain their
+existing explicit disclosures, even where the visual reference omits them.
 The consent dialog names Cloud storage and selected Coach-provider access; Android
 permission alone is not Cloud consent. Keep the seven-day foreground sync scope,
 missing-data behavior, deletion distinction and errors visible. Imported sleep is
