@@ -5,13 +5,20 @@ Optional additions use concise labels: **Note (optional)**, **Coach data**,
 **Remove heart data**. Privacy/selected-provider disclosures appear at explicit
 opt-in, not as permanent explanatory paragraphs. Missing measured values say
 **Unavailable**, never zero. Strict remains Active until explicit Unblock and
-requires staying on its screen; countdowns do not imply an automatic unlock.
+requires staying on its screen. Unblock offers `15 minutes` and `Turn off Strict`;
+only choosing starts the wait. Native conditions remain required even at zero.
 
 Strict initially shows `Active`, the configured `Unlock method` and `Unblock`.
-Only after explicit Unblock does the countdown and guarded `Unlock` completion
-appear, with `Scan tag` when needed. The configured method is not live progress.
+After choosing, the countdown shows `Unlocking for 15m…` or `Turning off Strict…`,
+with `Scan tag` when needed. Completion is automatic if native conditions are
+met; otherwise `Waiting for conditions` stays visible without a second button.
+The configured method is not live progress. Usage labels use compact elapsed
+units such as `2h 30m` and `1d 9h 20m`; raw measured values remain unchanged.
 Android Customize keeps its compact edit action above the true native preview;
 no extra explanatory paragraph is added.
+Blocking Plans omits the repeated browser-name/address-bar paragraph. Website
+consent still explicitly discloses address-bar-only detection, hidden/unsupported
+browsers and local-only observation; no stronger website support is claimed.
 
 Android Settings uses `Updates`, `Check`, `Download` and the installed version.
 The one-time-per-build startup dialog says `Update available` with `Close` and

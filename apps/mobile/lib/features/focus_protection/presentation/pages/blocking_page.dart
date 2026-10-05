@@ -15,12 +15,14 @@ import '../../../../core/widgets/app_surface.dart';
 import '../../application/blocking_gateway.dart';
 import '../../application/focus_protection_gateway.dart';
 import '../../domain/blocking_plan.dart';
+import '../../domain/blocking_usage_duration.dart';
 import '../../domain/focus_protection.dart';
 import 'focus_protection_settings_page.dart';
 import '../widgets/strict_status_ring.dart';
 import '../widgets/blocking_screen_preview.dart';
 import '../widgets/blocking_custom_editor.dart';
 import '../widgets/blocking_plan_summary.dart';
+import '../widgets/blocking_reorder_handle.dart';
 
 IconData blockingIcon(String name) => switch (name) {
   'work' => AppIcons.briefcaseOutlined,
@@ -39,6 +41,15 @@ class BlockingPage extends ConsumerStatefulWidget {
 
 class _BlockingPageState extends ConsumerState<BlockingPage>
     with WidgetsBindingObserver {
+  static const _strictControlGap = AppSpacing.sm + AppSpacing.xs;
+  static const _strictControlStyle = ButtonStyle(
+    minimumSize: WidgetStatePropertyAll(Size(0, 48)),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(AppRadii.lg)),
+      ),
+    ),
+  );
   BlockingSnapshot? _snapshot;
   final _timingLabels = Expando<(int, bool, String)>();
 
@@ -49,19 +60,28 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     if (cached != null && cached.$1 == minute && cached.$2 == usageGranted) {
       return cached.$3;
     }
-    final label = blockingPlanTiming(plan, now: now, usageGranted: usageGranted);
+    final label = blockingPlanTiming(
+      plan,
+      now: now,
+      usageGranted: usageGranted,
+    );
     _timingLabels[plan] = (minute, usageGranted, label);
     return label;
   }
+
   FocusProtectionStatus? _legacy;
   String? _error;
   bool _busy = false, _editorOpen = false, _foreground = true;
+  bool _reordering = false;
+  Future<void>? _refreshFuture;
   int _tab = 0, _days = 7, _generation = 0, _usageGeneration = 0;
   Map? _insights;
   Timer? _timer;
   BlockingGateway? _sessionGateway;
   bool _routeVisible = true;
   bool _unlockDialog = false;
+  bool _strictPresent = true, _finishingUnlock = false;
+  bool _requestingUnlock = false;
   BlockingGateway get _gateway => ref.read(blockingGatewayProvider);
   bool get _configurationLocked =>
       _snapshot?.locked == true || _legacy?.lease?.isActive == true;
@@ -92,12 +112,25 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
-    unawaited(_syncStrictVisibility());
+    // A notification shade loses focus without leaving the app. Suspend UI
+    // polling/completion but retain the native request; hidden/paused cancels it.
+    if (state == AppLifecycleState.inactive) {
+      ++_generation;
+      _timer?.cancel();
+      return;
+    }
+    _strictPresent = _foreground;
     if (_foreground) {
-      unawaited(_load());
+      unawaited(_resumeStrict());
     } else {
+      unawaited(_syncStrictVisibility());
       _timer?.cancel();
     }
+  }
+
+  Future<void> _resumeStrict() async {
+    await _syncStrictVisibility();
+    if (mounted && _foreground) await _load();
   }
 
   @override
@@ -114,7 +147,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     final generation = ++_generation;
     try {
       final value = await _gateway.command('strictVisibility', {
-        'visible': _foreground && (_routeVisible || _unlockDialog) && _tab == 1,
+        'visible':
+            _strictPresent && (_routeVisible || _unlockDialog) && _tab == 1,
       });
       if (!mounted || generation != _generation) return;
       setState(() => _snapshot = value);
@@ -122,6 +156,23 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     } catch (_) {
       // Unsupported/web hosts have no native Strict session. Explicit unlock
       // remains guarded by the native bridge and reports any real failure.
+    }
+  }
+
+  Future<void> _refresh() {
+    if (_busy || _editorOpen || _reordering || !_foreground || !_routeVisible) {
+      return Future<void>.value();
+    }
+    return _refreshFuture ??= _refreshCurrentTab().whenComplete(
+      () => _refreshFuture = null,
+    );
+  }
+
+  Future<void> _refreshCurrentTab() async {
+    final tab = _tab;
+    await _load();
+    if (mounted && _error == null && _tab == tab && tab == 2 && !_busy) {
+      await _usage();
     }
   }
 
@@ -144,9 +195,11 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         }
       });
       _pollUnlock(value);
+      unawaited(_completeUnlockIfReady());
     } catch (e) {
       if (mounted && generation == _generation) {
         setState(() => _error = _message(e));
+        if (_snapshot case final current?) _pollUnlock(current);
       }
     }
   }
@@ -156,10 +209,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     _timer?.cancel();
     if (!_foreground || (!_routeVisible && !_unlockDialog)) return;
     final delays = <int>[];
-    if (_tab == 1 &&
-        value.locked &&
-        value.unlockStarted &&
-        value.remainingMs > 0) {
+    if (_tab == 1 && value.locked && value.unlockStarted) {
       delays.add(1000);
     }
     if (value.releaseRemainingMs > 0) {
@@ -179,6 +229,89 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         Duration(milliseconds: delays.first),
         () => unawaited(_load()),
       );
+    }
+  }
+
+  Future<void> _completeUnlockIfReady() async {
+    final s = _snapshot;
+    if (!mounted ||
+        !_foreground ||
+        !_routeVisible ||
+        _unlockDialog ||
+        _tab != 1 ||
+        _busy ||
+        _finishingUnlock ||
+        s == null ||
+        !s.locked ||
+        !s.unlockStarted ||
+        s.remainingMs > 0) {
+      return;
+    }
+    _finishingUnlock = true;
+    try {
+      // Native authority rechecks visibility, charger/Wi-Fi/NFC and intent.
+      // Unmet conditions return the unchanged snapshot, not a success/error loop.
+      await _perform(() => _gateway.command('tryFinishUnlock'));
+    } finally {
+      _finishingUnlock = false;
+    }
+  }
+
+  Future<void> _requestUnlock() async {
+    if (_busy ||
+        _editorOpen ||
+        _requestingUnlock ||
+        _snapshot?.locked != true) {
+      return;
+    }
+    _requestingUnlock = true;
+    try {
+      _editorOpen = true;
+      String? mode;
+      try {
+        mode = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            scrollable: true,
+            titlePadding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            title: const Text('Unlock'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton(
+                  style: _strictControlStyle,
+                  onPressed: () => Navigator.pop(ctx, 'temporary'),
+                  child: const Text('15 minutes'),
+                ),
+                const SizedBox(height: _strictControlGap),
+                OutlinedButton(
+                  style: _strictControlStyle,
+                  onPressed: () => Navigator.pop(ctx, 'off'),
+                  child: const Text('Turn off Strict'),
+                ),
+              ],
+            ),
+          ),
+        );
+      } finally {
+        _editorOpen = false;
+      }
+      if (!mounted ||
+          mode == null ||
+          !_foreground ||
+          _tab != 1 ||
+          _snapshot?.locked != true) {
+        return;
+      }
+      _routeVisible = ModalRoute.of(context)?.isCurrent ?? true;
+      await _syncStrictVisibility();
+      if (!mounted || !_foreground || _tab != 1) return;
+      await _perform(() => _gateway.command('requestUnlock', {'mode': mode!}));
+      await _completeUnlockIfReady();
+    } finally {
+      _requestingUnlock = false;
     }
   }
 
@@ -230,6 +363,13 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       }),
     );
   }
+
+  Future<bool> _reorder(List<BlockingPlan> plans, int revision) => _perform(
+    () => _gateway.command('reorder', {
+      'revision': revision,
+      'ids': plans.map((p) => p.id).toList(),
+    }),
+  );
 
   Future<bool> _disclose(String title, String message) async =>
       await showDialog<bool>(
@@ -377,6 +517,11 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   }
 
   Future<void> _menu(BlockingPlan plan, String action) async {
+    if (_busy ||
+        _editorOpen ||
+        (_configurationLocked && action != 'up' && action != 'down')) {
+      return;
+    }
     if (action == 'edit') {
       await _edit(plan);
       return;
@@ -401,7 +546,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         final to = from + (action == 'up' ? -1 : 1);
         if (from >= 0 && to >= 0 && to < ordered.length) {
           ordered.insert(to, ordered.removeAt(from));
-          await _save(ordered);
+          await _reorder(ordered, _snapshot!.revision);
         }
       case 'delete':
         await _save(others);
@@ -466,6 +611,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     final s = _snapshot;
     return AppPage(
       title: 'App blocking',
+      compactHeader: true,
       backFallback: AppRoutes.settings,
       maxWidth: 720,
       actions: [
@@ -473,11 +619,6 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           tooltip: 'Permissions & limits',
           onPressed: _busy ? null : _permissions,
           icon: const Icon(AppIcons.settingsOutlined),
-        ),
-        IconButton(
-          tooltip: 'Refresh',
-          onPressed: _busy ? null : _load,
-          icon: const Icon(AppIcons.refresh),
         ),
       ],
       viewportBody: Column(
@@ -503,14 +644,40 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                             child: const Text('Retry'),
                           ),
                   )
-                : ListView(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    children: switch (_tab) {
-                      0 => _plans(s),
-                      1 => _strict(s),
-                      2 => _charts(s),
-                      _ => _custom(s),
-                    },
+                : RefreshIndicator(
+                    key: const ValueKey('blocking-pull-refresh'),
+                    onRefresh: _refresh,
+                    notificationPredicate: (notification) =>
+                        notification.depth == 0 &&
+                        !_busy &&
+                        !_editorOpen &&
+                        !_reordering,
+                    child: _tab == 0
+                        ? CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              for (final section in _plans(s))
+                                if (section is SliverReorderableList)
+                                  section
+                                else
+                                  SliverToBoxAdapter(child: section),
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: AppSpacing.md),
+                              ),
+                            ],
+                          )
+                        : ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.md,
+                            ),
+                            children: switch (_tab) {
+                              0 => _plans(s),
+                              1 => _strict(s),
+                              2 => _charts(s),
+                              _ => _custom(s),
+                            },
+                          ),
                   ),
           ),
           AppSurface(
@@ -658,18 +825,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
         child: Text('No plans yet.'),
       ),
-    ReorderableListView.builder(
-      shrinkWrap: true,
-      primary: false,
-      physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false,
+    SliverReorderableList(
       itemCount: s.plans.length,
+      onReorderStart: (_) => _reordering = true,
+      onReorderEnd: (_) => _reordering = false,
       onReorderItem: (oldIndex, newIndex) {
-        if (_configurationLocked || _busy || _editorOpen) return;
+        if (_busy || _editorOpen) return;
         final plans = [...s.plans];
         if (oldIndex == newIndex) return;
         plans.insert(newIndex, plans.removeAt(oldIndex));
-        unawaited(_save(plans, expectedRevision: s.revision));
+        unawaited(_reorder(plans, s.revision));
       },
       itemBuilder: (context, index) {
         final plan = s.plans[index];
@@ -776,29 +941,34 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                     children: [
                       PopupMenuButton<String>(
                         tooltip: 'Plan options',
-                        enabled: editable,
+                        enabled: !_busy && !_editorOpen,
                         icon: const Icon(AppIcons.moreHoriz, size: 20),
                         onSelected: (value) => unawaited(_menu(plan, value)),
                         itemBuilder: (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
+                            enabled: editable,
                             value: 'edit',
-                            child: Text('Edit'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'duplicate',
-                            child: Text('Duplicate'),
+                            child: const Text('Edit'),
                           ),
                           PopupMenuItem(
+                            enabled: editable,
+                            value: 'duplicate',
+                            child: const Text('Duplicate'),
+                          ),
+                          PopupMenuItem(
+                            enabled: editable,
                             value: plan.paused ? 'resume' : 'pause',
                             child: Text(plan.paused ? 'Resume' : 'Pause'),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
+                            enabled: editable,
                             value: '10m',
-                            child: Text('Pause 10m'),
+                            child: const Text('Pause 10m'),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
+                            enabled: editable,
                             value: 'delete',
-                            child: Text('Delete'),
+                            child: const Text('Delete'),
                           ),
                           if (index > 0)
                             const PopupMenuItem(
@@ -812,9 +982,9 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                             ),
                         ],
                       ),
-                      ReorderableDragStartListener(
+                      BlockingReorderHandle(
                         index: index,
-                        enabled: editable,
+                        enabled: !_busy && !_editorOpen,
                         child: Semantics(
                           label: 'Reorder ${plan.name}',
                           child: SizedBox(
@@ -882,13 +1052,6 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           ),
       ],
     ),
-    if (s.websiteConsent)
-      const Padding(
-        padding: EdgeInsets.only(top: AppSpacing.sm),
-        child: Text(
-          'Chrome · Edge · Brave · Firefox · Samsung Internet\nVisible address bars only.',
-        ),
-      ),
   ];
   Future<void> _detail(BlockingPlan plan) async {
     await showModalBottomSheet<void>(
@@ -991,6 +1154,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 ? null
                 : () => _strictOptions(s),
           ),
+          const SizedBox(height: _strictControlGap),
           if (s.locked) ...[
             if (s.unlockStarted && s.remainingMs > 0)
               Text(
@@ -1000,40 +1164,56 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
               ),
             if (!s.unlockStarted)
               FilledButton(
-                onPressed: _busy
-                    ? null
-                    : () => _perform(() => _gateway.command('requestUnlock')),
+                style: _strictControlStyle,
+                onPressed: _busy ? null : _requestUnlock,
                 child: const Text('Unblock'),
               ),
-            if (s.unlockStarted && s.strict['nfc'] == true)
+            if (s.unlockStarted && s.strict['nfc'] == true) ...[
+              if (s.remainingMs > 0) const SizedBox(height: _strictControlGap),
               OutlinedButton.icon(
+                style: _strictControlStyle,
                 icon: const Icon(AppIcons.devicesOutlined),
                 onPressed: _busy ? null : () => _scan(false),
                 label: const Text('Scan tag'),
               ),
+            ],
+            if (s.unlockStarted &&
+                (s.remainingMs > 0 || s.strict['nfc'] == true))
+              const SizedBox(height: _strictControlGap),
             if (s.unlockStarted)
-              OutlinedButton(
-                onPressed: _busy || s.remainingMs > 0
-                    ? null
-                    : () => _perform(() => _gateway.command('finishUnlock')),
-                child: const Text('Unlock'),
+              Text(
+                s.remainingMs > 0
+                    ? (s.unlockMode == 'off'
+                          ? 'Turning off Strict…'
+                          : 'Unlocking for 15m…')
+                    : 'Waiting for conditions',
+                textAlign: TextAlign.center,
               ),
           ] else ...[
-            if (s.strict['enabled'] == true)
+            if (s.strict['enabled'] == true) ...[
               FilledButton(
+                style: _strictControlStyle,
                 onPressed: _busy
                     ? null
                     : () => _perform(() => _gateway.command('relock')),
                 child: const Text('Lock now'),
               ),
-            FilledButton(
-              onPressed: _busy || _configurationLocked
-                  ? null
-                  : () => _strictOptions(s),
-              child: Text(
-                s.strict['enabled'] == true ? 'Configure' : 'Enable Strict',
+              const SizedBox(height: _strictControlGap),
+              OutlinedButton(
+                style: _strictControlStyle,
+                onPressed: _busy || _configurationLocked
+                    ? null
+                    : () => _strictOptions(s),
+                child: const Text('Configure'),
               ),
-            ),
+            ] else
+              FilledButton(
+                style: _strictControlStyle,
+                onPressed: _busy || _configurationLocked
+                    ? null
+                    : () => _strictOptions(s),
+                child: const Text('Enable Strict'),
+              ),
           ],
         ],
       ),
@@ -1165,6 +1345,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                       ),
                       const SizedBox(height: AppSpacing.md),
                       DropdownButtonFormField<int>(
+                        isExpanded: true,
                         initialValue: wait,
                         decoration: const InputDecoration(labelText: 'Wait'),
                         items: [
@@ -1250,9 +1431,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                           },
                           child: const Text('Set up tag'),
                         ),
-                      const Text(
-                        'All selected conditions must be met. Unlocks changes for 15m.',
-                      ),
+                      const Text('All selected conditions must be met.'),
                       const SizedBox(height: AppSpacing.md),
                       if (saveError != null)
                         Semantics(liveRegion: true, child: Text(saveError!)),
@@ -1342,14 +1521,35 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       for (final app in (_insights!['apps'] as List? ?? const []))
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(AppIcons.devicesOutlined),
-          title: Text((app as Map)['label'] as String),
-          trailing: Text('${(app['milliseconds'] as int) ~/ 60000}m'),
+          leading: _usageAppIcon(app as Map),
+          title: Text(app['label'] as String),
+          trailing: Text(
+            formatBlockingUsageDuration(app['milliseconds'] as int),
+          ),
         ),
       if ((_insights!['apps'] as List? ?? const []).isEmpty)
         const Text('No usage available.'),
     ],
   ];
+  Widget _usageAppIcon(Map app) {
+    const fallback = Icon(AppIcons.devicesOutlined);
+    final encoded = app['icon'];
+    if (encoded is! String || encoded.isEmpty) return fallback;
+    try {
+      final size = IconTheme.of(context).size ?? 24;
+      return Image.memory(
+        base64Decode(encoded),
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        excludeFromSemantics: true,
+        errorBuilder: (_, _, _) => fallback,
+      );
+    } on FormatException {
+      return fallback;
+    }
+  }
+
   Widget _metric(String value, String label) => Column(
     children: [
       Text(value, style: Theme.of(context).textTheme.headlineSmall),
@@ -2483,12 +2683,6 @@ class _UsageBars extends StatelessWidget {
       );
 
   String _usageLabel(int milliseconds) {
-    if (milliseconds == 0) return '0m';
-    if (milliseconds < 1000) return '<1s';
-    final seconds = milliseconds ~/ 1000;
-    if (seconds < 60) return '${seconds}s';
-    return seconds % 60 == 0
-        ? '${seconds ~/ 60}m'
-        : '${seconds ~/ 60}m ${seconds % 60}s';
+    return formatBlockingUsageDuration(milliseconds);
   }
 }

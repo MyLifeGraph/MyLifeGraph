@@ -2,12 +2,17 @@ package com.mylifegraph.app
 
 import android.Manifest
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.app.KeyguardManager
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.nfc.NfcAdapter
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Base64
 import io.flutter.embedding.android.FlutterActivity
@@ -26,8 +31,38 @@ class BlockingBridge(private val activity: FlutterActivity) {
     private var nfcGeneration = 0
     private val wifiRequest = BlockingPendingRequest<MethodChannel.Result>()
     private var disposed = false
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) stopped()
+        }
+    }
+    init {
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            activity.registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            activity.registerReceiver(screenReceiver, filter)
+        }
+    }
+    private fun screenUnlocked(): Boolean =
+        activity.getSystemService(PowerManager::class.java).isInteractive &&
+            !activity.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    private fun requireStrictScreen() {
+        if (!screenUnlocked()) stopped()
+        strictSession.requireVisible()
+    }
     private fun fail(result: MethodChannel.Result, error: Throwable) =
         result.error("blocking_error", error.message ?: "Blocking unavailable", null)
+    private fun appIcon(packageName: String): String = runCatching {
+        val drawable = activity.packageManager.getApplicationIcon(packageName)
+        val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        try {
+            drawable.setBounds(0, 0, 64, 64); drawable.draw(Canvas(bitmap))
+            val bytes = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+            Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+        } finally { bitmap.recycle() }
+    }.getOrDefault("")
     fun handle(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
@@ -55,6 +90,7 @@ class BlockingBridge(private val activity: FlutterActivity) {
                         }
                     }
                 }
+                "reorder" -> result.success(plans.reorder(call.arguments as Map<*, *>))
                 "consent" -> {
                     result.success(plans.consent(call.argument<String>("kind") ?: "", call.argument<Boolean>("allowed") ?: true))
                     FocusBlockAccessibilityService.refreshOverlayIfRunning(activity)
@@ -81,13 +117,17 @@ class BlockingBridge(private val activity: FlutterActivity) {
                     if (!visible) cancelNfc("Unlock wait reset.")
                     result.success(plans.status())
                 }
-                "requestUnlock" -> { strictSession.requireVisible(); result.success(plans.requestUnlock()) }
-                "finishUnlock" -> { strictSession.requireVisible(); result.success(plans.finishUnlock()) }
+                "requestUnlock" -> { requireStrictScreen(); result.success(plans.requestUnlock(call.argument<String>("mode"))) }
+                "finishUnlock" -> { requireStrictScreen(); result.success(plans.finishUnlock()) }
+                "tryFinishUnlock" -> {
+                    if (!screenUnlocked()) stopped()
+                    result.success(if (strictSession.canComplete()) plans.finishUnlock(onlyIfReady = true) else plans.status())
+                }
                 "relock" -> result.success(plans.relock())
                 "nfc" -> {
                     val enroll = call.argument<Boolean>("enroll") == true
                     if (enroll) plans.requireEditable()
-                    else strictSession.requireVisible()
+                    else requireStrictScreen()
                     val adapter = NfcAdapter.getDefaultAdapter(activity)
                     check(adapter != null && adapter.isEnabled) { "Enable NFC first." }
                     check(nfcRequest.pending == null) { "A tag scan is already running." }
@@ -115,7 +155,10 @@ class BlockingBridge(private val activity: FlutterActivity) {
                             nfcRequest.take(); ++nfcGeneration
                             runCatching { adapter.disableReaderMode(activity) }
                             data.fold(onSuccess = { hash ->
-                                runCatching { plans.acceptNfc(hash, enroll); plans.status() }
+                                runCatching {
+                                    if (!enroll) requireStrictScreen()
+                                    plans.acceptNfc(hash, enroll); plans.status()
+                                }
                                     .fold(onSuccess = response::success, onFailure = { fail(response, it) })
                             }, onFailure = { fail(response, it) })
                         }
@@ -136,14 +179,7 @@ class BlockingBridge(private val activity: FlutterActivity) {
                     worker.execute {
                         val catalog = list.map { app ->
                             val pkg = app.getValue("packageName")
-                            val icon = runCatching {
-                                val drawable = activity.packageManager.getApplicationIcon(pkg)
-                                val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
-                                drawable.setBounds(0, 0, 64, 64); drawable.draw(Canvas(bitmap))
-                                val bytes = ByteArrayOutputStream()
-                                bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes); bitmap.recycle()
-                                Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
-                            }.getOrDefault("")
+                            val icon = appIcon(pkg)
                             val category = runCatching {
                                 if (android.os.Build.VERSION.SDK_INT < 26) return@runCatching "Other"
                                 when (activity.packageManager.getApplicationInfo(pkg, 0).category) {
@@ -165,7 +201,11 @@ class BlockingBridge(private val activity: FlutterActivity) {
                     worker.execute {
                         try {
                             val data = plans.insights(days)
-                            handler.post { if (!disposed) result.success(data) }
+                            val apps = (data["apps"] as List<*>).map { row ->
+                                val app = row as Map<*, *>
+                                app + mapOf("icon" to appIcon(app["packageName"] as String))
+                            }
+                            handler.post { if (!disposed) result.success(data + mapOf("apps" to apps)) }
                         } catch (e: Exception) { handler.post { if (!disposed) fail(result, e) } }
                     }
                 }
@@ -186,10 +226,17 @@ class BlockingBridge(private val activity: FlutterActivity) {
         runCatching { NfcAdapter.getDefaultAdapter(activity)?.disableReaderMode(activity) }
         response.error("blocking_error", message, null)
     }
-    fun resumed() { strictSession.resumed() }
+    fun resumed() {
+        if (screenUnlocked()) strictSession.resumed() else stopped()
+    }
+    fun windowFocusChanged(focused: Boolean) {
+        if (!screenUnlocked()) stopped() else strictSession.focus(focused)
+    }
     fun paused() { strictSession.paused(); cancelNfc("Scan cancelled. Keep the app open.") }
+    fun stopped() { strictSession.stopped(); cancelNfc("Unlock wait reset.") }
     fun dispose() {
-        strictSession.paused()
+        strictSession.stopped()
+        runCatching { activity.unregisterReceiver(screenReceiver) }
         disposed = true; cancelNfc("Scan cancelled.")
         wifiRequest.take()?.error("blocking_error", "Permission request cancelled", null)
         handler.removeCallbacksAndMessages(null); worker.shutdownNow()

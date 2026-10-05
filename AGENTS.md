@@ -42,6 +42,7 @@ code, tests, or documentation.
 | Broad or cross-product user-flow work | `docs/current-product-guide.md` |
 | VPS development, setup, deployment continuation, or Gregor/Matthias server handoff | `docs/vps-matthias-handoff.md`; `deploy/vps/README.md`; `deploy/vps/PROJECT_ADMIN.md` |
 | Tooling, startup, environment, local URLs, or configuration | `docs/local-dev.md` |
+| Local release retention or post-publication cleanup | `docs/local-release-retention.md`; `docs/local-dev.md`; `docs/verification.md` |
 | Cross-system data flow, dependency direction, authority, or public architecture | `docs/architecture.md` |
 | Selecting, running, changing, or claiming verification | `docs/verification.md` |
 | Contract versions, wire shapes, public payloads, or cross-runtime compatibility | `docs/current-contracts.json` |
@@ -263,6 +264,29 @@ Do not use destructive Git commands to clean a worktree. Package managers may
 change lockfiles; review and report those changes instead of discarding them.
 Do not push, deploy, open a pull request, mutate remote state, or perform a
 destructive action without explicit authorization.
+
+### Mandatory Local Release Retention
+
+After an authorized GitHub Release publication, complete
+`npm run release:finalize-local -- --source <verified-output-folder> --tag <tag>
+--sha <full-commit-sha>` on each laptop/VM holding registered release copies.
+Follow `docs/local-release-retention.md`. A successful build or Actions artifact
+upload is NOT publication. Verify the non-draft release, resolved tag commit,
+uploaded asset identities and SHA-256 of downloaded bytes before cleanup.
+Unavailable GitHub verification stops cleanup; it never waives release gates.
+
+Only the marked `.tools/release-artifacts` store and exact allowlisted output
+files are eligible. Keep the oldest and newest verified published output per
+supported platform/variant, plus all protected outputs. Independent cleanup is
+dry-run first, then apply its exact content-bound confirmation with fresh checks.
+Protect unpublished/unknown files, originals, repositories, user data, backups,
+secrets, signing material and all active/rollback server releases. Pin any needed
+artifact copy before cleanup. No recursive/glob deletion, `flutter clean`, Git
+cleanup, Docker prune or generic cache eviction is permitted by this policy.
+
+Report failed/partial cleanup explicitly; do not claim completion. Publication
+authority includes this bounded local step, not unrelated deletions. A request
+to configure retention alone does not authorize GitHub publication or deployment.
 
 ### Authorization Before Updating Main
 

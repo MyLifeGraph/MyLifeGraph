@@ -15,6 +15,7 @@ class BlockingSnapshot {
       locked = map['locked'] as bool,
       remainingMs = map['remainingMs'] as int,
       unlockStarted = map['unlockStarted'] as bool? ?? false,
+      unlockMode = map['unlockMode'] as String? ?? 'temporary',
       releaseRemainingMs = map['releaseRemainingMs'] as int? ?? 0,
       websiteConsent = map['websiteConsent'] as bool,
       usageConsent = map['usageConsent'] as bool? ?? false,
@@ -39,6 +40,7 @@ class BlockingSnapshot {
       nfcEnrolled,
       wifiReady;
   final bool unlockStarted;
+  final String unlockMode;
 }
 
 class BlockingGateway {

@@ -11,11 +11,17 @@ directly visible; Reload/Delete share a row. Study motivation remains unchanged
 behind its existing backend capability gate, above the new Morning note.
 
 Blocking cards support direct edit, persistent drag-handle order and accessible
-Move up/down actions. Cards show short rule/time summaries and target counts;
+Move up/down actions. Hold the six-dot handle for one second; an armed drag
+uses the saved haptic preference. One sliver viewport allows edge auto-scrolling.
+Revision-checked exact-ID ordering is available under Strict/Focus without
+changing any rule definition. Cards show short rule/time summaries and target counts;
 full weekly windows remain in the editor/details. Customize keeps a native draft preview above icon, accent,
 layout, background and delay controls, with Save fixed outside the scroll area.
 All themes remain supported. Strict Unblock waits only on the visible foreground
-Strict screen; leaving or restarting resets the pending request. The finite
+Strict screen; leaving or restarting resets the pending request. A notification
+shade suspends completion but does not reset it. Unblock offers 15 minutes or
+permanent Strict-off before starting its wait, and completion is automatic only
+after all native conditions are met. The finite
 block-screen Return timer and Android essential exits are unchanged. Planner
 creation, rescheduling and drag/drop are explicitly outside this change.
 
@@ -32,6 +38,16 @@ budgets. Targets can be apps or explicitly consented website domains. Native
 Strict guards, local usage charts and block-screen customization remain entirely
 on-device. Permissions retains the existing master and independent Focus DND
 controls; named plans own app/domain selections after migration.
+The header retains only Permissions & limits on the right. Pull down at the
+top of any Blocking tab to reread local status; Insights also reloads usage.
+The theme-owned indicator supports short lists and coalesces repeated requests.
+Writes, editors and active reordering suppress refresh; failed reads retain the
+previous data. Pulling does not reset a Strict unlock request or upload data.
+Blocking Insights uses installed Android app icons in the unchanged leading
+slot. Missing/invalid icons retain the generic fallback; native PNGs are local,
+optional additive response fields, not a catalog upload or usage change.
+Plans keeps website limitations at explicit consent instead of a permanent
+browser-list paragraph.
 
 `blocking-plans-v2` is checked across the native/Dart device channel (explicit
 registry coverage, no FastAPI counterpart). Editors retain their opening
@@ -58,8 +74,12 @@ remaining additive. Larger, high-contrast checks use existing theme colors.
 Search/collapse do not save or clear targets.
 The active local tab uses a quiet selected pill. Plan cards expose their actual
 weekly windows in device time; usage charts show measured durations and range
-totals. Strict keeps its existing layout and Limits, using compact minute units
+totals using readable `m`/`h`/`d` elapsed units rather than large minute counts.
+Strict keeps its existing layout and Limits, using compact minute units
 without an extra explanatory line.
+Its controls use shared 16px rounding, at least 48px height and 12px gaps.
+Lock now stays primary; Configure is outlined. NFC timer/action/status are
+separated, and Unlock choices remain stacked and scrollable on small displays.
 Weekly clock rows share the plan-card center axis. Android Customize embeds the
 same native `BlockingScreenView` as the actual app overlay, in a bounded phone
 frame. Its Return replays only its own preview countdown; it never records an

@@ -41,6 +41,7 @@ bash scripts/test_e2e_web_process_ownership.sh
 
 node --check scripts/check_docs_consistency.mjs
 node --test scripts/web_build_cache.test.mjs
+node --test scripts/local_release_retention.test.mjs
 node --test apps/website/website.test.mjs
 node --check scripts/check_docs_consistency.test.mjs
 node --check scripts/check_frontend_visual_contract.mjs
