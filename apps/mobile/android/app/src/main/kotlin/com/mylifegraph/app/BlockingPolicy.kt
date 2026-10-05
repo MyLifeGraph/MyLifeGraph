@@ -117,6 +117,20 @@ class BlockingUsageReducer(private val start: Long, private val end: Long) {
 
 /** Persist boot identity with monotonic timestamps. A reboot never completes a wait. */
 object BlockingUnlockPolicy {
+    const val TEMPORARY = "temporary"
+    const val OFF = "off"
+
+    fun mode(value: String?): String = (value ?: TEMPORARY).also {
+        require(it == TEMPORARY || it == OFF) { "Choose a valid unlock action." }
+    }
+
+    fun requireSameIntent(requested: String, pending: String?) {
+        check(pending == null || requested == pending) { "Cancel the current unlock request first." }
+    }
+
+    fun completionAllowed(mode: String, focusActive: Boolean): Boolean =
+        mode != OFF || !focusActive
+
     fun started(started: Long, startBoot: Int, boot: Int, now: Long): Boolean =
         boot >= 0 && startBoot == boot && started >= 0 && now >= started
 
@@ -131,4 +145,14 @@ object BlockingUnlockPolicy {
         needsWifi: Boolean, wifiMatches: Boolean, needsNfc: Boolean, nfcMatches: Boolean): Boolean =
         remaining == 0L && (!needsPower || powered) && (!needsWifi || wifiMatches) &&
             (!needsNfc || nfcMatches)
+}
+
+/** Presentation order can change while rules remain locked, but cannot alter any ID. */
+object BlockingOrderPolicy {
+    fun <T> reorder(current: List<T>, ids: List<String>, identity: (T) -> String): List<T> {
+        val byId = current.associateBy(identity)
+        require(byId.size == current.size && ids.size == current.size &&
+            ids.toSet().size == ids.size && ids.toSet() == byId.keys) { "Plans changed. Reload and try again." }
+        return ids.map { byId.getValue(it) }
+    }
 }

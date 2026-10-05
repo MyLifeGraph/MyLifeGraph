@@ -104,6 +104,21 @@ class _PolishGateway extends FakeBlockingGateway {
   };
 }
 
+class _LongDurationGateway extends _PolishGateway {
+  @override
+  Future<Map> insights(int days) async => {
+    'daily': [
+      {
+        'dateEpochMs': DateTime(2026, 10, 3).millisecondsSinceEpoch,
+        'milliseconds': 2000 * 60000,
+      },
+    ],
+    'apps': [
+      {'label': 'Example browser', 'milliseconds': 2000 * 60000},
+    ],
+  };
+}
+
 Future<void> _open(
   WidgetTester tester, {
   int wait = 180,
@@ -152,6 +167,34 @@ Future<void> _open(
 }
 
 void main() {
+  for (final theme in [
+    AppTheme.dark,
+    AppTheme.light,
+    AppTheme.space,
+    AppTheme.liquidGlass,
+  ]) {
+    testWidgets(
+      'long usage totals and app rows use readable units at 320px/200% ${theme.brightness}/${theme.colorScheme.primary}',
+      (tester) async {
+        await _open(
+          tester,
+          gateway: _LongDurationGateway(),
+          theme: theme,
+          width: 320,
+          scale: 2,
+        );
+        await tester.tap(find.text('Insights').last);
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(find.text('Daily usage'), 150);
+        expect(find.text('Total 1d 9h 20m'), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Example browser'), 150);
+        await tester.pumpAndSettle();
+        expect(find.text('1d 9h 20m'), findsWidgets);
+        expect(find.textContaining('2000m'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final (width, scale) in [(390.0, 1.0), (900.0, 1.0), (320.0, 2.0)]) {
     testWidgets('Customize actions share centered width at $width/$scale', (
       tester,
@@ -177,18 +220,19 @@ void main() {
       expect(tester.widget<OutlinedButton>(returnButton).onPressed, isNull);
       expect(tester.takeException(), isNull);
     });
-    testWidgets('weekly detail is not repeated on compact cards at $width/$scale', (
-      tester,
-    ) async {
-      await _open(tester, width: width, scale: scale);
-      for (final label in [
-        'Mo Tu · 22:00–07:00 (+1 day)',
-        'We Su · 10:00–11:00',
-      ]) {
-        expect(find.text(label), findsNothing);
-      }
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'weekly detail is not repeated on compact cards at $width/$scale',
+      (tester) async {
+        await _open(tester, width: width, scale: scale);
+        for (final label in [
+          'Mo Tu · 22:00–07:00 (+1 day)',
+          'We Su · 10:00–11:00',
+        ]) {
+          expect(find.text(label), findsNothing);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
   for (final (width, scale) in [(390.0, 1.0), (320.0, 2.0)]) {
     testWidgets('native active state is visibly distinct at $width/$scale', (
@@ -200,8 +244,11 @@ void main() {
         width: width,
         scale: scale,
       );
-      await tester.scrollUntilVisible(find.text('Active'), 180,
-        scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(
+        find.text('Active'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('Active'), findsOneWidget);
       final active = tester.widget<AppSurface>(
@@ -210,8 +257,11 @@ void main() {
             .first,
       );
       expect(active.selected, isTrue);
-      await tester.scrollUntilVisible(find.text('Night'), 180,
-        scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(
+        find.text('Night'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('Scheduled'), findsOneWidget);
       final inactive = tester.widget<AppSurface>(
@@ -222,7 +272,10 @@ void main() {
       expect(inactive.selected, isFalse);
       await tester.tap(find.text('Night'));
       await tester.pumpAndSettle();
-      expect(find.text('Mo Tu We Th Fr · 22:00–07:00 (+1 day)'), findsOneWidget);
+      expect(
+        find.text('Mo Tu We Th Fr · 22:00–07:00 (+1 day)'),
+        findsOneWidget,
+      );
       expect(find.text('Device time'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -339,7 +392,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Daily usage'), 180);
       await tester.pumpAndSettle();
-      expect(find.text('Total 465m'), findsOneWidget);
+      expect(find.text('Total 7h 45m'), findsOneWidget);
       expect(find.text('Peak 30m'), findsOneWidget);
       // Dense month charts retain individual values in tooltips, not 30 labels.
       expect(find.byType(Tooltip), findsWidgets);

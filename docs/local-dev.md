@@ -1296,6 +1296,17 @@ timezone revision read before import. Only an import with
 
 ## Android Builds
 
+### Mandatory post-publication retention
+
+After an authorized GitHub Release publication, complete
+`npm run release:finalize-local -- --source <verified-output-folder> --tag <tag> --sha <full-sha>`
+on laptop/VM hosts holding registered release copies. The
+[bounded retention runbook](local-release-retention.md) requires uploaded-asset
+and downloaded SHA-256 proof before keeping only oldest/newest per supported
+platform/variant, plus protected outputs. Held Actions uploads are not
+publication. Originals, unknown/unpublished files, signing, backups and all
+active/rollback services remain protected; never prune broad build trees.
+
 ### Build-cache controls
 
 `npm run verify:web` reuses only a checksum-validated, credential-free debug

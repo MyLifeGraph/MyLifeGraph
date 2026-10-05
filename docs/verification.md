@@ -31,6 +31,191 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local Blocking Insights icons and Plans copy (2026-10-05)
+
+- Base `dbf0b0e8608a0f1971a513445083ede955eb24ff`; earlier dirty work remains
+  preserved. The native bridge reuses its catalog PNG renderer for the bounded
+  usage rows, adding an optional local-only `icon` field without changing the
+  channel version, ranking, consent, measurements or enforcement. Flutter uses
+  the prior leading dimensions and a safe generic fallback. Plans removes only
+  the permanent browser list; its explicit website disclosure remains intact.
+- **220 focused Blocking/Strict/Focus Protection Flutter tests pass**. New
+  coverage verifies decoded images, exact before/after row/icon/title/duration
+  geometry across four themes and 390px/100% or 320px/200% layouts, missing,
+  empty, malformed, corrupt and wrong-type images, and website opt-in/cancel.
+  The valid-image check failed before implementation. One actual renderer
+  capture in `.tools/ui-catalog/blocking-insights-icons-20261005` was inspected;
+  its blue test image is synthetic, not an installed app icon/device screenshot.
+- Android native compilation and **72 JVM tests** pass; debug lint passes with
+  **0 errors / 87 warnings**. The isolated command excludes only the Flutter
+  build task, not native compilation, JVM tests or lint. Initial lint found two
+  incorrectly escaped Windows drive separators in ignored `local.properties`;
+  fixing them and rerunning only stale lint analysis resolves those findings.
+- Flutter analysis, Docs, Visual and diff hygiene pass. Captured-base affected
+  **dry-run only** selects Full for the combined pending tree; existing unrelated
+  full-Windows/full-suite gaps remain, and this is not a new Full pass.
+  No signed APK, GitHub publication, production rollout or physical-device
+  icon check is performed. Today grouping is a discussion only, not a change.
+
+### Blocking pull-to-refresh and compact header (2026-10-05)
+
+- Task base `dbf0b0e8608a0f1971a513445083ede955eb24ff`; earlier dirty work
+  remains intact. Flutter-only local status/usage refresh replaces the header
+  Refresh action; Permissions uses the existing compact heading at the right.
+  No native/channel, database, enforcement, provider or publication change.
+- **211 focused Blocking/Strict/Focus Protection Flutter tests pass**. New
+  coverage includes actual pulls across all four tabs/themes, same-row header
+  positioning, pending progress/single-flight reads, failure/retry with retained
+  usage data, ordinary scrolling, reorder suppression, tab/disposal races and
+  preservation of an active Strict unlock request. Existing real long-hold drag,
+  edge auto-scroll, large-text and back/edit/save regressions remain in the run.
+- Flutter analysis, Docs, Visual and diff hygiene pass. One actual Flutter
+  renderer capture in `.tools/ui-catalog/blocking-pull-refresh-20261005` is
+  visually inspected. It uses a synthetic gateway and is not an installed APK
+  or physical-device test. Existing copy/architecture owners need no new promise:
+  this adds no new label, cloud data or authority.
+- Captured-base affected **dry-run only** still selects Full for the combined
+  pending tree and unrelated untracked media. This is not a new Full gate pass;
+  prior Windows/full-suite gaps below remain open. Nothing is pushed or deployed.
+
+### Approved Strict button spacing polish (2026-10-05)
+
+- Base `dbf0b0e8608a0f1971a513445083ede955eb24ff`; prior dirty work stays
+  preserved. Only approved Flutter button presentation and its adjacent Wait
+  dropdown width constraint change; native enforcement, labels, timer intent,
+  providers and database behavior remain unchanged. No publication is performed.
+- **189 focused Blocking/Strict/Focus Protection Flutter tests pass**. The 24
+  new cases check exact 12px gaps, 16px corners, equal widths, at least 48px
+  heights, all four themes, 390px/100% and 320px/200% text, Configure/back and
+  Lock now. Before the polish, normal-size cases failed on the absent outlined
+  Configure, touching NFC controls and 8px dialog gap. Large-text configuration
+  additionally reproduced an existing Wait-dropdown overflow; width expansion
+  resolves it without dropping an option. The Wi-Fi test finder now reflects
+  Configure's intentionally outlined presentation.
+- Three actual Flutter renderer captures under
+  `.tools/ui-catalog/button-spacing-implemented-20261005` were inspected against
+  the approved generated concepts. They are synthetic test screens, not APK or
+  physical-device evidence; the global palette and non-button layout stay intact.
+- Flutter analysis, Docs, Visual and diff hygiene pass. Captured-base affected **dry-run only**
+  selects Full because the combined tree includes earlier retention/native and
+  unrelated media paths. It is not a new Full gate pass; existing full-Windows
+  gaps below remain open. Interrupted restricted-environment Flutter processes
+  were restarted outside that environment for focused verification. No SDK,
+  reference golden, dependency or other running service was changed.
+
+### Local Blocking follow-up after release cleanup (2026-10-05)
+
+- Base `dbf0b0e8608a0f1971a513445083ede955eb24ff`. Prior retention changes
+  and unrelated untracked media stay preserved. This follow-up is local only;
+  no new publication, account mutation, schema, provider or rollout is performed.
+- Reproduced notification-shade cancellation with a failing-before Flutter
+  lifecycle regression. Real touch tests additionally exposed the unpainted
+  gap between the six dots: the complete handle now owns pointer hits. One-second
+  hold, early-scroll/cancel behavior, haptic preference, exact-ID order under
+  Strict, offscreen edge auto-scroll, stale revisions and single-flight writes
+  have passing widget coverage. Native exact-permutation tests preserve rules.
+- Strict choice starts no request until selected; temporary/permanent intent,
+  automatic guarded completion, all native AND conditions, shade suspension,
+  actual exit/screen-lock/recreation cancellation, stale replies and repeated
+  tab switching are covered. Independent review found and fixed a delayed
+  visibility-sync double-tap race and lost polling after a transient read failure.
+- **165 Blocking/Strict/Focus Protection Flutter tests pass**, including long duration
+  labels at 320px/200% text in all four themes. Fresh native Kotlin compilation,
+  **72 JVM tests** (zero failures/errors/skips) and debug lint pass (zero errors,
+  87 warnings). That native invocation excludes Flutter compilation, which is
+  checked separately by the Flutter suite. Only equivalent ignored local SDK
+  path escaping was repaired for the local lint input; no baseline is suppressed.
+- Flutter analysis, Docs and Visual gates pass. Synthetic renderer captures
+  under `.tools/ui-catalog/blocking-followup-20261005` were generated and visually
+  inspected; they are not installed-device screenshots. ADB reports no attached
+  device, so actual notification-shade/OEM/Strict/Accessibility behavior remains
+  an explicit device acceptance gap. No private account or local plan was altered.
+- Captured-base affected verification selects Full for the combined dirty tree.
+  Its Windows run is not green: Source lacks Unix `setsid`, the selected backend
+  interpreter lacks Ruff, and the reference component goldens differ on Windows.
+  An initial suite run also used the old ListView-specific test finder after the
+  intentional sliver change; that finder was adapted and focused tests rerun.
+  Reference goldens, test gates, credentials and dependencies are not changed to
+  hide those gaps. No new signed APK or production-release claim is made.
+
+### Historical release cleanup after explicit opt-in (2026-10-05)
+
+- Base remains `dbf0b0e8608a0f1971a513445083ede955eb24ff`; prior retention
+  changes and unrelated untracked media are preserved. The user separately
+  authorizes cleaning the existing downloaded outputs on laptop and VM.
+- Six inventoried bundles (RC6–RC10 and RC21) matched local metadata/checksums,
+  real non-draft GitHub tag/source identities, uploaded asset digests and freshly
+  streamed public download SHA-256. Authenticated `gh api` on the VM then
+  revalidated immutable asset identities before the local operation; anonymous
+  HTTP 403 and intermittent nested SSH failures stopped earlier attempts without
+  deletion. No credentials were copied into scripts, arguments or reports.
+- Laptop: RC7–RC10 removed; redundant RC21 proof files removed while its managed
+  copy remains. RC6 was registered in the managed store and its now-redundant
+  original output files removed only after matching the retained copy. Exactly
+  24 known public output files unlinked, **744,774,927 bytes removed** and
+  **71,767,584 bytes copied** to retain RC6: **673,007,343 net payload bytes freed**.
+  This net figure does not falsely count relocation as space saving.
+- VM: only four redundant RC21 proof files removed, **151,993,407 payload bytes**
+  / **152,010,752 allocated guest-filesystem bytes**. Its managed RC21 remains.
+  Combined net payload reduction is **825,000,750 bytes (825.00 MB / 786.78 MiB)**;
+  small audit/receipt files and filesystem allocation rounding are not included.
+  This does not claim physical Proxmox thinpool reclamation or a host trim.
+- Dry-run preceded deletion. A deliberately wrong confirmation stopped before
+  copying/removal. Laptop repeat-check reports **0 bytes** and hashes retained
+  RC6/RC21; the VM redundant folder is empty. The retention suite again passes
+  30 tests; documentation checks pass. Detailed exact-path inventories, proof,
+  plans and completion reports remain in `.tools/legacy-release-*` on the
+  relevant hosts. Known public releases can restore every removed artifact.
+- No recursive deletion or global cache/Docker cleanup. Device-audit RC20,
+  unpublished debug APKs, repositories, user data, backups, signing, retired
+  VM services and active/rollback production versions remain untouched.
+
+### Safe local release retention (2026-10-05, local/VM tooling)
+
+- Task base: `dbf0b0e8608a0f1971a513445083ede955eb24ff`. This task authorizes
+  laptop/VM retention setup, not a new GitHub publication or production rollout.
+  No application, schema, dependency, signing or deployment behavior changed.
+- **30 retention tests pass on Windows and Linux**. Tests actually exercise
+  dry-run/no deletion, published oldest/newest selection, pinned/unpublished/
+  unknown protection, repeated zero-byte apply, source/secret/backup/runtime
+  isolation, links, network/upload/download/hash/commit failures, release and
+  local drift, locks, candidate retry and partial-unlink recovery refusal.
+- The laptop managed store is initialized at `.tools/release-artifacts`.
+  The personal VM has the same bounded store under
+  `/home/codex/code/MyLifeGraph/.tools/release-artifacts`. Eight installed tool/
+  test/runbook snapshot files are checksum-verified in
+  `/home/codex/.local/share/mylifegraph-release-retention/5cd4d3d7f9c9d7e68babbd828fc189ad99503b754062494f1ec331fb2635ea6f`;
+  the directory name is the SHA-256 of the ordered filename/hash manifest.
+  Node on that VM is `v22.23.2`. Its older checkout remains
+  `1be4efd4d9449472ed6c74e83e7b7c0a2da25910`; only AGENTS/local-dev receive
+  the mandatory retention instructions, with unchanged original copies retained
+  under `.tools/release-retention-setup`. Existing untracked attachments stay
+  untouched; no retired development service is restarted.
+- Real public RC21 files are staged on the laptop and VM. The local APK is
+  151,618,552 bytes with SHA-256
+  `a29b53918a6e60bd99e4b3ddde2e4fa989486d9064774aeb1ed3a7c124bc49bf`,
+  and metadata binds it to the task-base commit above. Initial empty-store
+  previews select no removals. A real laptop finalizer encountered interrupted
+  HTTP streams (`terminated`) during renewed remote verification and exited
+  nonzero without removing anything. That is fail-closed network evidence,
+  not a successful publication-proof claim or permission to skip hash checking.
+  The real VM finalizer subsequently completed successfully: non-draft RC21,
+  exact tag/source SHA, all four uploaded digests and streamed downloads matched;
+  dry-run/apply retained the sole oldest/newest bundle and removed **0 bytes**.
+  The final installed tool's Linux fixture suite was rerun successfully.
+- Docs (19 tests), Android release configuration (7 tests), visual guard
+  (1 test) and diff hygiene pass. The captured-base affected dry-run selects
+  Full due to workflow/tooling changes and preserved prior untracked media.
+  The Windows Source gate reaches its local-stack harness but stops at the
+  pre-existing missing Unix `setsid`; the complete Source/Full gates are not
+  claimed green. The independent retention suite runs directly in both OSes.
+  Required CI, security and signing gates remain mandatory for any later push.
+- The [retention runbook](local-release-retention.md) is mandatory in AGENTS,
+  the build/release runbooks and both signed-APK workflows. Their held uploads
+  do not count as publication. No real release files, legacy outputs, user
+  data, backups, signing files or active/rollback server versions are deleted
+  by this setup. Only isolated test fixtures exercise actual pruning.
+
 ### Final Exam and Android audit candidate (2026-10-05)
 
 - Task base remains `e30b78c24409263c9d7ae80f188e8b73672acba3`. The user
@@ -3986,6 +4171,7 @@ Use the lowest level that covers the complete change.
 | Docs | `npm run verify:docs` | Documentation tests, links, routes, current versions, owner coverage, current claims, and docs-impact rules. | No |
 | Visual | `npm run verify:visual` | Frontend visual-system tests and source contract. | No |
 | Source | `npm run verify:source` | Shared documentation, visual, shell, deployment, and source contract checks used locally and by CI. | No |
+| Release retention tests | `npm run verify:release-cleanup` | Isolated dry-run, deletion, protection, failure, drift and repetition fixtures; no real GitHub publication or service changes. | Deletes only disposable fixture outputs. |
 | Affected | `npm run verify:affected -- --base-ref <task-base-ref>` | Classifies every task path and runs the required gates. | Depends on selected gates; never grants reset authority. |
 | Fast | `FLUTTER_BIN="${FLUTTER_BIN:-flutter}" npm run verify:fast` | Docs/visual/source checks, complete Flutter analysis/tests, complete FastAPI checks, and diff hygiene. | No |
 | Flutter | `npm run verify:flutter` | Flutter dependency resolution, analysis, and the complete Flutter suite. | No |

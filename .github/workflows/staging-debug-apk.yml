@@ -84,7 +84,9 @@ jobs:
           git diff --exit-code -- pubspec.yaml pubspec.lock
 
       - name: Verify release configuration
-        run: npm run verify:android-release
+        run: |
+          npm run verify:android-release
+          npm run verify:release-cleanup
 
       - name: Derive update-safe Android identity
         id: identity
@@ -163,6 +165,9 @@ jobs:
         run: echo "commit=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
       - name: Upload verified signed APK
+        # Held Actions output is NOT publication and cannot authorize retention.
+        # Published tagged outputs on laptop/VM require release:finalize-local;
+        # see docs/local-release-retention.md. Never prune candidates here.
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: MyLifeGraph-Pilot-Signed-${{ steps.artifact.outputs.commit }}

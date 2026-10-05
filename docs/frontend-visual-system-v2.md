@@ -18,8 +18,25 @@ actions put Reload/Delete side by side, with Sync separate; the three categories
 are directly visible, while saved sample data and
 privacy detail are disclosures, while cloud/provider consent stays visible.
 
-Blocking Strict separates the active idle state from an explicitly requested
+Blocking's header has one right-side Permissions action;
+its former Refresh icon is replaced by the standard theme-owned pull-to-refresh
+indicator, shared by all four local tabs without moving controls or changing
+materials. Reordering does not trigger the indicator.
+Blocking Insights app images occupy the existing IconTheme-sized leading slot;
+row height, text, trailing durations and spacing remain unchanged. Missing or
+invalid images keep the prior generic icon. No new badge or colored wrapper.
+Strict separates the active idle state from an explicitly requested
 unlock countdown; before Unblock no countdown or disabled completion is shown.
+The compact Unlock dialog offers two full-width choices without an explanatory
+paragraph. Only the chosen request shows progress; completion needs no second
+button. Strict controls share a 48px minimum height and 16px corner radius;
+text scaling may increase their height. The unlocked Lock now/Configure controls
+have equal full width and a 12px gap, with Configure outlined as the secondary
+action. Method/timer/NFC action/status use 12px separation. Unlock choices use
+the same geometry, 20px symmetric content insets and a 12px gap; their dialog
+scrolls if needed. Existing theme materials, colors and labels stay unchanged.
+Plan handles arm after one second with preference-aware haptics and
+retain their 44px targets. Usage labels use compact day/hour/minute units.
 Its existing ornament remains decorative. Android Customize places its edit
 action above the native preview. Taps retain preview interaction, while vertical
 swipes scroll the containing page; the actual blocking overlay is unchanged.

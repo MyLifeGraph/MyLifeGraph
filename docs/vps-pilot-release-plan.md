@@ -873,6 +873,14 @@ evidence.
 
 ### Release identity
 
+After successful GitHub Release publication, every publishing/build host with
+registered local release copies must complete the
+[local retention finalizer](local-release-retention.md). Uploaded asset and
+downloaded SHA-256 verification precede any bounded cleanup. A held Actions
+candidate is not publication. This policy never removes VPS runtime current/
+previous releases, images, source bundles, backups or signing material; those
+remain under their existing separate operational protection rules.
+
 Release identity is deliberately two-stage so tags do not depend on artifacts
 that do not yet exist:
 

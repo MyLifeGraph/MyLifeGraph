@@ -221,6 +221,7 @@ class BlockingPlans(private val context: Context) {
         return mapOf("contractVersion" to CONTRACT_VERSION, "revision" to prefs.getLong("revision", 0), "plans" to arrayMap(values),
             "strict" to jsonMap(s), "locked" to locked(), "remainingMs" to remaining,
             "unlockStarted" to unlockStarted(),
+            "unlockMode" to (if (unlockStarted()) prefs.getString("unlock_mode", BlockingUnlockPolicy.TEMPORARY) else null),
             "releaseRemainingMs" to (if (released()) (prefs.getLong("release_until", 0) - SystemClock.elapsedRealtime()).coerceAtLeast(0) else 0),
             "custom" to jsonMap(custom()), "websiteConsent" to websiteConsent(),
             "usageConsent" to usageConsent(), "usageGranted" to usageGranted(),
@@ -294,6 +295,20 @@ class BlockingPlans(private val context: Context) {
             .putLong("revision", prefs.getLong("revision", 0) + 1))
         return status()
     }
+    fun reorder(arguments: Map<*, *>): Map<String, Any?> {
+        require((arguments["revision"] as? Number)?.toLong() == prefs.getLong("revision", 0)) {
+            "Settings changed. Reload and try again."
+        }
+        val ids = (arguments["ids"] as? List<*>)?.map { it as? String ?: error("Invalid plan id.") }
+            ?: error("Missing plan order.")
+        val current = plans()
+        val ordered = BlockingOrderPolicy.reorder((0 until current.length()).map { current.getJSONObject(it) }, ids) {
+            it.getString("id")
+        }
+        commit(prefs.edit().putString("plans", JSONArray(ordered).toString())
+            .putLong("revision", prefs.getLong("revision", 0) + 1))
+        return status()
+    }
     fun setStrict(arguments: Map<*, *>): Map<String, Any?> {
         requireEditable()
         require((arguments["revision"] as? Number)?.toLong() == prefs.getLong("revision", 0)) {
@@ -312,26 +327,34 @@ class BlockingPlans(private val context: Context) {
             if (s.optBoolean("wifi")) s.put("wifiName", currentWifi())
         }
         commit(prefs.edit().putString("strict", s.toString()).putLong("revision", prefs.getLong("revision", 0) + 1).remove("unlock_start")
-            .remove("release_until").remove("nfc_verified"))
+            .remove("unlock_boot").remove("unlock_mode").remove("release_until").remove("release_boot")
+            .remove("nfc_verified").remove("nfc_boot"))
         return status()
     }
     fun cancelUnlockRequest() {
-        if (!prefs.contains("unlock_start") && !prefs.contains("nfc_verified")) return
+        if (!prefs.contains("unlock_start") && !prefs.contains("nfc_verified") && !prefs.contains("unlock_mode")) return
         commit(prefs.edit().remove("unlock_start").remove("unlock_boot")
-            .remove("nfc_verified").remove("nfc_boot"))
+            .remove("unlock_mode").remove("nfc_verified").remove("nfc_boot"))
     }
-    fun requestUnlock(): Map<String, Any?> {
+    fun requestUnlock(requestedMode: String? = null): Map<String, Any?> {
         check(locked()) { "Strict mode is not locked." }
+        val mode = BlockingUnlockPolicy.mode(requestedMode)
         val currentBoot = boot()
         val elapsed = SystemClock.elapsedRealtime()
         check(currentBoot >= 0) { "Android boot identity is unavailable." }
-        if (!unlockStarted(currentBoot, elapsed)) {
-            commit(prefs.edit().putLong("unlock_start", elapsed).putInt("unlock_boot", currentBoot))
+        if (unlockStarted(currentBoot, elapsed)) {
+            BlockingUnlockPolicy.requireSameIntent(mode, prefs.getString("unlock_mode", BlockingUnlockPolicy.TEMPORARY))
+        } else {
+            commit(prefs.edit().putLong("unlock_start", elapsed).putInt("unlock_boot", currentBoot)
+                .putString("unlock_mode", mode).remove("nfc_verified").remove("nfc_boot"))
         }
         return status()
     }
-    fun finishUnlock(): Map<String, Any?> {
-        check(unlockStarted()) { "Start unlocking first." }
+    fun finishUnlock(onlyIfReady: Boolean = false): Map<String, Any?> {
+        if (!unlockStarted()) {
+            check(onlyIfReady) { "Start unlocking first." }
+            return status()
+        }
         val s = strict()
         val remaining = status()["remainingMs"] as Long
         val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -339,15 +362,32 @@ class BlockingPlans(private val context: Context) {
         val verified = prefs.getLong("nfc_verified", -1)
         val nfcOk = prefs.getInt("nfc_boot", -2) == boot() && verified >= 0 &&
             SystemClock.elapsedRealtime() - verified in 0..60000
-        check(locked() && BlockingUnlockPolicy.ready(remaining, s.optBoolean("power"), power,
-            s.optBoolean("wifi"), currentWifi().isNotEmpty() && currentWifi() == s.optString("wifiName"),
-            s.optBoolean("nfc"), nfcOk)) { "Unlock conditions are not met yet." }
-        commit(prefs.edit().putLong("release_until", SystemClock.elapsedRealtime() + 15 * 60000)
-            .putInt("release_boot", boot()).remove("unlock_start").remove("nfc_verified"))
+        val mode = BlockingUnlockPolicy.mode(prefs.getString("unlock_mode", BlockingUnlockPolicy.TEMPORARY))
+        val wifi = currentWifi()
+        val ready = locked() && BlockingUnlockPolicy.ready(remaining, s.optBoolean("power"), power,
+            s.optBoolean("wifi"), wifi.isNotEmpty() && wifi == s.optString("wifiName"),
+            s.optBoolean("nfc"), nfcOk) && BlockingUnlockPolicy.completionAllowed(mode,
+                legacy.readLease()?.isActive(now()) == true)
+        if (!ready) {
+            check(onlyIfReady) { "Unlock conditions are not met yet." }
+            return status()
+        }
+        val editor = prefs.edit().remove("unlock_start").remove("unlock_boot").remove("unlock_mode")
+            .remove("nfc_verified").remove("nfc_boot")
+        if (mode == BlockingUnlockPolicy.OFF) {
+            editor.putString("strict", s.put("enabled", false).toString())
+                .putLong("revision", prefs.getLong("revision", 0) + 1)
+                .remove("release_until").remove("release_boot")
+        } else {
+            editor.putLong("release_until", SystemClock.elapsedRealtime() + 15 * 60000)
+                .putInt("release_boot", boot())
+        }
+        commit(editor)
         return status()
     }
     fun relock(): Map<String, Any?> {
-        commit(prefs.edit().remove("release_until").remove("unlock_start").remove("nfc_verified"))
+        commit(prefs.edit().remove("release_until").remove("release_boot").remove("unlock_start")
+            .remove("unlock_boot").remove("unlock_mode").remove("nfc_verified").remove("nfc_boot"))
         return status()
     }
     fun acceptNfc(hash: String, enroll: Boolean) {

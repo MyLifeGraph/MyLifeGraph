@@ -14,6 +14,7 @@ import 'package:my_life_graph/features/focus_protection/domain/focus_protection.
 import 'package:my_life_graph/features/focus_protection/presentation/pages/blocking_page.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/widgets/blocking_custom_editor.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/widgets/blocking_screen_preview.dart';
+import 'package:my_life_graph/features/focus_protection/presentation/widgets/blocking_reorder_handle.dart';
 import 'support/ui_catalog_capture.dart';
 
 Map<String, Object> snapshot({bool locked = false}) => {
@@ -78,6 +79,8 @@ class FakeBlockingGateway extends BlockingGateway {
 }
 
 class _OrderGateway extends BlockingGateway {
+  _OrderGateway({this.locked = false});
+  final bool locked;
   List<BlockingPlan> plans = [
     for (final id in ['A', 'B', 'C'])
       BlockingPlan(
@@ -99,19 +102,27 @@ class _OrderGateway extends BlockingGateway {
     String name, [
     Map<String, Object>? args,
   ]) async {
-    if (name == 'save') {
+    if (name == 'save' || name == 'reorder') {
       saves++;
       await pending?.future;
       if (fail || args!['revision'] != revision) {
         throw StateError('Save conflict');
       }
-      plans = (args['plans'] as List)
-          .map((value) => BlockingPlan.fromMap(value as Map))
-          .toList();
+      if (name == 'reorder') {
+        plans = [
+          for (final id in args['ids'] as List)
+            plans.singleWhere((p) => p.id == id),
+        ];
+        expectSync(args.keys.toSet(), {'revision', 'ids'});
+      } else {
+        plans = (args['plans'] as List)
+            .map((value) => BlockingPlan.fromMap(value as Map))
+            .toList();
+      }
       revision++;
     }
     return BlockingSnapshot({
-      ...snapshot(),
+      ...snapshot(locked: locked),
       'revision': revision,
       'plans': plans.map((p) => p.toMap()).toList(),
     });
@@ -173,23 +184,81 @@ Future<void> _showCustomControl(WidgetTester tester, Finder control) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('armed drag scrolls to offscreen plans using the page viewport', (
+    tester,
+  ) async {
+    final gateway = _OrderGateway(locked: true);
+    gateway.plans.addAll([
+      for (var i = 0; i < 12; i++)
+        BlockingPlan(
+          id: 'extra$i',
+          name: 'Extra $i',
+          apps: {'example.app'},
+          always: true,
+        ),
+    ]);
+    await _openOrder(tester, gateway);
+    tester.view.physicalSize = const Size(390, 700);
+    await tester.pumpAndSettle();
+    final scroller = find.byType(CustomScrollView);
+    final start = tester.getCenter(find.byType(BlockingReorderHandle).first);
+    final edge = tester.getRect(scroller).bottom - 4;
+    final gesture = await tester.startGesture(start);
+    await tester.pump(const Duration(milliseconds: 1100));
+    await gesture.moveTo(Offset(start.dx, edge));
+    for (var i = 0; i < 180; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(gateway.saves, 1);
+    expect(gateway.plans.indexWhere((p) => p.id == 'A'), greaterThan(3));
+    expect(gateway.plans, hasLength(15));
+    expect(gateway.plans.map((p) => p.id).toSet(), {
+      'A',
+      'B',
+      'C',
+      for (var i = 0; i < 12; i++) 'extra$i',
+    });
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'long-hold handle reorders real touch drag while Strict is locked',
+    (tester) async {
+      final gateway = _OrderGateway(locked: true);
+      await _openOrder(tester, gateway);
+      final handle = find.byType(BlockingReorderHandle).first;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump(const Duration(milliseconds: 1100));
+      await gesture.moveBy(const Offset(0, 310));
+      await tester.pump(const Duration(milliseconds: 300));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(gateway.saves, 1);
+      expect(gateway.plans.first.id, isNot('A'));
+      expect(gateway.plans.map((p) => p.id).toSet(), {'A', 'B', 'C'});
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'plan reorder persists exact identity order and failed save leaves previous order',
     (tester) async {
       final gateway = _OrderGateway();
       await _openOrder(tester, gateway);
-      final list = find.byType(ReorderableListView);
-      tester.widget<ReorderableListView>(list).onReorderItem!(0, 2);
+      final list = find.byType(SliverReorderableList);
+      tester.widget<SliverReorderableList>(list).onReorderItem!(0, 2);
       await tester.pumpAndSettle();
       expect(gateway.plans.map((p) => p.id), ['B', 'C', 'A']);
-      await tester.tap(find.byTooltip('Refresh'));
+      await tester
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh();
       await tester.pumpAndSettle();
       expect(
         tester.getTopLeft(find.text('Plan B')).dy,
         lessThan(tester.getTopLeft(find.text('Plan C')).dy),
       );
       gateway.fail = true;
-      tester.widget<ReorderableListView>(list).onReorderItem!(2, 0);
+      tester.widget<SliverReorderableList>(list).onReorderItem!(2, 0);
       await tester.pumpAndSettle();
       expect(gateway.plans.map((p) => p.id), ['B', 'C', 'A']);
       expect(
@@ -223,8 +292,8 @@ void main() {
   ) async {
     final gateway = _OrderGateway()..pending = Completer<void>();
     await _openOrder(tester, gateway);
-    final list = tester.widget<ReorderableListView>(
-      find.byType(ReorderableListView),
+    final list = tester.widget<SliverReorderableList>(
+      find.byType(SliverReorderableList),
     );
     list.onReorderItem!(0, 2);
     list.onReorderItem!(1, 0);

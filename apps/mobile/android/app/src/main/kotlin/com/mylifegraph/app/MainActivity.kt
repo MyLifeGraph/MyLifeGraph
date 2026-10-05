@@ -38,6 +38,21 @@ class MainActivity : FlutterActivity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        blockingBridge?.stopped()
+        super.onStop()
+    }
+
+    override fun onUserLeaveHint() {
+        blockingBridge?.stopped()
+        super.onUserLeaveHint()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        blockingBridge?.windowFocusChanged(hasFocus)
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

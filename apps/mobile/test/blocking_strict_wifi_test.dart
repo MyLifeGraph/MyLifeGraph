@@ -71,7 +71,7 @@ Future<void> _openConfiguration(
   await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(TextButton, 'Strict'));
   await tester.pumpAndSettle();
-  await tester.tap(find.widgetWithText(FilledButton, 'Configure'));
+  await tester.tap(find.widgetWithText(OutlinedButton, 'Configure'));
   await tester.pumpAndSettle();
 }
 

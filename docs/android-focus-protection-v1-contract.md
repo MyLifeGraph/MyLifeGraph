@@ -15,11 +15,23 @@ The current Android surface is **App blocking**, reached from the header shield
 or existing Settings entry. Its four local tabs are Plans, Strict, Insights and
 Customize. This route hides the main shell navigation to avoid stacked bars.
 Flutter uses existing themes, icon, spacing and surface tokens.
+The header keeps only Permissions & limits at the right. Top-edge pull-to-refresh
+uses a theme-owned progress indicator on all four local tabs, including short
+contents. It reads local native status, additionally reloading usage on Insights;
+it makes no cloud call or Strict visibility change. Explicit refresh is
+single-flight and suppressed during writes, editors and active plan reordering.
+Failed reads retain the previous view and can be retried with another pull.
 Compact plan cards open their editor on one tap when editable; locked cards
 retain read-only details. Dedicated six-dot handles reorder plans, with
-accessible Move up/down menu alternatives. The saved plan-array order is
+accessible Move up/down menu alternatives. Hold the handle for one second to
+arm dragging; only a successfully armed drag uses the saved subtle-haptic
+preference. Earlier swipes remain ordinary scrolling. Plans use one page-owned
+sliver viewport so edge dragging can reach offscreen cards. The saved plan-array order is
 presentation-only: it never changes OR-combined enforcement. Reordering uses
-the opening revision and preserves the prior view on failure. Edit, Pause,
+the opening revision and preserves the prior view on failure. Its native
+`reorder` command accepts only `revision` and an exact ID permutation, retaining
+every saved definition/customization; it may run under Strict or a Focus lease
+without permitting rule edits. Edit, Pause,
 Resume and temporary Pause replace a plan in place rather than moving it.
 The selected local tab adds a quiet palette-owned pill behind its unchanged
 icon/label and selected semantics; large text retains the two-column wrap.
@@ -157,8 +169,22 @@ Usage charts display a range total from the returned daily measurements.
 Today/Week additionally show each daily magnitude directly; enlarged text wraps
 dated values rather than shrinking them. Month keeps its thirty bars and
 individual accessible tooltips, with a compact total and peak scale instead of
-thirty cramped value labels. Durations use the measured whole seconds/minutes,
+thirty cramped value labels. App rows, totals, peaks and daily labels share
+compact measured durations (`30m`, `2h 30m`, `1d 9h 20m`), using the largest
+applicable units and up to three components without changing stored milliseconds.
+These are elapsed days of 24 hours, not calendar-day or timezone arithmetic.
+Durations use the measured whole seconds/minutes,
 with a nonzero subsecond value shown as `<1s`; unavailable data remains unavailable.
+Insights app rows reuse the catalog's local PackageManager PNG renderer (64px
+source on the existing worker). The optional base64 `icon` field is additive to
+`insights.apps`: missing, uninstalled or failed icons return an empty string;
+older responses may omit it. Flutter retains its existing IconTheme-sized
+leading slot, spacing and generic fallback for absent or invalid images. No full
+catalog/extra consent, remote icon lookup or cloud upload is introduced, and
+the bounded top-twenty ranking, measurements and channel version stay unchanged.
+Plans omits the redundant permanent browser list; the explicit website-consent
+dialog still explains address-bar-only detection, unsupported/hidden bars and
+no page-content or browsing-data upload.
 
 ### Strict and customization
 
@@ -179,7 +205,10 @@ while disconnected; adding or re-enabling it requires an available SSID. NFC
 enrollment requires two matching scans; changing IDs are rejected. Only the
 tag-ID hash is stored. SSIDs and NFC IDs are self-control checks, not strong
 authentication. The unlock request uses monotonic time/boot identity and belongs
-to one continuously foreground, visible Strict screen. Leaving that tab or
+to one visible Strict screen. A transient inactive/window-focus loss such as
+the notification shade suspends completion and display polling, but retains
+the chosen request. Actual stopped/hidden/background lifecycle, Home/app leaving,
+screen-off/keyguard or Activity recreation cancels it. Leaving that tab or
 route, opening Permissions, backgrounding, locking the screen, or recreating the
 Android Activity cancels the request and NFC proof. Reboot never completes it.
 Returning shows Unblock and requires a new deliberate request; it does not
@@ -188,14 +217,25 @@ also guard request, NFC scan and completion, independently of Flutter display.
 The in-app NFC scan dialog belongs to the same visible unlock screen; closing it
 does not itself reset the wait, while backgrounding during it still does.
 Completion rechecks all
-conditions natively and consumes recent NFC proof. Unlock permits changes for
-fifteen minutes, then relocks; Lock now closes the window.
+conditions natively and consumes recent NFC proof. `Unblock` first opens a
+compact choice: `15 minutes` or `Turn off Strict`. Cancelling starts nothing;
+choosing starts the monotonic request with immutable `temporary`/`off` intent.
+Missing intent retains the legacy temporary behavior. Duplicate requests with
+the same intent preserve the deadline; a different intent is rejected.
+Flutter polls only on the foreground visible Strict screen and invokes
+`tryFinishUnlock` automatically after zero. Native suspended focus or unmet
+charger/Wi-Fi/NFC conditions return unchanged status, not successful completion.
+Temporary completion permits changes for fifteen minutes, then relocks; Lock
+now closes the window. Permanent completion disables Strict while preserving
+plans, customization and configured unlock requirements; the active-Focus
+configuration guard still applies. Neither choice releases blocked apps/rules.
 Enabling Strict clears the old request and locks indefinitely; no unlock countdown
 starts until the explicit `Unblock` action. Before that request, the surface shows
 only Active, the configured method and Unblock, not a countdown, completion button
-or NFC scan. After requesting, the existing Unlock completion and any required NFC
-scan become available subject to the wait/conditions. Merely waiting, refreshing or
-reopening cannot start or complete a request. Late pre-exit command/status
+or NFC scan. After choosing, the countdown and any required NFC scan become
+available subject to the wait/conditions; there is no second completion button.
+Merely waiting without a request, refreshing or reopening cannot start a request.
+Late pre-exit command/status
 responses cannot restore cancelled countdowns in Flutter. Duplicate requests preserve its
 original deadline. A request is valid only with a known matching boot identity and
 a non-future monotonic start; unknown boot cannot start a new request. Invalid or
@@ -208,6 +248,11 @@ The existing Unlock method summary uses compact minute units for full minutes,
 seconds for short waits and both units for a remainder; zero is `Immediate`.
 Its charger/Wi-Fi/NFC requirements remain visible on that same summary line.
 No additional explanatory line is added; the existing Limits disclosure remains.
+Strict buttons retain all commands with equal full width, at least 48px height,
+16px rounded corners and 12px spacing. Configure is outlined beneath the primary
+Lock now action. Pending NFC scan is separated from its timer and status;
+Unlock choices remain stacked in a compact scrollable dialog. The Wait dropdown
+constrains its selected value to available width, including large-text layouts.
 Permission/tag launch failures clear their pending reply before retry; completion
 and cancellation consume the reply once even if driver cleanup fails. Strict
 configuration shares the same active-Focus edit boundary as plan configuration.

@@ -113,6 +113,7 @@ jobs:
       - name: Verify fail-closed Android release boundary
         run: |
           npm run verify:android-release
+          npm run verify:release-cleanup
           cd apps/mobile
           flutter analyze --no-pub
           flutter test --no-pub \
@@ -205,6 +206,9 @@ jobs:
             > release-metadata.json
 
       - name: Upload verified signed candidate
+        # Held Actions output is NOT publication. The publishing laptop/VM must
+        # complete release:finalize-local after GitHub Release publication;
+        # docs/local-release-retention.md owns the mandatory bounded procedure.
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: MyLifeGraph-${{ github.ref_name }}-signed

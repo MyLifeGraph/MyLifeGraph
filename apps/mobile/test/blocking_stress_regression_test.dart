@@ -101,7 +101,12 @@ Map _usage(int days) => {
 };
 
 Finder get _mainScroll => find
-    .descendant(of: find.byType(ListView), matching: find.byType(Scrollable))
+    .descendant(
+      of: find.byWidgetPredicate(
+        (widget) => widget is ListView || widget is CustomScrollView,
+      ),
+      matching: find.byType(Scrollable),
+    )
     .first;
 
 Future<void> _pumpPage(
@@ -212,7 +217,9 @@ void main() {
       await tester.ensureVisible(save);
       await tester.tap(save);
       await tester.pumpAndSettle();
-      final submitted = gateway.arguments.singleWhere((args) => args.containsKey('waitSeconds'));
+      final submitted = gateway.arguments.singleWhere(
+        (args) => args.containsKey('waitSeconds'),
+      );
       expect(submitted['revision'], 4);
       expect(submitted['waitSeconds'], 60);
       expect(submitted['nfc'], true);
@@ -300,7 +307,11 @@ void main() {
     await _openInsights(tester);
     await tester.pumpAndSettle();
     gateway.delayedStatus = Completer<BlockingSnapshot>();
-    await tester.tap(find.byTooltip('Refresh'));
+    unawaited(
+      tester
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh(),
+    );
     await tester.pump();
     await tester.tap(find.widgetWithText(ChoiceChip, 'Month'));
     await tester.pump();
@@ -476,7 +487,13 @@ void main() {
     expect(tester.testTextInput.hasAnyClients, isFalse);
     gateway.pendingSave!.complete(BlockingSnapshot(snapshot()));
     await tester.pumpAndSettle();
-    expect((gateway.arguments.singleWhere((args) => args.containsKey('custom'))['custom'] as Map)['title'], 'Saved title');
+    expect(
+      (gateway.arguments.singleWhere(
+            (args) => args.containsKey('custom'),
+          )['custom']
+          as Map)['title'],
+      'Saved title',
+    );
   });
 
   testWidgets('timer-only expired plan is not labeled Scheduled', (

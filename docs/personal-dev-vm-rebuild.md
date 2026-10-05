@@ -237,6 +237,13 @@ API-Proxy auf Loopback 8003, echte bestehende Cloud-Dienste. Kein VM-Docker nöt
 
 ## Vor einer späteren Bereinigung
 
+Für zukünftige veröffentlichte Build-Kopien gilt zusätzlich die
+[begrenzte Release-Bereinigung](local-release-retention.md): nur der markierte
+Artefaktordner, erst nach Upload-/SHA-256-Prüfung, mit Dry-Run und Wiederholschutz.
+Das gibt keine Löschfreigabe für alte Datenbanken, Container, Backups, Anhänge,
+Server-Rückfallversionen oder unregistrierte Altbestände. Installation und
+Prüfnachweise stehen im aktuellen Verification-Baseline-Abschnitt.
+
 - Testcode und CI im Repository **behalten**. Wegfallen kann die alte laufende
   VM-Testumgebung, nicht die Fähigkeit, weiterhin Regressionstests auszuführen.
 - Zuerst genau diese elf Container stoppen und Wiederanlauf prüfen; das spart
