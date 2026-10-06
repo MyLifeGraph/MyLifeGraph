@@ -45,6 +45,19 @@ visual-contract checks passed. Full Linux
 database/backend/CI, exact-commit release, live migration and provider acceptance
 remain required. This entry does not claim a new APK, merge or deployment.
 
+Linux run `37483556694` at `c1737b3fed8fad5964b476c70fca79312079dd4a`
+passed the complete FastAPI suite, docs/visual/source gate, debug Web build,
+full serial browser E2E and fresh migration/pgTAP gate including PG17 restore.
+All 715 pgTAP assertions passed. The full Flutter suite passed 1822 tests and
+identified two stale Profile-visibility fixtures; both now explicitly expand
+Profile and all 38 tests in their two integration files pass locally. A fresh
+full exact-commit CI is required after this fixture update, including Android.
+Pilot metadata inspection through the existing CLI confirmed 82 installed
+migrations before rollout and matching function guard/OID/ACL baselines.
+The pinned VPS CLI accepted the new configuration in an unauthenticated parser
+probe; that is not provider acceptance. Demo Auth requires a human CAPTCHA,
+so no successful live Sol turn is claimed here.
+
 ### Local Blocking card direct-edit follow-up (2026-10-06)
 
 - Base remains `af9de5015ae58f1b577e6c3fcd5b8737cd6f8a91`; pending editor

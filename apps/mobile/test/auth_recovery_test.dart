@@ -971,6 +971,8 @@ void main() {
 
     expect(identical(router, container.read(appRouterProvider)), isTrue);
     expect(find.byType(SettingsPage), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('settings-profile-expansion')));
+    await tester.pumpAndSettle();
     expect(find.text('Europe/London'), findsOneWidget);
   });
 }

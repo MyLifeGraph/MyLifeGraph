@@ -480,6 +480,9 @@ void main() {
     expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Inbox'), findsNothing);
     expect(find.text('Guest Coach User'), findsOneWidget);
+    expect(find.text('guest@personal-coach.local'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('settings-profile-expansion')));
+    await tester.pumpAndSettle();
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
     await _scrollSliverUntilVisible(
