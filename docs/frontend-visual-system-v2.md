@@ -1,5 +1,11 @@
 # Frontend Visual System V2
 
+Blocking editor polish preserves the existing four-theme surfaces and app-row
+geometry. Opening selections lead each app list with a fine group divider;
+website rows use compact local marks and trailing checks. Time-window and
+budget toggles reveal details in place; Block now shares Rules with a divider,
+not an additional card. The sticky Save footer remains visible.
+
 Wearable metric cards use `AppFeaturePalette` moon/footsteps/heart/pulse accents
 from the approved design, darkened on Light for contrast; surfaces still use the
 existing theme. Optional missing metrics say Unavailable. Cards switch to one

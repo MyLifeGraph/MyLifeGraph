@@ -287,6 +287,49 @@ void main() {
     expect(find.byType(BlockingPlanEditor), findsOneWidget);
     expect(gateway.saves, 0);
   });
+  testWidgets(
+    'locked card tap explains guard without opening fallback details',
+    (tester) async {
+      final gateway = _OrderGateway(locked: true);
+      await _openOrder(tester, gateway);
+      await tester.tap(find.text('Plan B'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.text('Unlock Strict to edit.'), findsOneWidget);
+      expect(gateway.saves, 0);
+      await tester.tap(find.byTooltip('Plan options').at(1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Details'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.byType(BlockingPlanEditor), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Edit'))
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+  testWidgets('card taps during pending writes never open a fallback sheet', (
+    tester,
+  ) async {
+    final gateway = _OrderGateway()..pending = Completer<void>();
+    await _openOrder(tester, gateway);
+    tester
+        .widget<SliverReorderableList>(find.byType(SliverReorderableList))
+        .onReorderItem!(0, 2);
+    await tester.pump();
+    await tester.tap(find.text('Plan B'));
+    await tester.pump();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(BlockingPlanEditor), findsNothing);
+    gateway.pending!.complete();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Plan B'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsOneWidget);
+  });
   testWidgets('reorder is single flight and uses opening revision', (
     tester,
   ) async {

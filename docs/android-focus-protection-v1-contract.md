@@ -21,9 +21,11 @@ contents. It reads local native status, additionally reloading usage on Insights
 it makes no cloud call or Strict visibility change. Explicit refresh is
 single-flight and suppressed during writes, editors and active plan reordering.
 Failed reads retain the previous view and can be retried with another pull.
-Compact plan cards open their editor on one tap when editable; locked cards
-retain read-only details. Dedicated six-dot handles reorder plans, with
-accessible Move up/down menu alternatives. Hold the handle for one second to
+Compact plan cards open their editor on one tap when editable. Pending operations
+ignore repeat taps rather than opening a fallback overview. Locked taps show a
+short Strict/Focus hint; read-only Details remains an explicit plan-menu action.
+Dedicated six-dot handles reorder plans, with
+accessible Move up/down menu alternatives. Hold the handle for 500 milliseconds to
 arm dragging; only a successfully armed drag uses the saved subtle-haptic
 preference. Earlier swipes remain ordinary scrolling. Plans use one page-owned
 sliver viewport so edge dragging can reach offscreen cards. The saved plan-array order is
@@ -70,7 +72,7 @@ channels remain unchanged. No cloud table, route, upload or analysis input is ad
 Plans hold id/name/icon, app/domain sets, enabled/paused state, up to twelve
 weekly windows, a timer, shared daily minute budget, Focus and Always selections.
 Rules combine with OR; overlapping plans also combine with OR. Editing,
-pausing or deleting one cannot clear another. Menus provide Edit, Duplicate,
+pausing or deleting one cannot clear another. Menus provide Details, Edit, Duplicate,
 Pause/Resume, ten-minute pause and confirmed Delete. Quick Block creates a
 normal plan with an initial one-hour timer; custom timers/budgets accept
 1–1440 minutes. Names are limited to sixty characters. Weekly windows retain
@@ -119,7 +121,21 @@ current theme's primary/on-primary contrast. Preset chips reflect whether all
 their installed apps are selected; tapping remains additive and never removes
 manual choices. Collapse and search preserve the draft; only Save persists it.
 Missing categories are not guessed. Domains match exact host or subdomain boundaries;
-optional common-site chips never silently select websites.
+optional category suggestions never silently select websites. The editor snapshots
+selected apps first on opening, preserving catalog order inside both groups and
+keeping row order stable during edits. App row sizes and picker bounds are unchanged.
+Websites use checkbox rows, local bundled marks for known hosts and a globe fallback;
+no external favicon requests expose the user's domain list. Custom normalized domains
+and unchecked draft rows remain available. Social media and Video switch suggestions.
+
+Rules uses separate Time windows and Shared daily budget toggles. Existing saved
+rules reopen enabled; unused rules start disabled. Disabled controls hide their
+details and Save omits those rules, while switching back on restores their draft.
+Explicitly enabling a new budget suggests 45 minutes; it is persisted only on Save.
+Revoked usage access still permits retaining/reducing an existing budget, never
+increasing it. Revoked website access permits retaining/reducing saved domains,
+never adding new ones. Block now remains in Rules below a thin divider; Focus,
+Always, overnight scheduling, validation and failed-save retention are unchanged.
 
 ### Local timer notifications
 

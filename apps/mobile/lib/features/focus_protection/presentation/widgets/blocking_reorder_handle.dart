@@ -12,7 +12,7 @@ class BlockingReorderHandle extends StatelessWidget {
     super.key,
   });
 
-  static const holdDuration = Duration(seconds: 1);
+  static const holdDuration = kLongPressTimeout;
 
   final int index;
   final Widget child;

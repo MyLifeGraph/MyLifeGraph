@@ -1,5 +1,12 @@
 # UI Language And Copy Contract
 
+Blocking editor labels are `Rules`, `Time windows`, `Shared daily budget`,
+`Block now` and `Search or add domain`. Detail controls appear only for enabled
+rules; permanent Any rule explanatory copy is omitted. Category suggestions
+are `Social media` and `Video` and do not silently check website targets.
+Locked plan taps use `Unlock Strict to edit.` or `End Focus to edit.` rather
+than an unexpected overview. `Details` is an explicit read-only menu action.
+
 Optional additions use concise labels: **Note (optional)**, **Coach data**,
 **Phone usage**, **Shared data**, **Sync now**, **Add heart data** and
 **Remove heart data**. Privacy/selected-provider disclosures appear at explicit

@@ -171,6 +171,20 @@ Future<void> _retainedEditor(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(stubNativeBlockingPreview);
+  testWidgets('active Focus plan tap explains lock without fallback overview', (
+    tester,
+  ) async {
+    final gateway = _Gateway();
+    await _pumpPage(tester, gateway, activeFocus: true);
+    await tester.tap(find.text('Study'));
+    await tester.pumpAndSettle();
+    expect(find.text('End Focus to edit.'), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(BlockingPlanEditor), findsNothing);
+    expect(gateway.catalogs, isEmpty);
+    expect(gateway.calls.where((call) => call == 'save'), isEmpty);
+  });
+
   testWidgets('active Focus disables plan editing and Strict reconfiguration', (
     tester,
   ) async {
@@ -381,8 +395,12 @@ void main() {
     final dropdown = tester.widget<DropdownButton<int>>(
       find.descendant(of: budget, matching: find.byType(DropdownButton<int>)),
     );
-    expect(dropdown.items!.map((i) => i.value), [0, 15, 30, 45]);
-    control.onChanged!(0);
+    expect(dropdown.items!.map((i) => i.value), [15, 30, 45]);
+    tester
+        .widget<SwitchListTile>(
+          find.byKey(const ValueKey('blocking-budget-toggle')),
+        )
+        .onChanged!(false);
     await tester.pumpAndSettle();
     final save = find.widgetWithText(FilledButton, 'Save');
     await tester.scrollUntilVisible(save, 200, scrollable: _mainScroll);
@@ -406,12 +424,15 @@ void main() {
       const Offset(0, -500),
     );
     await tester.pumpAndSettle();
-    final chip = find.widgetWithText(InputChip, 'x.com');
+    final chip = find.byKey(const ValueKey('blocking-site-x.com'));
     expect(chip, findsOneWidget);
-    tester.widget<InputChip>(chip).onDeleted!();
+    tester.widget<CheckboxListTile>(chip).onChanged!(false);
     await tester.pumpAndSettle();
-    expect(chip, findsNothing);
-    expect(find.widgetWithText(TextField, 'Add domain'), findsNothing);
+    expect(tester.widget<CheckboxListTile>(chip).value, isFalse);
+    expect(
+      find.widgetWithText(TextField, 'Search or add domain'),
+      findsNothing,
+    );
   });
 
   testWidgets('Strict failure retains wait and charger draft for retry', (

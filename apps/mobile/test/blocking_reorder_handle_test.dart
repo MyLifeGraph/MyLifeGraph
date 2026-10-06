@@ -61,7 +61,7 @@ Future<void> _open(
 }
 
 void main() {
-  testWidgets('one-second hold arms one pulse and real nested-list reorder', (
+  testWidgets('500ms hold arms one pulse and real nested-list reorder', (
     tester,
   ) async {
     var feedback = 0;
@@ -74,7 +74,7 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('handle-0'))),
     );
-    await tester.pump(const Duration(milliseconds: 999));
+    await tester.pump(const Duration(milliseconds: 499));
     expect(feedback, 0);
     expect(reorders, isEmpty);
     await tester.pump(const Duration(milliseconds: 1));
@@ -101,11 +101,11 @@ void main() {
     );
     final handle = find.byKey(const ValueKey('handle-0'));
     final short = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 400));
     await short.up();
     await tester.pumpAndSettle();
     final cancelled = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 400));
     await cancelled.cancel();
     await tester.pump(const Duration(seconds: 1));
     expect(feedback, 0);

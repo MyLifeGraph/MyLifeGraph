@@ -1,5 +1,11 @@
 # MyLifeGraph Mobile App
 
+The Blocking editor keeps selected apps first on opening without reshuffling rows
+while editing. Website checkboxes use local marks and category suggestions. Time
+windows and Shared daily budget expand when enabled; disabled rules are omitted
+on Save but preserved in the draft. Plan drag handles use the 500ms Flutter
+long-press threshold and preference-aware haptics.
+
 Approved local polish: Morning adds a directly visible compact optional note and
 reviewed dictation; Evening adds a right-side microphone at the original field
 height without moving its other inputs.
@@ -10,8 +16,10 @@ from local Blocking consent. Daily app time, Top apps and Blocking attempts stay
 directly visible; Reload/Delete share a row. Study motivation remains unchanged
 behind its existing backend capability gate, above the new Morning note.
 
-Blocking cards support direct edit, persistent drag-handle order and accessible
-Move up/down actions. Hold the six-dot handle for one second; an armed drag
+Blocking cards open Edit directly; busy taps never open fallback details.
+Strict/Focus locks show a short hint, and read-only Details is a separate menu
+action. Cards retain persistent drag-handle order and accessible
+Move up/down actions. Hold the six-dot handle for 500ms; an armed drag
 uses the saved haptic preference. One sliver viewport allows edge auto-scrolling.
 Revision-checked exact-ID ordering is available under Strict/Focus without
 changing any rule definition. Cards show short rule/time summaries and target counts;

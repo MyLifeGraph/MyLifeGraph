@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../widgets/blocking_website_icon.dart';
+
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -469,6 +471,25 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     }
   }
 
+  void _tapPlan(BlockingPlan plan) {
+    if (_busy || _editorOpen || _reordering) return;
+    if (_configurationLocked) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            _snapshot?.locked == true
+                ? 'Unlock Strict to edit.'
+                : 'End Focus to edit.',
+          ),
+        ),
+      );
+      return;
+    }
+    unawaited(_edit(plan));
+  }
+
   Future<void> _edit([BlockingPlan? plan, bool quick = false]) async {
     if (_snapshot == null || _configurationLocked || _busy || _editorOpen) {
       return;
@@ -519,7 +540,14 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   Future<void> _menu(BlockingPlan plan, String action) async {
     if (_busy ||
         _editorOpen ||
-        (_configurationLocked && action != 'up' && action != 'down')) {
+        (_configurationLocked &&
+            action != 'up' &&
+            action != 'down' &&
+            action != 'details')) {
+      return;
+    }
+    if (action == 'details') {
+      await _detail(plan);
       return;
     }
     if (action == 'edit') {
@@ -847,7 +875,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           child: AppSurface(
             variant: AppSurfaceVariant.interactive,
             selected: plan.active,
-            onTap: editable ? () => _edit(plan) : () => _detail(plan),
+            onTap: () => _tapPlan(plan),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -945,6 +973,10 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                         icon: const Icon(AppIcons.moreHoriz, size: 20),
                         onSelected: (value) => unawaited(_menu(plan, value)),
                         itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'details',
+                            child: Text('Details'),
+                          ),
                           PopupMenuItem(
                             enabled: editable,
                             value: 'edit',
@@ -1726,6 +1758,11 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
   String? _error;
   bool _saving = false;
   bool _focus = true, _always = false, _appsExpanded = true;
+  bool _windowsEnabled = false, _budgetEnabled = false;
+  late final List<Map> _orderedCatalog;
+  String? _firstUnselectedApp;
+  final Set<String> _siteChoices = {};
+  String _siteCategory = 'Social media';
   int _budget = 0, _until = 0;
   Set<String> _apps = {}, _sites = {};
   List<BlockingWindow> _windows = [];
@@ -1751,6 +1788,23 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
       _until = DateTime.now()
           .add(const Duration(hours: 1))
           .millisecondsSinceEpoch;
+    }
+    _windowsEnabled = _windows.isNotEmpty;
+    _budgetEnabled = _budget > 0;
+    _siteChoices.addAll(_sites);
+    // Snapshot the opening selection: checking a row must not move it away
+    // from the user's finger. Reopening applies the new selection order.
+    _orderedCatalog = [
+      ...widget.catalog.where((a) => _apps.contains(a['packageName'])),
+      ...widget.catalog.where((a) => !_apps.contains(a['packageName'])),
+    ];
+    if (_orderedCatalog.any((a) => _apps.contains(a['packageName']))) {
+      for (final app in _orderedCatalog) {
+        if (!_apps.contains(app['packageName'])) {
+          _firstUnselectedApp = app['packageName'] as String;
+          break;
+        }
+      }
     }
     for (final app in widget.catalog) {
       final data = app['icon'] as String? ?? '';
@@ -1808,9 +1862,9 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
       sites: _sites,
       focus: _focus,
       always: _always,
-      budget: _budget,
+      budget: _budgetEnabled ? _budget : 0,
       until: _until,
-      windows: _windows,
+      windows: _windowsEnabled ? _windows : const [],
       enabled: widget.plan?.enabled ?? true,
       pausedUntil: widget.plan?.pausedUntil ?? 0,
     );
@@ -1945,6 +1999,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     }
     setState(() {
       _sites.add(host);
+      _siteChoices.add(host);
       _domain.clear();
       _error = null;
     });
@@ -2042,6 +2097,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppSurface(
+                        key: const ValueKey('blocking-rules'),
                         variant: AppSurfaceVariant.subtle,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2049,10 +2105,6 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                             Text(
                               'Rules',
                               style: Theme.of(ctx).textTheme.titleMedium,
-                            ),
-                            const Text(
-                              'Block when any rule applies.',
-                              style: null,
                             ),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
@@ -2068,86 +2120,122 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                               value: _always,
                               onChanged: (v) => setState(() => _always = v),
                             ),
-                            for (
-                              var index = 0;
-                              index < _windows.length;
-                              index++
-                            )
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  '${_clock(_windows[index].start)}–${_clock(_windows[index].end)}',
-                                ),
-                                subtitle: Text(
-                                  _windows[index].days
-                                      .map(
-                                        (d) =>
-                                            _BlockingPageState._dayNames[d - 1],
-                                      )
-                                      .join(' '),
-                                ),
-                                onTap: () => _window(index),
-                                trailing: IconButton(
-                                  tooltip: 'Remove time',
-                                  icon: const Icon(AppIcons.close),
-                                  onPressed: () =>
-                                      setState(() => _windows.removeAt(index)),
-                                ),
-                              ),
-                            TextButton.icon(
-                              onPressed: _windows.length < 12 ? _window : null,
-                              icon: const Icon(AppIcons.schedule),
-                              label: const Text('Add time'),
+                            SwitchListTile(
+                              key: const ValueKey('blocking-windows-toggle'),
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(AppIcons.schedule),
+                              title: const Text('Time windows'),
+                              value: _windowsEnabled,
+                              onChanged: (v) =>
+                                  setState(() => _windowsEnabled = v),
                             ),
-                            DropdownButtonFormField<int>(
-                              key: ValueKey('budget-$_budget'),
-                              initialValue: _budget,
-                              decoration: const InputDecoration(
-                                labelText: 'Daily budget · shared',
-                              ),
-                              items: [
-                                for (final minutes
-                                    in ({
-                                          0,
-                                          15,
-                                          30,
-                                          45,
-                                          60,
-                                          90,
-                                          120,
-                                          180,
-                                          240,
-                                          _budget,
-                                        }
-                                        .where(
-                                          (v) =>
-                                              widget.usageGranted ||
-                                              v <= (widget.plan?.budget ?? 0),
+                            if (_windowsEnabled) ...[
+                              for (
+                                var index = 0;
+                                index < _windows.length;
+                                index++
+                              )
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    '${_clock(_windows[index].start)}–${_clock(_windows[index].end)}',
+                                  ),
+                                  subtitle: Text(
+                                    _windows[index].days
+                                        .map(
+                                          (d) =>
+                                              _BlockingPageState._dayNames[d -
+                                                  1],
                                         )
-                                        .toList()
-                                      ..sort()))
-                                  DropdownMenuItem(
-                                    value: minutes,
-                                    child: Text(
-                                      minutes == 0 ? 'Off' : '${minutes}m',
+                                        .join(' '),
+                                  ),
+                                  onTap: () => _window(index),
+                                  trailing: IconButton(
+                                    tooltip: 'Remove time',
+                                    icon: const Icon(AppIcons.close),
+                                    onPressed: () => setState(
+                                      () => _windows.removeAt(index),
                                     ),
                                   ),
-                              ],
+                                ),
+                              TextButton.icon(
+                                onPressed: _windows.length < 12
+                                    ? _window
+                                    : null,
+                                icon: const Icon(AppIcons.schedule),
+                                label: const Text('Add time'),
+                              ),
+                            ],
+                            SwitchListTile(
+                              key: const ValueKey('blocking-budget-toggle'),
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(AppIcons.hourglass),
+                              title: const Text('Shared daily budget'),
+                              value: _budgetEnabled,
                               onChanged:
                                   widget.usageGranted ||
                                       (widget.plan?.budget ?? 0) > 0
-                                  ? (v) => setState(() => _budget = v!)
+                                  ? (v) => setState(() {
+                                      _budgetEnabled = v;
+                                      if (v && _budget == 0) {
+                                        _budget = widget.usageGranted
+                                            ? 45
+                                            : widget.plan!.budget;
+                                      }
+                                    })
                                   : null,
                             ),
-                            if (widget.usageGranted ||
-                                (widget.plan?.budget ?? 0) > 0)
-                              TextButton(
-                                onPressed: () => _customMinutes(true),
-                                child: const Text('Custom budget'),
+                            if (_budgetEnabled) ...[
+                              DropdownButtonFormField<int>(
+                                key: ValueKey('budget-$_budget'),
+                                initialValue: _budget,
+                                decoration: const InputDecoration(
+                                  labelText: 'Daily budget',
+                                ),
+                                items: [
+                                  for (final minutes
+                                      in ({
+                                            15,
+                                            30,
+                                            45,
+                                            60,
+                                            90,
+                                            120,
+                                            180,
+                                            240,
+                                            _budget,
+                                          }
+                                          .where(
+                                            (v) =>
+                                                widget.usageGranted ||
+                                                v <= (widget.plan?.budget ?? 0),
+                                          )
+                                          .toList()
+                                        ..sort()))
+                                    DropdownMenuItem(
+                                      value: minutes,
+                                      child: Text(
+                                        minutes == 0 ? 'Off' : '${minutes}m',
+                                      ),
+                                    ),
+                                ],
+                                onChanged:
+                                    widget.usageGranted ||
+                                        (widget.plan?.budget ?? 0) > 0
+                                    ? (v) => setState(() => _budget = v!)
+                                    : null,
                               ),
-                            if (!widget.usageGranted)
-                              const Text('Enable budgets on Plans first.'),
+                              if (widget.usageGranted ||
+                                  (widget.plan?.budget ?? 0) > 0)
+                                TextButton(
+                                  onPressed: () => _customMinutes(true),
+                                  child: const Text('Custom budget'),
+                                ),
+                              if (!widget.usageGranted)
+                                const Text('Enable budgets on Plans first.'),
+                            ],
                             const SizedBox(height: AppSpacing.sm),
+                            const Divider(),
                             Text(
                               'Block now',
                               style: Theme.of(ctx).textTheme.titleSmall,
@@ -2267,12 +2355,16 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                     primary: false,
                                     shrinkWrap: true,
                                     children: [
-                                      for (final app in widget.catalog.where(
+                                      for (final app in _orderedCatalog.where(
                                         (a) =>
                                             '${a['label']} ${a['packageName']}'
                                                 .toLowerCase()
                                                 .contains(_search),
-                                      ))
+                                      )) ...[
+                                        if (_search.isEmpty &&
+                                            app['packageName'] ==
+                                                _firstUnselectedApp)
+                                          const Divider(height: 1),
                                         CheckboxListTile(
                                           contentPadding: EdgeInsets.zero,
                                           title: Tooltip(
@@ -2317,6 +2409,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                                   ),
                                           ),
                                         ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -2342,7 +2435,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                 controller: _domain,
                                 readOnly: _saving,
                                 decoration: InputDecoration(
-                                  labelText: 'Add domain',
+                                  labelText: 'Search or add domain',
                                   suffixIcon: IconButton(
                                     tooltip: 'Add website',
                                     onPressed: _addDomain,
@@ -2350,35 +2443,63 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                   ),
                                 ),
                                 onSubmitted: (_) => _addDomain(),
+                                onChanged: (_) => setState(() {}),
                               ),
                               Wrap(
                                 spacing: AppSpacing.sm,
                                 children: [
-                                  for (final domain in [
-                                    'instagram.com',
-                                    'youtube.com',
-                                    'reddit.com',
-                                    'x.com',
+                                  for (final category in [
+                                    'Social media',
+                                    'Video',
                                   ])
-                                    ActionChip(
-                                      label: Text(domain),
-                                      onPressed: () =>
-                                          setState(() => _sites.add(domain)),
+                                    FilterChip(
+                                      label: Text(category),
+                                      selected: _siteCategory == category,
+                                      onSelected: (_) => setState(
+                                        () => _siteCategory = category,
+                                      ),
                                     ),
                                 ],
                               ),
                             ],
-                            Wrap(
-                              spacing: AppSpacing.xs,
-                              children: [
-                                for (final domain in _sites)
-                                  InputChip(
-                                    label: Text(domain),
-                                    onDeleted: () =>
-                                        setState(() => _sites.remove(domain)),
-                                  ),
-                              ],
-                            ),
+                            const Divider(),
+                            for (final domain
+                                in <String>{
+                                  ...?widget.plan?.sites,
+                                  ..._siteChoices,
+                                  if (widget.websiteAllowed)
+                                    ...(_siteCategory == 'Video'
+                                        ? ['youtube.com', 'twitch.tv']
+                                        : [
+                                            'instagram.com',
+                                            'reddit.com',
+                                            'x.com',
+                                            'facebook.com',
+                                          ]),
+                                }.where(
+                                  (d) =>
+                                      _domain.text.isEmpty ||
+                                      d.contains(_domain.text.toLowerCase()) ||
+                                      _sites.contains(d),
+                                ))
+                              CheckboxListTile(
+                                key: ValueKey('blocking-site-$domain'),
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(domain),
+                                secondary: blockingWebsiteIcon(domain),
+                                value: _sites.contains(domain),
+                                checkboxScaleFactor: 1.25,
+                                onChanged:
+                                    widget.websiteAllowed ||
+                                        (widget.plan?.sites.contains(domain) ??
+                                            false)
+                                    ? (v) => setState(
+                                        () => v!
+                                            ? _sites.add(domain)
+                                            : _sites.remove(domain),
+                                      )
+                                    : null,
+                              ),
                           ],
                         ),
                       ),

@@ -131,12 +131,14 @@ void main() {
     BlockingPlan? submitted;
     await _pumpEditor(tester, save: (plan) async => submitted = plan);
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilterChip, 'Social media'),
+      find.widgetWithText(FilterChip, 'Social media').first,
       250,
       scrollable: _outer,
     );
-    final social = find.widgetWithText(FilterChip, 'Social media');
+    final social = find.widgetWithText(FilterChip, 'Social media').first;
     final games = find.widgetWithText(FilterChip, 'Games');
+    await tester.ensureVisible(social);
+    await tester.pumpAndSettle();
     await tester.tap(social);
     await tester.pumpAndSettle();
     expect(tester.widget<FilterChip>(social).selected, isTrue);
@@ -232,10 +234,10 @@ void main() {
       await tester.tap(_toggle);
       await tester.pumpAndSettle();
       expect(
-        find.widgetWithText(FilterChip, 'Social media').hitTestable(),
+        find.widgetWithText(FilterChip, 'Social media').first.hitTestable(),
         findsOneWidget,
       );
-      await tester.tap(find.widgetWithText(FilterChip, 'Social media'));
+      await tester.tap(find.widgetWithText(FilterChip, 'Social media').first);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Apps · 3'));
       await tester.pumpAndSettle();

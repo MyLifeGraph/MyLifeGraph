@@ -270,7 +270,14 @@ void main() {
             .first,
       );
       expect(inactive.selected, isFalse);
-      await tester.tap(find.text('Night'));
+      await Scrollable.ensureVisible(
+        tester.element(find.byTooltip('Plan options').last),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Plan options').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Details'));
       await tester.pumpAndSettle();
       expect(
         find.text('Mo Tu We Th Fr · 22:00–07:00 (+1 day)'),

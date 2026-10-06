@@ -31,6 +31,40 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local Blocking card direct-edit follow-up (2026-10-06)
+
+- Base remains `af9de5015ae58f1b577e6c3fcd5b8737cd6f8a91`; pending editor
+  polish and unrelated files remain preserved. The added locked-card regression
+  reproduced the unexpected BottomSheet before the fix. Cards now open Edit;
+  pending writes/editor opens ignore repeated taps, and Strict/Focus locks give
+  concise feedback. Read-only Details is explicitly available in the plan menu.
+- All 222 tests across the twenty Blocking/Focus Protection files passed,
+  including pending-write then direct-edit, Strict read-only Details, active
+  Focus rejection, stale revisions and narrow/large-text Details access.
+  Docs, visual-contract and diff-hygiene checks passed. The captured-base
+  affected dry-run selects Full for the combined tree; it is not a Full pass.
+- No native enforcement, wire format, storage or theme geometry changed.
+  No installed-device test, new APK, push or production rollout is claimed.
+
+### Local Blocking editor polish (2026-10-06)
+
+- Captured task base `af9de5015ae58f1b577e6c3fcd5b8737cd6f8a91`; unrelated
+  untracked `output/`, `tmp/` and existing test failures are preserved.
+- Local Flutter analysis passed. All 219 tests across the twenty Blocking and
+  Focus Protection test files passed, including opening selected-first ordering,
+  stable draft rows, permission-denied retained budgets/sites, rule toggle Save
+  semantics, cancellation, website suggestions, four themes at 320px/200%,
+  existing revision/save failure tests and the 500ms drag boundary/haptics.
+- Docs and frontend visual-contract gates passed. Real synthetic Flutter renderer
+  catalogs are retained under ignored `.tools/ui-catalog/` before/after variants;
+  nineteen tests passed with the two opt-in screenshot catalog tests enabled.
+  These are not installed-APK or physical-device screenshots.
+- The captured-base affected selector dry-run succeeded using Git Bash and the
+  installed Node runtime. It selects Full because unrelated unknown media paths
+  remain untracked; Full/backend/database/browser/release gates were not run for
+  this local presentation-only candidate. No native, schema, channel or provider
+  contract changed. No push, PR, APK publication or production deployment occurred.
+
 ### Local Blocking Insights icons and Plans copy (2026-10-05)
 
 - Base `dbf0b0e8608a0f1971a513445083ede955eb24ff`; earlier dirty work remains
