@@ -55,7 +55,8 @@ reset role;
 select lives_ok($sql$ select public.complete_coach_request_v3(
   'ed600000-0000-4000-8000-000000000001','ed610000-0000-4000-8000-000000000001',
   'Test Sol',(select value from sol_reply),'[]',(select value->'agent_trace' from sol_reply),
-  0,'standard','{"provider_called":true,"prompt_bytes":8,"context_bytes":0,"reply_codepoints":39}',now()) $sql$,
+  0,'standard',jsonb_build_object('provider_called',true,'prompt_bytes',8,
+    'context_bytes',0,'reply_codepoints',(select char_length(value->>'reply') from sol_reply)),now()) $sql$,
   'Standard completion passes the existing ledger and row constraints');
 select is((select response#>>'{provenance,model_requested}' from public.coach_requests
   where request_id='ed610000-0000-4000-8000-000000000001'),'gpt-6.1-sol',
