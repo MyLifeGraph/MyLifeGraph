@@ -1,5 +1,10 @@
 # Daily Briefing Implementation Plan
 
+Morning Sleep start and Wake time quick-adjust controls use 15-minute steps,
+preserving the existing minute remainder and wrapping at midnight. The explicit
+clock picker, missing-value handling, profile timezone and Save authority are
+unchanged; this does not round imported wearable timestamps.
+
 ## Optional Morning context
 
 Morning V5 accepts optional `reflection_note` (at most 500 characters). The

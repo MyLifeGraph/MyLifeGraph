@@ -92,6 +92,10 @@ void main() {
         .first;
 
     expect(find.text('Review Guest'), findsOneWidget);
+    expect(find.text('guest@personal-coach.local'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('settings-profile-expansion')));
+    await tester.pumpAndSettle();
+    expect(find.text('Review Guest'), findsNWidgets(2));
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.textContaining('Device local ('), findsOneWidget);
     expect(find.text('Local dates follow this device'), findsOneWidget);

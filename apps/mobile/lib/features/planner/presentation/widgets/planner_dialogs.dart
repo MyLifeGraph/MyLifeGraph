@@ -405,6 +405,9 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
   int _weeklyTarget = 3;
   String? _error;
 
+  bool get _durationOptional => widget.initial?.targetId == null;
+  bool get _withoutPlan => _durationOptional && _duration.text.trim().isEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -429,147 +432,150 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: Text(
-          widget.initial?.targetId == null ? 'Add Habit' : 'Plan Habit',
-        ),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (widget.definitionReadOnly) ...[
-                  const Text(
-                    'Managed in Setup',
-                    key: ValueKey('planner-habit-managed-in-setup'),
+    title: Text(widget.initial?.targetId == null ? 'Add Habit' : 'Plan Habit'),
+    content: SizedBox(
+      width: 520,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.definitionReadOnly) ...[
+              const Text(
+                'Managed in Setup',
+                key: ValueKey('planner-habit-managed-in-setup'),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              const Text(
+                'Title, description, and cadence stay managed in Settings. You can change the duration used for this preview.',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+            if (widget.definitionReadOnly) ...[
+              _ReadOnlyHabitDefinition(
+                title: widget.initial!.title,
+                description: widget.initial!.description,
+                cadence: _habitCadenceLabel(widget.initial!),
+              ),
+            ] else ...[
+              TextField(
+                key: const ValueKey('planner-habit-title'),
+                controller: _title,
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  labelText: 'Title *',
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                key: const ValueKey('planner-habit-description'),
+                controller: _description,
+                maxLength: 2000,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              DropdownButtonFormField<String>(
+                key: const ValueKey('planner-habit-cadence'),
+                initialValue: _cadence,
+                isExpanded: true,
+                itemHeight: null,
+                decoration: const InputDecoration(labelText: 'How often? *'),
+                items: const [
+                  DropdownMenuItem(value: 'daily', child: Text('Daily')),
+                  DropdownMenuItem(
+                    value: 'weekdays',
+                    child: Text('Selected weekdays'),
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  const Text(
-                    'Title, description, and cadence stay managed in Settings. You can change the duration used for this preview.',
+                  DropdownMenuItem(
+                    value: 'weekly_target',
+                    child: Text('Times per week'),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
                 ],
-                if (widget.definitionReadOnly) ...[
-                  _ReadOnlyHabitDefinition(
-                    title: widget.initial!.title,
-                    description: widget.initial!.description,
-                    cadence: _habitCadenceLabel(widget.initial!),
-                  ),
-                ] else ...[
-                  TextField(
-                    key: const ValueKey('planner-habit-title'),
-                    controller: _title,
-                    maxLength: 160,
-                    decoration: const InputDecoration(labelText: 'Title *', counterText: ''),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  TextField(
-                    key: const ValueKey('planner-habit-description'),
-                    controller: _description,
-                    maxLength: 2000,
-                    minLines: 1,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optional)',
-                      counterText: '',
+                onChanged: (value) => setState(() => _cadence = value),
+              ),
+            ],
+            if (!widget.definitionReadOnly && _cadence == 'weekdays') ...[
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  for (var day = 1; day <= 7; day++)
+                    FilterChip(
+                      label: Text(_weekdayLabel(day)),
+                      selected: _weekdays.contains(day),
+                      onSelected: (selected) => setState(() {
+                        selected ? _weekdays.add(day) : _weekdays.remove(day);
+                      }),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  DropdownButtonFormField<String>(
-                    key: const ValueKey('planner-habit-cadence'),
-                    initialValue: _cadence,
-                    isExpanded: true,
-                    itemHeight: null,
-                    decoration: const InputDecoration(labelText: 'How often? *'),
-                    items: const [
-                      DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                      DropdownMenuItem(
-                        value: 'weekdays',
-                        child: Text('Selected weekdays'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'weekly_target',
-                        child: Text('Times per week'),
-                      ),
-                    ],
-                    onChanged: (value) => setState(() => _cadence = value),
-                  ),
                 ],
-                if (!widget.definitionReadOnly && _cadence == 'weekdays') ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      for (var day = 1; day <= 7; day++)
-                        FilterChip(
-                          label: Text(_weekdayLabel(day)),
-                          selected: _weekdays.contains(day),
-                          onSelected: (selected) => setState(() {
-                            selected
-                                ? _weekdays.add(day)
-                                : _weekdays.remove(day);
-                          }),
-                        ),
-                    ],
-                  ),
+              ),
+            ],
+            if (!widget.definitionReadOnly && _cadence == 'weekly_target')
+              DropdownButtonFormField<int>(
+                initialValue: _weeklyTarget,
+                decoration: const InputDecoration(labelText: 'Times per week'),
+                items: [
+                  for (var value = 1; value <= 7; value++)
+                    DropdownMenuItem(value: value, child: Text('$value')),
                 ],
-                if (!widget.definitionReadOnly && _cadence == 'weekly_target')
-                  DropdownButtonFormField<int>(
-                    initialValue: _weeklyTarget,
-                    decoration:
-                        const InputDecoration(labelText: 'Times per week'),
-                    items: [
-                      for (var value = 1; value <= 7; value++)
-                        DropdownMenuItem(value: value, child: Text('$value')),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _weeklyTarget = value!),
-                  ),
-                const SizedBox(height: AppSpacing.sm),
-                TextField(
-                  key: const ValueKey('planner-habit-duration'),
-                  controller: _duration,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Minutes per occurrence *',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                const Text(
-                  'The same weekly time is checked across the next four weeks. Later conflicts appear under Needs attention.',
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    _error!,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
-                ],
-              ],
+                onChanged: (value) => setState(() => _weeklyTarget = value!),
+              ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              key: const ValueKey('planner-habit-duration'),
+              controller: _duration,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: _durationOptional
+                    ? 'Minutes (optional)'
+                    : 'Minutes per occurrence *',
+              ),
             ),
-          ),
+            if (!_withoutPlan) ...[
+              const SizedBox(height: AppSpacing.sm),
+              const Text(
+                'The same weekly time is checked across the next four weeks. Later conflicts appear under Needs attention.',
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                _error!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('planner-habit-preview'),
-            onPressed: _submit,
-            child: const Text('Preview plan'),
-          ),
-        ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const ValueKey('planner-habit-preview'),
+        onPressed: _submit,
+        child: Text(_withoutPlan ? 'Save habit' : 'Preview plan'),
+      ),
+    ],
+  );
 
   void _submit() {
     final initial = widget.initial;
-    final title =
-        widget.definitionReadOnly ? initial!.title : _title.text.trim();
+    final title = widget.definitionReadOnly
+        ? initial!.title
+        : _title.text.trim();
     final duration = int.tryParse(_duration.text.trim());
     if (title.isEmpty || _cadence == null) {
       setState(() => _error = 'Enter a title and choose a cadence.');
@@ -579,10 +585,11 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
       setState(() => _error = 'Choose at least one weekday.');
       return;
     }
-    if (duration == null ||
-        duration < 5 ||
-        duration > 240 ||
-        duration % 5 != 0) {
+    if (!_withoutPlan &&
+        (duration == null ||
+            duration < 5 ||
+            duration > 240 ||
+            duration % 5 != 0)) {
       setState(() => _error = 'Choose 5–240 minutes in five-minute steps.');
       return;
     }
@@ -593,15 +600,16 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
         description: widget.definitionReadOnly
             ? initial!.description
             : (_description.text.trim().isEmpty
-                ? null
-                : _description.text.trim()),
-        cadenceKind:
-            widget.definitionReadOnly ? initial!.cadenceKind : _cadence!,
+                  ? null
+                  : _description.text.trim()),
+        cadenceKind: widget.definitionReadOnly
+            ? initial!.cadenceKind
+            : _cadence!,
         scheduledWeekdays: widget.definitionReadOnly
             ? initial!.scheduledWeekdays
             : (_cadence == 'weekdays'
-                ? (_weekdays.toList()..sort())
-                : const []),
+                  ? (_weekdays.toList()..sort())
+                  : const []),
         weeklyTarget: widget.definitionReadOnly
             ? initial!.weeklyTarget
             : (_cadence == 'weekly_target' ? _weeklyTarget : 1),

@@ -248,6 +248,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                   final result = await controller.retryExact();
                   if (!mounted || result == null) return;
                   final pending = result.pending;
+                  if (result.succeeded &&
+                      pending.kind == PlannerPendingKind.manualHabitCreate) {
+                    _retainedNewHabitDraft = null;
+                  }
                   final retryingProposal =
                       pending.kind == PlannerPendingKind.proposal;
                   if (!result.succeeded) {
@@ -689,6 +693,20 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       _retainedSetupHabitDrafts[setupTargetId] = draft;
     } else if (!definitionReadOnly) {
       _retainHabitDraft(draft);
+    }
+    if (draft.targetId == null && draft.durationMinutes == null) {
+      final saved = await ref
+          .read(plannerControllerProvider.notifier)
+          .createUnscheduledHabit(draft);
+      if (!mounted) return;
+      if (saved) {
+        _retainedNewHabitDraft = null;
+        await _afterPlannerMutation();
+        if (mounted) _showMessage('Habit added.');
+      } else {
+        _showFailure();
+      }
+      return;
     }
     if (!await _confirmAvailabilityForAutomaticPlanning()) return;
     final plan = await _submitHabitProposal(

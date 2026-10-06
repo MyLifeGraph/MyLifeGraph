@@ -1,5 +1,13 @@
 # Architecture
 
+Planner's optional-duration Habit path composes the existing Habit application
+writer at the composition layer; the Planner feature does not import another
+feature's private data implementation. Owner changes invalidate its controller,
+and pending exact retries bind one immutable draft to one UUID.
+Operator Sol/Standard uses the same isolated Unix executor and durable budgets
+as legacy operator Fast. Only the explicit model/tier allowlist expands; provider
+ownership, tool permissions, secret isolation and local/BYOK paths do not change.
+
 Optional context additions preserve authority boundaries: Morning reflection
 stays in the Capture branch JSON rather than Evening/numeric projections;
 consented Health Connect heart averages remain imported observations, excluded

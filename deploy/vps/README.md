@@ -173,7 +173,10 @@ The current CLI pin is **0.153.4**, selected from the stable official release
 and bound to the archive checksum in `manifests/codex-cli.json`. Updating it
 also updates `LOCAL_CODEX_EXPECTED_VERSION` in the executor environment;
 keep the resolved UID/socket settings and the disabled provider flag intact.
-The CLI version does not change the Coach's explicit `gpt-5.5`/Fast selection.
+The CLI version remains pinned. Operator settings now select `gpt-6.1-sol` with
+Standard tier (explicit default service tier and Fast disabled); the local
+development adapter remains `gpt-5.5`/Fast. SQL/model metadata and API/executor
+compatibility must be verified before enabling this selection; there is no fallback.
 
 Run these steps only from a second, proven SSH session. Replace every example
 identifier before use; never paste a secret into shell history.

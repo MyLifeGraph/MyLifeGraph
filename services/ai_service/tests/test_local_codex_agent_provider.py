@@ -69,7 +69,7 @@ def test_analysis_image_revision_is_path_independent_and_content_bound(
 
 
 def test_fixed_model_catalog_preserves_upstream_model_metadata() -> None:
-    catalog = json.loads(local_codex_module._TOOL_CATALOG_PATH.read_text())
+    catalog = json.loads(local_codex_module._TOOL_CATALOG_PATH.read_text(encoding="utf-8"))
     assert len(catalog["models"]) == 1
     model = catalog["models"][0]
     assert model["slug"] == "gpt-5.5"
@@ -90,6 +90,22 @@ def test_fixed_model_catalog_preserves_upstream_model_metadata() -> None:
     ).hexdigest()
     assert digest == "7f58c0111030d056fb293b7280e5352340a48ccf9fe7a62ba59589cbc9618367"
     assert local_codex_module._tool_catalog_valid()
+
+
+def test_standard_model_catalog_disables_native_tools_and_is_hash_bound() -> None:
+    catalog = json.loads(local_codex_module._STANDARD_TOOL_CATALOG_PATH.read_text(encoding="utf-8"))
+    assert len(catalog["models"]) == 1
+    model = catalog["models"][0]
+    assert model["slug"] == "gpt-6.1-sol"
+    assert model["shell_type"] == "disabled"
+    assert model["apply_patch_tool_type"] is None
+    assert model["supports_search_tool"] is False
+    assert model["experimental_supported_tools"] == []
+    assert model["tool_mode"] is None
+    assert model["multi_agent_version"] is None
+    assert model["node_repl_disabled"] is True
+    assert local_codex_module._tool_catalog_valid("gpt-6.1-sol")
+    assert not local_codex_module._tool_catalog_valid("unknown")
 
 
 def _settings(**overrides) -> Settings:
@@ -556,15 +572,18 @@ def test_agent_fails_honestly_when_private_workdir_cannot_be_removed(
             shutil.rmtree(agent_workdir, ignore_errors=True)
 
 
+@pytest.mark.parametrize("model", ["gpt-5.5", "gpt-6.1-sol"])
 def test_operator_executor_mode_needs_no_supabase_secret_and_filters_children(
     tmp_path: Path,
+    model: str,
 ) -> None:
-    runner = AgentRunner()
+    runner = AgentRunner(model=model)
     settings = Settings(
         _env_file=None,
         APP_ENV="staging",
         USE_MOCK_DATA=False,
         OPERATOR_CODEX_PILOT_ENABLED=True,
+        COACH_OPERATOR_MODEL=model,
         LOCAL_CODEX_BIN="codex",
         LOCAL_CODEX_EXPECTED_VERSION="0.147.0",
         COACH_ANALYSIS_DOCKER_BIN="/usr/bin/docker",
@@ -598,7 +617,7 @@ def test_operator_executor_mode_needs_no_supabase_secret_and_filters_children(
     )
 
     assert capability.state == "ready"
-    assert capability.model_requested == "gpt-5.5"
+    assert capability.model_requested == model
     assert runner.calls
     assert all(
         "SUPABASE_SECRET_KEY" not in options["env"]
@@ -621,6 +640,9 @@ def test_operator_executor_mode_needs_no_supabase_secret_and_filters_children(
         for index, value in enumerate(agent_argv)
         if value == "-c"
     ]
+    assert agent_argv[agent_argv.index("--model") + 1] == model
+    assert ('service_tier="default"' if model == "gpt-6.1-sol" else 'service_tier="fast"') in configs
+    assert ("features.fast_mode=false" if model == "gpt-6.1-sol" else "features.fast_mode=true") in configs
     assert (
         "mcp_servers.coach_data.env.DOCKER_HOST="
         + json.dumps("unix:///run/user/1234/docker.sock")

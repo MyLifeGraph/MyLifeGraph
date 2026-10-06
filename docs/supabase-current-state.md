@@ -8,7 +8,16 @@ migration is recorded in [Verification](verification.md#current-verified-baselin
 including the post-apply function identity and permission checks. Inspect live
 history before future rollout; repository inventory alone is not live evidence.
 
-The latest repository migration is `20261004141004_optional_coach_phone_data.sql`.
+The latest repository migration is `20261006135421_coach_operator_sol61_standard.sql`.
+It adds the explicit operator `gpt-6.1-sol`/Standard pair while preserving legacy
+`gpt-5.5`/Fast provenance. Drift-guarded replacements retain function identities,
+ACLs, owner lock order, request replay and operator budgets. The existing request
+constraint accepts Standard; no table, RLS or historical response is rewritten.
+The legacy structural validator receives a normalized copy only: saved Sol
+provenance remains exact. Application and provider acceptance are not inferred
+from this inventory; deploy SQL before the new API/client/model configuration.
+
+The preceding migration is `20261004141004_optional_coach_phone_data.sql`.
 New local candidate migrations (application is not inferred):
 
 - `20261004135731_optional_morning_note.sql`: preserves omitted Morning notes,

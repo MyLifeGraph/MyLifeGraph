@@ -1,5 +1,10 @@
 # Account Controls Contract
 
+Settings Profile is initially collapsed. Its compact header shows Profile and
+the account name; expanding reveals the unchanged identity, account status and
+timezone controls. Expansion survives scrolling within that Settings page and
+does not change persisted account data or authorization.
+
 Coach provider keys are device-local account material, not exportable product
 data. Logout, account deletion, or a profile change clears in-memory state
 immediately and deletes both provider keys for the previous profile.

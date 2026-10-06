@@ -66,6 +66,8 @@ _TOOL_CATALOG_PATH = (
     Path(__file__).resolve().parent / "codex_policy" / "gpt-5.5-codex-0.153.4.json"
 )
 _TOOL_CATALOG_SHA256 = "fb47a342c2b76c1cb6816cf02b8ee07c1e3f49892b5c25cebea825a564286436"
+_STANDARD_TOOL_CATALOG_PATH = _TOOL_CATALOG_PATH.with_name("gpt-6.1-sol-codex-0.153.4.json")
+_STANDARD_TOOL_CATALOG_SHA256 = "4512bbf25faae9b092e8b68529777072e6cbf3547dc5b0713009770d0e8acfb0"
 _ANALYSIS_IMAGE_PATTERN = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}",
 )
@@ -402,10 +404,10 @@ class LocalCodexCoachProvider:
         trace_path: Path,
         activity_callback: CoachActivityCallback | None = None,
     ) -> CoachAgentProviderResult:
-        if self._configured_model() != "gpt-5.5":
+        if not self._allowed_model():
             raise CoachProviderError(
                 "unavailable_model",
-                "The free Coach data agent requires explicit gpt-5.5.",
+                "The Coach data agent requires an explicitly supported model.",
                 retryable=False,
             )
         if self._resolved_bin is None or self._disabled_features is None:
@@ -485,7 +487,7 @@ class LocalCodexCoachProvider:
                 )
             output = _parse_agent_output(final_path.read_bytes())
             reported = _reported_model(result.stdout)
-            if reported is not None and reported != "gpt-5.5":
+            if reported is not None and reported != self._configured_model():
                 raise CoachProviderError(
                     "unavailable_model",
                     "The local Coach provider reported a different model.",
@@ -612,9 +614,9 @@ class LocalCodexCoachProvider:
             is None
         ):
             return "analysis_image_unavailable"
-        if self._configured_model() != "gpt-5.5":
+        if not self._allowed_model():
             return "unavailable_model"
-        if not _tool_catalog_valid():
+        if not _tool_catalog_valid(self._configured_model()):
             return "tool_free_unavailable"
         return None
 
@@ -670,7 +672,7 @@ class LocalCodexCoachProvider:
             "--cd",
             workdir,
         ]
-        argv.extend(_tool_policy_argv())
+        argv.extend(_tool_policy_argv(self._configured_model()))
         model = self._configured_model()
         if model is not None:
             argv.extend(["--model", model])
@@ -717,11 +719,11 @@ class LocalCodexCoachProvider:
             "--cd",
             workdir,
             "--model",
-            "gpt-5.5",
+            self._configured_model(),
             "-c",
-            'service_tier="fast"',
+            'service_tier="default"' if self._configured_model() == "gpt-6.1-sol" else 'service_tier="fast"',
             "-c",
-            "features.fast_mode=true",
+            "features.fast_mode=false" if self._configured_model() == "gpt-6.1-sol" else "features.fast_mode=true",
             "-c",
             f"{server}.command={json.dumps(sys.executable)}",
             "-c",
@@ -766,7 +768,7 @@ class LocalCodexCoachProvider:
                 + json.dumps(self._settings.coach_analysis_image)
             ),
         ]
-        argv.extend(_tool_policy_argv())
+        argv.extend(_tool_policy_argv(self._configured_model()))
         if self._settings.coach_analysis_docker_host:
             argv.extend(
                 [
@@ -798,6 +800,11 @@ class LocalCodexCoachProvider:
             ],
         )
         return argv
+
+    def _allowed_model(self) -> bool:
+        return self._configured_model() == "gpt-5.5" or (
+            self._operator_executor and self._configured_model() == "gpt-6.1-sol"
+        )
 
     def _configured_model(self) -> str | None:
         model = (
@@ -1001,27 +1008,31 @@ def _expected_analysis_revision() -> str | None:
         return None
 
 
-def _tool_catalog_valid() -> bool:
+def _tool_catalog_valid(model: str | None = None) -> bool:
+    if model not in (None, "gpt-5.5", "gpt-6.1-sol"):
+        return False
+    path = _STANDARD_TOOL_CATALOG_PATH if model == "gpt-6.1-sol" else _TOOL_CATALOG_PATH
+    digest = _STANDARD_TOOL_CATALOG_SHA256 if model == "gpt-6.1-sol" else _TOOL_CATALOG_SHA256
     try:
-        metadata = _TOOL_CATALOG_PATH.lstat()
+        metadata = path.lstat()
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 131_072:
             return False
-        return hashlib.sha256(_TOOL_CATALOG_PATH.read_bytes()).hexdigest() == _TOOL_CATALOG_SHA256
+        return hashlib.sha256(path.read_bytes()).hexdigest() == digest
     except OSError:
         return False
 
 
-def _tool_policy_argv() -> list[str]:
+def _tool_policy_argv(model: str | None = None) -> list[str]:
     # Check on every turn as well as capability: a cached ready result must
     # never allow a missing or changed policy to reach the provider process.
-    if not _tool_catalog_valid():
+    if not _tool_catalog_valid(model):
         raise CoachProviderError(
             "tool_free_unavailable",
             "The fixed Coach tool configuration is unavailable.",
             retryable=False,
         )
     return [
-        "-c", f"model_catalog_json={json.dumps(str(_TOOL_CATALOG_PATH))}",
+        "-c", f"model_catalog_json={json.dumps(str(_STANDARD_TOOL_CATALOG_PATH if model == 'gpt-6.1-sol' else _TOOL_CATALOG_PATH))}",
         "-c", 'web_search="disabled"',
         "-c", "tools.update_plan.enabled=false",
         "-c", "tools.experimental_request_user_input.enabled=false",

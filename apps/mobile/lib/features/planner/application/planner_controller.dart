@@ -16,6 +16,7 @@ enum PlannerOperation {
   confirming,
   savingCommitment,
   savingPreferences,
+  savingHabit,
   archiving,
   cancelling,
 }
@@ -28,6 +29,7 @@ enum PlannerPendingKind {
   preferences,
   commitmentArchive,
   cancel,
+  manualHabitCreate,
 }
 
 enum PlannerProjectionStatus {
@@ -170,10 +172,12 @@ class PlannerController extends StateNotifier<PlannerState> {
     required PlannerAccessTokenProvider accessTokenProvider,
     required bool canUseSyncedPlanner,
     required bool isBackendConfigured,
+    Future<void> Function(PlannerHabitDraft draft, String requestId)? createManualHabit,
   })  : _api = api,
         _accessTokenProvider = accessTokenProvider,
         _canUseSyncedPlanner = canUseSyncedPlanner,
         _isBackendConfigured = isBackendConfigured,
+        _createManualHabit = createManualHabit,
         super(PlannerState.initial()) {
     Future<void>.microtask(load);
   }
@@ -182,6 +186,68 @@ class PlannerController extends StateNotifier<PlannerState> {
   final PlannerAccessTokenProvider _accessTokenProvider;
   final bool _canUseSyncedPlanner;
   final bool _isBackendConfigured;
+
+  final Future<void> Function(PlannerHabitDraft draft, String requestId)?
+  _createManualHabit;
+  PlannerHabitDraft? _pendingManualHabit;
+
+  Future<bool> createUnscheduledHabit(PlannerHabitDraft draft) async {
+    if (!state.canMutate ||
+        draft.targetId != null ||
+        draft.durationMinutes != null) {
+      return false;
+    }
+    _pendingManualHabit = draft;
+    return _saveManualHabit(
+      PlannerPendingMutation(
+        kind: PlannerPendingKind.manualHabitCreate,
+        requestId: newClientUuid(),
+      ),
+    );
+  }
+
+  Future<bool> _saveManualHabit(PlannerPendingMutation pending) async {
+    state = state.copyWith(
+      operation: PlannerOperation.savingHabit,
+      operationError: null,
+      mutationOutcome: null,
+    );
+    try {
+      _requireRemote();
+      final write = _createManualHabit;
+      final draft = _pendingManualHabit;
+      if (write == null || draft == null) {
+        throw const PlannerAccessException(
+          'Synced habit creation is unavailable.',
+        );
+      }
+      await write(draft, pending.requestId);
+      if (!mounted) return false;
+      _pendingManualHabit = null;
+      state = state.copyWith(
+        operation: PlannerOperation.idle,
+        pendingMutation: null,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
+      );
+      await _reloadAfterMutation();
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      // PostgREST may have committed before a response was lost. Reuse the
+      // immutable draft and UUID; never start a second create automatically.
+      state = state.copyWith(
+        operation: PlannerOperation.idle,
+        operationError: error,
+        pendingMutation: pending,
+        mutationOutcome: null,
+      );
+      return false;
+    }
+  }
 
   Future<void>? _overviewLoad;
 
@@ -592,6 +658,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       PlannerPendingKind.preferences => await _updatePreferences(pending),
       PlannerPendingKind.commitmentArchive => await _archiveCommitment(pending),
       PlannerPendingKind.cancel => await _cancelPlan(pending),
+      PlannerPendingKind.manualHabitCreate => await _saveManualHabit(pending),
     };
     final disposition = succeeded
         ? PlannerExactRetryDisposition.succeeded

@@ -113,13 +113,13 @@ void main() {
     String? changed;
     await _pump(tester, CaptureClockControl(
       label: 'Sleep start', semanticLabel: 'estimated sleep start',
-      value: '00:15', quickAdjust: true, onChanged: (value) => changed = value,
+      value: '00:09', quickAdjust: true, onChanged: (value) => changed = value,
     ));
-    await tester.tap(find.byTooltip('Sleep start 30 minutes earlier'));
-    expect(changed, '23:45');
-    await tester.tap(find.byTooltip('Sleep start 30 minutes later'));
-    expect(changed, '00:45');
-    await tester.tap(find.text('00:15'));
+    await tester.tap(find.byTooltip('Sleep start 15 minutes earlier'));
+    expect(changed, '23:54');
+    await tester.tap(find.byTooltip('Sleep start 15 minutes later'));
+    expect(changed, '00:24');
+    await tester.tap(find.text('00:09'));
     await tester.pumpAndSettle();
     expect(find.byType(TimePickerDialog), findsOneWidget);
   });
@@ -130,10 +130,10 @@ void main() {
       value: null, quickAdjust: true, onChanged: (_) => fail('Unexpected change'),
     ));
     expect(tester.widget<IconButton>(find.byWidgetPredicate((widget) =>
-        widget is IconButton && widget.tooltip == 'Sleep start 30 minutes earlier'))
+        widget is IconButton && widget.tooltip == 'Sleep start 15 minutes earlier'))
         .onPressed, isNull);
     expect(tester.widget<IconButton>(find.byWidgetPredicate((widget) =>
-        widget is IconButton && widget.tooltip == 'Sleep start 30 minutes later'))
+        widget is IconButton && widget.tooltip == 'Sleep start 15 minutes later'))
         .onPressed, isNull);
   });
 

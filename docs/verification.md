@@ -31,6 +31,20 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local approved follow-up candidate (2026-10-06)
+
+The four approved follow-ups add optional new-Habit minutes, 15-minute Morning
+clock steps, collapsed Profile and operator Sol/Standard compatibility. Full
+Flutter analysis passed on the local candidate. All 65 focused Flutter tests
+passed; after shortening the clipped optional minutes label, the seven Habit
+tests and three true Flutter renderer captures passed again. Coach service and
+provider tests passed 82 cases under Windows; three Linux-specific cases require
+Linux execution (symlink/FIFO and analysis-container path semantics). UTF-8 reads
+and enforced LF catalog bytes preserve the original security hash. Docs and
+visual-contract checks passed. Full Linux
+database/backend/CI, exact-commit release, live migration and provider acceptance
+remain required. This entry does not claim a new APK, merge or deployment.
+
 ### Local Blocking card direct-edit follow-up (2026-10-06)
 
 - Base remains `af9de5015ae58f1b577e6c3fcd5b8737cd6f8a91`; pending editor

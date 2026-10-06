@@ -539,7 +539,7 @@ class CoachAgentCapabilitiesResponse(BaseModel):
     provider_mode: CoachProviderMode
     model_requested: str | None = Field(default=None, max_length=100)
     model_source: CoachModelSource
-    service_tier: Literal["fast", "not_applicable"]
+    service_tier: Literal["fast", "standard", "not_applicable"]
     fast_mode: bool
     reason_code: str = Field(min_length=1, max_length=64)
     tools: list[Literal["inspect_data", "query_data", "run_python"]]
@@ -561,10 +561,11 @@ class CoachAgentCapabilitiesResponse(BaseModel):
             if (
                 self.contract_version != COACH_CAPABILITIES_V5_CONTRACT_VERSION
                 or self.provider_mode != "operator_subscription_pilot"
-                or self.model_requested != "gpt-5.5"
+                or self.model_requested not in {"gpt-5.5", "gpt-6.1-sol"}
                 or self.model_source != "explicit"
-                or self.service_tier != "fast"
-                or not self.fast_mode
+                or (self.service_tier, self.fast_mode) != (
+                    ("standard", False) if self.model_requested == "gpt-6.1-sol" else ("fast", True)
+                )
                 or self.tools != ["inspect_data", "query_data", "run_python"]
             ):
                 raise ValueError("operator Coach capability identity is invalid")
@@ -684,7 +685,7 @@ class CoachAgentProvenance(BaseModel):
     context_version: Literal["personal-snapshot-v3"]
     generated_at: datetime = Field(strict=False)
     provider_called: bool
-    service_tier: Literal["fast", "not_applicable"]
+    service_tier: Literal["fast", "standard", "not_applicable"]
     service_tier_status: Literal["configured", "not_applicable"]
     fast_mode: bool
     snapshot_row_count: int = Field(ge=0, le=COACH_SNAPSHOT_MAX_ROWS)
@@ -718,11 +719,12 @@ class CoachAgentProvenance(BaseModel):
         elif self.provider == "operator_codex_pilot":
             if (
                 self.provider_mode != "operator_subscription_pilot"
-                or self.service_tier != "fast"
+                or (self.service_tier, self.fast_mode) != (
+                    ("standard", False) if self.model_requested == "gpt-6.1-sol" else ("fast", True)
+                )
                 or self.service_tier_status != "configured"
-                or not self.fast_mode
-                or self.model_requested != "gpt-5.5"
-                or self.model_reported not in {None, "gpt-5.5"}
+                or self.model_requested not in {"gpt-5.5", "gpt-6.1-sol"}
+                or self.model_reported not in {None, self.model_requested}
                 or self.model_source != "explicit"
             ):
                 raise ValueError("operator Codex provenance is invalid")

@@ -2,6 +2,12 @@
 
 ## Aktueller Einstieg
 
+Der neue Operator-Kandidat verwendet `gpt-6.1-sol` im Standardmodus, nicht Fast.
+API und Executor brauchen dieselbe explizite Modellkonfiguration; zuerst die
+additive Modell-/Tier-Migration installieren. CLI-Pinning, tool-deaktivierter
+Hash-Katalog und echte Provider-Abnahme bleiben Pflicht. Lokales 5.5/Fast und
+BYOK bleiben getrennt. Aktive Live-Version nicht aus diesen Vorgaben ableiten.
+
 Der Pilot ist inzwischen eingerichtet und es gibt veröffentlichte Releases.
 Aktuelle lokale Änderungen und alle Zusatzdienste stehen in der
 [Entwicklungsübergabe](development-handoff.md), der zuletzt beobachtete

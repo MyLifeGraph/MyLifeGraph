@@ -1127,7 +1127,8 @@ class CoachAgentService:
         trace: CoachAgentTrace,
         evidence: list[CoachAgentEvidence],
     ) -> CoachAgentResponse:
-        fast_codex = identity[0] in {
+        standard_codex = identity[0] == "operator_codex_pilot" and identity[2] == "gpt-6.1-sol"
+        fast_codex = not standard_codex and identity[0] in {
             "local_codex_oauth",
             "operator_codex_pilot",
         }
@@ -1154,9 +1155,9 @@ class CoachAgentService:
                 "context_version": COACH_AGENT_CONTEXT_VERSION,
                 "generated_at": self._lifecycle.now(),
                 "provider_called": provider_called,
-                "service_tier": "fast" if fast_codex else "not_applicable",
+                "service_tier": "standard" if standard_codex else "fast" if fast_codex else "not_applicable",
                 "service_tier_status": (
-                    "configured" if fast_codex else "not_applicable"
+                    "configured" if fast_codex or standard_codex else "not_applicable"
                 ),
                 "fast_mode": fast_codex,
                 "snapshot_row_count": snapshot.row_count if snapshot else 0,
@@ -1173,7 +1174,8 @@ class CoachAgentService:
         global_remaining: int | None = None,
     ) -> CoachAgentCapabilitiesResponse:
         identity = self._identity()
-        fast_codex = identity[0] in {
+        standard_codex = identity[0] == "operator_codex_pilot" and identity[2] == "gpt-6.1-sol"
+        fast_codex = not standard_codex and identity[0] in {
             "local_codex_oauth",
             "operator_codex_pilot",
         }
@@ -1186,7 +1188,7 @@ class CoachAgentService:
             provider_mode=identity[1],
             model_requested=identity[2],
             model_source=identity[3],
-            service_tier="fast" if fast_codex else "not_applicable",
+            service_tier="standard" if standard_codex else "fast" if fast_codex else "not_applicable",
             fast_mode=fast_codex,
             reason_code=reason_code,
             tools=(

@@ -1,5 +1,9 @@
 import '../../../core/contracts/strict_contract.dart';
 
+bool _validOperatorModelTier(String? model, String tier, bool fast) =>
+    model == 'gpt-5.5' && tier == 'fast' && fast ||
+    model == 'gpt-6.1-sol' && tier == 'standard' && !fast;
+
 const coachRequestContractVersion = 'coach-request-v4';
 const coachResponseContractVersion = 'coach-response-v4';
 const _previousCoachResponseContractVersion = 'coach-response-v3';
@@ -276,14 +280,17 @@ class CoachCapabilities {
         }
       case CoachProviderName.operatorCodexPilot:
         if (result.providerMode != 'operator_subscription_pilot' ||
-            result.modelRequested != 'gpt-5.5' ||
-            result.modelSource != 'explicit' ||
-            result.serviceTier != 'fast' ||
-            !result.fastMode ||
-            !_sameStrings(
-              result.tools,
-              const ['inspect_data', 'query_data', 'run_python'],
+            !_validOperatorModelTier(
+              result.modelRequested,
+              result.serviceTier,
+              result.fastMode,
             ) ||
+            result.modelSource != 'explicit' ||
+            !_sameStrings(result.tools, const [
+              'inspect_data',
+              'query_data',
+              'run_python',
+            ]) ||
             result.limits.requestsPerLocalDay != 5 ||
             result.limits.requestPeriod != 'utc_day' ||
             result.limits.globalRequestsPerUtcDay != 15 ||
@@ -680,12 +687,15 @@ class CoachProvenance {
         }
       case CoachProviderName.operatorCodexPilot:
         if (result.providerMode != 'operator_subscription_pilot' ||
-            result.modelRequested != 'gpt-5.5' ||
-            result.modelReported != null && result.modelReported != 'gpt-5.5' ||
+            !_validOperatorModelTier(
+              result.modelRequested,
+              result.serviceTier,
+              result.fastMode,
+            ) ||
+            result.modelReported != null &&
+                result.modelReported != result.modelRequested ||
             result.modelSource != 'explicit' ||
-            result.serviceTier != 'fast' ||
-            result.serviceTierStatus != 'configured' ||
-            !result.fastMode) {
+            result.serviceTierStatus != 'configured') {
           throw const CoachContractException(
             'Project Coach provenance is invalid.',
           );

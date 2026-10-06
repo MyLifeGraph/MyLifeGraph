@@ -1,5 +1,12 @@
 # MyLifeGraph Mobile App
 
+New Habits without minutes save as manual, unscheduled Habits; entering minutes
+keeps the existing planning preview. Settings Profile starts collapsed and keeps
+its expansion while scrolling. Morning Sleep start/Wake time use 15-minute quick
+adjustments without rounding imported values. The hosted operator Coach accepts
+the explicit `gpt-6.1-sol`/Standard provenance pair while retaining historical
+`gpt-5.5`/Fast replies and the unchanged local-development provider.
+
 The Blocking editor keeps selected apps first on opening without reshuffling rows
 while editing. Website checkboxes use local marks and category suggestions. Time
 windows and Shared daily budget expand when enabled; disabled rules are omitted

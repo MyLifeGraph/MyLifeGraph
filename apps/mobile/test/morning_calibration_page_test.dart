@@ -368,10 +368,10 @@ void main() {
 
       await _tapVisible(
         tester,
-        find.byTooltip('Sleep start 30 minutes earlier'),
+        find.byTooltip('Sleep start 15 minutes earlier'),
       );
-      expect(find.text('8 h 30 min'), findsOneWidget);
-      await _tapVisible(tester, find.byTooltip('Wake time 30 minutes earlier'));
+      expect(find.text('8 h 15 min'), findsOneWidget);
+      await _tapVisible(tester, find.byTooltip('Wake time 15 minutes earlier'));
 
       await _tapVisible(tester, find.text('Next'));
       expect(find.text('MORNING · CHECK-IN'), findsOneWidget);

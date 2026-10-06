@@ -159,7 +159,7 @@ class Settings(BaseSettings):
         ge=0,
         alias="COACH_EXECUTOR_ALLOWED_API_UID",
     )
-    coach_operator_model: Literal["gpt-5.5"] = Field(
+    coach_operator_model: Literal["gpt-5.5", "gpt-6.1-sol"] = Field(
         default="gpt-5.5",
         alias="COACH_OPERATOR_MODEL",
     )

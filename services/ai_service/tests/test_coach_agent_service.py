@@ -3,6 +3,7 @@ import json
 import shutil
 import tempfile
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -1328,14 +1329,17 @@ def test_busy_turn_is_rejected_before_claim_or_snapshot(monkeypatch) -> None:
     assert provider.calls == 0
 
 
-def test_operator_turn_reserves_records_dispatch_and_releases() -> None:
+@pytest.mark.parametrize("model", ["gpt-5.5", "gpt-6.1-sol"])
+def test_operator_turn_reserves_records_dispatch_and_releases(model: str) -> None:
     repository = AgentRepository()
     provider = OperatorProvider()
+    provider.capability_result = replace(provider.capability_result, model_requested=model)
+    provider.model_reported = model
     service = _service(
         repository=repository,
         snapshot=SnapshotService(),
         provider=AgentProvider(),
-        settings=_operator_settings(),
+        settings=_operator_settings().model_copy(update={"coach_operator_model": model}),
         operator_provider=provider,
     ).for_operator_request()
     request = CoachAgentRequest(
@@ -1349,7 +1353,12 @@ def test_operator_turn_reserves_records_dispatch_and_releases() -> None:
     assert result.contract_version == "coach-response-v4"
     assert result.provenance.provider == "operator_codex_pilot"
     assert result.provenance.provider_mode == "operator_subscription_pilot"
-    assert result.provenance.fast_mode is True
+    assert result.provenance.fast_mode is (model == "gpt-5.5")
+    assert result.provenance.service_tier == (
+        "standard" if model == "gpt-6.1-sol" else "fast"
+    )
+    assert result.provenance.model_requested == model
+    assert result.provenance.model_reported == model
     assert provider.reserve_calls == 1
     assert provider.calls == 1
     assert provider.release_calls == [provider.reservation_id]

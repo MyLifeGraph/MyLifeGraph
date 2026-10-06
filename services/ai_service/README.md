@@ -1,5 +1,14 @@
 # MyLifeGraph AI Service
 
+The operator executor supports exactly `gpt-6.1-sol` with Standard tier
+(`service_tier="default"`, `fast_mode=false`) in addition to legacy
+`gpt-5.5`/Fast. API and executor must use the same explicit operator model.
+Apply the additive model/tier migration before selecting Sol; old clients must
+be updated before reading Sol provenance. Local development stays 5.5/Fast,
+BYOK providers and 5-per-user/15-global UTC operator budgets are unchanged.
+Each model uses its own hash-checked tool-disabled metadata catalog; there is
+no automatic model fallback. Actual CLI/provider acceptance is a separate gate.
+
 Optional context endpoints: authenticated `GET /v1/coach/phone-data` reads
 `coach-phone-data-v1` state; `POST /v1/coach/phone-data` accepts explicit
 enable/sync/disable/delete. `coach-phone-consent-v1` is independent of local

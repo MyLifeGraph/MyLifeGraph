@@ -209,14 +209,15 @@ gate. Automated tests use deterministic fakes and need no Codex login, network
 call, or live provider key. Live checks remain separately opt-in and must not
 be claimed unless they were actually run.
 
-The requested VPS CLI upgrade pins Codex 0.153.4 without changing the explicit
-`gpt-5.5`/Fast selection. A content-hash-bound copy of the complete selected
+The VPS CLI remains pinned to Codex 0.153.4. The operator now supports explicit
+`gpt-6.1-sol`/Standard as well as historical `gpt-5.5`/Fast; local development
+remains 5.5/Fast. A content-hash-bound copy of the complete selected
 model metadata now disables model-driven shell, apply-patch and tool-search
 capabilities without replacing its reasoning, instruction or service-tier
 metadata. Both Codex response paths additionally disable web search, planning
 and user-input tools. Missing, changed or non-regular profile files fail before
 CLI dispatch, including after cached readiness. Configuration requires the
-documented explicit `gpt-5.5` model. Hosted CLI version pinning remains mandatory;
+documented explicit model/tier pair. Hosted CLI version pinning remains mandatory;
 the optional local-development version setting is not proof of compatibility
 with another CLI version.
 
@@ -657,7 +658,15 @@ standard-tier downgrade. User-visible provenance is
 `gpt-5.5 · Fast configured`.
 
 The hosted pilot provider is exactly `operator_codex_pilot` with mode
-`operator_subscription_pilot`. FastAPI holds no Codex state and cannot use the
+`operator_subscription_pilot`. Its production selection is `gpt-6.1-sol` with
+explicit `service_tier="default"` and `features.fast_mode=false`; public
+provenance says `standard`, `configured`, `false`. Historical 5.5/Fast remains
+valid, reported models must match the requested model, and fallback is forbidden.
+Each model has a distinct content-hash-bound tool-disabled metadata catalog.
+Apply the additive model/tier SQL before changing matching API/executor settings;
+verify installed CLI acceptance and an actual bounded turn before rollout claims.
+Existing provider isolation, tool limits and UTC operator quotas remain intact.
+FastAPI holds no Codex state and cannot use the
 analysis daemon. It talks only to `mylifegraph-coach` over a length-prefixed Unix
 socket. Linux `SO_PEERCRED` admits one configured non-root API UID; the protocol
 accepts only capability, reserve, release, and one-use execute frames with

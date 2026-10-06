@@ -1,5 +1,11 @@
 # UI Language And Copy Contract
 
+New untimed Habit creation uses `Minutes (optional)` and
+`Save habit`; supplying minutes retains `Preview plan`. Existing scheduled
+Habits keep their required duration. Morning clock controls say `15m` and have
+explicit 15-minute earlier/later tooltips. Profile detail uses a compact
+expandable `Profile` header, without an extra explanatory paragraph.
+
 Blocking editor labels are `Rules`, `Time windows`, `Shared daily budget`,
 `Block now` and `Search or add domain`. Detail controls appear only for enabled
 rules; permanent Any rule explanatory copy is omitted. Category suggestions

@@ -1,4 +1,5 @@
 *.sh text eol=lf
+services/ai_service/app/providers/codex_policy/*.json text eol=lf
 apps/mobile/android/gradlew text eol=lf
 apps/mobile/android/gradlew.bat text eol=crlf
 apps/mobile/android/gradle/wrapper/gradle-wrapper.jar -text

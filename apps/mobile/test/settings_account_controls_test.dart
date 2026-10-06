@@ -79,11 +79,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Synced account'), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('settings-profile-expansion')),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Synced account'), findsOneWidget);
       expect(find.text('Speech to text'), findsNothing);
       expect(find.text('Coach provider'), findsNothing);
       final container = ProviderScope.containerOf(
-        tester.element(find.text('Synced account')),
+      tester.element(find.byType(SettingsPage)),
       );
       await tester.scrollUntilVisible(
         find.text('In-app reminders'),
@@ -269,6 +274,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-profile-expansion')));
+    await tester.pumpAndSettle();
+    if (find.text('Change timezone').evaluate().isEmpty) {
+      await tester.tap(
+        find.byKey(const ValueKey('settings-profile-expansion')),
+      );
+      await tester.pumpAndSettle();
+    }
     await tester.tap(find.text('Change timezone'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Europe/Berlin').last);
@@ -544,6 +557,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('settings-profile-expansion')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Change timezone'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Europe/Berlin').last);
@@ -612,7 +627,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
-      tester.element(find.text('Synced account')),
+      tester.element(find.byType(SettingsPage)),
     );
 
     await tester.scrollUntilVisible(
@@ -673,7 +688,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
-      tester.element(find.text('Synced account')),
+      tester.element(find.byType(SettingsPage)),
     );
 
     await tester.scrollUntilVisible(
@@ -779,7 +794,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
-      tester.element(find.text('Synced account')),
+      tester.element(find.byType(SettingsPage)),
     );
 
     await tester.scrollUntilVisible(
@@ -854,6 +869,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(
+        find.byKey(const ValueKey('settings-profile-expansion')),
+      );
+      await tester.pumpAndSettle();
       final changeTimezone = find.text('Change timezone');
       await tester.dragUntilVisible(
         changeTimezone,

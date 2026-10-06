@@ -4,6 +4,53 @@ import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'support/coach_fixtures.dart';
 
 void main() {
+  test(
+    'operator Sol 6.1 must use Standard; legacy Fast history stays valid',
+    () {
+      for (final model in ['gpt-5.5', 'gpt-6.1-sol']) {
+        final standard = model == 'gpt-6.1-sol';
+        final capability = coachCapabilitiesJson(
+          provider: 'operator_codex_pilot',
+          providerMode: 'operator_subscription_pilot',
+          modelRequested: model,
+          modelSource: 'explicit',
+          serviceTier: standard ? 'standard' : 'fast',
+          fastMode: !standard,
+          requestsPerLocalDay: 5,
+          remainingRequests: 4,
+          globalRequestsPerUtcDay: 15,
+          globalRemainingRequests: 14,
+        );
+        expect(CoachCapabilities.fromJson(capability).modelRequested, model);
+        capability['fast_mode'] = standard;
+        expect(
+          () => CoachCapabilities.fromJson(capability),
+          throwsA(isA<CoachContractException>()),
+        );
+        final response = coachResponseJson();
+        final provenance = response['provenance'] as Map<String, dynamic>;
+        provenance.addAll({
+          'provider': 'operator_codex_pilot',
+          'provider_mode': 'operator_subscription_pilot',
+          'model_requested': model,
+          'model_reported': model,
+          'model_source': 'explicit',
+          'service_tier': standard ? 'standard' : 'fast',
+          'service_tier_status': 'configured',
+          'fast_mode': !standard,
+        });
+        expect(
+          CoachResponse.fromJson(response).provenance.modelRequested,
+          model,
+        );
+        provenance['model_reported'] = 'different-model';
+        expect(
+          () => CoachResponse.fromJson(response),
+          throwsA(isA<CoachContractException>()),
+        );
+      }
+    },
+  );
   test('V4 request contains only identity and free question', () {
     final request = CoachRequest(
       requestId: coachRequestId,

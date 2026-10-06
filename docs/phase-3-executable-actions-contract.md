@@ -1,5 +1,10 @@
 # Phase 3 Executable Actions Contract
 
+Planner's new-Habit dialog may omit minutes and use this boundary's existing
+manual Habit creation command. Cadence and title validation, owner identity,
+stable creation UUID and ambiguous-response retry remain unchanged. There is no
+new Habit schema, invented estimate, reservation or Focus duration.
+
 Status: implementation contract for Phase 3. This contract is deliberately
 independent of briefing ranking and the future decision-first Today redesign.
 

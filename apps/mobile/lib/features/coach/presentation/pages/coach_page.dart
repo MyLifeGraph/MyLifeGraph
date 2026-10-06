@@ -1090,6 +1090,12 @@ class _AnalysisDetails extends StatelessWidget {
 }
 
 String _provenanceLabel(CoachProvenance provenance) {
+  if (provenance.provider == CoachProviderName.operatorCodexPilot &&
+      provenance.modelRequested == 'gpt-6.1-sol' &&
+      provenance.serviceTier == 'standard' &&
+      !provenance.fastMode) {
+    return 'gpt-6.1-sol · Standard configured';
+  }
   if (provenance.provider == CoachProviderName.localCodexOauth) {
     if (provenance.fastMode &&
         provenance.serviceTier == 'fast' &&

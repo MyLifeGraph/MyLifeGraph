@@ -41,6 +41,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _isExporting = false;
   bool _isDeleting = false;
   bool _isSavingHaptics = false;
+  bool _profileExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -72,52 +73,66 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       compactHeader: true,
       actions: const [AppHeaderActions(settingsSelected: true)],
       children: [
-        const AppSectionHeader(title: 'Profile'),
         AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: EdgeInsets.zero,
+          child: ExpansionTile(
+            key: const ValueKey('settings-profile-expansion'),
+            initiallyExpanded: _profileExpanded,
+            onExpansionChanged: (expanded) =>
+                setState(() => _profileExpanded = expanded),
+            leading: const Icon(AppIcons.personOutlineRounded),
+            title: const Text('Profile'),
+            subtitle: profile?.name == null ? null : Text(profile!.name),
+            shape: const Border(),
+            collapsedShape: const Border(),
+            childrenPadding: const EdgeInsets.all(AppSpacing.md),
             children: [
-              _ProfileValue(label: 'Name', value: profile?.name),
-              _ProfileValue(label: 'Email', value: profile?.email),
-              _ProfileValue(label: 'Timezone', value: profileTimezone),
-              _ProfileValue(
-                label: 'Account',
-                value: session == null
-                    ? null
-                    : session.isGuestSession
-                    ? 'Local guest'
-                    : 'Synced account',
-                isLast: true,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: syncedAccount && !_isSavingTimezone
-                      ? _chooseTimezone
-                      : null,
-                  icon: _isSavingTimezone
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(AppIcons.publicOutlined),
-                  label: Text(
-                    syncedAccount
-                        ? 'Change timezone'
-                        : 'Local dates follow this device',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ProfileValue(label: 'Name', value: profile?.name),
+                  _ProfileValue(label: 'Email', value: profile?.email),
+                  _ProfileValue(label: 'Timezone', value: profileTimezone),
+                  _ProfileValue(
+                    label: 'Account',
+                    value: session == null
+                        ? null
+                        : session.isGuestSession
+                        ? 'Local guest'
+                        : 'Synced account',
+                    isLast: true,
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: syncedAccount && !_isSavingTimezone
+                          ? _chooseTimezone
+                          : null,
+                      icon: _isSavingTimezone
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(AppIcons.publicOutlined),
+                      label: Text(
+                        syncedAccount
+                            ? 'Change timezone'
+                            : 'Local dates follow this device',
+                      ),
+                    ),
+                  ),
+                  if (!syncedAccount) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      capabilities.isLocalDemo
+                          ? 'Guest/demo capture dates use this device clock; no account timezone is stored.'
+                          : 'Timezone changes are available only for a synced account.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
               ),
-              if (!syncedAccount) ...[
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  capabilities.isLocalDemo
-                      ? 'Guest/demo capture dates use this device clock; no account timezone is stored.'
-                      : 'Timezone changes are available only for a synced account.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
             ],
           ),
         ),
@@ -141,9 +156,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               key: const ValueKey('focus-protection-setting-entry'),
               leading: const Icon(AppIcons.lockOutline),
               title: const Text('App blocking'),
-              subtitle: const Text(
-                'Apps, websites and Focus permissions.',
-              ),
+              subtitle: const Text('Apps, websites and Focus permissions.'),
               trailing: const Icon(AppIcons.chevronRight),
               onTap: () => context.push(AppRoutes.focusProtection),
             ),

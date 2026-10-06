@@ -1,5 +1,10 @@
 # Frontend Visual System V2
 
+The optional Habit duration and collapsed Profile reuse existing theme surfaces,
+field geometry and expansion affordances. Morning clock steps change labels,
+not layout. These follow-ups must retain Dark, Light, Space and Liquid Glass
+palettes; proposal artwork is not evidence of installed-device rendering.
+
 Blocking editor polish preserves the existing four-theme surfaces and app-row
 geometry. Opening selections lead each app list with a fine group divider;
 website rows use compact local marks and trailing checks. Time-window and

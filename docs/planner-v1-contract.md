@@ -1,5 +1,16 @@
 # Planner V1 Mutation And Overview V2 Contract
 
+## Optional new Habit duration
+
+New Habit creation permits an empty duration. `Save habit` then creates a manual
+Habit through the existing owner-scoped Habit command, with the chosen cadence
+and one stable creation UUID. It does not fabricate a duration, create a proposal
+or reserve calendar time. Ambiguous failures retain the immutable draft and UUID
+for exact retry; a committed write with failed overview refresh is not replayed.
+Entering minutes retains `Preview plan`, existing validation and confirmation.
+Editing an existing scheduled Habit still requires its planning duration. Guest
+and mock modes never call the authenticated Habit writer.
+
 Action-reservation details distinguish `Cancel reservations` (keep the target)
 from `Remove task` (existing target cancellation, releasing future slots).
 Habit rows expose a management action: manual Habits use Habit management,
