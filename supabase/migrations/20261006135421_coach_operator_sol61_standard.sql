@@ -32,8 +32,8 @@ begin
   definition := replace(definition,
     $old$p_value #>> '{provenance,service_tier}' is distinct from 'fast'$old$,
     $new$p_value #>> '{provenance,service_tier}' is distinct from
-      case when p_value #>> '{provenance,model_requested}' = 'gpt-6.1-sol'
-        then 'standard' else 'fast' end$new$);
+      (case when p_value #>> '{provenance,model_requested}' = 'gpt-6.1-sol'
+        then 'standard' else 'fast' end)$new$);
   definition := replace(definition,
     $old$(p_value #>> '{provenance,fast_mode}')::boolean is not true$old$,
     $new$(p_value #>> '{provenance,fast_mode}')::boolean is distinct from
