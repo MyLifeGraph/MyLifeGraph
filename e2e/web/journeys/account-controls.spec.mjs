@@ -15,6 +15,8 @@ test('@account-controls exports and permanently deletes through Settings', async
   await e2e.signInUi();
   await openFlutterRoute(page, e2e.appUrl, '/settings');
   await expectFlutterText(page, 'Settings');
+  await expectFlutterText(page, 'Profile');
+  await clickFlutterText(page, 'Profile');
   await expectFlutterText(page, 'Synced account');
 
   const exportResponsePromise = page.waitForResponse(
