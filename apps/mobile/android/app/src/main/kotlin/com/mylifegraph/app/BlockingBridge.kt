@@ -29,6 +29,7 @@ class BlockingBridge(private val activity: FlutterActivity) {
     private val worker = Executors.newSingleThreadExecutor()
     private val nfcRequest = BlockingPendingRequest<MethodChannel.Result>()
     private var nfcGeneration = 0
+    private var nfcReaderActive = false
     private val wifiRequest = BlockingPendingRequest<MethodChannel.Result>()
     private var disposed = false
     private val screenReceiver = object : BroadcastReceiver() {
@@ -114,7 +115,7 @@ class BlockingBridge(private val activity: FlutterActivity) {
                 "strictVisibility" -> {
                     val visible = call.argument<Boolean>("visible") == true
                     strictSession.visibility(visible)
-                    if (!visible) cancelNfc("Unlock wait reset.")
+                    if (!visible && nfcRequest.pending != null) cancelNfc("Unlock wait reset.")
                     result.success(plans.status())
                 }
                 "requestUnlock" -> { requireStrictScreen(); result.success(plans.requestUnlock(call.argument<String>("mode"))) }
@@ -124,50 +125,65 @@ class BlockingBridge(private val activity: FlutterActivity) {
                     result.success(if (strictSession.canComplete()) plans.finishUnlock(onlyIfReady = true) else plans.status())
                 }
                 "relock" -> result.success(plans.relock())
+                "removeNfcTag" -> result.success(plans.removeNfcTag(
+                    call.argument<String>("id") ?: "", call.argument<Number>("revision")))
                 "nfc" -> {
                     val enroll = call.argument<Boolean>("enroll") == true
-                    if (enroll) plans.requireEditable()
+                    val revision = call.argument<Number>("revision")
+                    val name = call.argument<String>("name") ?: "Main chip"
+                    if (enroll) plans.requireNfcRevision(revision)
                     else requireStrictScreen()
                     val adapter = NfcAdapter.getDefaultAdapter(activity)
                     check(adapter != null && adapter.isEnabled) { "Enable NFC first." }
                     check(nfcRequest.pending == null) { "A tag scan is already running." }
+                    check(!nfcReaderActive) { "Remove the chip before scanning again." }
                     val generation = ++nfcGeneration
-                    var firstTag: String? = null
+                    val contact = BlockingNfcContact(enroll)
                     nfcRequest.launch(result) {
-                      try { adapter.enableReaderMode(activity, { tag ->
+                      try { nfcReaderActive = true; adapter.enableReaderMode(activity, { tag ->
                         handler.post {
                             if (generation != nfcGeneration) return@post
                             val response = nfcRequest.pending ?: return@post
-                            val data = runCatching {
+                            try {
                                 require(tag.id.isNotEmpty()) { "Use a tag with a stable identifier." }
                                 val hash = MessageDigest.getInstance("SHA-256").digest(tag.id)
                                     .joinToString("") { "%02x".format(it) }
-                                if (enroll && firstTag == null) {
-                                    firstTag = hash
+                                val complete = contact.scanned(hash) ?: return@post
+                                // Keep reader ownership while the chip is touching. Android's normal
+                                // tag dispatch must not steal foreground and cancel a valid unlock.
+                                val ignored = adapter.ignore(tag, 500, {
+                                    handler.post removed@{
+                                        if (generation != nfcGeneration) return@removed
+                                        contact.removed()
+                                        if (complete) cancelNfc("Scan finished.")
+                                    }
+                                }, handler)
+                                check(ignored) { "Remove the chip and try again." }
+                                if (!complete) {
                                     android.widget.Toast.makeText(activity, "Remove the tag, then scan it again.", android.widget.Toast.LENGTH_LONG).show()
                                     return@post
                                 }
-                                require(!enroll || hash == firstTag) { "Use the same tag with a stable identifier." }
-                                hash
+                                if (!enroll) requireStrictScreen()
+                                plans.acceptNfc(hash, enroll, name, revision)
+                                // Complete ready requests in the same native turn as the proof.
+                                // A remaining timer/other conditions still retain their normal guard.
+                                if (!enroll && strictSession.canComplete()) plans.finishUnlock(onlyIfReady = true)
+                                nfcRequest.take()
+                                response.success(plans.status())
+                                runCatching { android.widget.Toast.makeText(activity, "Chip recognized. Remove the chip.", android.widget.Toast.LENGTH_SHORT).show() }
+                            } catch (error: Exception) {
+                                nfcRequest.take()
+                                cancelNfc("Scan failed.")
+                                fail(response, error)
                             }
-                            // Consume the reply before cleanup, persistence or callback.
-                            // Driver cleanup itself must not prevent a retry.
-                            nfcRequest.take(); ++nfcGeneration
-                            runCatching { adapter.disableReaderMode(activity) }
-                            data.fold(onSuccess = { hash ->
-                                runCatching {
-                                    if (!enroll) requireStrictScreen()
-                                    plans.acceptNfc(hash, enroll); plans.status()
-                                }
-                                    .fold(onSuccess = response::success, onFailure = { fail(response, it) })
-                            }, onFailure = { fail(response, it) })
                         }
                     }, NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
                         NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V or
                         NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK, null)
-                      handler.postDelayed({ if (generation == nfcGeneration) cancelNfc("No tag scanned. Try again.") }, 30000)
+                      handler.postDelayed({ if (generation == nfcGeneration && nfcRequest.pending != null) cancelNfc("No tag scanned. Try again.") }, 30000)
                       } catch (error: Exception) {
                           ++nfcGeneration
+                          nfcReaderActive = false
                           runCatching { adapter.disableReaderMode(activity) }
                           throw error
                       }
@@ -222,9 +238,10 @@ class BlockingBridge(private val activity: FlutterActivity) {
     }
     private fun cancelNfc(message: String) {
         ++nfcGeneration
-        val response = nfcRequest.take() ?: return
-        runCatching { NfcAdapter.getDefaultAdapter(activity)?.disableReaderMode(activity) }
-        response.error("blocking_error", message, null)
+        val response = nfcRequest.take()
+        if (nfcReaderActive) runCatching { NfcAdapter.getDefaultAdapter(activity)?.disableReaderMode(activity) }
+        nfcReaderActive = false
+        response?.error("blocking_error", message, null)
     }
     fun resumed() {
         if (screenUnlocked()) strictSession.resumed() else stopped()

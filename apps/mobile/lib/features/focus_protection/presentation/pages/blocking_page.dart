@@ -1295,7 +1295,11 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       : seconds % 60 == 0
       ? '${seconds ~/ 60}m'
       : '${seconds ~/ 60}m ${seconds % 60}s';
-  Future<BlockingSnapshot?> _scan(bool enroll) async {
+  Future<BlockingSnapshot?> _scan(
+    bool enroll, {
+    String? name,
+    int? revision,
+  }) async {
     if (_busy || _startingNfc) return null;
     _startingNfc = true;
     final navigator = Navigator.of(context, rootNavigator: true);
@@ -1338,7 +1342,11 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     }
     unawaited(navigator.push(route));
     final saved = await _perform(
-      () => _gateway.command('nfc', {'enroll': enroll}),
+      () => _gateway.command('nfc', {
+        'enroll': enroll,
+        if (name != null) 'name': name,
+        if (revision != null) 'revision': revision,
+      }),
     );
     if (route.isActive) navigator.removeRoute(route);
     _unlockDialog = false;
@@ -1481,12 +1489,87 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                             ? (v) => update(() => nfc = v)
                             : null,
                       ),
-                      if (_snapshot!.nfcAvailable && !_snapshot!.nfcEnrolled)
+                      for (final tag in _snapshot!.nfcTags)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: AppSurface(
+                            variant: AppSurfaceVariant.subtle,
+                            padding: EdgeInsets.zero,
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                              ),
+                              leading: const Icon(AppIcons.nfc),
+                              title: Text(tag['name']!),
+                              trailing: IconButton(
+                                tooltip: 'Remove chip',
+                                icon: const Icon(AppIcons.deleteOutline),
+                                onPressed: () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: ctx,
+                                    builder: (dialog) => AlertDialog(
+                                      title: const Text('Remove chip?'),
+                                      content: Text(tag['name']!),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(dialog, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(dialog, true),
+                                          child: const Text('Remove'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed != true || !ctx.mounted) return;
+                                  update(() => saving = true);
+                                  final saved = await _perform(
+                                    () => _gateway.command('removeNfcTag', {
+                                      'id': tag['id']!,
+                                      'revision': expectedRevision,
+                                    }),
+                                  );
+                                  if (saved) {
+                                    expectedRevision = _snapshot!.revision;
+                                    if (!_snapshot!.nfcEnrolled) nfc = false;
+                                  }
+                                  if (ctx.mounted) {
+                                    update(() {
+                                      saving = false;
+                                      saveError = _error;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_snapshot!.nfcAvailable)
                         TextButton(
                           onPressed: () async {
                             if (saving || _busy) return;
                             update(() => saving = true);
-                            final next = await _scan(true);
+                            final chipName = await showDialog<String>(
+                              context: ctx,
+                              builder: (_) => _NfcChipNameDialog(
+                                initialName: _snapshot!.nfcEnrolled
+                                    ? 'Backup chip'
+                                    : 'Main chip',
+                              ),
+                            );
+                            if (!ctx.mounted) return;
+                            if (chipName == null) {
+                              update(() => saving = false);
+                              return;
+                            }
+                            final next = await _scan(
+                              true,
+                              name: chipName,
+                              revision: expectedRevision,
+                            );
                             if (next != null) expectedRevision = next.revision;
                             if (ctx.mounted) {
                               update(() {
@@ -1495,7 +1578,11 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                               });
                             }
                           },
-                          child: const Text('Set up tag'),
+                          child: Text(
+                            _snapshot!.nfcEnrolled
+                                ? '+ Add chip'
+                                : 'Set up tag',
+                          ),
                         ),
                       const Text('All selected conditions must be met.'),
                       const SizedBox(height: AppSpacing.md),
@@ -1778,6 +1865,47 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       ),
     );
   }
+}
+
+class _NfcChipNameDialog extends StatefulWidget {
+  const _NfcChipNameDialog({required this.initialName});
+  final String initialName;
+  @override
+  State<_NfcChipNameDialog> createState() => _NfcChipNameDialogState();
+}
+
+class _NfcChipNameDialogState extends State<_NfcChipNameDialog> {
+  late final _controller = TextEditingController(text: widget.initialName);
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Add chip'),
+    content: TextField(
+      controller: _controller,
+      maxLength: 40,
+      autofocus: true,
+      decoration: const InputDecoration(labelText: 'Name'),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      TextButton(
+        onPressed: () {
+          if (_controller.text.trim().isNotEmpty) {
+            Navigator.pop(context, _controller.text.trim());
+          }
+        },
+        child: const Text('Scan'),
+      ),
+    ],
+  );
 }
 
 const _iconNames = ['shield', 'work', 'games', 'social', 'sleep', 'study'];

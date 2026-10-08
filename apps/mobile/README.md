@@ -42,6 +42,15 @@ creation, rescheduling and drag/drop are explicitly outside this change.
 
 ## Android blocking plans
 
+Unlock method lists registered NFC chips by name with compact Remove actions
+and Add chip. Registration accepts two matching scans separated by removal;
+blank and previously written payloads stay untouched. Up to eight chips may be
+registered, including a backup. The old single chip remains Main chip. Changes
+require authorized Strict/Focus edit access; the last required chip cannot be
+removed and no lost-chip recovery bypass is provided. Successful scans retain
+reader ownership until removal to suppress held-chip redispatch. Device/OEM
+verification remains necessary; this is local-only and adds no Cloud data.
+
 NFC registration keeps the in-app scan dialog within Strict-screen visibility.
 Scan the same tag twice, removing it between scans; payload contents are not
 read or written. Verification uses the registered stable identifier. Tags with

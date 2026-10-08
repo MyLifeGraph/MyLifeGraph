@@ -13,6 +13,7 @@ import 'package:my_life_graph/features/focus_protection/presentation/pages/block
 
 import 'blocking_plans_test.dart' show snapshot;
 import 'support/native_blocking_preview.dart';
+import 'support/ui_catalog_capture.dart';
 
 class _CatalogConsentGateway extends UnsupportedFocusProtectionGateway {
   @override
@@ -61,7 +62,25 @@ class _RevisionGateway extends BlockingGateway {
       nfcRequests++;
       nfcScreenVisible = strictVisible;
       await pendingNfcReply?.future;
-      state = {...state, 'revision': 4, 'nfcEnrolled': true};
+      state = {
+        ...state,
+        'revision': 4,
+        'nfcEnrolled': true,
+        'nfcTags': [
+          {'id': 'main', 'name': args?['name'] ?? 'Main chip'},
+        ],
+      };
+    }
+    if (name == 'removeNfcTag') {
+      final tags = (state['nfcTags'] as List)
+          .where((tag) => (tag as Map)['id'] != args?['id'])
+          .toList();
+      state = {
+        ...state,
+        'revision': (state['revision'] as int) + 1,
+        'nfcTags': tags,
+        'nfcEnrolled': tags.isNotEmpty,
+      };
     }
     if (name == 'save') {
       saves.add(Map<String, Object>.from(args!));
@@ -93,6 +112,7 @@ Future<void> _openDetail(
   WidgetTester tester,
   _RevisionGateway gateway, {
   bool openEditor = true,
+  ThemeData? theme,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(800, 1000);
@@ -111,7 +131,8 @@ Future<void> _openDetail(
         ),
       ],
       child: MaterialApp(
-        theme: AppTheme.liquidGlass,
+        debugShowCheckedModeBanner: false,
+        theme: theme ?? AppTheme.liquidGlass,
         home: const Scaffold(body: BlockingPage()),
       ),
     ),
@@ -162,6 +183,85 @@ Future<void> _attemptDetailSave(WidgetTester tester) async {
 }
 
 void main() {
+  for (final (label, theme) in [
+    ('glass', AppTheme.liquidGlass),
+    ('dark', AppTheme.dark),
+    ('light', AppTheme.light),
+    ('space', AppTheme.space),
+  ]) {
+    testWidgets('NFC chips fit $label theme at narrow large text', (
+      tester,
+    ) async {
+      final gateway = _RevisionGateway();
+      gateway.state = {
+        ...gateway.state,
+        'nfcAvailable': true,
+        'nfcEnrolled': true,
+        'nfcTags': [
+          {'id': 'main', 'name': 'Main chip'},
+          {'id': 'backup', 'name': 'Backup chip'},
+        ],
+      };
+      if (captureUiCatalog) await loadCatalogFonts();
+      await _openDetail(tester, gateway, openEditor: false, theme: theme);
+      tester.view.physicalSize = const Size(390, 960);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Strict').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Unlock method'));
+      await tester.tap(find.text('Unlock method'));
+      await tester.pumpAndSettle();
+      if (captureUiCatalog) await captureCatalog(tester, 'nfc-chips-$label');
+      tester.view.physicalSize = const Size(320, 640);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('+ Add chip'));
+      await tester.pumpAndSettle();
+      expect(find.text('+ Add chip').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('saved chips stay visible and removal requires confirmation', (
+    tester,
+  ) async {
+    final gateway = _RevisionGateway();
+    gateway.state = {
+      ...gateway.state,
+      'nfcAvailable': true,
+      'nfcEnrolled': true,
+      'nfcTags': [
+        {'id': 'main', 'name': 'Main chip'},
+        {'id': 'backup', 'name': 'Backup chip'},
+      ],
+    };
+    if (captureUiCatalog) await loadCatalogFonts();
+    await _openDetail(tester, gateway, openEditor: false);
+    tester.view.physicalSize = const Size(390, 960);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Strict').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Unlock method'));
+    await tester.tap(find.text('Unlock method'));
+    await tester.pumpAndSettle();
+    expect(find.text('Main chip'), findsOneWidget);
+    expect(find.text('Backup chip'), findsOneWidget);
+    expect(find.text('+ Add chip'), findsOneWidget);
+    if (captureUiCatalog) await captureCatalog(tester, 'nfc-chips');
+    await tester.ensureVisible(find.byTooltip('Remove chip').first);
+    await tester.tap(find.byTooltip('Remove chip').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Main chip'), findsOneWidget);
+    await tester.tap(find.byTooltip('Remove chip').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(find.text('Main chip'), findsNothing);
+    expect(find.text('Backup chip'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(stubNativeBlockingPreview);
 
@@ -439,6 +539,8 @@ void main() {
       activate();
       activate();
       await tester.pump();
+      await tester.tap(find.widgetWithText(TextButton, 'Scan'));
+      await tester.pump();
       final setupCanPop = tester
           .widget<PopScope>(
             find
@@ -483,6 +585,8 @@ void main() {
     await tester.ensureVisible(setup);
     gateway.pendingNfcReply = Completer<void>();
     await tester.tap(setup);
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.tap(find.widgetWithText(TextButton, 'Scan'));
     await tester.pump();
     gateway.pendingNfcReply!.completeError(
       PlatformException(

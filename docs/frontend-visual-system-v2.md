@@ -1,5 +1,10 @@
 # Frontend Visual System V2
 
+NFC chip management stays inside Unlock method: compact named rows with one
+leading icon and trailing Remove control, followed by a small Add chip action.
+Name/removal dialogs reuse existing fields, buttons and theme surfaces. All four
+palettes and Strict layout remain unchanged; no new decoration or recovery panel.
+
 The optional Habit duration and collapsed Profile reuse existing theme surfaces,
 field geometry and expansion affordances. Morning clock steps change labels,
 not layout. These follow-ups must retain Dark, Light, Space and Liquid Glass
