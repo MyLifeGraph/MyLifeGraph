@@ -226,7 +226,9 @@ class BlockingPlans(private val context: Context) {
             "custom" to jsonMap(custom()), "websiteConsent" to websiteConsent(),
             "usageConsent" to usageConsent(), "usageGranted" to usageGranted(),
             "nfcAvailable" to (context.packageManager.hasSystemFeature("android.hardware.nfc")),
-            "nfcEnrolled" to prefs.contains("nfc_hash"), "wifiReady" to currentWifi().isNotEmpty(),
+            "nfcEnrolled" to nfcTags().isNotEmpty(),
+            "nfcTags" to nfcTags().map { mapOf("id" to it.id, "name" to it.name) },
+            "wifiReady" to currentWifi().isNotEmpty(),
             "attemptsToday" to today, "attemptsTotal" to total,
             "browsers" to BrowserAddressBars.adapters.keys.toList())
     }
@@ -322,7 +324,7 @@ class BlockingPlans(private val context: Context) {
             check(boot() >= 0) { "Android boot identity is unavailable." }
             check(legacy.readConfiguration().enabled && legacy.readConfiguration().blockSelectedApps) { "Enable app blocking first." }
             check(FocusProtectionManager(context).readStatus()["accessibilityEnabled"] == true) { "Enable Android protection first." }
-            require(!s.optBoolean("nfc") || prefs.contains("nfc_hash")) { "Set up NFC first." }
+            require(!s.optBoolean("nfc") || nfcTags().isNotEmpty()) { "Set up NFC first." }
             require(!s.optBoolean("wifi") || currentWifi().isNotEmpty()) { "Allow Wi-Fi access and connect first." }
             if (s.optBoolean("wifi")) s.put("wifiName", currentWifi())
         }
@@ -390,10 +392,44 @@ class BlockingPlans(private val context: Context) {
             .remove("unlock_boot").remove("unlock_mode").remove("nfc_verified").remove("nfc_boot"))
         return status()
     }
-    fun acceptNfc(hash: String, enroll: Boolean) {
-        if (enroll) { requireEditable(); commit(prefs.edit().putString("nfc_hash", hash)) }
+    private fun nfcTags(): List<BlockingNfcTag> {
+        if (!prefs.contains("nfc_tags")) return prefs.getString("nfc_hash", null)
+            ?.let { listOf(BlockingNfcTag("legacy", "Main chip", it)) } ?: emptyList()
+        val array = JSONArray(prefs.getString("nfc_tags", "[]"))
+        return (0 until array.length()).map {
+            val tag = array.getJSONObject(it)
+            BlockingNfcTag(tag.getString("id"), tag.getString("name"), tag.getString("hash"))
+        }
+    }
+    fun requireNfcRevision(revision: Number?) {
+        requireEditable()
+        if (revision != null) require(revision.toLong() == prefs.getLong("revision", 0)) {
+            "Settings changed. Reload and try again."
+        }
+    }
+    private fun saveNfcTags(tags: List<BlockingNfcTag>) {
+        val array = JSONArray(tags.map { JSONObject().put("id", it.id).put("name", it.name).put("hash", it.hash) })
+        val editor = prefs.edit().putString("nfc_tags", array.toString())
+            .putLong("revision", prefs.getLong("revision", 0) + 1)
+        // Preserve a single-chip mirror so an older APK can still unlock after rollback.
+        if (tags.isEmpty()) editor.remove("nfc_hash") else editor.putString("nfc_hash", tags.first().hash)
+        commit(editor)
+    }
+    fun removeNfcTag(id: String, revision: Number?): Map<String, Any?> {
+        requireNotNull(revision) { "Missing settings revision." }
+        requireNfcRevision(revision)
+        saveNfcTags(BlockingNfcTags.remove(nfcTags(), id, strict().optBoolean("enabled") && strict().optBoolean("nfc")))
+        return status()
+    }
+    fun acceptNfc(hash: String, enroll: Boolean, name: String = "Main chip", revision: Number? = null) {
+        if (enroll) {
+            requireNfcRevision(revision)
+            val old = nfcTags()
+            val next = BlockingNfcTags.add(old, BlockingNfcTag(java.util.UUID.randomUUID().toString(), name, hash))
+            if (next != old) saveNfcTags(next)
+        }
         else {
-            check(locked() && hash == prefs.getString("nfc_hash", null)) { "This is not your saved tag." }
+            check(locked() && nfcTags().any { it.hash == hash }) { "This is not your saved tag." }
             check(unlockStarted()) { "Start unlocking first." }
             commit(prefs.edit().putLong("nfc_verified", SystemClock.elapsedRealtime()).putInt("nfc_boot", boot()))
         }

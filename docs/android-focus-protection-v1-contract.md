@@ -227,8 +227,27 @@ Setup explains both scans. If protection/master or Accessibility is missing,
 the primary setup action opens Permissions & limits rather than attempting
 Strict activation. Native prerequisite checks stay authoritative. Platform
 failures show their readable message, not a raw channel exception.
-Only the
-tag-ID hash is stored. SSIDs and NFC IDs are self-control checks, not strong
+NFC registration is additive: up to eight named chips, with duplicate hashes
+ignored. The former single `nfc_hash` is read as `Main chip` without a read-side
+write; chip mutations persist `nfc_tags` plus an atomic first-chip `nfc_hash`
+mirror for older-APK unlock compatibility (removed only when the list is empty).
+The named list remains authoritative in this implementation; this does not
+promise bidirectional named-list editing through an older APK.
+Status exposes only opaque IDs/names, never tag hashes. Add/remove commands
+recheck Strict/Focus edit authority and the supplied opening revision at commit.
+Removing the last chip while enabled Strict requires NFC is rejected: add a
+replacement first or disable that requirement while authorized. No lost-chip
+bypass exists. Blank/written tag contents are neither read nor overwritten.
+One reader session accepts each physical contact once; enrollment requires
+an Android removal callback between its two matching scans. After recognition,
+reader ownership plus `NfcAdapter.ignore` (500ms removal debounce) is retained
+until removal or actual app exit/disposal, preventing immediate normal Android
+tag redispatch while held. Pending scans time out after 30s; a completed held
+scan does not remain a pending reply. Adapter refusal fails visibly and is
+retryable. Ready verification completes natively in the same turn as its proof;
+remaining waits/conditions and foreground checks still apply. A completed unlock
+is not undone by later scan callbacks. Hardware/OEM acceptance is separate.
+Only the tag-ID hash and user-assigned name are stored. SSIDs and NFC IDs are self-control checks, not strong
 authentication. The unlock request uses monotonic time/boot identity and belongs
 to one visible Strict screen. A transient inactive/window-focus loss such as
 the notification shade suspends completion and display polling, but retains

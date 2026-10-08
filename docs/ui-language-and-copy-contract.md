@@ -1,5 +1,10 @@
 # UI Language And Copy Contract
 
+NFC management uses named chip rows, `Remove chip`, `Remove chip?`, `Add chip`
+and a short `Name` field before `Scan`. Defaults are `Main chip` and `Backup chip`.
+Successful scans say `Chip recognized. Remove the chip.` No permanent recovery
+paragraph is added; last-required-chip removal reports the explicit safe remedy.
+
 NFC setup says `Scan twice. Remove the tag between scans.` Verification says
 `Use your saved tag.` Missing Strict prerequisites use `Set up protection`
 and open Permissions & limits; channel failures never display raw

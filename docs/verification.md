@@ -31,6 +31,46 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### NFC held-contact and named-chip follow-up — 2026-10-08 (release candidate)
+
+- Task base: `0799ffbfd553507bce3abb649f6042fbbf87fd22`. No push, release,
+  installation, VPS/Vercel deployment or database change in this follow-up.
+- Focused Flutter page/Strict/stress run: **51 tests passed**, including all four
+  themes at 320px/200% text, pending setup single-flight, failure retry, removal
+  confirmation and existing Strict timing/visibility behavior. Captures under
+  `.tools/ui-catalog/nfc-local` render real widgets with synthetic data, not an
+  installed APK. Proposal artwork is explicitly separate.
+- Broader six-suite Blocking regression run: **103 tests passed**, additionally
+  covering existing plan/customization persistence, reordering, Wi-Fi guards
+  and button-spacing behavior. The earlier wildcard launch stalled before any
+  test output and was stopped; the explicit six-suite run above completed.
+- Final release continuation: all twenty Blocking/Focus Protection Flutter
+  files pass **228 tests**, including editing/Back, four-theme narrow layouts,
+  reorder, refresh, Strict visibility, consent and customization regressions.
+- Android `:app:testDebugUnitTest` succeeds on the existing Java 21 toolchain;
+  current app JUnit XML reports **78 tests, zero failures/errors**, including six
+  new NFC contact/list policy tests. Native production code compiled in this
+  run. Held-contact loops, mandatory removal between matching enrollment scans,
+  changed IDs, duplicate enrollment, replacement-before-removal, last-required
+  chip protection and bounded names/count are covered by the pure policy tests.
+- Targeted Dart analysis passed after flow-control corrections. Documentation,
+  visual contracts and diff hygiene pass. The initial icon prototype importing
+  Phosphor classes was incompatible with this installed Flutter; implementation
+  instead uses the established AppIcons/font-constant pattern, without upgrading
+  dependencies.
+- Android Lint now passes after correcting ignored Windows SDK paths and
+  rerunning stale analysis/report tasks (**0 errors, 87 warnings**); no rule or
+  baseline is suppressed.
+  The captured-base `verify:affected` wrapper cannot execute through this
+  Windows shell; the complete affected/Linux CI result remains a separate gate.
+- Physical NFC/OEM acceptance is still required: hold through success, remove
+  and rescan, two distinct chips, wrong chip, Home/route exit, temporary versus
+  permanent unlock and remaining charger/Wi-Fi/wait conditions. No physical
+  claim is inferred from the pure tests or widget captures.
+- ADB currently reports no connected device. The user explicitly requests
+  publication without the phone after automated gates pass; physical acceptance
+  remains an unconfirmed limitation of this release, not a successful test.
+
 ### Local approved follow-up candidate (2026-10-06)
 
 The four approved follow-ups add optional new-Habit minutes, 15-minute Morning

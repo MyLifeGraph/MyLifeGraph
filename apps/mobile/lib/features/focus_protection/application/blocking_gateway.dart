@@ -22,6 +22,9 @@ class BlockingSnapshot {
       usageGranted = map['usageGranted'] as bool,
       nfcAvailable = map['nfcAvailable'] as bool,
       nfcEnrolled = map['nfcEnrolled'] as bool,
+      nfcTags = (map['nfcTags'] as List? ?? const [])
+          .map((value) => Map<String, String>.from(value as Map))
+          .toList(),
       wifiReady = map['wifiReady'] as bool,
       attemptsToday = map['attemptsToday'] as int,
       attemptsTotal = map['attemptsTotal'] as int;
@@ -31,6 +34,7 @@ class BlockingSnapshot {
       attemptsTotal,
       releaseRemainingMs;
   final List<BlockingPlan> plans;
+  final List<Map<String, String>> nfcTags;
   final Map<String, Object> strict, custom;
   final bool locked,
       websiteConsent,

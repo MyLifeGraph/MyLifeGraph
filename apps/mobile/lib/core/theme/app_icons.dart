@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 /// used only for compact status marks.
 class AppIcons {
   const AppIcons._();
+  static const nfc = IconData(0xed42, fontFamily: 'PhosphorRegular', fontPackage: 'phosphor_flutter');
   static const hourglass = IconData(
     0xe2b2,
     fontFamily: 'PhosphorRegular',

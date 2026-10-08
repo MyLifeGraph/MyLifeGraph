@@ -226,6 +226,8 @@ void main() {
           )
           .onChanged!(60);
       await tester.tap(find.text('Set up tag'));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.tap(find.widgetWithText(TextButton, 'Scan'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(SwitchListTile, 'NFC tag'));
       await tester.pumpAndSettle();
