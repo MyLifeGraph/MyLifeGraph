@@ -1510,8 +1510,9 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                                   try {
                                     await _permissions();
                                   } finally {
-                                    if (ctx.mounted)
+                                    if (ctx.mounted) {
                                       update(() => saving = false);
+                                    }
                                   }
                                   return;
                                 }
