@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
@@ -41,6 +42,8 @@ class _RevisionGateway extends BlockingGateway {
   Completer<void>? pendingNfcReply;
   int wifiRequests = 0;
   int nfcRequests = 0;
+  bool strictVisible = false;
+  bool? nfcScreenVisible;
 
   @override
   Future<BlockingSnapshot> command(
@@ -48,6 +51,7 @@ class _RevisionGateway extends BlockingGateway {
     Map<String, Object>? args,
   ]) async {
     if (name == 'status') statusReads++;
+    if (name == 'strictVisibility') strictVisible = args?['visible'] == true;
     if (name == 'wifiPermission') {
       wifiRequests++;
       await pendingWifiReply?.future;
@@ -55,6 +59,7 @@ class _RevisionGateway extends BlockingGateway {
     }
     if (name == 'nfc') {
       nfcRequests++;
+      nfcScreenVisible = strictVisible;
       await pendingNfcReply?.future;
       state = {...state, 'revision': 4, 'nfcEnrolled': true};
     }
@@ -84,7 +89,9 @@ class _RevisionGateway extends BlockingGateway {
   }
 }
 
-Future<void> _openDetail(WidgetTester tester, _RevisionGateway gateway, {
+Future<void> _openDetail(
+  WidgetTester tester,
+  _RevisionGateway gateway, {
   bool openEditor = true,
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -158,34 +165,35 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(stubNativeBlockingPreview);
 
-  testWidgets('resumed direct editor does not roll back a renamed native plan', (
-    tester,
-  ) async {
-    final gateway = _RevisionGateway();
-    await _openDetail(tester, gateway);
-    const current = BlockingPlan(
-      id: 'one',
-      name: 'Updated study',
-      apps: {'updated.app'},
-      always: true,
-    );
-    const unrelated = BlockingPlan(
-      id: 'other',
-      name: 'Another plan',
-      apps: {'example.app'},
-      budget: 30,
-      enabled: false,
-    );
-    await _resumeWithState(tester, gateway, const [current, unrelated]);
-    await _attemptDetailSave(tester);
-    final plans = BlockingSnapshot(gateway.state).plans;
-    final retained = plans.singleWhere((plan) => plan.id == current.id);
-    expect(retained.toMap(), current.toMap());
-    expect(
-      plans.singleWhere((plan) => plan.id == unrelated.id).toMap(),
-      unrelated.toMap(),
-    );
-  });
+  testWidgets(
+    'resumed direct editor does not roll back a renamed native plan',
+    (tester) async {
+      final gateway = _RevisionGateway();
+      await _openDetail(tester, gateway);
+      const current = BlockingPlan(
+        id: 'one',
+        name: 'Updated study',
+        apps: {'updated.app'},
+        always: true,
+      );
+      const unrelated = BlockingPlan(
+        id: 'other',
+        name: 'Another plan',
+        apps: {'example.app'},
+        budget: 30,
+        enabled: false,
+      );
+      await _resumeWithState(tester, gateway, const [current, unrelated]);
+      await _attemptDetailSave(tester);
+      final plans = BlockingSnapshot(gateway.state).plans;
+      final retained = plans.singleWhere((plan) => plan.id == current.id);
+      expect(retained.toMap(), current.toMap());
+      expect(
+        plans.singleWhere((plan) => plan.id == unrelated.id).toMap(),
+        unrelated.toMap(),
+      );
+    },
+  );
 
   testWidgets('resumed direct editor cannot recreate a deleted native plan', (
     tester,
@@ -197,23 +205,22 @@ void main() {
     expect(BlockingSnapshot(gateway.state).plans, isEmpty);
   });
 
-  testWidgets(
-    'direct card editor saves successfully under its own revision',
-    (tester) async {
-      final gateway = _RevisionGateway();
-      final original = BlockingSnapshot(gateway.state).plans.single;
-      await _openDetail(tester, gateway);
-      await _attemptDetailSave(tester);
-      expect(gateway.saves, hasLength(1));
-      expect(gateway.saves.single['revision'], 3);
-      expect(BlockingSnapshot(gateway.state).revision, 4);
-      expect(
-        BlockingSnapshot(gateway.state).plans.single.toMap(),
-        original.toMap(),
-      );
-      expect(find.byType(BlockingPlanEditor), findsNothing);
-    },
-  );
+  testWidgets('direct card editor saves successfully under its own revision', (
+    tester,
+  ) async {
+    final gateway = _RevisionGateway();
+    final original = BlockingSnapshot(gateway.state).plans.single;
+    await _openDetail(tester, gateway);
+    await _attemptDetailSave(tester);
+    expect(gateway.saves, hasLength(1));
+    expect(gateway.saves.single['revision'], 3);
+    expect(BlockingSnapshot(gateway.state).revision, 4);
+    expect(
+      BlockingSnapshot(gateway.state).plans.single.toMap(),
+      original.toMap(),
+    );
+    expect(find.byType(BlockingPlanEditor), findsNothing);
+  });
 
   for (final systemBack in [false, true]) {
     testWidgets(
@@ -254,7 +261,9 @@ void main() {
       final gateway = _RevisionGateway();
       await _openDetail(tester, gateway, openEditor: false);
       gateway.pendingCatalog = Completer<List<Map>>();
-      final card = find.ancestor(of: find.text('Study'), matching: find.byType(InkWell)).first;
+      final card = find
+          .ancestor(of: find.text('Study'), matching: find.byType(InkWell))
+          .first;
       await tester.ensureVisible(card);
       await tester.tap(card);
       await tester.pumpAndSettle();
@@ -441,6 +450,11 @@ void main() {
           )
           .canPop;
       expect(gateway.nfcRequests, 1);
+      expect(
+        gateway.nfcScreenVisible,
+        isTrue,
+        reason: 'The in-app enrollment dialog must not cancel reader mode.',
+      );
       expect(find.text('Hold your NFC tag nearby'), findsOneWidget);
       gateway.pendingNfcReply!.complete();
       await tester.pumpAndSettle();
@@ -451,4 +465,43 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('NFC failure is readable and setup remains retryable', (
+    tester,
+  ) async {
+    final gateway = _RevisionGateway();
+    gateway.state = {...gateway.state, 'nfcAvailable': true};
+    await _openDetail(tester, gateway);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Strict').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Unlock method'));
+    await tester.tap(find.text('Unlock method'));
+    await tester.pumpAndSettle();
+    final setup = find.widgetWithText(TextButton, 'Set up tag');
+    await tester.ensureVisible(setup);
+    gateway.pendingNfcReply = Completer<void>();
+    await tester.tap(setup);
+    await tester.pump();
+    gateway.pendingNfcReply!.completeError(
+      PlatformException(
+        code: 'blocking_error',
+        message: 'Enable app blocking first.',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Hold your NFC tag nearby'), findsNothing);
+    expect(
+      find.text('Set up app blocking in Permissions & limits.'),
+      findsWidgets,
+    );
+    expect(find.textContaining('PlatformException'), findsNothing);
+    expect(
+      find.widgetWithText(FilledButton, 'Set up protection'),
+      findsOneWidget,
+    );
+    expect(tester.widget<TextButton>(setup).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
 }

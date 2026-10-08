@@ -666,6 +666,12 @@ Each model has a distinct content-hash-bound tool-disabled metadata catalog.
 Apply the additive model/tier SQL before changing matching API/executor settings;
 verify installed CLI acceptance and an actual bounded turn before rollout claims.
 Existing provider isolation, tool limits and UTC operator quotas remain intact.
+The hosted CLI pin is 0.161.0. The prior 0.153.4 client rejected Sol with
+`unavailable_model`; an isolated 0.161.0 synthetic turn succeeded on the same
+pilot account. This client upgrade preserves Standard tier, Low reasoning,
+the hash-bound tool-disabled catalogs, strict response validation and quotas.
+Catalog filenames retain their source metadata revision, not the runtime pin.
+Production availability still requires a successful post-restart turn.
 FastAPI holds no Codex state and cannot use the
 analysis daemon. It talks only to `mylifegraph-coach` over a length-prefixed Unix
 socket. Linux `SO_PEERCRED` admits one configured non-root API UID; the protocol

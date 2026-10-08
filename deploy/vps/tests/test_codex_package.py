@@ -21,7 +21,7 @@ SPEC.loader.exec_module(INSTALLER)
 MANIFEST = json.loads((VPS / "manifests/codex-cli.json").read_text())
 METADATA = {
     "layoutVersion": 1,
-    "version": "0.153.4",
+    "version": "0.161.0",
     "target": "x86_64-unknown-linux-musl",
     "variant": "codex",
     "entrypoint": "bin/codex",
@@ -38,6 +38,8 @@ FILES = {
 }
 DIRS = ["bin", "codex-path", "codex-resources", "codex-resources/zsh",
         "codex-resources/zsh/bin"]
+FILES.update({name: b"vendor resource" for name in INSTALLER.PACKAGE_FILES if name not in FILES})
+DIRS = sorted(INSTALLER.PACKAGE_DIRS)
 
 
 def package(*, files=None, extra=None, special=None):
@@ -72,7 +74,7 @@ class CodexPackageTests(unittest.TestCase):
                 os.umask(previous)
             for name, content in FILES.items():
                 self.assertEqual((target / name).read_bytes(), content)
-                expected = 0o444 if name == "codex-package.json" else 0o555
+                expected = INSTALLER.PACKAGE_FILES[name]
                 self.assertEqual(stat.S_IMODE((target / name).stat().st_mode), expected)
             for name in ["", *DIRS]:
                 self.assertEqual(stat.S_IMODE((target / name).stat().st_mode), 0o555)

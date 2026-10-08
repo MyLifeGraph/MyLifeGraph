@@ -4,9 +4,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/focus_protection/application/blocking_gateway.dart';
 import 'package:my_life_graph/features/focus_protection/application/focus_protection_gateway.dart';
+import 'package:my_life_graph/features/focus_protection/domain/focus_protection.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/pages/blocking_page.dart';
 
 import 'blocking_plans_test.dart' show snapshot;
+
+class _ReadyProtectionGateway extends UnsupportedFocusProtectionGateway {
+  @override
+  Future<FocusProtectionStatus> readStatus() async {
+    final value = await super.readStatus();
+    return FocusProtectionStatus(
+      platformSupported: true,
+      accessibilityEnabled: true,
+      notificationPolicyGranted: false,
+      lease: null,
+      configuration: value.configuration.copyWith(
+        enabled: true, blockSelectedApps: true,
+      ),
+    );
+  }
+}
 
 class _DisconnectedWifiGateway extends BlockingGateway {
   _DisconnectedWifiGateway({required this.wifiRequired});
@@ -55,7 +72,7 @@ Future<void> _openConfiguration(
       overrides: [
         blockingGatewayProvider.overrideWithValue(gateway),
         focusProtectionGatewayProvider.overrideWithValue(
-          UnsupportedFocusProtectionGateway(),
+          _ReadyProtectionGateway(),
         ),
       ],
       child: MaterialApp(

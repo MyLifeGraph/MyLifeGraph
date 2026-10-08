@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../widgets/blocking_website_icon.dart';
@@ -82,11 +83,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   BlockingGateway? _sessionGateway;
   bool _routeVisible = true;
   bool _unlockDialog = false;
+  bool _startingNfc = false;
   bool _strictPresent = true, _finishingUnlock = false;
   bool _requestingUnlock = false;
   BlockingGateway get _gateway => ref.read(blockingGatewayProvider);
   bool get _configurationLocked =>
       _snapshot?.locked == true || _legacy?.lease?.isActive == true;
+  bool get _protectionReady =>
+      _legacy?.configuration.enabled == true &&
+      _legacy?.configuration.blockSelectedApps == true &&
+      _legacy?.accessibilityEnabled == true;
   @override
   void initState() {
     super.initState();
@@ -206,7 +212,20 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     }
   }
 
-  String _message(Object e) => e.toString().replaceFirst('Exception: ', '');
+  String _message(Object e) {
+    if (e is PlatformException) {
+      return switch (e.message) {
+        'Enable app blocking first.' || 'Enable Android protection first.' =>
+          'Set up app blocking in Permissions & limits.',
+        _ =>
+          e.message?.trim().isNotEmpty == true
+              ? e.message!.trim()
+              : 'Could not complete. Try again.',
+      };
+    }
+    return e.toString().replaceFirst('Exception: ', '');
+  }
+
   void _pollUnlock(BlockingSnapshot value) {
     _timer?.cancel();
     if (!_foreground || (!_routeVisible && !_unlockDialog)) return;
@@ -1277,7 +1296,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       ? '${seconds ~/ 60}m'
       : '${seconds ~/ 60}m ${seconds % 60}s';
   Future<BlockingSnapshot?> _scan(bool enroll) async {
-    if (_busy) return null;
+    if (_busy || _startingNfc) return null;
+    _startingNfc = true;
     final navigator = Navigator.of(context, rootNavigator: true);
     final route = DialogRoute<void>(
       context: context,
@@ -1286,6 +1306,11 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         canPop: false,
         child: AlertDialog(
           title: const Text('Hold your NFC tag nearby'),
+          content: Text(
+            enroll
+                ? 'Scan twice. Remove the tag between scans.'
+                : 'Use your saved tag.',
+          ),
           actions: [
             TextButton(
               onPressed: () async {
@@ -1301,7 +1326,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         ),
       ),
     );
-    _unlockDialog = !enroll;
+    // Enrollment is also an in-app scan, not a Strict-screen exit. Keep native
+    // visibility established before starting reader mode (including queued
+    // route-visibility commands from the setup sheet).
+    _unlockDialog = true;
+    await _syncStrictVisibility();
+    _startingNfc = false;
+    if (!mounted) {
+      _unlockDialog = false;
+      return null;
+    }
     unawaited(navigator.push(route));
     final saved = await _perform(
       () => _gateway.command('nfc', {'enroll': enroll}),
@@ -1470,7 +1504,19 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                       FilledButton(
                         onPressed: saving
                             ? null
-                            : () => save(true, ctx, update),
+                            : () async {
+                                if (!_protectionReady) {
+                                  update(() => saving = true);
+                                  try {
+                                    await _permissions();
+                                  } finally {
+                                    if (ctx.mounted)
+                                      update(() => saving = false);
+                                  }
+                                  return;
+                                }
+                                await save(true, ctx, update);
+                              },
                         child: saving
                             ? const SizedBox.square(
                                 dimension: 20,
@@ -1478,7 +1524,11 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text('Enable'),
+                            : Text(
+                                _protectionReady
+                                    ? 'Enable'
+                                    : 'Set up protection',
+                              ),
                       ),
                       if (s.strict['enabled'] == true)
                         TextButton(

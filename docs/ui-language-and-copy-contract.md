@@ -1,5 +1,10 @@
 # UI Language And Copy Contract
 
+NFC setup says `Scan twice. Remove the tag between scans.` Verification says
+`Use your saved tag.` Missing Strict prerequisites use `Set up protection`
+and open Permissions & limits; channel failures never display raw
+`PlatformException` wrappers.
+
 New untimed Habit creation uses `Minutes (optional)` and
 `Save habit`; supplying minutes retains `Preview plan`. Existing scheduled
 Habits keep their required duration. Morning clock controls say `15m` and have

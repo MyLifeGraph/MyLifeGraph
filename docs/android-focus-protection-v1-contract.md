@@ -218,7 +218,16 @@ Wi-Fi name and enrolled NFC tag. Wi-Fi setup requests location permission to
 obtain an unredacted SSID; unknown/disconnected networks fail closed. During an
 authorized editing window, a retained Wi-Fi condition can still be removed
 while disconnected; adding or re-enabling it requires an available SSID. NFC
-enrollment requires two matching scans; changing IDs are rejected. Only the
+enrollment requires two matching scans; changing IDs are rejected. The
+in-app reader dialog (enrollment as well as verification) retains Strict-screen
+visibility before reader mode starts, so opening it cannot cancel its own scan.
+Background/route exit still cancels. Empty and previously written tags work
+without reading/writing their payload; an empty or changing UID is rejected.
+Setup explains both scans. If protection/master or Accessibility is missing,
+the primary setup action opens Permissions & limits rather than attempting
+Strict activation. Native prerequisite checks stay authoritative. Platform
+failures show their readable message, not a raw channel exception.
+Only the
 tag-ID hash is stored. SSIDs and NFC IDs are self-control checks, not strong
 authentication. The unlock request uses monotonic time/boot identity and belongs
 to one visible Strict screen. A transient inactive/window-focus loss such as
