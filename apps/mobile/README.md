@@ -42,6 +42,12 @@ creation, rescheduling and drag/drop are explicitly outside this change.
 
 ## Android blocking plans
 
+NFC registration keeps the in-app scan dialog within Strict-screen visibility.
+Scan the same tag twice, removing it between scans; payload contents are not
+read or written. Verification uses the registered stable identifier. Tags with
+empty/random identifiers are unsupported. Missing protection prerequisites link
+to Permissions & limits before activation; native Strict checks remain intact.
+
 Blocking modal editors own keyboard insets. The underlying device-tool shell
 does not shrink behind them; other routes retain their existing resize behavior.
 

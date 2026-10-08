@@ -169,7 +169,7 @@ stop conditions remain authoritative in
 
 ## Privileged bootstrap (`ops`)
 
-The current CLI pin is **0.153.4**, selected from the stable official release
+The current CLI pin is **0.161.0**, selected from the stable official release
 and bound to the archive checksum in `manifests/codex-cli.json`. Updating it
 also updates `LOCAL_CODEX_EXPECTED_VERSION` in the executor environment;
 keep the resolved UID/socket settings and the disabled provider flag intact.
@@ -177,6 +177,13 @@ The CLI version remains pinned. Operator settings now select `gpt-6.1-sol` with
 Standard tier (explicit default service tier and Fast disabled); the local
 development adapter remains `gpt-5.5`/Fast. SQL/model metadata and API/executor
 compatibility must be verified before enabling this selection; there is no fallback.
+The 0.161.0 package also retains its exact vendor voice resource inventory;
+shipping these resources does not enable voice or additional Coach tools.
+The earlier 0.153.4 runtime returned `unavailable_model` for Sol on the pilot;
+a separate synthetic 0.161.0 turn succeeded on the same account. Update both
+the root-owned manifest/installer and executor expected version together.
+Keep the preceding version and configuration for rollback and prove a real
+post-restart turn; a version-only probe is not model availability evidence.
 
 Run these steps only from a second, proven SSH session. Replace every example
 identifier before use; never paste a secret into shell history.

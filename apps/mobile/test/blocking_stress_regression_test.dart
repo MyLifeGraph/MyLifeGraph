@@ -32,6 +32,8 @@ class _ConsentGateway extends UnsupportedFocusProtectionGateway {
             )
           : null,
       configuration: status.configuration.copyWith(
+        enabled: true,
+        blockSelectedApps: true,
         consentVersions: {
           focusProtectionAppCatalogConsent: focusProtectionConsentVersion,
         },

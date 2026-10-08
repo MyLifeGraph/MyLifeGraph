@@ -4705,6 +4705,49 @@ behavior, calls/alarms, process death, boot, or an installed-device layout.
 
 ## Phase 10 Provider Verification
 
+### NFC enrollment dialog regression (2026-10-08)
+
+The Flutter enrollment dialog previously reported its route as hidden to native
+Strict visibility, allowing that command to cancel its own pending reader scan.
+The regression assertion failed before the fix and passed after establishing
+visibility before starting enrollment, just as for unlock verification. Missing
+protection now opens its existing setup instead of dispatching an invalid Strict
+activation; channel errors use readable messages. Adjacent Strict test fixtures
+now explicitly enable protection rather than simulating impossible activation.
+The focused Blocking/Strict/widget stress suites passed, including retry,
+retained draft and timer/visibility paths. No native UID format, tag payload,
+unlock requirement or stored schema changed. Empty/written tag behavior follows
+the existing UID-only reader; a physical NFC/tag test is still pending. These
+results are local, not APK publication evidence. The task-base affected gate
+could not execute through the current Windows WSL shell.
+Focused static analysis also failed at analysis-server shutdown because the
+local Dart performance-witness file could not be deleted (Windows error 1920),
+not with a reported source diagnostic. This is an unresolved tooling failure,
+not a clean analysis pass. No external cache/user files were removed.
+
+### Sol CLI compatibility follow-up (2026-10-08)
+
+On the pilot, the existing 0.153.4 CLI returned an `unavailable_model` CLI
+event for `gpt-6.1-sol`. A separately staged, SHA-256-verified official 0.161.0
+package completed a synthetic empty-data turn under the existing Coach account.
+The response did not include a reported model identifier; this is not evidence
+of explicit model reporting. No response-validation or fallback check was removed.
+The upgraded installer fixtures and real official archive inventory/metadata
+validation passed on Linux; documentation consistency passed locally.
+The task-base affected runner could not start its gates because the selected
+Windows WSL shell could not find Node. These focused results do not replace a
+complete CI result or prove authenticated APK/API persistence.
+
+The ops-only runtime update is prepared with exact input hashes, root-private
+configuration/helper backups, retained previous CLI, service/health checks and
+a real post-restart synthetic turn. Failure restores the previous configuration,
+helpers and CLI link and reports rollback status. The operator executed the
+guarded v2 update and reported `live_success` with `codex-cli 0.161.0`,
+`gpt-6.1-sol`, reasoning `low`, and a retained root-private rollback backup.
+Post-restart service checks and a synthetic turn succeeded; an authenticated
+APK conversation remains a separate acceptance check. No APK or
+database change is necessary for this server-runtime correction.
+
 ### Analysis image verification without a model
 
 The existing opt-in Docker test uses synthetic SQLite data and no provider

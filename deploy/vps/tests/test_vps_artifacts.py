@@ -227,7 +227,7 @@ class VpsArtifactTests(unittest.TestCase):
             "GEMINI_API_KEY",
         ]:
             self.assertNotIn(forbidden, executor)
-        self.assertIn("LOCAL_CODEX_EXPECTED_VERSION=0.153.4", executor)
+        self.assertIn("LOCAL_CODEX_EXPECTED_VERSION=0.161.0", executor)
         self.assertIn("unix:///run/user/<mylifegraph-coach-uid>/docker.sock", executor)
         self.assertNotIn("\nCOACH_ANALYSIS_IMAGE=", executor)
 
@@ -383,14 +383,14 @@ class VpsArtifactTests(unittest.TestCase):
 
     def test_codex_manifest_pins_the_reviewed_official_archive(self) -> None:
         manifest = json.loads((VPS_ROOT / "manifests/codex-cli.json").read_text())
-        self.assertEqual(manifest["version"], "0.153.4")
+        self.assertEqual(manifest["version"], "0.161.0")
         self.assertEqual(
             manifest["asset_sha256"],
-            "a822187e1a2420c61c5926721bfbd878701ed95547c9bb0d4de4498a16ba1821",
+            "04d8ab9dbcb9df0edf3c67dca5072a374babfdf762a9bc4ae649ae140b8e2cf0",
         )
         self.assertTrue(
             manifest["source_url"].startswith(
-                "https://github.com/openai/codex/releases/download/rust-v0.153.4/"
+                "https://github.com/openai/codex/releases/download/rust-v0.161.0/"
             )
         )
 
