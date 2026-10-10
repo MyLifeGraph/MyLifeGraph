@@ -270,6 +270,10 @@ is not undone by later scan callbacks. Hardware/OEM acceptance is separate.
 Only the tag-ID hash and user-assigned name are stored. SSIDs and NFC IDs are self-control checks, not strong
 authentication. Unlock requests use monotonic time/boot identity. Starting a
 request or NFC reader still requires the visible foreground Discipline screen.
+At deliberate request/scan admission, Android reconciles cached resume/focus
+callbacks with the actual Activity RESUMED state, window focus and unlocked
+screen. The independent Flutter route-visibility guard is retained: current
+host facts cannot authorize a hidden Discipline route or a background request.
 When Stay on screen is on, actual tab/route exit, Home/background, screen lock or
 Activity recreation cancels the request and NFC proof. Notification-shade/window
 focus loss only suspends foreground completion; it does not reset the request.
@@ -282,8 +286,14 @@ inexact allow-idle alarm reconcile it natively, checking the same conditions and
 intent; neither starts a request. Doze/OEM scheduling or force-stop can delay
 completion: no exact background-time guarantee is made. Reboot/unknown boot
 never credits elapsed time or unlocks; a new deliberate request is required.
-The in-app NFC scan dialog belongs to the same visible unlock screen; closing it
-does not itself reset the wait; backgrounding stops the reader and cancels a
+The in-app NFC scan dialog belongs to the same visible unlock screen. While it
+is pending, the underlying page hides countdown/status/Stay focused controls.
+Explicit verification Cancel first cancels the unlock request, then stops the
+reader, returning to locked Unblock without an expected scan-cancel error.
+Enrollment Cancel does not cancel an unrelated unlock request. Successful scan
+closure preserves any remaining configured wait and other AND conditions.
+The Stay on screen warning appears only during a positive remaining wait;
+immediate NFC verification does not show a timer warning. Backgrounding stops the reader and cancels a
 stay-required request, but retains a background-enabled request.
 Completion rechecks all
 conditions natively and consumes recent NFC proof. `Unblock` first opens a

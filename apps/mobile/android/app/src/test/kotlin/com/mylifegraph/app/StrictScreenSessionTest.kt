@@ -4,6 +4,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class StrictScreenSessionTest {
+    @Test fun deliberateRequestReconcilesStaleHostCallbacksWithoutTrustingRouteAlone() {
+        val session = StrictScreenSession({ false }) { }
+        session.visibility(true)
+        // Host resumed behind keyguard, then gained focus without another
+        // resume callback: cached foreground is still false.
+        session.focus(true)
+        rejected(session)
+        session.requireVisible(hostResumed = true, hostFocused = true)
+        assertTrue(session.canComplete())
+        for ((resumed, focused) in listOf(false to true, true to false, false to false)) {
+            try {
+                session.requireVisible(resumed, focused)
+                fail("A hidden/unfocused host must not start unlock")
+            } catch (_: IllegalStateException) { }
+        }
+        session.visibility(false)
+        try {
+            session.requireVisible(true, true)
+            fail("Current host facts must not override hidden Discipline route")
+        } catch (_: IllegalStateException) { }
+    }
     @Test fun backgroundPolicyRetainsRequestAcrossTabStopAndRecreation() {
         var pending = true
         val session = StrictScreenSession({ false }) { pending = false }

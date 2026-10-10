@@ -347,11 +347,18 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       }
       await _completeUnlockIfReady();
     } finally {
-      _requestingUnlock = false;
+      if (mounted) {
+        setState(() => _requestingUnlock = false);
+      } else {
+        _requestingUnlock = false;
+      }
     }
   }
 
-  Future<bool> _perform(Future<BlockingSnapshot> Function() action) async {
+  Future<bool> _perform(
+    Future<BlockingSnapshot> Function() action, {
+    bool Function()? suppressError,
+  }) async {
     if (_busy) return false;
     final generation = ++_generation;
     ++_usageGeneration;
@@ -367,7 +374,9 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       }
       return true;
     } catch (e) {
-      if (mounted && generation == _generation) {
+      if (mounted &&
+          generation == _generation &&
+          suppressError?.call() != true) {
         setState(() => _error = _message(e));
       }
       return false;
@@ -1222,6 +1231,9 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   }
 
   static const _dayNames = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  bool _showUnlockProgress(BlockingSnapshot s) =>
+      s.unlockStarted && !_unlockDialog && !_requestingUnlock;
+
   List<Widget> _strict(BlockingSnapshot s) => [
     const SizedBox(height: AppSpacing.lg),
     Center(child: StrictStatusRing(locked: s.locked)),
@@ -1252,7 +1264,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           ),
           const SizedBox(height: _strictControlGap),
           if (s.locked) ...[
-            if (s.unlockStarted && s.remainingMs > 0)
+            if (_showUnlockProgress(s) && s.remainingMs > 0)
               Text(
                 '${((s.remainingMs + 999) ~/ 1000) ~/ 60}:${(((s.remainingMs + 999) ~/ 1000) % 60).toString().padLeft(2, '0')}',
                 textAlign: TextAlign.center,
@@ -1264,7 +1276,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 onPressed: _busy ? null : _requestUnlock,
                 child: const Text('Unblock'),
               ),
-            if (s.unlockStarted && s.strict['nfc'] == true) ...[
+            if (_showUnlockProgress(s) && s.strict['nfc'] == true) ...[
               if (s.remainingMs > 0) const SizedBox(height: _strictControlGap),
               OutlinedButton.icon(
                 style: _strictControlStyle,
@@ -1273,10 +1285,10 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 label: const Text('Scan tag'),
               ),
             ],
-            if (s.unlockStarted &&
+            if (_showUnlockProgress(s) &&
                 (s.remainingMs > 0 || s.strict['nfc'] == true))
               const SizedBox(height: _strictControlGap),
-            if (s.unlockStarted)
+            if (_showUnlockProgress(s))
               Text(
                 s.remainingMs > 0
                     ? (s.unlockMode == 'off'
@@ -1285,9 +1297,9 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                     : 'Waiting for conditions',
                 textAlign: TextAlign.center,
               ),
-            if (s.unlockStarted) ...[
+            if (_showUnlockProgress(s)) ...[
               const SizedBox(height: _strictControlGap),
-              if (s.strict['stayOnScreen'] == true) ...[
+              if (s.remainingMs > 0 && s.strict['stayOnScreen'] == true) ...[
                 AppSurface(
                   variant: AppSurfaceVariant.warning,
                   radius: AppRadii.lg,
@@ -1377,6 +1389,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       ],
     ),
   ];
+
   String _strictSummary(BlockingSnapshot s) => [
     _waitLabel(s.strict['waitSeconds'] as int? ?? 180),
     if (s.strict['power'] == true) 'Charger',
@@ -1399,6 +1412,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   }) async {
     if (_busy || _startingNfc) return null;
     _startingNfc = true;
+    var cancelling = false;
+    var cancelled = false;
     final navigator = Navigator.of(context, rootNavigator: true);
     final route = DialogRoute<void>(
       context: context,
@@ -1415,10 +1430,19 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           actions: [
             TextButton(
               onPressed: () async {
+                if (cancelling) return;
+                cancelling = true;
                 try {
+                  // Stop the deliberate request before closing its reader, so
+                  // Cancel cannot leave a background-enabled unlock pending.
+                  if (!enroll) await _gateway.command('cancelUnlock');
+                  cancelled = true;
                   await _gateway.open('cancelNfc');
                 } catch (e) {
+                  cancelled = false;
                   if (mounted) setState(() => _error = _message(e));
+                } finally {
+                  cancelling = false;
                 }
               },
               child: const Text('Cancel'),
@@ -1446,12 +1470,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         if (recovery) 'recovery': true,
         if (replaceId != null) 'replaceId': replaceId,
       }),
+      suppressError: () => cancelled,
     );
+    if (cancelled && mounted) {
+      await _perform(() => _gateway.command('status'));
+    }
     if (route.isActive) navigator.removeRoute(route);
     _unlockDialog = false;
     if (mounted) _routeVisible = ModalRoute.of(context)?.isCurrent ?? true;
     unawaited(_syncStrictVisibility());
-    return saved ? _snapshot : null;
+    return saved && !cancelled ? _snapshot : null;
   }
 
   Future<void> _recoverChip(BlockingSnapshot s) async {

@@ -2,7 +2,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_motion_tokens.dart';
-import '../theme/app_visual_tokens.dart';
 
 /// Read acknowledgement belongs only to the settled root destination, not to
 /// a lazily mounted neighbouring preview. Non-pager routes are visible by default.
@@ -200,11 +199,9 @@ class _RootTabPagerState extends State<RootTabPager> {
                   ),
             itemCount: widget.count,
             itemBuilder: (context, index) => ColoredBox(
-              // Cover neighbouring content during movement; retain the shared
-              // Liquid Glass backdrop once stationary.
-              color: _moving
-                  ? context.visualTokens.background
-                  : Colors.transparent,
+              // PageView separates/clips the page content. Keep the shared
+              // theme backdrop visible throughout dragging and settlement.
+              color: Colors.transparent,
               child: RootTabVisibility(
                 visible: !_moving && index == widget.index,
                 child: widget.pageBuilder(context, index),

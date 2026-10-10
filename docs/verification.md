@@ -31,6 +31,42 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local swipe/Discipline follow-up — 2026-10-11 (not published)
+
+Base `281ab3bdf4931c4b32fef3fe54c5df5637e7e2d0`. The backdrop assertion
+failed before removing the moving-only solid pager cover and passed afterward.
+Pager plus Discipline/NFC request suites: **38 passed**, including animated
+choice dismissal. Header/Coach regression suites: **32 passed**. Native
+admission now reconciles stale host callbacks from actual Android state while
+retaining route, foreground, focus and keyguard guards. A JVM case models the
+stale-callback rejection and current-host recovery; it is not a reproduction
+on the user's handset. Installed-device confirmation of the reported
+`Open Discipline to unlock` failure remains outstanding. Final source gates
+and release/production evidence must be recorded separately after completion.
+Final narrowed Flutter regression set: **122 passed**; `flutter analyze --no-pub`
+reports no issues. Docs consistency (19 tests), visual guard (1 test) and
+`git diff --check` pass. Local JVM/lint could not run with installed JBR
+25.0.2 (Gradle initialization failed); the required Java-21 Linux CI remains
+the native compile/JVM/lint gate. The attempted local full Flutter run is not
+counted as passing; exact Linux candidate results supersede it only when green.
+
+### Local NFC verification cancellation — 2026-10-10
+
+Base `281ab3bdf4931c4b32fef3fe54c5df5637e7e2d0`; local-only, not part of
+published RC26. Two new widget assertions reproduced the premature warning
+before the fix. The request/page/spacing/stress suites pass **85 tests**;
+the final narrowed request suite passes **26 tests**. Coverage includes immediate
+and timed NFC, successful scan, explicit cancellation and background-enabled
+cancellation. Docs consistency and whitespace checks pass. Logs are under
+`.tools/nfc-cancel-local`. No physical NFC/device acceptance is claimed.
+The base-bound affected Full attempt is not green: its source supervisor fails
+on Windows' missing `setsid`; the remaining parallel run was stopped. Initial
+Flutter analysis stalled; retry `flutter analyze --no-pub` completed successfully
+with no issues. A separate direct Dart analysis attempt failed at server shutdown
+with the existing Windows performance-witness file deletion error 1920; it is
+not counted as a passing gate and no external SDK/cache file was removed.
+No push, APK publication or remote deployment was performed in this follow-up.
+
 ### Pilot RC26 publication — 2026-10-10
 
 - PR [41](https://github.com/MyLifeGraph/MyLifeGraph/pull/41) merged candidate

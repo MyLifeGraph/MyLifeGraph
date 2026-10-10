@@ -49,8 +49,15 @@ class BlockingBridge(private val activity: FlutterActivity) {
         activity.getSystemService(PowerManager::class.java).isInteractive &&
             !activity.getSystemService(KeyguardManager::class.java).isKeyguardLocked
     private fun requireStrictScreen() {
-        if (!screenUnlocked()) stopped()
-        strictSession.requireVisible()
+        val unlocked = screenUnlocked()
+        if (!unlocked) stopped()
+        // Keyguard/window transitions can leave callback state stale even after
+        // the user is visibly back. Reconcile from actual Android host state;
+        // never infer foreground/focus from a client command.
+        strictSession.requireVisible(
+            unlocked && activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED),
+            unlocked && activity.hasWindowFocus(),
+        )
     }
     private fun fail(result: MethodChannel.Result, error: Throwable) =
         result.error("blocking_error", error.message ?: "Blocking unavailable", null)
