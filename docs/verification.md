@@ -31,6 +31,44 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Pilot RC26 publication — 2026-10-10
+
+- PR [41](https://github.com/MyLifeGraph/MyLifeGraph/pull/41) merged candidate
+  `da2ab422f35266599ce1f6ae7e10275d9ac10978` after required green checks into
+  Main `ec204fd4fff452a39913dbe3056262fad71bc3db`. Annotated RC26 resolves to
+  that commit; no force-push or Main administrator bypass was used.
+- [Linux CI 38062764582](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38062764582)
+  succeeded: complete Flutter/Android verification, docs/visual contracts and
+  web build passed; backend **2011 passed, 2 skipped**; browser E2E **8 passed**.
+  The separate migration lane was selector-skipped because no SQL changed;
+  browser E2E used its fresh disposable database, not production data.
+- [Signed build 38063770631](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38063770631)
+  succeeded. [Published RC26](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.26)
+  is a non-draft pilot prerelease with exactly four uploaded assets. APK build
+  number `10000113`, size **153093360 bytes**, SHA256
+  `cc19d1026a4321784d56d77f10d9950abfde0f3af3c5288f0fa074c299a2d71c`.
+  Workflow signer verification, strict local bundle validation, downloaded-byte
+  SHA256 and independent local `apksigner verify` passed; signer certificate
+  `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+- Existing Vercel production deployment `5GUFA9tqTnLNxFwdiDwEEbpN3kjQ`
+  succeeded for the above Main commit. Public app index and JS returned HTTP
+  200; JS contains the expected exact commit. An earlier blocked status was
+  from another team association, not the final production deployment.
+- Public VPS health still identifies RC24 / `0799ffbfd553507bce3abb649f6042fbbf87fd22`;
+  readiness is healthy and attests migration head
+  `20261006135421_coach_operator_sol61_standard.sql`, count **83**. No new
+  migration is required. RC26 VPS upload/promotion remains held for the
+  15-GiB storage reserve; the proposed exact duplicate APK removal is not yet
+  authorized. Do not claim the RC26 backend is live from the web/APK release.
+- Laptop retention finalization completed with fresh publication/download
+  proof, dry-run and exact-plan apply: **153369927 bytes removed** from the
+  registered RC25 intermediate bundle; registered oldest RC6 and newest RC26
+  retained. All **36** retention tests passed. Original outputs, unrelated
+  retention source edits, secrets, signing and server/rollback files stayed intact.
+  VM access returned; its RC26 download/finalization is still running, not a pass.
+- Physical NFC/OEM/shade/background acceptance remains unverified. These
+  checks do not claim a newly installed-device test or exact background delivery.
+
 ### Discipline settings and plan polish — 2026-10-10 (release candidate)
 
 Task base: `a15ed9303e3b2f06c5c07cad18b1b694cd5eb418`. Publication, PR/Main
@@ -44,15 +82,15 @@ The following evidence is local, not deployment evidence:
   fake native gateways, not generated mockups or physical-device screenshots.
 - Native `:app:testDebugUnitTest`: **91 tests, zero failures/errors**;
   `:app:lintDebug` passed. New policy tests cover default-off, active legacy
-  protection compatibility and completely-disabled-only settings. Existing
+  protection compatibility and completely-disabled-only settings. New
   recovery checks cover locked/NFC/revision prerequisites, duplicate contact,
   required removal, full-list explicit replacement and preservation of other chips.
   Flutter recovery tests cover cancel, guarded Scan and no unlock request/proof.
-  native boot/monotonic/condition tests and session lifecycle tests remain.
+  Existing native boot/monotonic/condition tests and session lifecycle tests remain.
 - Flutter analyze: no issues. Docs/visual contracts and whitespace checks pass.
   Logs: `.tools/discipline-polish`; captures: `.tools/ui-catalog/discipline-20261010`.
 - Captured-base affected verification selects Full but stops at the unchanged
-  Windows missing-`setsid` supervisor prerequisite. A green Linux/GitHub run
+  Windows prerequisites (`setsid` and a usable Python alias). A green Linux/GitHub run
   remains required before merge; this is not a local Full pass.
 - Physical NFC, shade/OEM lifecycle and inexact background-alarm timing remain
   unverified; no connected-device acceptance is claimed. No new SQL migration
