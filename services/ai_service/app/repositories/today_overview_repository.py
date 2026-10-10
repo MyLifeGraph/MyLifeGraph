@@ -33,6 +33,10 @@ class TodayOverviewRepository(Protocol):
 
     async def list_tasks(self, *, user_id: str) -> list[dict[str, Any]]: ...
 
+    async def list_capture_receipts(
+        self, *, user_id: str, entry_dates: list[date],
+    ) -> list[dict[str, Any]]: ...
+
     async def load_habits(
         self,
         *,
@@ -110,6 +114,24 @@ class SupabaseTodayOverviewRepository:
                 "limit": str(limit),
             },
         )
+
+    async def list_capture_receipts(
+        self, *, user_id: str, entry_dates: list[date],
+    ) -> list[dict[str, Any]]:
+        if not entry_dates:
+            return []
+        rows = await self._select_pages(
+            "daily_capture_request_identities",
+            params={
+                "select": "entry_date,branch,created_at",
+                "user_id": f"eq.{user_id}",
+                "entry_date": "in.(" + ",".join(d.isoformat() for d in entry_dates) + ")",
+                "order": "created_at.asc,request_id.asc",
+            }, max_rows=10_001,
+        )
+        if len(rows) > 10_000:
+            raise ValueError("Today capture receipt bound exceeded.")
+        return rows
 
     async def list_tasks(self, *, user_id: str) -> list[dict[str, Any]]:
         return await self._select_pages(

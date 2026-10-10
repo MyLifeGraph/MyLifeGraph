@@ -73,7 +73,7 @@ Plans hold id/name/icon, app/domain sets, enabled/paused state, up to twelve
 weekly windows, a timer, shared daily minute budget, Focus and Always selections.
 Rules combine with OR; overlapping plans also combine with OR. Editing,
 pausing or deleting one cannot clear another. Menus provide Details, Edit, Duplicate,
-Pause/Resume, ten-minute pause and confirmed Delete. Quick Block creates a
+Pause/Resume, ten-minute pause and confirmed Delete. Block now creates a
 normal plan with an initial one-hour timer; custom timers/budgets accept
 1–1440 minutes. Names are limited to sixty characters. Weekly windows retain
 V1 device-zone/DST, overnight/start-day and exclusive-end semantics. Focus
@@ -202,7 +202,19 @@ Plans omits the redundant permanent browser list; the explicit website-consent
 dialog still explains address-bar-only detection, unsupported/hidden bars and
 no page-content or browsing-data upload.
 
-### Strict and customization
+### Discipline (native Strict) and customization
+
+Visible copy calls Strict `Discipline mode`; native identifiers/wire keys remain
+unchanged. `Quick Block` is now `Block now`, retaining the same one-hour action.
+Unlock method's right chevron opens a dedicated Unlock settings page, then its
+method row opens the existing editable conditions on a dedicated page. Named
+NFC chip enrollment/removal, Wi-Fi, charger, wait, save/retry and consent remain.
+Stay on screen defaults **off** for fresh/disabled configurations. The setting
+can be changed only with Discipline fully disabled and no active Focus lease;
+a temporary release is not permission to change it. Native revision/authority
+checks persist the policy, and normal method saves cannot silently replace it.
+Already-enabled legacy configurations without the field retain their previous
+stay-required behavior until disabled/configured, avoiding an implicit weakening.
 
 The Strict status ornament keeps its lock fixed while a theme-owned light arc
 turns once per four seconds only while actually locked. This is decoration,
@@ -236,8 +248,16 @@ promise bidirectional named-list editing through an older APK.
 Status exposes only opaque IDs/names, never tag hashes. Add/remove commands
 recheck Strict/Focus edit authority and the supplied opening revision at commit.
 Removing the last chip while enabled Strict requires NFC is rejected: add a
-replacement first or disable that requirement while authorized. No lost-chip
-bypass exists. Blank/written tag contents are neither read nor overwritten.
+replacement first or disable that requirement while authorized. The owner-approved
+`Lost NFC chip?` recovery deliberately allows enrolling a replacement while locked
+NFC Discipline is enabled. It is self-control recovery, not strong authentication:
+anyone with access to this screen can enroll a chip. The opening revision and
+foreground Discipline screen are rechecked at commit. Two matching physical
+contacts are required. Registration alone never supplies unlock proof or changes
+wait, charger, Wi-Fi, plans or active Focus. Existing chips remain valid; at the
+eight-chip limit the user must explicitly select one lost chip to replace atomically.
+Duplicate scans never remove the selected chip. Other settings remain protected.
+Blank/written tag contents are neither read nor overwritten.
 One reader session accepts each physical contact once; enrollment requires
 an Android removal callback between its two matching scans. After recognition,
 reader ownership plus `NfcAdapter.ignore` (500ms removal debounce) is retained
@@ -245,30 +265,36 @@ until removal or actual app exit/disposal, preventing immediate normal Android
 tag redispatch while held. Pending scans time out after 30s; a completed held
 scan does not remain a pending reply. Adapter refusal fails visibly and is
 retryable. Ready verification completes natively in the same turn as its proof;
-remaining waits/conditions and foreground checks still apply. A completed unlock
+remaining waits/conditions and the configured stay policy still apply. A completed unlock
 is not undone by later scan callbacks. Hardware/OEM acceptance is separate.
 Only the tag-ID hash and user-assigned name are stored. SSIDs and NFC IDs are self-control checks, not strong
-authentication. The unlock request uses monotonic time/boot identity and belongs
-to one visible Strict screen. A transient inactive/window-focus loss such as
-the notification shade suspends completion and display polling, but retains
-the chosen request. Actual stopped/hidden/background lifecycle, Home/app leaving,
-screen-off/keyguard or Activity recreation cancels it. Leaving that tab or
-route, opening Permissions, backgrounding, locking the screen, or recreating the
-Android Activity cancels the request and NFC proof. Reboot never completes it.
-Returning shows Unblock and requires a new deliberate request; it does not
-automatically start a new countdown. Native bridge visibility/foreground gates
-also guard request, NFC scan and completion, independently of Flutter display.
+authentication. Unlock requests use monotonic time/boot identity. Starting a
+request or NFC reader still requires the visible foreground Discipline screen.
+When Stay on screen is on, actual tab/route exit, Home/background, screen lock or
+Activity recreation cancels the request and NFC proof. Notification-shade/window
+focus loss only suspends foreground completion; it does not reset the request.
+The countdown shows `Stay on this screen` / `Leaving resets the timer.` only for
+that policy. `Stay focused` deliberately cancels either kind of request without
+disabling Discipline. Returning after cancellation requires another Unblock.
+When Stay on screen is off, a deliberate request survives those navigation and
+lifecycle changes. Accessibility-service ticks and an explicit non-exported
+inexact allow-idle alarm reconcile it natively, checking the same conditions and
+intent; neither starts a request. Doze/OEM scheduling or force-stop can delay
+completion: no exact background-time guarantee is made. Reboot/unknown boot
+never credits elapsed time or unlocks; a new deliberate request is required.
 The in-app NFC scan dialog belongs to the same visible unlock screen; closing it
-does not itself reset the wait, while backgrounding during it still does.
+does not itself reset the wait; backgrounding stops the reader and cancels a
+stay-required request, but retains a background-enabled request.
 Completion rechecks all
 conditions natively and consumes recent NFC proof. `Unblock` first opens a
-compact choice: `15 minutes` or `Turn off Strict`. Cancelling starts nothing;
+compact choice: `15 minutes` or `Turn off Discipline`. Cancelling starts nothing;
 choosing starts the monotonic request with immutable `temporary`/`off` intent.
 Missing intent retains the legacy temporary behavior. Duplicate requests with
 the same intent preserve the deadline; a different intent is rejected.
-Flutter polls only on the foreground visible Strict screen and invokes
-`tryFinishUnlock` automatically after zero. Native suspended focus or unmet
-charger/Wi-Fi/NFC conditions return unchanged status, not successful completion.
+Flutter polls only on the foreground visible Discipline screen and invokes
+`tryFinishUnlock` automatically after zero. Stay-required suspended focus or
+unmet charger/Wi-Fi/NFC conditions return unchanged status, not completion.
+Background completion never bypasses fresh NFC, configured conditions or Focus.
 Temporary completion permits changes for fifteen minutes, then relocks; Lock
 now closes the window. Permanent completion disables Strict while preserving
 plans, customization and configured unlock requirements; the active-Focus
@@ -276,8 +302,9 @@ configuration guard still applies. Neither choice releases blocked apps/rules.
 Enabling Strict clears the old request and locks indefinitely; no unlock countdown
 starts until the explicit `Unblock` action. Before that request, the surface shows
 only Active, the configured method and Unblock, not a countdown, completion button
-or NFC scan. After choosing, the countdown and any required NFC scan become
-available subject to the wait/conditions; there is no second completion button.
+or NFC scan. After choosing, a required NFC scan opens automatically in the
+same visible unlock flow, without an extra Scan tap. Wait, fresh NFC proof and
+other configured native conditions still apply; there is no second completion button.
 Merely waiting without a request, refreshing or reopening cannot start a request.
 Late pre-exit command/status
 responses cannot restore cancelled countdowns in Flutter. Duplicate requests preserve its
@@ -292,8 +319,8 @@ The existing Unlock method summary uses compact minute units for full minutes,
 seconds for short waits and both units for a remainder; zero is `Immediate`.
 Its charger/Wi-Fi/NFC requirements remain visible on that same summary line.
 No additional explanatory line is added; the existing Limits disclosure remains.
-Strict buttons retain all commands with equal full width, at least 48px height,
-16px rounded corners and 12px spacing. Configure is outlined beneath the primary
+Discipline buttons retain all commands with equal full width, at least 48px height,
+oval corners and 12px spacing. Configure is outlined beneath the primary
 Lock now action. Pending NFC scan is separated from its timer and status;
 Unlock choices remain stacked in a compact scrollable dialog. The Wait dropdown
 constrains its selected value to available width, including large-text layouts.
@@ -632,3 +659,21 @@ Acceptance covers master-off zero effects, selected/unselected/essential apps,
 Flutter-process death, notification visibility without message access,
 alarm/starred/repeated calls, Finish/Abandon/expiry/emergency isolation, access
 revocation, boot, rule override, rotation, gestures, and large text.
+
+## Foreground daily-budget display and tab gestures
+
+Plans with a shared daily budget show minutes and seconds remaining in their summary.
+While a selected app (or a consented, currently observed browser host) is foreground,
+the existing silent local timer channel can display the app label, plan name and
+Android countdown chronometer. The earliest matching allowance is displayed; exhausted,
+paused, unavailable or unselected budgets have no countdown. Leaving the app, locking
+the device, losing usage/notification permission or showing the blocking overlay hides
+it. The notification shade does not change the underlying foreground app. Tapping opens
+MyLifeGraph and never unlocks. Notification permission is requested once when saving a
+budget or timer. Cloud push consent and existing Block Now timers remain independent.
+
+Blocking's four tabs reuse RootTabPager's live opaque movement preview, thresholds and
+motion tokens. The bottom selected tab remains the location indicator. Editing/reordering
+owns its gestures. Leaving Strict by movement cancels the request through the existing
+native visibility seam only when Stay on screen is enabled; a scan dialog remains
+part of that Discipline screen.

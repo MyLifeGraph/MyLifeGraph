@@ -18,7 +18,7 @@ void main() {
         budget: 45,
         usedMs: 600001,
       );
-      expect(summary(plan), 'All day · 35m left');
+      expect(summary(plan), 'All day · 35m 0s left');
       expect(summary(plan, access: false), 'Usage unavailable');
       expect(
         summary(
@@ -30,7 +30,7 @@ void main() {
             active: true,
           ),
         ),
-        'All day · 0m left',
+        'All day · 0m 0s left',
       );
       expect(
         summary(
@@ -69,6 +69,14 @@ void main() {
         ),
       ),
       'All day',
+    );
+  });
+  test('budget includes seconds and rounds a partial second up', () {
+    expect(
+      summary(
+        const BlockingPlan(id: 'b', name: 'Games', budget: 1, usedMs: 57500),
+      ),
+      'All day · 0m 3s left',
     );
   });
   test(

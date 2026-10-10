@@ -106,7 +106,7 @@ void main() {
     'Light': AppTheme.light,
     'Space': AppTheme.space,
   }.entries) {
-    for (final tab in ['Plans', 'Strict', 'Insights', 'Customize']) {
+    for (final tab in ['Plans', 'Discipline', 'Insights', 'Customize']) {
       testWidgets('pull refreshes $tab in ${theme.key}', (tester) async {
         final gateway = _Gateway();
         await _open(tester, gateway, tab, theme: theme.value);
@@ -244,7 +244,7 @@ void main() {
   if (captureUiCatalog) {
     testWidgets('pull-refresh compact header visual catalog', (tester) async {
       await loadCatalogFonts();
-      await _open(tester, _Gateway(), 'Strict');
+      await _open(tester, _Gateway(), 'Discipline');
       await captureCatalog(tester, 'blocking-header-pull-refresh');
     });
   }

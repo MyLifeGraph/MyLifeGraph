@@ -28,6 +28,15 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'support/ui_catalog_capture.dart';
 
 void main() {
+  for (final hour in [2, 11, 12]) {
+    testWidgets('missing Evening uses yesterday only before noon ($hour)', (tester) async {
+      final store = _RecordingCaptureStore();
+      await _pumpEveningPage(tester, store, currentInstant: DateTime(2026, 10, 10, hour));
+      final picker = tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker));
+      expect(picker.date, DateTime(2026, 10, hour < 12 ? 9 : 10));
+      expect(find.text('Yesterday'), hour < 12 ? findsOneWidget : findsNothing);
+    });
+  }
   if (captureUiCatalog) {
     testWidgets('compact evening note catalog', (tester) async {
       await loadCatalogFonts();

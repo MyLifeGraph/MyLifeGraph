@@ -295,7 +295,7 @@ void main() {
       await tester.tap(find.text('Plan B'));
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
-      expect(find.text('Unlock Strict to edit.'), findsOneWidget);
+      expect(find.text('Unlock Discipline to edit.'), findsOneWidget);
       expect(gateway.saves, 0);
       await tester.tap(find.byTooltip('Plan options').at(1));
       await tester.pumpAndSettle();
@@ -481,8 +481,6 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('header-island-toggle')));
-      await tester.pumpAndSettle();
       expect(
         find.byTooltip('App blocking'),
         eligible ? findsOneWidget : findsNothing,
@@ -546,7 +544,7 @@ void main() {
           );
           await tester.pumpAndSettle();
           await captureCatalog(tester, 'blocking-plans-${width.toInt()}');
-          for (final tab in ['Strict', 'Insights', 'Customize']) {
+          for (final tab in ['Discipline', 'Insights', 'Customize']) {
             await tester.tap(find.text(tab).last);
             await tester.pumpAndSettle();
             await captureCatalog(
@@ -618,9 +616,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Quick Block'), findsOneWidget);
+      expect(find.text('Block now'), findsOneWidget);
       expect(find.text('Study'), findsOneWidget);
-      for (final tab in ['Strict', 'Insights', 'Customize', 'Plans']) {
+      for (final tab in ['Discipline', 'Insights', 'Customize', 'Plans']) {
         await tester.tap(find.text(tab).last);
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: tab);
@@ -650,8 +648,10 @@ void main() {
       find.widgetWithText(FilledButton, 'Start').first,
     );
     expect(start.onPressed, isNull);
-    await tester.tap(find.text('Strict').last);
+    await tester.tap(find.text('Discipline').last);
     await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('Unblock'), findsOneWidget);
     expect(find.text('Unlock'), findsNothing);
     await tester.pumpWidget(const SizedBox());
@@ -761,7 +761,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    for (final tab in ['Strict', 'Insights', 'Customize', 'Plans']) {
+    for (final tab in ['Discipline', 'Insights', 'Customize', 'Plans']) {
       await tester.tap(find.text(tab).last);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: tab);

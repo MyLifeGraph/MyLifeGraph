@@ -38,10 +38,11 @@ class BlockingPlan {
     this.pausedUntil = 0,
     this.active = false,
     this.usedMs = 0,
+    this.tracking = false,
   });
   final String id, name, icon;
   final Set<String> apps, sites;
-  final bool focus, always, enabled, active;
+  final bool focus, always, enabled, active, tracking;
   final List<BlockingWindow> windows;
   final int until, budget, pausedUntil, usedMs;
   factory BlockingPlan.fromMap(Map map) => BlockingPlan(
@@ -61,6 +62,7 @@ class BlockingPlan {
     pausedUntil: map['pausedUntil'] as int,
     active: map['active'] as bool? ?? false,
     usedMs: map['usedMs'] as int? ?? 0,
+    tracking: map['tracking'] as bool? ?? false,
   );
   Map<String, Object> toMap() => {
     'id': id,

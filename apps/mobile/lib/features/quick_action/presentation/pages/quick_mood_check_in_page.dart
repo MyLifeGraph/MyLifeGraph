@@ -8,6 +8,7 @@ import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/capture_draft_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/time/profile_timezone.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../../focus/domain/focus_session.dart';
 import '../../../focus/presentation/widgets/focus_reflection_sheet.dart';
@@ -48,6 +49,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   var _proposalApplied = false;
   (String, DateTime)? _voiceBaseline;
   var _revisingSavedCapture = false;
+  bool _automaticDateResolved = false;
   String? _loadError;
   String? _saveError;
   List<FocusSession> _todayFocusSessions = const [];
@@ -135,6 +137,15 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (widget.proposal == null)
+                  if (_draft.entryDate ==
+                      dailyCaptureEntryDate(
+                        captureDayOffset(
+                          ref.read(profileLocalDateSourceProvider).today(),
+                          -1,
+                        ),
+                      ))
+                    const Text('Yesterday'),
                 if (widget.proposal == null)
                   CaptureDatePicker(
                     date: DateTime.parse(_draft.entryDate),
@@ -429,7 +440,10 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _save() async {
-    if (_isSaving || _dictating || !_safeCaptureLoaded || !_proposalMatchesContext) {
+    if (_isSaving ||
+        _dictating ||
+        !_safeCaptureLoaded ||
+        !_proposalMatchesContext) {
       return;
     }
     final draft = _draft.copyWith(
@@ -496,6 +510,27 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     }
     try {
       final store = ref.read(quickCheckInStoreProvider);
+      if (!_automaticDateResolved && widget.proposal == null) {
+        final dates = ref.read(profileLocalDateSourceProvider);
+        final instant = ref.read(currentInstantProvider)();
+        final clock = dates.timezoneName == null
+            ? instant.toLocal()
+            : profileDateTimeAt(
+                instant: instant,
+                timezoneName: dates.timezoneName!,
+              );
+        if (clock.hour < 12) {
+          final yesterday = captureDayOffset(dates.dateAt(instant), -1);
+          final previous = await store.loadToday(yesterday);
+          if (previous?.evening == null) {
+            _draft = EveningShutdownDraft.empty(
+              instant,
+              entryDate: dailyCaptureEntryDate(yesterday),
+            );
+          }
+        }
+        _automaticDateResolved = true;
+      }
       final targetDate = DateTime.parse(_draft.entryDate);
       final entry = await store.loadToday(targetDate);
       _safeCaptureLoaded = true;

@@ -122,7 +122,7 @@ void main() {
         await tester.pumpAndSettle();
         await openHeaderActions(tester);
         final island = tester.getRect(
-          find.byKey(const ValueKey('header-action-menu')),
+          find.byKey(const ValueKey('header-action-island')),
         );
         expect(island.right, lessThanOrEqualTo(320));
         final reload = find.byTooltip('Reload');
@@ -241,17 +241,26 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        final toggle = tester.getRect(find.byKey(const ValueKey('header-island-toggle')));
-        expect(toggle.top, 18);
-        expect(toggle.right, tester.view.physicalSize.width - 18);
+        final island = tester.getRect(
+          find.byKey(const ValueKey('header-action-island')),
+        );
+        expect(
+          island.right,
+          lessThanOrEqualTo(tester.view.physicalSize.width - 16),
+        );
         await openHeaderActions(tester);
         final settings = tester.getRect(
           find.byKey(const ValueKey('global-header-settings')),
         );
-        expect(settings.top, toggle.top);
-        expect(settings.right, lessThanOrEqualTo(tester.getRect(
-          find.byKey(const ValueKey('header-action-menu')),
-        ).right));
+        expect(settings.top, greaterThanOrEqualTo(island.top));
+        expect(
+          settings.right,
+          lessThanOrEqualTo(
+            tester
+                .getRect(find.byKey(const ValueKey('header-action-island')))
+                .right,
+          ),
+        );
         expect(settings.width, greaterThanOrEqualTo(44));
         expect(settings.height, greaterThanOrEqualTo(44));
         final inbox = tester.getRect(
@@ -275,9 +284,9 @@ void main() {
     await tester.pumpAndSettle();
     await openHeaderActions(tester);
     // Accessibility/keyboard activation does not emit a pointer-up event.
-    tester.widget<IconButton>(
-      find.byKey(const ValueKey('global-header-inbox')),
-    ).onPressed!();
+    tester
+        .widget<IconButton>(find.byKey(const ValueKey('global-header-inbox')))
+        .onPressed!();
     await tester.pumpAndSettle();
     expect(find.text('Inbox page'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('app-page-back')));

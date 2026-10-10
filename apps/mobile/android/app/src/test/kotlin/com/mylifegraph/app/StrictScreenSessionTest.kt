@@ -4,6 +4,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class StrictScreenSessionTest {
+    @Test fun backgroundPolicyRetainsRequestAcrossTabStopAndRecreation() {
+        var pending = true
+        val session = StrictScreenSession({ false }) { pending = false }
+        assertTrue(pending)
+        session.resumed(); session.visibility(true); session.focus(true)
+        session.visibility(false); session.stopped()
+        assertTrue(pending)
+        assertTrue(session.canFinishUnlock())
+        rejected(session) // Starting a request/scanning still requires this visible screen.
+        StrictScreenSession({ false }) { pending = false }
+        assertTrue(pending)
+    }
+
+    @Test fun stayPolicyRequiresVisibleForegroundForCompletion() {
+        val session = StrictScreenSession({ true }) { }
+        assertFalse(session.canFinishUnlock())
+        session.resumed(); session.visibility(true); session.focus(true)
+        assertTrue(session.canFinishUnlock())
+        session.focus(false)
+        assertFalse(session.canFinishUnlock())
+    }
     private fun rejected(session: StrictScreenSession) {
         try { session.requireVisible(); fail("Hidden Strict screen must reject unlock") }
         catch (_: IllegalStateException) { }

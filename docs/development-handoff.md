@@ -7,6 +7,16 @@ results belong in [Verification](verification.md#current-verified-baseline).
 
 ## Current delivery boundary
 
+The pending 2026-10-10 refinement candidate names Android Strict `Discipline`,
+adds dedicated Unlock settings with optional default-off Stay on screen,
+deliberate Stay focused cancellation, guarded native background completion and
+truthful blocking/tracking plan rims. Native identifiers stay unchanged;
+legacy active stay-required configurations are preserved. This candidate also
+contains the local header, Blocking swipe/budget-notification and check-in
+refinements documented in current Verification. Publication is authorized but
+must obtain fresh exact-commit Linux/GitHub checks. Physical NFC/OEM acceptance
+is a separate gap, not implied by automated tests. No new migration is needed.
+
 The recorded RC20 baseline includes Morning notes/dictation, source-backed
 Wearable cards with separately consented heart data, optional Coach phone
 summaries, persisted Blocking order/direct edit, draft Customize controls and

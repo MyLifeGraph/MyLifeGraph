@@ -113,7 +113,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun saveConfiguration(arguments: Map<*, *>): Map<String, Any?> {
-        check(!BlockingPlans(context).locked()) { "Unlock Strict mode first." }
+        check(!BlockingPlans(context).locked()) { "Unlock Discipline mode first." }
         val existingLease = store.readLease()
         check(existingLease?.isActive(System.currentTimeMillis()) != true) {
             "Focus protection configuration is locked during an active lease."

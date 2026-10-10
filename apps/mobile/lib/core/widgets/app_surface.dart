@@ -26,6 +26,7 @@ class AppSurface extends StatefulWidget {
     this.semanticLabel,
     this.selected = false,
     this.radius = AppRadii.md,
+    this.statusOutline,
     super.key,
   });
 
@@ -36,6 +37,9 @@ class AppSurface extends StatefulWidget {
   final String? semanticLabel;
   final bool selected;
   final double radius;
+
+  /// Optional semantic status rim; keyboard focus/selection retain priority.
+  final Color? statusOutline;
 
   @override
   State<AppSurface> createState() => _AppSurfaceState();
@@ -94,7 +98,8 @@ class _AppSurfaceState extends State<AppSurface> {
         widget.selected ||
         _focused ||
         widget.variant == AppSurfaceVariant.warning ||
-        widget.variant == AppSurfaceVariant.danger;
+        widget.variant == AppSurfaceVariant.danger ||
+        widget.statusOutline != null;
     final borderColor = _focused
         ? tokens.focus
         : widget.selected
@@ -103,6 +108,8 @@ class _AppSurfaceState extends State<AppSurface> {
         ? tokens.attention
         : widget.variant == AppSurfaceVariant.danger
         ? tokens.danger
+        : widget.statusOutline != null
+        ? widget.statusOutline!
         : interactive && _hovered
         ? effects.surfaceHoverOutlineColor
         : effects.surfaceOutlineColor;

@@ -1558,8 +1558,6 @@ void main() {
     final panel = tester.widget<AppSurface>(
       find.byKey(const Key('insights-observation-panel')),
     );
-    await tester.tap(find.byKey(const ValueKey('header-island-toggle')));
-    await tester.pumpAndSettle();
     final refreshButton = tester.widget<IconButton>(
       find.byWidgetPredicate(
         (widget) =>

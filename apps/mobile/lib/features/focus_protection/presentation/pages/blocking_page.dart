@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,8 +12,10 @@ import '../widgets/blocking_website_icon.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/navigation/root_tab_pager.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../../core/widgets/app_surface.dart';
 import '../../application/blocking_gateway.dart';
@@ -21,6 +24,7 @@ import '../../domain/blocking_plan.dart';
 import '../../domain/blocking_usage_duration.dart';
 import '../../domain/focus_protection.dart';
 import 'focus_protection_settings_page.dart';
+import 'blocking_unlock_settings_page.dart';
 import '../widgets/strict_status_ring.dart';
 import '../widgets/blocking_screen_preview.dart';
 import '../widgets/blocking_custom_editor.dart';
@@ -47,18 +51,18 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   static const _strictControlGap = AppSpacing.sm + AppSpacing.xs;
   static const _strictControlStyle = ButtonStyle(
     minimumSize: WidgetStatePropertyAll(Size(0, 48)),
-    shape: WidgetStatePropertyAll(
-      RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(AppRadii.lg)),
-      ),
-    ),
+    shape: WidgetStatePropertyAll(StadiumBorder()),
   );
   BlockingSnapshot? _snapshot;
+  static const _disciplineButtonStyle = ButtonStyle(
+    minimumSize: WidgetStatePropertyAll(Size(0, 48)),
+    shape: WidgetStatePropertyAll(StadiumBorder()),
+  );
   final _timingLabels = Expando<(int, bool, String)>();
 
   String _timingLabel(BlockingPlan plan, bool usageGranted) {
     final now = DateTime.now();
-    final minute = now.millisecondsSinceEpoch ~/ 60000;
+    final minute = now.millisecondsSinceEpoch ~/ 1000;
     final cached = _timingLabels[plan];
     if (cached != null && cached.$1 == minute && cached.$2 == usageGranted) {
       return cached.$3;
@@ -242,7 +246,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         if (instant > now) delays.add(instant - now + 50);
       }
       if (plan.windows.isNotEmpty || plan.focus) delays.add(60000);
-      if (plan.budget > 0 && value.usageGranted) delays.add(5000);
+      if (plan.budget > 0 && value.usageGranted) delays.add(1000);
     }
     if (delays.isNotEmpty) {
       delays.sort();
@@ -310,7 +314,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 OutlinedButton(
                   style: _strictControlStyle,
                   onPressed: () => Navigator.pop(ctx, 'off'),
-                  child: const Text('Turn off Strict'),
+                  child: const Text('Turn off Discipline'),
                 ),
               ],
             ),
@@ -329,7 +333,18 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       _routeVisible = ModalRoute.of(context)?.isCurrent ?? true;
       await _syncStrictVisibility();
       if (!mounted || !_foreground || _tab != 1) return;
-      await _perform(() => _gateway.command('requestUnlock', {'mode': mode!}));
+      final requested = await _perform(
+        () => _gateway.command('requestUnlock', {'mode': mode!}),
+      );
+      if (requested &&
+          mounted &&
+          _foreground &&
+          _tab == 1 &&
+          _snapshot?.locked == true &&
+          _snapshot?.unlockStarted == true &&
+          _snapshot?.strict['nfc'] == true) {
+        await _scan(false);
+      }
       await _completeUnlockIfReady();
     } finally {
       _requestingUnlock = false;
@@ -499,7 +514,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         SnackBar(
           content: Text(
             _snapshot?.locked == true
-                ? 'Unlock Strict to edit.'
+                ? 'Unlock Discipline to edit.'
                 : 'End Focus to edit.',
           ),
         ),
@@ -633,6 +648,14 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     if (mounted) await _load();
   }
 
+  void _selectTab(int index) {
+    if (_editorOpen || _reordering || index == _tab) return;
+    setState(() => _tab = index);
+    unawaited(_syncStrictVisibility());
+    if (_snapshot case final snapshot?) _pollUnlock(snapshot);
+    if (index == 2) unawaited(_usage());
+  }
+
   Future<void> _usage() async {
     if (_snapshot == null || _busy) return;
     if (!_snapshot!.usageGranted) {
@@ -691,40 +714,60 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                             child: const Text('Retry'),
                           ),
                   )
-                : RefreshIndicator(
-                    key: const ValueKey('blocking-pull-refresh'),
-                    onRefresh: _refresh,
-                    notificationPredicate: (notification) =>
-                        notification.depth == 0 &&
-                        !_busy &&
-                        !_editorOpen &&
-                        !_reordering,
-                    child: _tab == 0
-                        ? CustomScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            slivers: [
-                              for (final section in _plans(s))
-                                if (section is SliverReorderableList)
-                                  section
-                                else
-                                  SliverToBoxAdapter(child: section),
-                              const SliverToBoxAdapter(
-                                child: SizedBox(height: AppSpacing.md),
-                              ),
-                            ],
-                          )
-                        : ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.md,
-                            ),
-                            children: switch (_tab) {
-                              0 => _plans(s),
-                              1 => _strict(s),
-                              2 => _charts(s),
-                              _ => _custom(s),
-                            },
-                          ),
+                : RootTabPager(
+                    index: _tab,
+                    count: 4,
+                    enabled: !_busy && !_editorOpen && !_reordering,
+                    onMovementChanged: (moving) {
+                      _strictPresent = !moving && _foreground;
+                      unawaited(_syncStrictVisibility());
+                    },
+                    onSettled: _selectTab,
+                    pageBuilder: (context, index) => TickerMode(
+                      enabled: index == _tab && RootTabVisibility.of(context),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: RefreshIndicator(
+                          key: index == _tab
+                              ? const ValueKey('blocking-pull-refresh')
+                              : null,
+                          onRefresh: _refresh,
+                          notificationPredicate: (notification) =>
+                              notification.depth == 0 &&
+                              !_busy &&
+                              !_editorOpen &&
+                              !_reordering,
+                          child: index == 0
+                              ? CustomScrollView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  slivers: [
+                                    for (final section in _plans(s))
+                                      if (section is SliverReorderableList)
+                                        section
+                                      else
+                                        SliverToBoxAdapter(child: section),
+                                    const SliverToBoxAdapter(
+                                      child: SizedBox(height: AppSpacing.md),
+                                    ),
+                                  ],
+                                )
+                              : ListView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.md,
+                                  ),
+                                  children: switch (index) {
+                                    0 => _plans(s),
+                                    1 => _strict(s),
+                                    2 => _charts(s),
+                                    _ => _custom(s),
+                                  },
+                                ),
+                        ),
+                      ),
+                    ),
                   ),
           ),
           AppSurface(
@@ -743,7 +786,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                   children: [
                     for (final (index, label, icon) in [
                       (0, 'Plans', AppIcons.shieldOutlined),
-                      (1, 'Strict', AppIcons.lockOutline),
+                      (1, 'Discipline', AppIcons.lockOutline),
                       (2, 'Insights', AppIcons.autoGraph),
                       (3, 'Customize', AppIcons.tuneOutlined),
                     ])
@@ -754,12 +797,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                           child: TextButton(
                             onPressed: s == null
                                 ? null
-                                : () {
-                                    setState(() => _tab = index);
-                                    unawaited(_syncStrictVisibility());
-                                    _pollUnlock(s);
-                                    if (index == 2) unawaited(_usage());
-                                  },
+                                : () => _selectTab(index),
                             style: TextButton.styleFrom(
                               backgroundColor: _tab == index
                                   ? Theme.of(
@@ -832,13 +870,14 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     const SizedBox(height: AppSpacing.sm),
     AppSurface(
       variant: AppSurfaceVariant.subtle,
+      radius: AppRadii.lg,
       child: Row(
         children: [
           const Icon(AppIcons.playArrow),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'Quick Block',
+              'Block now',
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
@@ -893,7 +932,12 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: AppSurface(
             variant: AppSurfaceVariant.interactive,
-            selected: plan.active,
+            radius: AppRadii.lg,
+            statusOutline: plan.active
+                ? context.visualTokens.success
+                : plan.tracking
+                ? context.visualTokens.textPrimary.withValues(alpha: .55)
+                : null,
             onTap: () => _tapPlan(plan),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -903,7 +947,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                   decoration: BoxDecoration(
                     color:
                         (plan.active
-                                ? palette.primary
+                                ? context.visualTokens.success
                                 : palette.onSurfaceVariant)
                             .withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(AppRadii.md),
@@ -912,7 +956,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                     blockingIcon(plan.icon),
                     size: 28,
                     color: plan.active
-                        ? palette.primary
+                        ? context.visualTokens.success
                         : palette.onSurfaceVariant,
                   ),
                 ),
@@ -932,6 +976,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                             ? 'Paused'
                             : plan.active
                             ? 'Active'
+                            : plan.tracking
+                            ? 'Tracking'
                             : plan.expired
                             ? 'Expired'
                             : 'Scheduled',
@@ -1021,16 +1067,6 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                             value: 'delete',
                             child: const Text('Delete'),
                           ),
-                          if (index > 0)
-                            const PopupMenuItem(
-                              value: 'up',
-                              child: Text('Move up'),
-                            ),
-                          if (index < s.plans.length - 1)
-                            const PopupMenuItem(
-                              value: 'down',
-                              child: Text('Move down'),
-                            ),
                         ],
                       ),
                       BlockingReorderHandle(
@@ -1038,6 +1074,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                         enabled: !_busy && !_editorOpen,
                         child: Semantics(
                           label: 'Reorder ${plan.name}',
+                          customSemanticsActions: {
+                            if (!_busy && !_editorOpen && index > 0)
+                              CustomSemanticsAction(label: 'Move up'): () =>
+                                  unawaited(_menu(plan, 'up')),
+                            if (!_busy &&
+                                !_editorOpen &&
+                                index < s.plans.length - 1)
+                              CustomSemanticsAction(label: 'Move down'): () =>
+                                  unawaited(_menu(plan, 'down')),
+                          },
                           child: SizedBox(
                             width: 44,
                             height: 44,
@@ -1192,6 +1238,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     const SizedBox(height: AppSpacing.lg),
     AppSurface(
       variant: AppSurfaceVariant.subtle,
+      radius: AppRadii.lg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1200,18 +1247,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
             leading: const Icon(AppIcons.timerOutlined),
             title: const Text('Unlock method'),
             subtitle: Text(_strictSummary(s)),
-            trailing: const Icon(AppIcons.expandMore),
-            onTap: _configurationLocked || _busy
-                ? null
-                : () => _strictOptions(s),
+            trailing: const Icon(AppIcons.chevronRight),
+            onTap: _busy ? null : () => _unlockSettings(s),
           ),
           const SizedBox(height: _strictControlGap),
           if (s.locked) ...[
             if (s.unlockStarted && s.remainingMs > 0)
               Text(
-                '${(s.remainingMs + 999) ~/ 1000}s',
+                '${((s.remainingMs + 999) ~/ 1000) ~/ 60}:${(((s.remainingMs + 999) ~/ 1000) % 60).toString().padLeft(2, '0')}',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: Theme.of(context).textTheme.displaySmall,
               ),
             if (!s.unlockStarted)
               FilledButton(
@@ -1235,11 +1280,61 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
               Text(
                 s.remainingMs > 0
                     ? (s.unlockMode == 'off'
-                          ? 'Turning off Strict…'
+                          ? 'Turning off Discipline…'
                           : 'Unlocking for 15m…')
                     : 'Waiting for conditions',
                 textAlign: TextAlign.center,
               ),
+            if (s.unlockStarted) ...[
+              const SizedBox(height: _strictControlGap),
+              if (s.strict['stayOnScreen'] == true) ...[
+                AppSurface(
+                  variant: AppSurfaceVariant.warning,
+                  radius: AppRadii.lg,
+                  child: Row(
+                    children: [
+                      Icon(
+                        AppIcons.warningAmberOutlined,
+                        color: context.visualTokens.attention,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Stay on this screen',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: context.visualTokens.attention,
+                                  ),
+                            ),
+                            const Text('Leaving resets the timer.'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: _strictControlGap),
+              ],
+              OutlinedButton.icon(
+                style: _disciplineButtonStyle,
+                onPressed: _busy
+                    ? null
+                    : () => _perform(() => _gateway.command('cancelUnlock')),
+                icon: const Icon(AppIcons.shieldOutlined),
+                label: const Text('Stay focused'),
+              ),
+            ],
+            if (s.strict['nfc'] == true) ...[
+              const SizedBox(height: AppSpacing.xs),
+              TextButton.icon(
+                onPressed: _busy || _editorOpen ? null : () => _recoverChip(s),
+                icon: const Icon(AppIcons.devicesOutlined, size: 16),
+                label: const Text('Lost NFC chip?'),
+              ),
+            ],
           ] else ...[
             if (s.strict['enabled'] == true) ...[
               FilledButton(
@@ -1254,16 +1349,16 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 style: _strictControlStyle,
                 onPressed: _busy || _configurationLocked
                     ? null
-                    : () => _strictOptions(s),
+                    : () => _unlockSettings(s),
                 child: const Text('Configure'),
               ),
             ] else
               FilledButton(
-                style: _strictControlStyle,
+                style: _disciplineButtonStyle,
                 onPressed: _busy || _configurationLocked
                     ? null
-                    : () => _strictOptions(s),
-                child: const Text('Enable Strict'),
+                    : () => _enableDiscipline(s),
+                child: const Text('Enable Discipline'),
               ),
           ],
         ],
@@ -1299,6 +1394,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     bool enroll, {
     String? name,
     int? revision,
+    bool recovery = false,
+    String? replaceId,
   }) async {
     if (_busy || _startingNfc) return null;
     _startingNfc = true;
@@ -1346,6 +1443,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         'enroll': enroll,
         if (name != null) 'name': name,
         if (revision != null) 'revision': revision,
+        if (recovery) 'recovery': true,
+        if (replaceId != null) 'replaceId': replaceId,
       }),
     );
     if (route.isActive) navigator.removeRoute(route);
@@ -1355,7 +1454,76 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     return saved ? _snapshot : null;
   }
 
-  Future<void> _strictOptions(BlockingSnapshot s) async {
+  Future<void> _recoverChip(BlockingSnapshot s) async {
+    if (_busy || _editorOpen || !s.locked || s.strict['nfc'] != true) return;
+    _editorOpen = true;
+    _unlockDialog = true;
+    try {
+      await _syncStrictVisibility();
+      if (!mounted) return;
+      final draft = await showDialog<({String name, String? replaceId})>(
+        context: context,
+        builder: (_) => _NfcReplacementDialog(tags: s.nfcTags),
+      );
+      if (draft == null || !mounted || !_foreground || _tab != 1) return;
+      await _scan(
+        true,
+        name: draft.name,
+        revision: s.revision,
+        recovery: true,
+        replaceId: draft.replaceId,
+      );
+    } finally {
+      _editorOpen = false;
+      _unlockDialog = false;
+      if (mounted) await _resumeStrict();
+    }
+  }
+
+  Future<void> _unlockSettings(BlockingSnapshot s) async {
+    if (_editorOpen || _busy) return;
+    _editorOpen = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => BlockingUnlockSettingsPage(
+            snapshot: s,
+            gateway: _gateway,
+            methodSummary: _strictSummary,
+            focusLocked: _legacy?.lease?.isActive == true,
+            editMethod: (ctx, current) async {
+              if (mounted) setState(() => _snapshot = current);
+              await _strictOptions(current, host: ctx, saveOnly: true);
+            },
+          ),
+        ),
+      );
+    } finally {
+      _editorOpen = false;
+      if (mounted) await _resumeStrict();
+    }
+  }
+
+  Future<void> _enableDiscipline(BlockingSnapshot s) async {
+    if (!_protectionReady) {
+      await _permissions();
+      return;
+    }
+    await _perform(
+      () => _gateway.command('strict', {
+        ...s.strict,
+        'enabled': true,
+        'waitSeconds': s.strict['waitSeconds'] as int? ?? 180,
+        'revision': s.revision,
+      }),
+    );
+  }
+
+  Future<void> _strictOptions(
+    BlockingSnapshot s, {
+    BuildContext? host,
+    bool saveOnly = false,
+  }) async {
     if (_busy || _configurationLocked) return;
     var wait = (s.strict['waitSeconds'] as int?) ?? 180;
     var power = s.strict['power'] == true,
@@ -1395,238 +1563,236 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       }
     }
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      enableDrag: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, update) => PopScope(
-          canPop: !saving,
-          child: SafeArea(
-            child: AbsorbPointer(
-              absorbing: saving,
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+    Widget content(BuildContext ctx) => StatefulBuilder(
+      builder: (ctx, update) => PopScope(
+        canPop: !saving,
+        child: SafeArea(
+          child: AbsorbPointer(
+            absorbing: saving,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!saveOnly)
                       Text(
                         'Unlock method',
                         style: Theme.of(ctx).textTheme.titleLarge,
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      DropdownButtonFormField<int>(
-                        isExpanded: true,
-                        initialValue: wait,
-                        decoration: const InputDecoration(labelText: 'Wait'),
-                        items: [
-                          for (final seconds in [
-                            0,
-                            10,
-                            30,
-                            60,
-                            180,
-                            300,
-                            600,
-                            900,
-                          ])
-                            DropdownMenuItem(
-                              value: seconds,
-                              child: Text(
-                                seconds == 0
-                                    ? 'Immediately'
-                                    : seconds < 60
-                                    ? '${seconds}s'
-                                    : '${seconds ~/ 60}m',
-                              ),
-                            ),
-                        ],
-                        onChanged: (value) => update(() => wait = value!),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Charger connected'),
-                        value: power,
-                        onChanged: (v) => update(() => power = v),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Current Wi-Fi'),
-                        value: wifi,
-                        onChanged: wifi || _snapshot!.wifiReady
-                            ? (v) => update(() => wifi = v)
-                            : null,
-                      ),
-                      if (!_snapshot!.wifiReady)
-                        TextButton(
-                          onPressed: () async {
-                            if (saving || _busy) return;
-                            update(() => saving = true);
-                            try {
-                              final next = await _gateway.command(
-                                'wifiPermission',
-                              );
-                              if (mounted) setState(() => _snapshot = next);
-                              expectedRevision = next.revision;
-                            } catch (e) {
-                              if (ctx.mounted) {
-                                update(() => saveError = _message(e));
-                              }
-                            } finally {
-                              if (ctx.mounted) update(() => saving = false);
-                            }
-                          },
-                          child: const Text('Set up Wi-Fi'),
-                        ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('NFC tag'),
-                        value: nfc,
-                        onChanged: _snapshot!.nfcEnrolled
-                            ? (v) => update(() => nfc = v)
-                            : null,
-                      ),
-                      for (final tag in _snapshot!.nfcTags)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: AppSurface(
-                            variant: AppSurfaceVariant.subtle,
-                            padding: EdgeInsets.zero,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                              ),
-                              leading: const Icon(AppIcons.nfc),
-                              title: Text(tag['name']!),
-                              trailing: IconButton(
-                                tooltip: 'Remove chip',
-                                icon: const Icon(AppIcons.deleteOutline),
-                                onPressed: () async {
-                                  final confirmed = await showDialog<bool>(
-                                    context: ctx,
-                                    builder: (dialog) => AlertDialog(
-                                      title: const Text('Remove chip?'),
-                                      content: Text(tag['name']!),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(dialog, false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(dialog, true),
-                                          child: const Text('Remove'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                  if (confirmed != true || !ctx.mounted) return;
-                                  update(() => saving = true);
-                                  final saved = await _perform(
-                                    () => _gateway.command('removeNfcTag', {
-                                      'id': tag['id']!,
-                                      'revision': expectedRevision,
-                                    }),
-                                  );
-                                  if (saved) {
-                                    expectedRevision = _snapshot!.revision;
-                                    if (!_snapshot!.nfcEnrolled) nfc = false;
-                                  }
-                                  if (ctx.mounted) {
-                                    update(() {
-                                      saving = false;
-                                      saveError = _error;
-                                    });
-                                  }
-                                },
-                              ),
+                    const SizedBox(height: AppSpacing.md),
+                    DropdownButtonFormField<int>(
+                      isExpanded: true,
+                      initialValue: wait,
+                      decoration: const InputDecoration(labelText: 'Wait'),
+                      items: [
+                        for (final seconds in [
+                          0,
+                          10,
+                          30,
+                          60,
+                          180,
+                          300,
+                          600,
+                          900,
+                        ])
+                          DropdownMenuItem(
+                            value: seconds,
+                            child: Text(
+                              seconds == 0
+                                  ? 'Immediately'
+                                  : seconds < 60
+                                  ? '${seconds}s'
+                                  : '${seconds ~/ 60}m',
                             ),
                           ),
-                        ),
-                      if (_snapshot!.nfcAvailable)
-                        TextButton(
-                          onPressed: () async {
-                            if (saving || _busy) return;
-                            update(() => saving = true);
-                            final chipName = await showDialog<String>(
-                              context: ctx,
-                              builder: (_) => _NfcChipNameDialog(
-                                initialName: _snapshot!.nfcEnrolled
-                                    ? 'Backup chip'
-                                    : 'Main chip',
-                              ),
+                      ],
+                      onChanged: (value) => update(() => wait = value!),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Charger connected'),
+                      value: power,
+                      onChanged: (v) => update(() => power = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Current Wi-Fi'),
+                      value: wifi,
+                      onChanged: wifi || _snapshot!.wifiReady
+                          ? (v) => update(() => wifi = v)
+                          : null,
+                    ),
+                    if (!_snapshot!.wifiReady)
+                      TextButton(
+                        onPressed: () async {
+                          if (saving || _busy) return;
+                          update(() => saving = true);
+                          try {
+                            final next = await _gateway.command(
+                              'wifiPermission',
                             );
-                            if (!ctx.mounted) return;
-                            if (chipName == null) {
-                              update(() => saving = false);
-                              return;
-                            }
-                            final next = await _scan(
-                              true,
-                              name: chipName,
-                              revision: expectedRevision,
-                            );
-                            if (next != null) expectedRevision = next.revision;
+                            if (mounted) setState(() => _snapshot = next);
+                            expectedRevision = next.revision;
+                          } catch (e) {
                             if (ctx.mounted) {
-                              update(() {
-                                saving = false;
-                                saveError = _error;
-                              });
+                              update(() => saveError = _message(e));
                             }
-                          },
-                          child: Text(
-                            _snapshot!.nfcEnrolled
-                                ? '+ Add chip'
-                                : 'Set up tag',
+                          } finally {
+                            if (ctx.mounted) update(() => saving = false);
+                          }
+                        },
+                        child: const Text('Set up Wi-Fi'),
+                      ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('NFC tag'),
+                      value: nfc,
+                      onChanged: _snapshot!.nfcEnrolled
+                          ? (v) => update(() => nfc = v)
+                          : null,
+                    ),
+                    for (final tag in _snapshot!.nfcTags)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: AppSurface(
+                          variant: AppSurfaceVariant.subtle,
+                          padding: EdgeInsets.zero,
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                            ),
+                            leading: const Icon(AppIcons.nfc),
+                            title: Text(tag['name']!),
+                            trailing: IconButton(
+                              tooltip: 'Remove chip',
+                              icon: const Icon(AppIcons.deleteOutline),
+                              onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: ctx,
+                                  builder: (dialog) => AlertDialog(
+                                    title: const Text('Remove chip?'),
+                                    content: Text(tag['name']!),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialog, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialog, true),
+                                        child: const Text('Remove'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed != true || !ctx.mounted) return;
+                                update(() => saving = true);
+                                final saved = await _perform(
+                                  () => _gateway.command('removeNfcTag', {
+                                    'id': tag['id']!,
+                                    'revision': expectedRevision,
+                                  }),
+                                );
+                                if (saved) {
+                                  expectedRevision = _snapshot!.revision;
+                                  if (!_snapshot!.nfcEnrolled) nfc = false;
+                                }
+                                if (ctx.mounted) {
+                                  update(() {
+                                    saving = false;
+                                    saveError = _error;
+                                  });
+                                }
+                              },
+                            ),
                           ),
                         ),
-                      const Text('All selected conditions must be met.'),
-                      const SizedBox(height: AppSpacing.md),
-                      if (saveError != null)
-                        Semantics(liveRegion: true, child: Text(saveError!)),
-                      FilledButton(
+                      ),
+                    if (_snapshot!.nfcAvailable)
+                      TextButton(
+                        onPressed: () async {
+                          if (saving || _busy) return;
+                          update(() => saving = true);
+                          final chipName = await showDialog<String>(
+                            context: ctx,
+                            builder: (_) => _NfcChipNameDialog(
+                              initialName: _snapshot!.nfcEnrolled
+                                  ? 'Backup chip'
+                                  : 'Main chip',
+                            ),
+                          );
+                          if (!ctx.mounted) return;
+                          if (chipName == null) {
+                            update(() => saving = false);
+                            return;
+                          }
+                          final next = await _scan(
+                            true,
+                            name: chipName,
+                            revision: expectedRevision,
+                          );
+                          if (next != null) expectedRevision = next.revision;
+                          if (ctx.mounted) {
+                            update(() {
+                              saving = false;
+                              saveError = _error;
+                            });
+                          }
+                        },
+                        child: Text(
+                          _snapshot!.nfcEnrolled ? '+ Add chip' : 'Set up tag',
+                        ),
+                      ),
+                    const Text('All selected conditions must be met.'),
+                    const SizedBox(height: AppSpacing.md),
+                    if (saveError != null)
+                      Semantics(liveRegion: true, child: Text(saveError!)),
+                    FilledButton(
+                      style: _disciplineButtonStyle,
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              if (!saveOnly && !_protectionReady) {
+                                update(() => saving = true);
+                                try {
+                                  await _permissions();
+                                } finally {
+                                  if (ctx.mounted) {
+                                    update(() => saving = false);
+                                  }
+                                }
+                                return;
+                              }
+                              await save(
+                                saveOnly ? s.strict['enabled'] == true : true,
+                                ctx,
+                                update,
+                              );
+                            },
+                      child: saving
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              saveOnly
+                                  ? 'Save'
+                                  : _protectionReady
+                                  ? 'Enable'
+                                  : 'Set up protection',
+                            ),
+                    ),
+                    if (!saveOnly && s.strict['enabled'] == true)
+                      TextButton(
                         onPressed: saving
                             ? null
-                            : () async {
-                                if (!_protectionReady) {
-                                  update(() => saving = true);
-                                  try {
-                                    await _permissions();
-                                  } finally {
-                                    if (ctx.mounted) {
-                                      update(() => saving = false);
-                                    }
-                                  }
-                                  return;
-                                }
-                                await save(true, ctx, update);
-                              },
-                        child: saving
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                _protectionReady
-                                    ? 'Enable'
-                                    : 'Set up protection',
-                              ),
+                            : () => save(false, ctx, update),
+                        child: const Text('Turn off'),
                       ),
-                      if (s.strict['enabled'] == true)
-                        TextButton(
-                          onPressed: saving
-                              ? null
-                              : () => save(false, ctx, update),
-                          child: const Text('Turn off'),
-                        ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -1634,6 +1800,34 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         ),
       ),
     );
+    if (saveOnly) {
+      await Navigator.of(host ?? context).push<void>(
+        MaterialPageRoute(
+          builder: (ctx) => Scaffold(
+            key: const ValueKey('blocking-unlock-method-page'),
+            body: AppPage(
+              title: 'Unlock method',
+              maxWidth: 640,
+              children: [
+                AppSurface(
+                  radius: AppRadii.lg,
+                  padding: EdgeInsets.zero,
+                  child: content(ctx),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        enableDrag: false,
+        builder: content,
+      );
+    }
   }
 
   List<Widget> _charts(BlockingSnapshot s) => [
@@ -1656,6 +1850,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     const SizedBox(height: AppSpacing.md),
     AppSurface(
       variant: AppSurfaceVariant.subtle,
+      radius: AppRadii.lg,
       child: Row(
         children: [
           Expanded(child: _metric('${s.attemptsToday}', 'Attempts today')),
@@ -1867,6 +2062,86 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   }
 }
 
+class _NfcReplacementDialog extends StatefulWidget {
+  const _NfcReplacementDialog({required this.tags});
+  final List<Map<String, String>> tags;
+  @override
+  State<_NfcReplacementDialog> createState() => _NfcReplacementDialogState();
+}
+
+class _NfcReplacementDialogState extends State<_NfcReplacementDialog> {
+  final _name = TextEditingController(text: 'Backup chip');
+  String? _replaceId;
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final full = widget.tags.length >= 8;
+    final valid =
+        _name.text.trim().isNotEmpty &&
+        _name.text.trim().length <= 40 &&
+        (!full || _replaceId != null);
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Add replacement chip'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _name,
+            maxLength: 40,
+            decoration: const InputDecoration(
+              labelText: 'Name',
+              counterText: '',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (full) ...[
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Replace lost chip'),
+              isExpanded: true,
+              items: [
+                for (final tag in widget.tags)
+                  DropdownMenuItem(
+                    value: tag['id'],
+                    child: Text(tag['name']!, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _replaceId = value),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          Text(
+            full ? 'Only this chip will be replaced.' : 'Old chips stay valid.',
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(shape: const StadiumBorder()),
+          onPressed: !valid
+              ? null
+              : () => Navigator.pop(context, (
+                  name: _name.text.trim(),
+                  replaceId: _replaceId,
+                )),
+          child: const Text('Scan'),
+        ),
+      ],
+    );
+  }
+}
+
 class _NfcChipNameDialog extends StatefulWidget {
   const _NfcChipNameDialog({required this.initialName});
   final String initialName;
@@ -1951,7 +2226,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     super.initState();
     final p = widget.plan;
     _name = TextEditingController(
-      text: p?.name ?? (widget.quick ? 'Quick Block' : ''),
+      text: p?.name ?? (widget.quick ? 'Block now' : ''),
     );
     if (p != null) {
       _icon = p.icon;

@@ -55,6 +55,15 @@ class Repository:
             raise RuntimeError("database detail must not leak")
         return self.tasks
 
+    async def list_capture_receipts(self, *, user_id, entry_dates):
+        assert user_id == USER_ID
+        return [
+            {"entry_date": row["entry_date"], "branch": kind, "created_at": raw["captured_at"]}
+            for row in self.daily_logs
+            if date.fromisoformat(row["entry_date"]) in entry_dates
+            for kind, raw in row.get("metadata", {}).get("captures", {}).items()
+        ]
+
     async def load_habits(self, *, user_id, week_starts_on, local_date):
         assert user_id == USER_ID
         assert week_starts_on == date(2026, 7, 20)

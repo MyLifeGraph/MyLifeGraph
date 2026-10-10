@@ -117,7 +117,7 @@ void main() {
             find.byTooltip('Permissions & limits').hitTestable(),
             findsOneWidget,
           );
-          for (final label in ['Strict', 'Insights', 'Plans']) {
+          for (final label in ['Discipline', 'Insights', 'Plans']) {
             final tab = find.widgetWithText(TextButton, label);
             expect(tab.hitTestable(), findsOneWidget);
             await tester.tap(tab);

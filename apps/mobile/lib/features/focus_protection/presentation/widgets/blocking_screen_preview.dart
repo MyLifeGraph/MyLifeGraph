@@ -112,7 +112,7 @@ class BlockingScreenPreview extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                     SizedBox(height: spacing),
-                    if (strictLocked) const Text('Strict mode'),
+                    if (strictLocked) const Text('Discipline mode'),
                     SizedBox(height: spacing),
                     OutlinedButton(
                       onPressed: null,

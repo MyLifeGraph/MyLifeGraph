@@ -445,3 +445,11 @@ The stabilization is covered by:
   guard, and narrow large-text layouts.
 
 An external Coach/LLM smoke is outside this stabilization boundary.
+
+## Receipt-based streak grace
+
+Today reads the existing immutable Daily Capture request ledger with the service client
+and verified owner. Both currently valid branches need timely server receipts by local
+day end plus 48 elapsed hours. This read does not mutate logs, revisions or ledger rows,
+does not expose the ledger to Flutter, and does not grant late entries streak credit.
+Later edits do not remove earlier timely credit. Capture CAS and idempotency are unchanged.

@@ -47,6 +47,26 @@ class BlockingPlans(private val context: Context) {
     private fun settings(key: String) = JSONObject(prefs.getString(key, "{}") ?: "{}")
     fun custom() = settings("custom")
     fun strict() = settings("strict")
+    // Preserve already-enabled legacy protection; new/off configurations default to background.
+    fun stayOnScreen(): Boolean = strict().let {
+        BlockingEditPolicy.stayOnScreen(if (it.has("stayOnScreen")) it.getBoolean("stayOnScreen") else null,
+            it.optBoolean("enabled"))
+    }
+    fun backgroundUnlockPending(): Boolean = !stayOnScreen() && locked() && unlockStarted()
+    fun setStayOnScreen(arguments: Map<*, *>): Map<String, Any?> {
+        requireEditable()
+        BlockingEditPolicy.requireStayPolicyEditable(strict().optBoolean("enabled"))
+        require((arguments["revision"] as? Number)?.toLong() == prefs.getLong("revision", 0)) {
+            "Settings changed. Reload and try again."
+        }
+        val value = arguments["enabled"] as? Boolean ?: error("Choose Stay on screen.")
+        commit(prefs.edit().putString("strict", strict().put("stayOnScreen", value).toString())
+            .putLong("revision", prefs.getLong("revision", 0) + 1))
+        return status()
+    }
+    fun finishBackgroundUnlock() {
+        if (!stayOnScreen() && unlockStarted()) finishUnlock(onlyIfReady = true)
+    }
     private fun released(): Boolean = prefs.getInt("release_boot", -2) == boot() &&
         prefs.getLong("release_until", 0) > SystemClock.elapsedRealtime()
     private fun unlockStarted(currentBoot: Int = boot(), elapsed: Long = SystemClock.elapsedRealtime()): Boolean =
@@ -211,8 +231,12 @@ class BlockingPlans(private val context: Context) {
                 p.getJSONArray("sites").length(), websiteConsent())
             p.put("active", config.enabled && config.blockSelectedApps && granted && targetsAvailable && active(p))
                 .put("usedMs", if (p.optInt("budgetMinutes") > 0) used(p) else 0)
+                .put("tracking", config.enabled && config.blockSelectedApps && granted && targetsAvailable &&
+                    p.optBoolean("enabled", true) && p.optLong("pausedUntil") <= now() && usageGranted() &&
+                    p.optInt("budgetMinutes") > 0 && p.optLong("usedMs") < p.optInt("budgetMinutes") * 60000L)
         }
         val s = strict()
+        s.put("stayOnScreen", stayOnScreen())
         val remaining = BlockingUnlockPolicy.remaining(s.optInt("waitSeconds", 180),
             prefs.getLong("unlock_start", -1), prefs.getInt("unlock_boot", -2), boot(), SystemClock.elapsedRealtime())
         val counts = settings("attempts")
@@ -276,7 +300,7 @@ class BlockingPlans(private val context: Context) {
             }
             require(p.getBoolean("focus") || p.getBoolean("always") || windows.length() > 0 ||
                 p.getInt("budgetMinutes") > 0 || p.getLong("untilEpochMs") > 0) { "Choose a rule." }
-            p.remove("active"); p.remove("usedMs"); values.put(p)
+            p.remove("active"); p.remove("usedMs"); p.remove("tracking"); values.put(p)
         }
         val appearance = JSONObject(arguments["custom"] as? Map<*, *> ?: emptyMap<String, Any>())
         require(appearance.optString("title", "Stay focused").length <= 60 &&
@@ -318,6 +342,11 @@ class BlockingPlans(private val context: Context) {
         }
         val s = JSONObject(arguments)
         s.remove("revision")
+        // This policy is configured separately and cannot change in a temporary release.
+        require(!s.has("stayOnScreen") || s.getBoolean("stayOnScreen") == stayOnScreen()) {
+            "Turn off Discipline to change this setting."
+        }
+        s.put("stayOnScreen", stayOnScreen())
         require(s.optInt("waitSeconds", 180) in 0..900)
         val enabled = s.getBoolean("enabled")
         if (enabled) {
@@ -339,7 +368,7 @@ class BlockingPlans(private val context: Context) {
             .remove("unlock_mode").remove("nfc_verified").remove("nfc_boot"))
     }
     fun requestUnlock(requestedMode: String? = null): Map<String, Any?> {
-        check(locked()) { "Strict mode is not locked." }
+        check(locked()) { "Discipline mode is not locked." }
         val mode = BlockingUnlockPolicy.mode(requestedMode)
         val currentBoot = boot()
         val elapsed = SystemClock.elapsedRealtime()
@@ -401,8 +430,10 @@ class BlockingPlans(private val context: Context) {
             BlockingNfcTag(tag.getString("id"), tag.getString("name"), tag.getString("hash"))
         }
     }
-    fun requireNfcRevision(revision: Number?) {
-        requireEditable()
+    fun requireNfcRevision(revision: Number?, recovery: Boolean = false) {
+        if (recovery) {
+            BlockingNfcRecoveryPolicy.requireAllowed(locked(), strict().optBoolean("enabled"), strict().optBoolean("nfc"), revision != null)
+        } else requireEditable()
         if (revision != null) require(revision.toLong() == prefs.getLong("revision", 0)) {
             "Settings changed. Reload and try again."
         }
@@ -421,11 +452,14 @@ class BlockingPlans(private val context: Context) {
         saveNfcTags(BlockingNfcTags.remove(nfcTags(), id, strict().optBoolean("enabled") && strict().optBoolean("nfc")))
         return status()
     }
-    fun acceptNfc(hash: String, enroll: Boolean, name: String = "Main chip", revision: Number? = null) {
+    fun acceptNfc(hash: String, enroll: Boolean, name: String = "Main chip", revision: Number? = null,
+        recovery: Boolean = false, replaceId: String? = null) {
+        require(!recovery || enroll) { "Choose chip enrollment." }
         if (enroll) {
-            requireNfcRevision(revision)
+            requireNfcRevision(revision, recovery)
             val old = nfcTags()
-            val next = BlockingNfcTags.add(old, BlockingNfcTag(java.util.UUID.randomUUID().toString(), name, hash))
+            val tag = BlockingNfcTag(java.util.UUID.randomUUID().toString(), name, hash)
+            val next = if (recovery) BlockingNfcTags.recover(old, tag, replaceId) else BlockingNfcTags.add(old, tag)
             if (next != old) saveNfcTags(next)
         }
         else {

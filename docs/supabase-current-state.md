@@ -2192,3 +2192,10 @@ snapshot and briefing identities by profile-local date. Phase 8 persists only
 observational weekly facts and has no proposal, confirmation, or mutation path.
 Phase 10 adds conversational explanation without making any Coach suggestion
 executable or changing the deterministic briefing loop.
+
+## Today streak receipt read
+
+Today uses the existing `daily_capture_request_identities` service-only SELECT grant,
+owner/date index and immutable `created_at` to establish its 48-hour grace deadline.
+No new table, migration, grant, RLS exception or client ledger access is introduced.
+Ledger-read failure makes the check-in source unavailable rather than guessing credit.

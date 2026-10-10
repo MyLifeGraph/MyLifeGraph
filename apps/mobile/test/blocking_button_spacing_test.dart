@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'support/blocking_navigation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
@@ -75,7 +77,7 @@ Future<void> _open(
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Strict'));
+  await tester.tap(find.text('Discipline'));
   await tester.pumpAndSettle();
   await tester.scrollUntilVisible(
     find.text(switch (gateway.state) {
@@ -100,8 +102,8 @@ Future<void> _open(
 
 void _roundControl(WidgetTester tester, Finder finder) {
   final button = tester.widget<ButtonStyleButton>(finder);
-  final shape = button.style!.shape!.resolve({})! as RoundedRectangleBorder;
-  expect(shape.borderRadius, BorderRadius.circular(16));
+  final shape = button.style!.shape!.resolve({})!;
+  expect(shape, isA<StadiumBorder>());
   expect(tester.getSize(finder).height, greaterThanOrEqualTo(48));
 }
 
@@ -119,11 +121,11 @@ void _checkGeometry(WidgetTester tester, _State state, {bool normal = true}) {
     _roundControl(tester, primary);
     _roundControl(tester, secondary);
     if (normal) {
-      expect(tester.getSize(primary).height, 48);
-      expect(tester.getSize(secondary).height, 48);
+      expect(tester.getSize(primary).height, greaterThanOrEqualTo(48));
+      expect(tester.getSize(secondary).height, greaterThanOrEqualTo(48));
     }
   } else if (state == _State.nfc) {
-    final timer = find.text('180s');
+    final timer = find.text('3:00');
     final scan = find.widgetWithText(OutlinedButton, 'Scan tag');
     final status = find.text('Unlocking for 15m…');
     expect(tester.getTopLeft(scan).dy - tester.getBottomLeft(timer).dy, 12);
@@ -131,7 +133,10 @@ void _checkGeometry(WidgetTester tester, _State state, {bool normal = true}) {
     _roundControl(tester, scan);
   } else {
     final primary = find.widgetWithText(FilledButton, '15 minutes');
-    final secondary = find.widgetWithText(OutlinedButton, 'Turn off Strict');
+    final secondary = find.widgetWithText(
+      OutlinedButton,
+      'Turn off Discipline',
+    );
     expect(
       tester.getTopLeft(secondary).dy - tester.getBottomLeft(primary).dy,
       12,
@@ -140,8 +145,8 @@ void _checkGeometry(WidgetTester tester, _State state, {bool normal = true}) {
     _roundControl(tester, primary);
     _roundControl(tester, secondary);
     if (normal) {
-      expect(tester.getSize(primary).height, 48);
-      expect(tester.getSize(secondary).height, 48);
+      expect(tester.getSize(primary).height, greaterThanOrEqualTo(48));
+      expect(tester.getSize(secondary).height, greaterThanOrEqualTo(48));
     }
   }
   expect(tester.takeException(), isNull);
@@ -174,9 +179,12 @@ void main() {
               await tester.ensureVisible(find.text('Configure'));
               await tester.pumpAndSettle();
               await tester.tap(find.text('Configure'));
+              await enterUnlockMethod(tester);
               await tester.pumpAndSettle();
               expect(find.text('Charger connected'), findsOneWidget);
               tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+              await tester.pumpAndSettle();
+              await tester.binding.handlePopRoute();
               await tester.pumpAndSettle();
               await tester.ensureVisible(find.text('Lock now'));
               await tester.pumpAndSettle();

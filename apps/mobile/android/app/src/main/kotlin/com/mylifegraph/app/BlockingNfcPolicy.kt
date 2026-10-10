@@ -19,8 +19,23 @@ class BlockingNfcContact(private val enroll: Boolean) {
 
 data class BlockingNfcTag(val id: String, val name: String, val hash: String)
 
+/** Explicit owner-approved self-control recovery, not a generic edit/unlock bypass. */
+object BlockingNfcRecoveryPolicy {
+    fun requireAllowed(locked: Boolean, enabled: Boolean, needsNfc: Boolean, hasRevision: Boolean) {
+        check(locked && enabled && needsNfc) { "NFC recovery is not available." }
+        require(hasRevision) { "Missing settings revision." }
+    }
+}
+
 object BlockingNfcTags {
     const val LIMIT = 8
+    fun recover(tags: List<BlockingNfcTag>, tag: BlockingNfcTag, replaceId: String?): List<BlockingNfcTag> {
+        if (tags.any { it.hash == tag.hash }) return tags
+        require(replaceId == null || (tags.size == LIMIT && tags.any { it.id == replaceId })) {
+            "Chip list changed. Reload and try again."
+        }
+        return add(if (replaceId == null) tags else tags.filterNot { it.id == replaceId }, tag)
+    }
     fun add(tags: List<BlockingNfcTag>, tag: BlockingNfcTag): List<BlockingNfcTag> {
         if (tags.any { it.hash == tag.hash }) return tags
         require(tags.size < LIMIT) { "Up to 8 chips can be saved." }

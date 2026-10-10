@@ -29,6 +29,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private val returnDelay = BlockReturnDelay()
     private var homePackages: Set<String> = emptySet()
     private var lastForegroundPackage: String? = null
+    private var budgetForegroundPackage: String? = null
     private var emergencyArmRunnable: Runnable? = null
     private lateinit var plans: BlockingPlans
     private var currentHost: String? = null
@@ -69,12 +70,15 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         ) {
             if (lastForegroundPackage != foregroundPackage) { currentHost = null; lastMeterAt = SystemClock.elapsedRealtime() }
             lastForegroundPackage = foregroundPackage
+            if (foregroundPackage != "com.android.systemui") budgetForegroundPackage = foregroundPackage
         }
         checkBrowser()
         refreshOverlay()
+        BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, currentHost, overlay == null)
     }
 
     override fun onInterrupt() {
+        BlockingTimerNotifications.disconnected(applicationContext)
         if (::plans.isInitialized) plans.flushSiteUsage()
         hideOverlay()
     }
@@ -298,7 +302,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private val scheduleTick = object : Runnable {
         override fun run() {
             if (::plans.isInitialized) {
+                runCatching { DisciplineUnlockScheduler.reconcile(applicationContext) }
                 BlockingTimerNotifications.sync(applicationContext)
+                BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, currentHost, overlay == null)
                 val elapsed = SystemClock.elapsedRealtime()
                 val host = currentHost
                 val browser = lastForegroundPackage
@@ -371,10 +377,12 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         fun onAppResumed(context: Context) {
             runningService?.get()?.let { service ->
                 service.lastForegroundPackage = context.packageName
+                service.budgetForegroundPackage = context.packageName
                 service.currentHost = null
                 service.lastMeterAt = SystemClock.elapsedRealtime()
                 service.plans.flushSiteUsage()
                 service.refreshOverlay()
+                BlockingTimerNotifications.syncForeground(context, service.plans, context.packageName, null, true)
             }
         }
 
