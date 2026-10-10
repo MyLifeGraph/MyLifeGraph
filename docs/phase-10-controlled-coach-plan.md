@@ -1,5 +1,9 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+Coach's always-open header restores the existing 44px More actions / First actions
+control when icons overflow. This is presentation-only; action identities,
+provider controls, phone-data consent and all other page headers are unchanged.
+
 ## Optional phone summaries
 
 `coach-phone-data-v1` adds authenticated `GET /v1/coach/phone-data` and

@@ -1,5 +1,9 @@
 # MyLifeGraph Mobile App
 
+Coach uses the existing full-size More actions / First actions overflow arrow
+when its always-open header icons exceed the available width. Other tabs remain
+unchanged; horizontal swiping and title-bounded layout are retained.
+
 New Habits without minutes save as manual, unscheduled Habits; entering minutes
 keeps the existing planning preview. Settings Profile starts collapsed and keeps
 its expansion while scrolling. Morning Sleep start/Wake time use 15-minute quick
@@ -41,6 +45,11 @@ block-screen Return timer and Android essential exits are unchanged. Planner
 creation, rescheduling and drag/drop are explicitly outside this change.
 
 ## Android blocking plans
+
+Pending NFC verification shows only its scan dialog, not timer instructions
+behind it. Cancel ends the unlock request and returns to locked Unblock.
+A successful scan keeps any remaining configured wait/other conditions; only
+a positive remaining wait shows Stay on screen. Immediate NFC needs no warning.
 
 Unlock method lists registered NFC chips by name with compact Remove actions
 and Add chip. Registration accepts two matching scans separated by removal;
@@ -989,9 +998,9 @@ uses the shell's discrete swipe shortcut, without interactive sliding.
 Root-page transitions follow the same order in both directions, for navigation
 buttons and swipes: later tabs enter from the right, earlier tabs from the left.
 Auxiliary routes retain normal push/back behavior; reduced motion removes slides.
-While sliding, the incoming root page paints an opaque theme background so
-loading content cannot reveal the previous page. Settled pages retain the shared
-backdrop. Back controls use their own route's history, so opening Settings does
+While sliding and settling, pages retain the shared theme backdrop; the pager
+does not insert a solid background between Liquid Glass pages. PageView separates
+and clips neighbouring content. Back controls use their own route's history, so opening Settings does
 not reflow the underlying main-page header.
 
 With the development Coach surface enabled, the five shell destinations are

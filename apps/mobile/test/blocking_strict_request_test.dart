@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
@@ -34,6 +35,15 @@ class _UnlockGateway extends BlockingGateway {
   final calls = <String>[];
   final nfcCalls = <Map<String, Object>>[];
   List<Map<String, String>> tags = [];
+
+  @override
+  Future<void> open(String name) async {
+    if (name == 'cancelNfc' && pendingNfc?.isCompleted == false) {
+      pendingNfc!.completeError(
+        PlatformException(code: 'blocking_error', message: 'Scan cancelled.'),
+      );
+    }
+  }
 
   @override
   Future<BlockingSnapshot> command(
@@ -106,7 +116,11 @@ Future<void> _request(WidgetTester tester, {bool permanent = false}) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> _open(WidgetTester tester, _UnlockGateway gateway) async {
+Future<void> _open(
+  WidgetTester tester,
+  _UnlockGateway gateway, {
+  bool disableAnimations = true,
+}) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(390, 844);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -127,7 +141,9 @@ Future<void> _open(WidgetTester tester, _UnlockGateway gateway) async {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.liquidGlass,
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          data: MediaQuery.of(
+            context,
+          ).copyWith(disableAnimations: disableAnimations),
           child: child!,
         ),
         home: const Scaffold(body: BlockingPage()),
@@ -136,10 +152,112 @@ Future<void> _open(WidgetTester tester, _UnlockGateway gateway) async {
   );
   await tester.pumpAndSettle();
   await tester.tap(find.text('Discipline'));
-  await tester.pumpAndSettle();
+  if (disableAnimations) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+  }
 }
 
 void main() {
+  testWidgets(
+    'animated Unlock choice restores native visible screen before request',
+    (tester) async {
+      final gateway = _UnlockGateway(waitSeconds: 0, stayOnScreen: false);
+      await _open(tester, gateway, disableAnimations: false);
+      await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('Turn off Discipline'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(gateway.enabled, isFalse);
+      expect(find.textContaining('Strict screen hidden'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  for (final wait in [0, 10]) {
+    testWidgets('NFC scan cancel restores locked idle state ($wait seconds)', (
+      tester,
+    ) async {
+      final gateway = _UnlockGateway(waitSeconds: wait, nfc: true)
+        ..conditionsReady = false
+        ..pendingNfc = Completer<void>();
+      await _open(tester, gateway);
+      await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Turn off Discipline'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Hold your NFC tag nearby'), findsOneWidget);
+      expect(find.text('Stay on this screen'), findsNothing);
+      expect(find.text('Stay focused'), findsNothing);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(gateway.started, isFalse);
+      expect(gateway.locked, isTrue);
+      expect(gateway.enabled, isTrue);
+      expect(find.text('Unblock'), findsOneWidget);
+      expect(find.text('Waiting for conditions'), findsNothing);
+      expect(find.text('Stay on this screen'), findsNothing);
+      expect(find.text('Stay focused'), findsNothing);
+      expect(find.textContaining('Scan cancelled'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('successful NFC shows only a remaining wait ($wait seconds)', (
+      tester,
+    ) async {
+      final gateway = _UnlockGateway(waitSeconds: wait, nfc: true)
+        ..conditionsReady = false
+        ..pendingNfc = Completer<void>();
+      await _open(tester, gateway);
+      await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Turn off Discipline'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Stay on this screen'), findsNothing);
+      gateway.conditionsReady = true;
+      gateway.pendingNfc!.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Hold your NFC tag nearby'), findsNothing);
+      if (wait == 0) {
+        expect(gateway.enabled, isFalse);
+        expect(find.text('Stay on this screen'), findsNothing);
+        expect(find.text('Stay focused'), findsNothing);
+      } else {
+        expect(gateway.locked, isTrue);
+        expect(find.text('0:10'), findsOneWidget);
+        expect(find.text('Stay on this screen'), findsOneWidget);
+        gateway.remaining = 0;
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+        expect(gateway.enabled, isFalse);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('NFC cancel also ends a background-enabled request', (
+    tester,
+  ) async {
+    final gateway = _UnlockGateway(nfc: true, stayOnScreen: false)
+      ..conditionsReady = false
+      ..pendingNfc = Completer<void>();
+    await _open(tester, gateway);
+    await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15 minutes'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(gateway.started, isFalse);
+    expect(gateway.enabled, isTrue);
+    expect(find.text('Unblock'), findsOneWidget);
+  });
   testWidgets(
     'replacement enrollment stays locked and carries recovery revision',
     (tester) async {

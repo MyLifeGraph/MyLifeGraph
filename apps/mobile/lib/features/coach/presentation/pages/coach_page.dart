@@ -151,6 +151,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       compactHeader: true,
       actions: [
         AppHeaderActions(
+          showOverflowControl: true,
           pageActions: [
             IconButton(tooltip: 'Coach data', icon: const Icon(AppIcons.deviceMobile),
               onPressed: !ref.watch(appSurfaceCapabilitiesProvider).canUseSyncedExecution || state.isSending

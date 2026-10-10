@@ -1,11 +1,19 @@
 # Frontend Visual System V2
 
+Coach restores the existing 44px trailing overflow control with a 16px chevron
+and theme-owned reduced-motion-aware scroll animation. It stays always open;
+other headers retain their current geometry and swipe behavior.
+
 NFC chip management stays inside Unlock method: compact named rows with one
 leading icon and trailing Remove control, followed by a small Add chip action.
 Name/removal dialogs reuse existing fields, buttons and theme surfaces. All four
 palettes remain unchanged. Locked NFC Discipline adds only the subdued
 `Lost NFC chip?` link below Unblock, opening a compact themed name/Scan dialog.
 At eight chips it includes a required replacement selector, not another panel.
+
+NFC's pending scan dialog hides underlying unlock-progress controls. After a
+successful scan, only a positive remaining wait shows the timer warning;
+Cancel restores the idle locked surface. No colors, spacing or geometry change.
 
 Discipline uses the approved dedicated Unlock settings/method pages, large `m:ss`
 countdown, compact theme-owned amber warning only when Stay on screen is enabled,
@@ -126,8 +134,9 @@ motion retains the discrete shortcut instead of dragging page content.
 Root-page transitions enter from the right for a later destination and from the
 left for an earlier destination, consistently for buttons and swipes. Reduced
 motion removes the slide; auxiliary push/back navigation is unchanged.
-Incoming root pages cover outgoing content with the existing opaque background
-token during the slide, then expose the unchanged shared backdrop once settled.
+The pager exposes the unchanged shared theme backdrop during dragging, animated
+tab changes and settlement. PageView separates/clips neighbouring content; no
+moving-only solid background may obscure Liquid Glass lighting.
 If an auxiliary page is pushed during swipe settlement, the covered pager restores
 its routed page; it cannot navigate underneath that page or change the Back target.
 Header Back visibility is route-local: opening Settings must not insert a Back

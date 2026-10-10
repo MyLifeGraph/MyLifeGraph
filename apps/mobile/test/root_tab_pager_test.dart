@@ -6,6 +6,43 @@ import 'package:my_life_graph/core/navigation/root_tab_pager.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 
 void main() {
+  testWidgets('shared backdrop remains exposed during drag and settlement', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.liquidGlass,
+        home: RootTabPager(
+          index: 0,
+          count: 2,
+          onSettled: (_) {},
+          pageBuilder: (_, index) => Text('Surface $index'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    void expectBackdrop() {
+      final pages = find.byType(RootTabVisibility);
+      expect(pages, findsWidgets);
+      for (final page in pages.evaluate()) {
+        final cover = page.findAncestorWidgetOfExactType<ColoredBox>();
+        expect(cover?.color, Colors.transparent);
+      }
+    }
+
+    expectBackdrop();
+    final gesture = await tester.startGesture(const Offset(300, 100));
+    await gesture.moveBy(const Offset(-30, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-100, 0));
+    await tester.pump();
+    expectBackdrop();
+    await gesture.up();
+    await tester.pump();
+    expectBackdrop();
+    await tester.pumpAndSettle();
+    expectBackdrop();
+  });
   Future<GoRouter> pump(WidgetTester tester, {bool reduced = false}) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -215,7 +252,10 @@ void main() {
     expect(find.text('Settings').hitTestable(), findsOneWidget);
     router.pop();
     await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, '/$routedBeforePush');
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/$routedBeforePush',
+    );
     expect(
       tester.widget<RootTabPager>(find.byType(RootTabPager)).index,
       routedBeforePush,
@@ -236,32 +276,35 @@ void main() {
     expect(router.routeInformationProvider.value.uri.path, '/0');
   });
 
-  testWidgets('resizing during a swipe keeps the settled route and reverse usable', (
-    tester,
-  ) async {
-    final router = await pump(tester);
-    final gesture = await tester.startGesture(const Offset(280, 50));
-    await gesture.moveBy(const Offset(-25, 0));
-    await tester.pump();
-    await gesture.moveBy(const Offset(-120, 0));
-    await tester.pump();
-    tester.view.physicalSize = const Size(600, 844);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    await gesture.up();
-    await tester.pumpAndSettle();
-    final settled = tester.widget<RootTabPager>(find.byType(RootTabPager)).index;
-    expect(settled, anyOf(0, 1));
-    expect(router.routeInformationProvider.value.uri.path, '/$settled');
-    expect(find.text('Page $settled').hitTestable(), findsOneWidget);
-    router.go('/1');
-    await tester.pumpAndSettle();
-    await tester.dragFrom(const Offset(250, 50), const Offset(180, 0));
-    await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, '/0');
-    expect(find.text('Page 0').hitTestable(), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'resizing during a swipe keeps the settled route and reverse usable',
+    (tester) async {
+      final router = await pump(tester);
+      final gesture = await tester.startGesture(const Offset(280, 50));
+      await gesture.moveBy(const Offset(-25, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-120, 0));
+      await tester.pump();
+      tester.view.physicalSize = const Size(600, 844);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final settled = tester
+          .widget<RootTabPager>(find.byType(RootTabPager))
+          .index;
+      expect(settled, anyOf(0, 1));
+      expect(router.routeInformationProvider.value.uri.path, '/$settled');
+      expect(find.text('Page $settled').hitTestable(), findsOneWidget);
+      router.go('/1');
+      await tester.pumpAndSettle();
+      await tester.dragFrom(const Offset(250, 50), const Offset(180, 0));
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/0');
+      expect(find.text('Page 0').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('reduced motion changes tabs without a slide', (tester) async {
     final router = await pump(tester, reduced: true);

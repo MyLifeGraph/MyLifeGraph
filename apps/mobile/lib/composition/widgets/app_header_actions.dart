@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_radii.dart';
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_icons.dart';
+import '../../core/theme/app_motion_tokens.dart';
 import '../../core/theme/app_visual_tokens.dart';
 import '../../core/widgets/app_surface.dart';
 import '../../core/widgets/app_page_header_actions_scope.dart';
@@ -17,11 +18,13 @@ class AppHeaderActions extends ConsumerStatefulWidget {
   const AppHeaderActions({
     this.pageActions = const <Widget>[],
     this.settingsSelected = false,
+    this.showOverflowControl = false,
     super.key,
   });
 
   final List<Widget> pageActions;
   final bool settingsSelected;
+  final bool showOverflowControl;
 
   /// Compatibility seam for page callbacks; the always-open island has no menu
   /// to dismiss. Keep existing guarded action callbacks unchanged.
@@ -95,7 +98,13 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions> {
     );
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: menuWidth),
-      child: _surface(context, _HeaderIconsViewport(child: actions)),
+      child: _surface(
+        context,
+        _HeaderIconsViewport(
+          showOverflowControl: widget.showOverflowControl,
+          child: actions,
+        ),
+      ),
     );
   }
 
@@ -130,8 +139,12 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions> {
 }
 
 class _HeaderIconsViewport extends StatefulWidget {
-  const _HeaderIconsViewport({required this.child});
+  const _HeaderIconsViewport({
+    required this.child,
+    required this.showOverflowControl,
+  });
   final Widget child;
+  final bool showOverflowControl;
 
   @override
   State<_HeaderIconsViewport> createState() => _HeaderIconsViewportState();
@@ -182,11 +195,24 @@ class _HeaderIconsViewportState extends State<_HeaderIconsViewport> {
     super.dispose();
   }
 
+  void _showMore() {
+    if (!_scroll.hasClients) return;
+    final target = _atEnd ? 0.0 : _scroll.position.maxScrollExtent;
+    final duration = context.motionTokens.stateFor(context);
+    if (duration == Duration.zero) {
+      _scroll.jumpTo(target);
+    } else {
+      _scroll.animateTo(target, duration: duration, curve: Curves.easeOutCubic);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       _availableWidth = constraints.maxWidth;
       _queueMetrics();
+      final showControl =
+          widget.showOverflowControl && _overflow && constraints.maxWidth >= 88;
       final icons = NotificationListener<ScrollMetricsNotification>(
         onNotification: (_) {
           _queueMetrics();
@@ -210,7 +236,7 @@ class _HeaderIconsViewportState extends State<_HeaderIconsViewport> {
                 icons,
                 // At exceptionally narrow widths, preserve the icon hit target;
                 // an inert edge hint accompanies the existing swipe interaction.
-                if (_overflow)
+                if (_overflow && !showControl)
                   IgnorePointer(
                     child: ExcludeSemantics(
                       child: Icon(
@@ -222,6 +248,20 @@ class _HeaderIconsViewportState extends State<_HeaderIconsViewport> {
               ],
             ),
           ),
+          if (showControl)
+            SizedBox.square(
+              dimension: 44,
+              child: IconButton(
+                key: const ValueKey('header-island-overflow'),
+                tooltip: _atEnd ? 'First actions' : 'More actions',
+                padding: EdgeInsets.zero,
+                onPressed: _showMore,
+                icon: Icon(
+                  _atEnd ? AppIcons.chevronLeft : AppIcons.chevronRight,
+                  size: 16,
+                ),
+              ),
+            ),
         ],
       );
     },

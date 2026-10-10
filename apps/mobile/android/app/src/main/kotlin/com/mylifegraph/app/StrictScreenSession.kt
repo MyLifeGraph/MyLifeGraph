@@ -20,4 +20,11 @@ internal class StrictScreenSession(
     fun canComplete(): Boolean = foreground && visible && focused
     fun canFinishUnlock(): Boolean = !stayOnScreen() || canComplete()
     fun requireVisible() { check(canComplete()) { "Open Discipline to unlock." } }
+    /** At deliberate requests, use current host facts rather than stale callbacks.
+     * Route visibility remains independently owned by the Flutter screen. */
+    fun requireVisible(hostResumed: Boolean, hostFocused: Boolean) {
+        foreground = hostResumed
+        focused = hostFocused
+        requireVisible()
+    }
 }
