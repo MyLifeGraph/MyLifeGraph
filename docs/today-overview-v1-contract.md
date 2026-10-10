@@ -102,11 +102,16 @@ instead of treating separate legacy rows as completion. The additive Morning
 before that field existed remain valid for streak compatibility; every new or
 edited Morning capture requires it in Flutter.
 
-Rows are read newest-first in bounded pages until the first date gap is known;
-the calculation is not capped to a cosmetic 30- or 60-day window. An incomplete
-current date gets grace: it does not extend the streak, but it also does not end
-the completed run ending yesterday. The first incomplete prior date ends the
-run. A complete current date extends it immediately.
+Rows are read newest-first in bounded pages, without a cosmetic lookback cap.
+Each branch also requires an immutable server receipt in
+`daily_capture_request_identities` by profile-local day end plus 48 elapsed hours.
+Use IANA timezone rules (including skipped/repeated midnight), never fixed offsets.
+Later edits retain timely receipt credit; late new entries remain valid product
+data but cannot repair a streak. Receipt reads are service-only and fail closed.
+Recent incomplete dates before the first completed day preserve the existing run
+until their deadlines, without adding days. An expired incomplete date, or a gap
+inside a completed run, ends it. Completion counts only dates with both timely
+branches; Today's Progress and save-state flags remain independent of this grace.
 
 ## Today's Progress
 
@@ -281,10 +286,10 @@ an action at 320 logical pixels and 200-percent text.
 The same header controls remain available during the initial Today loading and
 load-error states. The local unread Coach control does not generate, reload, or
 acknowledge a Coach turn; it only presents the current in-memory notice.
-The shared header actions live behind the `Page actions` circle, with a retained
-unread dot. The same-row expanding menu does not reflow Today or change any
-read/write authority; Back closes the menu before leaving the page. Outside
-tap/swipe/scroll closes it without consuming the underlying page interaction.
+The shared header island stays open, showing up to four 44px actions. Extra
+actions scroll horizontally in the same bounded capsule; title and palettes stay
+unchanged. There is no collapse menu or extra Back step. All callbacks and the
+unread Coach notice retain their existing authority.
 
 Guest/demo builds the same conceptual overview from local capture storage. It
 performs no authenticated Today, Supabase, briefing, or preparation request and

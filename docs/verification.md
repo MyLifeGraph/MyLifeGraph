@@ -31,6 +31,63 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Discipline settings and plan polish — 2026-10-10 (release candidate)
+
+Task base: `a15ed9303e3b2f06c5c07cad18b1b694cd5eb418`. Publication, PR/Main
+merge, signed APK and affected production rollout are now explicitly authorized.
+The following evidence is local, not deployment evidence:
+
+- Final Blocking suite plus opt-in synthetic UI captures: **238 passed**;
+  all four palettes, 320px/200% text, navigation, deliberate cancel, both stay
+  policies, temporary-release edit guards, failed-save/retry, NFC races and
+  finite 120-tab stress cases. Captures are real Flutter test rendering with
+  fake native gateways, not generated mockups or physical-device screenshots.
+- Native `:app:testDebugUnitTest`: **91 tests, zero failures/errors**;
+  `:app:lintDebug` passed. New policy tests cover default-off, active legacy
+  protection compatibility and completely-disabled-only settings. Existing
+  recovery checks cover locked/NFC/revision prerequisites, duplicate contact,
+  required removal, full-list explicit replacement and preservation of other chips.
+  Flutter recovery tests cover cancel, guarded Scan and no unlock request/proof.
+  native boot/monotonic/condition tests and session lifecycle tests remain.
+- Flutter analyze: no issues. Docs/visual contracts and whitespace checks pass.
+  Logs: `.tools/discipline-polish`; captures: `.tools/ui-catalog/discipline-20261010`.
+- Captured-base affected verification selects Full but stops at the unchanged
+  Windows missing-`setsid` supervisor prerequisite. A green Linux/GitHub run
+  remains required before merge; this is not a local Full pass.
+- Physical NFC, shade/OEM lifecycle and inexact background-alarm timing remain
+  unverified; no connected-device acceptance is claimed. No new SQL migration
+  is introduced. Unrelated local retention edits remain outside this candidate.
+
+### Local Blocking/check-in refinements — 2026-10-10 (not published)
+
+Task base: `a15ed9303e3b2f06c5c07cad18b1b694cd5eb418`. Working-tree candidate;
+no commit, push, release, migration or production deployment in this task.
+Unrelated local release-retention edits remain preserved.
+
+- Targeted Today service/API/receipt and timezone tests: **25 passed**.
+- Flutter functional suite: **1815 passed**, using the name filter
+  `^(?!.*component reference golden).*`. Six component-reference golden cases
+  were excluded after local pixel mismatches in an unchanged component gallery;
+  their baselines were not regenerated or claimed passing.
+- Final four-icon header/navigation/catalog checks: **24 passed** after correcting
+  Material's default padded target expansion; four full 44px targets fit without
+  a false overflow arrow. Synthetic Liquid Glass capture was visually inspected.
+- Native `:app:testDebugUnitTest`: **81 tests, no failures/errors**;
+  `:app:lintDebug` passed with the existing JDK 21 toolchain.
+- Flutter analyze: no issues; docs consistency, visual contract and diff whitespace
+  checks passed. Logs/captures are under `.tools/blocking-refinements` and
+  `.tools/ui-catalog/blocking-refinements`.
+- The base-bound affected selector chose Full and stopped at the existing Windows
+  missing-`setsid` supervisor prerequisite. No DB reset/migration was attempted.
+  A broad backend attempt also encountered Unix-only socket/process/filesystem
+  prerequisites on Windows; it is not a green full-backend gate. An unrestricted
+  Android plugin test run failed in third-party SharedPreferences temporary-file
+  tests, separately from the green application module tests.
+- Physical foreground-app notification rendering, OEM shade lifecycle, real NFC
+  verification and reboot/background acceptance remain unverified. Native unit
+  and Flutter tests do not replace those device checks. Production still uses
+  the previous deployed backend's streak behavior until explicitly deployed.
+
 ### NFC held-contact and named-chip follow-up — 2026-10-08 (release candidate)
 
 - Task base: `0799ffbfd553507bce3abb649f6042fbbf87fd22`. No push, release,
@@ -70,6 +127,34 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 - ADB currently reports no connected device. The user explicitly requests
   publication without the phone after automated gates pass; physical acceptance
   remains an unconfirmed limitation of this release, not a successful test.
+
+### VM retention slow-link correction (2026-10-06, local follow-up)
+
+- Task base: `5a2273281585c1933e1446ee04e596b78b11aed4`. This follow-up
+  changes only asset-download deadlines and tests/runbooks; it does not publish
+  another application release or change production services.
+- All **36 retention tests pass on Windows and Linux**, including simulated
+  slow streams beyond two minutes, 30-second header stalls, the ten-minute
+  body ceiling, one deadline across redirects and fail-closed apply/lock
+  recovery. Windows sandbox denied fixture rename/link/Git operations;
+  the complete suite passed outside that restriction, without skipping tests.
+- Eight standalone snapshot files were checksum-verified on the VM under
+  `/home/codex/.local/share/mylifegraph-release-retention/7c6dda5d059211f7b5d80cfb54454d37d6a0df1d8f86f6dafa0c7c106ec8e773`.
+  The previous installation and older repository checkout were preserved.
+  Linux fixture execution passed on the installed copy before real cleanup.
+- Documentation consistency passed (19 tests); diff hygiene passed. The
+  captured-base affected dry-run selected Full due to tooling plus preserved
+  unrelated untracked media/renderer files. This is selection evidence, not
+  a new Full CI or installed-APK pass. No application/schema/signing changes
+  require an app build for this maintenance task.
+- Actual RC23 VM finalization was retried with the installed correction, but
+  one streamed asset still exceeded the finite ten-minute bound on the
+  fluctuating VM-to-GitHub link. It exited nonzero before a completed preview
+  or apply: **0 bytes removed**, no successful real repetition claimed.
+  A post-failure local hash check confirmed all four files in each RC21/22/23
+  bundle still match their receipts and the operation lock was released.
+  RC22's 151,993,407 bytes remain eligible only after a future successful fresh
+  publication proof; it is not permission to bypass proof or delete manually.
 
 ### Local approved follow-up candidate (2026-10-06)
 

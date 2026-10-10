@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/core/widgets/app_surface.dart';
 import 'package:my_life_graph/features/focus_protection/application/blocking_gateway.dart';
 import 'package:my_life_graph/features/focus_protection/application/focus_protection_gateway.dart';
@@ -104,6 +105,28 @@ class _PolishGateway extends FakeBlockingGateway {
   };
 }
 
+class _TrackingGateway extends _StatusGateway {
+  @override
+  Future<BlockingSnapshot> command(
+    String name, [
+    Map<String, Object>? args,
+  ]) async => BlockingSnapshot({
+    ...snapshot(),
+    'plans': [
+      {
+        ...const BlockingPlan(
+          id: 'budget',
+          name: 'Games',
+          apps: {'example.game'},
+          budget: 45,
+        ).toMap(),
+        'tracking': true,
+        'active': false,
+      },
+    ],
+  });
+}
+
 class _LongDurationGateway extends _PolishGateway {
   @override
   Future<Map> insights(int days) async => {
@@ -167,6 +190,25 @@ Future<void> _open(
 }
 
 void main() {
+  testWidgets(
+    'native budget tracking gets a neutral rim and no visual move menu',
+    (tester) async {
+      await _open(tester, gateway: _TrackingGateway());
+      expect(find.text('Tracking'), findsOneWidget);
+      final surface = tester.widget<AppSurface>(
+        find
+            .ancestor(of: find.text('Games'), matching: find.byType(AppSurface))
+            .first,
+      );
+      expect(surface.statusOutline, isNotNull);
+      expect(surface.selected, isFalse);
+      await tester.tap(find.byTooltip('Plan options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Move up'), findsNothing);
+      expect(find.text('Move down'), findsNothing);
+      expect(find.text('Duplicate'), findsOneWidget);
+    },
+  );
   for (final theme in [
     AppTheme.dark,
     AppTheme.light,
@@ -185,9 +227,27 @@ void main() {
         );
         await tester.tap(find.text('Insights').last);
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(find.text('Daily usage'), 150);
+        await tester.scrollUntilVisible(
+          find.text('Daily usage'),
+          150,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const ValueKey('blocking-pull-refresh')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
         expect(find.text('Total 1d 9h 20m'), findsOneWidget);
-        await tester.scrollUntilVisible(find.text('Example browser'), 150);
+        await tester.scrollUntilVisible(
+          find.text('Example browser'),
+          150,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const ValueKey('blocking-pull-refresh')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
         await tester.pumpAndSettle();
         expect(find.text('1d 9h 20m'), findsWidgets);
         expect(find.textContaining('2000m'), findsNothing);
@@ -207,7 +267,16 @@ void main() {
         'Return to MyLifeGraph',
       );
       final customizeButton = find.widgetWithText(FilledButton, 'Customize');
-      await tester.scrollUntilVisible(customizeButton, 120);
+      await tester.scrollUntilVisible(
+        customizeButton,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('blocking-pull-refresh')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.pumpAndSettle();
       final returnRect = tester.getRect(returnButton);
       final customizeRect = tester.getRect(customizeButton);
@@ -247,7 +316,12 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('Active'),
         180,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('blocking-pull-refresh')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.pumpAndSettle();
       expect(find.text('Active'), findsOneWidget);
@@ -256,11 +330,22 @@ void main() {
             .ancestor(of: find.text('Study'), matching: find.byType(AppSurface))
             .first,
       );
-      expect(active.selected, isTrue);
+      expect(
+        active.statusOutline,
+        Theme.of(
+          tester.element(find.text('Study')),
+        ).extension<AppVisualTokens>()!.success,
+      );
+      expect(active.selected, isFalse);
       await tester.scrollUntilVisible(
         find.text('Night'),
         180,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('blocking-pull-refresh')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.pumpAndSettle();
       expect(find.text('Scheduled'), findsOneWidget);
@@ -270,6 +355,7 @@ void main() {
             .first,
       );
       expect(inactive.selected, isFalse);
+      expect(inactive.statusOutline, isNull);
       await Scrollable.ensureVisible(
         tester.element(find.byTooltip('Plan options').last),
         alignment: .5,
@@ -319,7 +405,7 @@ void main() {
   ]) {
     testWidgets('Strict summary preserves $wait second wait', (tester) async {
       await _open(tester, wait: wait);
-      await tester.tap(find.text('Strict').last);
+      await tester.tap(find.text('Discipline').last);
       await tester.pumpAndSettle();
       expect(find.text(label), findsOneWidget);
       expect(find.text('Unlock method'), findsOneWidget);
@@ -338,7 +424,7 @@ void main() {
       'Blocking tab pill retains $id palette and selected semantics',
       (tester) async {
         await _open(tester, theme: theme);
-        for (final label in ['Plans', 'Strict', 'Insights', 'Customize']) {
+        for (final label in ['Plans', 'Discipline', 'Insights', 'Customize']) {
           await tester.tap(find.text(label).last);
           await tester.pumpAndSettle();
           final button = tester.widget<TextButton>(
@@ -385,7 +471,16 @@ void main() {
       await _open(tester, width: 320, scale: scale);
       await tester.tap(find.text('Insights').last);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Daily usage'), 180);
+      await tester.scrollUntilVisible(
+        find.text('Daily usage'),
+        180,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('blocking-pull-refresh')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('Total 28m'), findsOneWidget);
       for (var minute = 1; minute <= 7; minute++) {
@@ -394,10 +489,33 @@ void main() {
           findsWidgets,
         );
       }
-      await tester.scrollUntilVisible(find.text('Month'), -180);
-      await tester.tap(find.text('Month'));
+      await tester.scrollUntilVisible(
+        find.text('Month'),
+        -180,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('blocking-pull-refresh')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Month')),
+        alignment: .5,
+      );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Daily usage'), 180);
+      await tester.tap(find.text('Month').hitTestable());
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Daily usage'),
+        180,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('blocking-pull-refresh')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('Total 7h 45m'), findsOneWidget);
       expect(find.text('Peak 30m'), findsOneWidget);
@@ -413,7 +531,7 @@ void main() {
       await loadCatalogFonts();
       await _open(tester);
       await captureCatalog(tester, 'blocking-polish-plans');
-      for (final tab in ['Strict', 'Insights', 'Customize']) {
+      for (final tab in ['Discipline', 'Insights', 'Customize']) {
         await tester.tap(find.text(tab).last);
         await tester.pumpAndSettle();
         await captureCatalog(tester, 'blocking-polish-${tab.toLowerCase()}');
@@ -421,7 +539,7 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await _open(tester, gateway: _StatusGateway(), reduced: true);
       await captureCatalog(tester, 'blocking-active-inactive');
-      await tester.tap(find.text('Strict').last);
+      await tester.tap(find.text('Discipline').last);
       await tester.pumpAndSettle();
       await captureCatalog(tester, 'blocking-strict-active');
     });

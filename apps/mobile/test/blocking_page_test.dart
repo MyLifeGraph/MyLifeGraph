@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'support/blocking_navigation.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -183,6 +185,35 @@ Future<void> _attemptDetailSave(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('blocking swipe previews and selects adjacent tabs like root', (
+    tester,
+  ) async {
+    final gateway = _RevisionGateway();
+    await _openDetail(tester, gateway, openEditor: false);
+    final pager = find.byKey(const ValueKey('root-tab-pager'));
+    final rect = tester.getRect(pager);
+    final gesture = await tester.startGesture(
+      Offset(rect.right - 60, rect.top + 100),
+    );
+    await gesture.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-180, 0));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.widget<PageView>(pager).controller!.page, greaterThan(0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final strict = find.widgetWithText(TextButton, 'Discipline').last;
+    expect(
+      find.ancestor(
+        of: strict,
+        matching: find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.selected == true,
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
   for (final (label, theme) in [
     ('glass', AppTheme.liquidGlass),
     ('dark', AppTheme.dark),
@@ -206,10 +237,11 @@ void main() {
       await _openDetail(tester, gateway, openEditor: false, theme: theme);
       tester.view.physicalSize = const Size(390, 960);
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Strict').last);
+      await tester.tap(find.widgetWithText(TextButton, 'Discipline').last);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Unlock method'));
       await tester.tap(find.text('Unlock method'));
+      await enterUnlockMethod(tester);
       await tester.pumpAndSettle();
       if (captureUiCatalog) await captureCatalog(tester, 'nfc-chips-$label');
       tester.view.physicalSize = const Size(320, 640);
@@ -239,10 +271,11 @@ void main() {
     await _openDetail(tester, gateway, openEditor: false);
     tester.view.physicalSize = const Size(390, 960);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Strict').last);
+    await tester.tap(find.widgetWithText(TextButton, 'Discipline').last);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Unlock method'));
     await tester.tap(find.text('Unlock method'));
+    await enterUnlockMethod(tester);
     await tester.pumpAndSettle();
     expect(find.text('Main chip'), findsOneWidget);
     expect(find.text('Backup chip'), findsOneWidget);
@@ -491,11 +524,12 @@ void main() {
       await _openDetail(tester, gateway);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Strict').last);
+      await tester.tap(find.text('Discipline').last);
       await tester.pumpAndSettle();
       final options = find.text('Unlock method');
       await tester.ensureVisible(options);
       await tester.tap(options);
+      await enterUnlockMethod(tester);
       await tester.pumpAndSettle();
       final setup = find.widgetWithText(TextButton, 'Set up Wi-Fi');
       await tester.ensureVisible(setup);
@@ -506,7 +540,10 @@ void main() {
       final requestsWhilePending = gateway.wifiRequests;
       await tester.binding.handlePopRoute();
       await tester.pump();
-      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('blocking-unlock-method-page')),
+        findsOneWidget,
+      );
       gateway.pendingWifiReply!.complete();
       await tester.pumpAndSettle();
       expect(requestsWhilePending, 1);
@@ -524,11 +561,12 @@ void main() {
       await _openDetail(tester, gateway);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Strict').last);
+      await tester.tap(find.text('Discipline').last);
       await tester.pumpAndSettle();
       final options = find.text('Unlock method');
       await tester.ensureVisible(options);
       await tester.tap(options);
+      await enterUnlockMethod(tester);
       await tester.pumpAndSettle();
       final setup = find.widgetWithText(TextButton, 'Set up tag');
       await tester.ensureVisible(setup);
@@ -545,7 +583,7 @@ void main() {
           .widget<PopScope>(
             find
                 .descendant(
-                  of: find.byType(BottomSheet),
+                  of: find.byKey(const ValueKey('blocking-unlock-method-page')),
                   matching: find.byType(PopScope),
                 )
                 .first,
@@ -562,7 +600,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(setupCanPop, isFalse);
       expect(find.text('Set up tag'), findsNothing);
-      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('blocking-unlock-method-page')),
+        findsOneWidget,
+      );
       expect(gateway.saves, isEmpty);
       expect(tester.takeException(), isNull);
     },
@@ -576,10 +617,11 @@ void main() {
     await _openDetail(tester, gateway);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Strict').last);
+    await tester.tap(find.text('Discipline').last);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Unlock method'));
     await tester.tap(find.text('Unlock method'));
+    await enterUnlockMethod(tester);
     await tester.pumpAndSettle();
     final setup = find.widgetWithText(TextButton, 'Set up tag');
     await tester.ensureVisible(setup);
@@ -601,10 +643,7 @@ void main() {
       findsWidgets,
     );
     expect(find.textContaining('PlatformException'), findsNothing);
-    expect(
-      find.widgetWithText(FilledButton, 'Set up protection'),
-      findsOneWidget,
-    );
+    expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
     expect(tester.widget<TextButton>(setup).onPressed, isNotNull);
     expect(tester.takeException(), isNull);
   });

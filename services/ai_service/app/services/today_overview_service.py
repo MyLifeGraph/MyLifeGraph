@@ -70,6 +70,18 @@ _T = TypeVar("_T")
 _CAPTURE_PAGE_SIZE = 100
 
 
+def _streak_deadline(entry_date: date, zone: ZoneInfo) -> datetime:
+    # 48 elapsed hours after profile-local day end, including DST transitions.
+    midnight = datetime.combine(entry_date + timedelta(days=1), time.min)
+    # Some IANA zones skip or repeat midnight (or an entire calendar date).
+    # Use the earliest instant at/after the boundary, never a guessed offset.
+    boundaries = [midnight.replace(tzinfo=zone, fold=fold).astimezone(UTC)
+                  for fold in (0, 1)]
+    end = min(instant for instant in boundaries
+              if instant.astimezone(zone).replace(tzinfo=None) >= midnight)
+    return end + timedelta(hours=48)
+
+
 class TodayOverviewService:
     def __init__(
         self,
@@ -160,6 +172,8 @@ class TodayOverviewService:
                 lambda: self._load_check_ins(
                     user_id=user_id,
                     local_date=local_date,
+                    generated_at=generated_at,
+                    zone=zone,
                 ),
             ),
             _read_source(
@@ -510,9 +524,12 @@ class TodayOverviewService:
         *,
         user_id: str,
         local_date: date,
+        generated_at: datetime,
+        zone: ZoneInfo,
     ) -> TodayCheckIns:
         offset = 0
         by_date: dict[date, frozenset[str]] = {}
+        eligible: dict[date, frozenset[str]] = {}
         reached_end = False
         expected: date | None = None
         streak = 0
@@ -524,23 +541,38 @@ class TodayOverviewService:
             )
             if len(page) > _CAPTURE_PAGE_SIZE:
                 raise ValueError("Today capture page exceeded its requested bound.")
+            page_dates = [_date(row.get("entry_date")) for row in page]
+            receipts = await self._repository.list_capture_receipts(
+                user_id=user_id, entry_dates=page_dates,
+            )
+            timely: dict[date, set[str]] = {}
+            for receipt in receipts:
+                day = _date(receipt.get("entry_date"))
+                branch = receipt.get("branch")
+                saved = _aware_utc(datetime.fromisoformat(str(receipt.get("created_at"))))
+                if day in page_dates and branch in {"morning", "evening"} and saved <= generated_at and saved <= _streak_deadline(day, zone):
+                    timely.setdefault(day, set()).add(branch)
             for row in page:
                 row_date = _date(row.get("entry_date"))
                 if row_date > local_date or row_date in by_date:
                     continue
                 by_date[row_date] = valid_explicit_capture_kinds(row)
+                eligible[row_date] = by_date[row_date] & timely.get(row_date, set())
             reached_end = len(page) < _CAPTURE_PAGE_SIZE
 
             today_kinds = by_date.get(local_date, frozenset())
             if expected is None:
                 expected = (
                     local_date
-                    if {"morning", "evening"}.issubset(today_kinds)
+                    if {"morning", "evening"}.issubset(eligible.get(local_date, frozenset()))
                     else local_date - timedelta(days=1)
                 )
-            while expected in by_date:
-                kinds = by_date[expected]
+            while expected in by_date or (reached_end or any(d < expected for d in by_date)):
+                kinds = eligible.get(expected, frozenset())
                 if not {"morning", "evening"}.issubset(kinds):
+                    if streak == 0 and generated_at <= _streak_deadline(expected, zone):
+                        expected -= timedelta(days=1)
+                        continue
                     return TodayCheckIns(
                         morning_saved="morning" in today_kinds,
                         evening_saved="evening" in today_kinds,

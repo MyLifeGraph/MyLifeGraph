@@ -402,10 +402,27 @@ Watch data adds a large watch icon and a finite state fade. `Connected` requires
 current sharing, matching device, supported Health Connect and permission;
 other-device, unavailable, unknown and disconnected states stay distinct.
 It is not a Bluetooth or freshness claim and adds no automatic connection.
-App blocking accents only effective native-active plans, with an explicit status
-pill alongside neutral paused/scheduled/expired cards. Strict's fixed lock has
+App blocking uses a green rim for native-active plans, a subdued text-colored rim
+for native daily-budget Tracking, and neutral scheduled/paused/expired cards,
+with explicit status pills. Move up/down leave the visual menu; drag/drop and
+accessible handle reorder actions remain. Discipline's fixed lock has
 a slow rotating optical ring only when locked and visible in the foreground;
-Reduced Motion freezes it. The existing countdown and unlock guards are unchanged.
+Reduced Motion freezes it. Unlock method opens Unlock settings, then the method
+editor, retaining every condition and named NFC chip control. Stay on screen
+defaults off for new/disabled configurations; change it only with Discipline
+fully off, never in a 15-minute release. Active legacy configurations keep their
+previous stay-required policy until deliberately configured. Optional stay mode
+shows an amber warning and resets on tab/app exit, not notification shade.
+Stay focused cancels the request without disabling protection. Background mode
+retains a deliberate same-boot request and reconciles native conditions through
+service ticks/inexact alarm; OS restrictions can delay completion. No exact
+background deadline or reboot unlock is promised. `Lost NFC chip?` permits
+replacement enrollment while NFC Discipline is locked: two matching contacts,
+revision/foreground checks, no unlock proof or other settings changes. Old chips
+remain valid; a full eight-chip list requires explicitly selecting one lost chip
+to replace. This deliberate self-control recovery is not strong authentication.
+Native keys
+stay Strict; student-facing copy is Discipline and Block now.
 
 Settings omits its own navigation cog while retaining Coach notices and Back;
 its compact header reduces the gap before Profile.
@@ -1442,3 +1459,15 @@ Tools and connections, and Account and appearance. Student-facing auth uses
 outcome-first, and never render raw transport or contract exceptions. Shared
 status pills and surfaces own semantic state, while category accents remain
 non-semantic.
+
+## Blocking and check-in refinements
+
+Header actions stay open in a four-icon horizontal viewport; extra actions scroll,
+with unchanged palettes and 44px targets. Blocking uses the shared root tab pager and
+four-tab selected indicator. After an Unblock choice, required NFC scanning opens directly;
+native wait/condition checks remain authoritative. Daily budgets show seconds, and Android
+can show a silent foreground-app budget countdown independently of Cloud push.
+
+Before profile-local noon, initial manual Evening entry selects missing yesterday and
+labels it Yesterday. Explicit date selection and voice draft dates are retained. Real
+Today streaks use the backend's automatic 48-hour receipt grace, not client timestamps.

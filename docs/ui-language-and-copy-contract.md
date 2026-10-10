@@ -20,7 +20,7 @@ Blocking editor labels are `Rules`, `Time windows`, `Shared daily budget`,
 `Block now` and `Search or add domain`. Detail controls appear only for enabled
 rules; permanent Any rule explanatory copy is omitted. Category suggestions
 are `Social media` and `Video` and do not silently check website targets.
-Locked plan taps use `Unlock Strict to edit.` or `End Focus to edit.` rather
+Locked plan taps use `Unlock Discipline to edit.` or `End Focus to edit.` rather
 than an unexpected overview. `Details` is an explicit read-only menu action.
 
 Optional additions use concise labels: **Note (optional)**, **Coach data**,
@@ -28,17 +28,28 @@ Optional additions use concise labels: **Note (optional)**, **Coach data**,
 **Remove heart data**. Privacy/selected-provider disclosures appear at explicit
 opt-in, not as permanent explanatory paragraphs. Missing measured values say
 **Unavailable**, never zero. Strict remains Active until explicit Unblock and
-requires staying on its screen. Unblock offers `15 minutes` and `Turn off Strict`;
+offers optional `Stay on screen`, default off. Unblock offers `15 minutes` and `Turn off Discipline`;
 only choosing starts the wait. Native conditions remain required even at zero.
 
 Strict initially shows `Active`, the configured `Unlock method` and `Unblock`.
-After choosing, the countdown shows `Unlocking for 15m…` or `Turning off Strict…`,
+After choosing, the countdown shows `Unlocking for 15m…` or `Turning off Discipline…`,
 with `Scan tag` when needed. Completion is automatic if native conditions are
 met; otherwise `Waiting for conditions` stays visible without a second button.
 The configured method is not live progress. Usage labels use compact elapsed
 units such as `2h 30m` and `1d 9h 20m`; raw measured values remain unchanged.
 Android Customize keeps its compact edit action above the true native preview;
 no extra explanatory paragraph is added.
+The visible mode is `Discipline mode`, with `Enable Discipline`, `Unlock settings`,
+`Stay on screen`, `Stay focused` and `Block now`. The optional countdown warning
+is `Stay on this screen` / `Leaving resets the timer.` Settings says `Timer
+continues in background.` when off and `Changes apply next time.`; disabled
+editing says `Turn off Discipline to change.` Countdown uses `m:ss`; rules and
+usage keep their existing compact units. Plan pills distinguish `Active`,
+`Tracking`, `Scheduled`, `Paused` and `Expired` without relying on border color.
+The recovery link says `Lost NFC chip?`, the dialog `Add replacement chip`,
+with `Old chips stay valid.` or `Only this chip will be replaced.` at capacity.
+`Replace lost chip` requires an explicit selection; `Scan` remains disabled until
+the name and any required selection are valid. No security guarantee is implied.
 Blocking Plans omits the repeated browser-name/address-bar paragraph. Website
 consent still explicitly discloses address-bar-only detection, hidden/unsupported
 browsers and local-only observation; no stronger website support is claimed.
@@ -657,7 +668,7 @@ Android Focus protection names app-blocking modes `Focus sessions`, `Weekly
 schedule`, and `Always block`. Weekly selection confirms days/times in one
 compact sheet and names device time plus next-day end where relevant.
 
-Named Android plans use short Plans / Strict / Insights / Customize labels.
+Named Android plans use short Plans / Discipline / Insights / Customize labels.
 The target footer shows only counts and `Save`; disclosure icons expose
 `Expand apps` / `Collapse apps` tooltips and expanded semantics. Preset chip
 selection describes the current app set, not a separate saved blocking mode.
@@ -674,9 +685,9 @@ not rewrite third-party tabs. A return delay never grants access to a blocked ap
 Customize labels non-native surfaces `Approximate preview · native on Android`.
 The Android preview uses `Preview` rather than claiming a live plan countdown;
 its Return replays only its local timer. Native return copy uses compact seconds
-and minutes (`Return in 3s`, then `Return to MyLifeGraph`). `Strict mode` means
+and minutes (`Return in 3s`, then `Return to MyLifeGraph`). `Discipline mode` means
 enabled, including an unlocked editing window; emergency failure says
-`Turn off Strict mode first.` Phone/alarms/Settings safety exits remain disclosed;
+`Turn off Discipline mode first.` Phone/alarms/Settings safety exits remain disclosed;
 no label promises kiosk security or universal prevention of Android escape routes.
 `Silence during Focus` explicitly distinguishes DND from independent app blocks.
 Permission disclosures and warnings stay visible; `Privacy & limits` holds
@@ -831,3 +842,11 @@ Text may wrap and pages/dialogs may scroll; text must not be scaled down to hide
 overflow. Controls need stable semantics that use the same student-facing name
 as the visible label. Copy changes are incomplete until affected widget and
 browser selectors are updated.
+
+## Compact refinement labels
+
+Keep the always-open header icon-only with existing tooltips; overflow scrolls. Daily
+budget summaries use `All day · Xm Ys left`; local countdowns identify app and plan.
+Evening's previous-day default is labelled `Yesterday`, without extra explanatory blocks.
+Streak help states that both check-ins count, with a 48-hour catch-up window after day end;
+late saves remain editable data but do not restore streak credit.

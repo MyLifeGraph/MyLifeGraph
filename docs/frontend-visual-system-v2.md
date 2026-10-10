@@ -3,7 +3,20 @@
 NFC chip management stays inside Unlock method: compact named rows with one
 leading icon and trailing Remove control, followed by a small Add chip action.
 Name/removal dialogs reuse existing fields, buttons and theme surfaces. All four
-palettes and Strict layout remain unchanged; no new decoration or recovery panel.
+palettes remain unchanged. Locked NFC Discipline adds only the subdued
+`Lost NFC chip?` link below Unblock, opening a compact themed name/Scan dialog.
+At eight chips it includes a required replacement selector, not another panel.
+
+Discipline uses the approved dedicated Unlock settings/method pages, large `m:ss`
+countdown, compact theme-owned amber warning only when Stay on screen is enabled,
+and an oval outlined Stay focused action. Controls use equal widths, minimum
+48px height and 12px gaps. Graphite/glass materials and all four palettes stay
+unchanged across Plans, Discipline, Insights and Customize. AppSurface's optional
+statusOutline uses semantic success green for native blocking, subdued primary
+text for native daily-budget tracking and the normal border for scheduled plans.
+Focus/selected/warning/danger states retain precedence; status text supplements
+color. Move up/down are removed from the visual menu, but remain accessibility
+actions on the reorder handle alongside drag/drop.
 
 The optional Habit duration and collapsed Profile reuse existing theme surfaces,
 field geometry and expansion affordances. Morning clock steps change labels,
@@ -45,7 +58,7 @@ Strict separates the active idle state from an explicitly requested
 unlock countdown; before Unblock no countdown or disabled completion is shown.
 The compact Unlock dialog offers two full-width choices without an explanatory
 paragraph. Only the chosen request shows progress; completion needs no second
-button. Strict controls share a 48px minimum height and 16px corner radius;
+button. Discipline controls share a 48px minimum height and oval corners;
 text scaling may increase their height. The unlocked Lock now/Configure controls
 have equal full width and a 12px gap, with Configure outlined as the secondary
 action. Method/timer/NFC action/status use 12px separation. Unlock choices use
@@ -714,26 +727,13 @@ Category color paints only the narrow left accent, never a full opaque layer
 under that translucent row; primary/secondary text retains its dark-surface contrast.
 Shared header actions form one rounded, softly raised glass island in Liquid Glass,
 with clear individual icons and unchanged 44px targets, focus and navigation.
-The resting state is a 48px circle with a menu icon. Opening reveals the existing
-actions right-to-left in the same header row, with a fixed title and anchor throughout.
-Horizontal clipping and a subtle fade use the shared 260ms emphasis curve;
-glyphs are not scaled. Reverse animation closes it; outside tap, Back, Escape,
-activation or leaving the page dismisses it. Outside swipe/scroll also closes it
-without consuming the underlying gesture. Reduced Motion is immediate.
-Selection haptics obey the existing toggle. The overlay has a legible surface,
-title-bounded width and horizontally scrollable 44px targets rather than
-wrapping or shrinking icons. Scrolling icons inside the capsule leaves it open.
-Icon targets use 44px and consume the full title-bounded capacity; no fixed icon
-count or arbitrary desktop width cap is imposed. Only measured overflow adds an
-accessible end-scroll chevron. It changes direction at the end, leaves the menu
-open on pointer/keyboard activation and disappears when resizing lets all icons
-fit. At widths below two targets, the existing swipe gets a passive edge cue
-instead of sacrificing an action's target. Title, palette and reveal remain.
-Loaded Today/Insights headings reserve the same title space as loading/error
-pages. Activation dismissal also applies to screenreader actions, not only
-pointer/keyboard input, without excluding native focus/tap semantics (including
-the unread Coach notice); tab departure is observed independently of open state.
-An unread Coach dot remains visible on the closed circle.
+The island stays open in the header row. Up to four unchanged 44px icon targets
+are visible (176px inner viewport, 180px including surface padding); overflow
+scrolls horizontally with a passive edge cue. No collapse control or reveal
+overlay is required. Preserve title space, keyboard focus, callbacks and the
+unread Coach notice. At accessibility text sizes the existing header may place
+actions on a separate row rather than overlap the title. Dark, Light, Space and
+Liquid Glass retain their own palettes and surface effects.
 Inside the island, icons omit individual sheen/background tiles and resting
 borders. Circular press/hover feedback and a two-pixel keyboard focus ring
 identify the active control without adding permanent dividers or a white wash.

@@ -2017,3 +2017,11 @@ explanations remain closed initially. Save failures use provider-neutral copy,
 keep the complete draft, and do not expose storage or transport configuration.
 Consent, validation, step progress, and the final save authority remain visible
 and unchanged.
+
+## Evening entry default before noon
+
+On the initial manual Evening entry, before profile-local 12:00, load yesterday and
+select it only if its Evening branch is still missing. Show a compact Yesterday label.
+Otherwise open today. Explicit date changes and reviewed voice draft dates are untouched;
+recent-date editing, branch CAS and source attribution retain their existing contracts.
+A failed prior-day read is an error, not evidence that yesterday is empty.

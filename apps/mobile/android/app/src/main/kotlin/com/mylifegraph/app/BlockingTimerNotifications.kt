@@ -21,6 +21,14 @@ object BlockingTimerPolicy {
         master && accessibility && targets && enabled && pausedUntil <= now && end > now
 }
 
+object BlockingBudgetTimerPolicy {
+    fun remaining(enabled: Boolean, pausedUntil: Long, now: Long, budgetMinutes: Int,
+                  usedMs: Long, matching: Boolean, available: Boolean): Long? {
+        if (!enabled || pausedUntil > now || budgetMinutes <= 0 || !matching || !available) return null
+        return (budgetMinutes * 60000L - usedMs.coerceAtLeast(0)).takeIf { it > 0 }
+    }
+}
+
 /** Android renders the ticking clock; only lifecycle changes issue a notification. */
 object BlockingTimerNotifications {
     private const val CHANNEL = "mylifegraph-blocking-timers-v1"
@@ -33,6 +41,59 @@ object BlockingTimerNotifications {
     private var lastInputs = ""
     private var nextDecisionAt = 0L
     private var channelCreated = false
+    private const val BUDGET_TAG = "mylifegraph-budget-foreground"
+    private var budgetPublished: Timer? = null
+
+    /** This is presentation only; persisted usage/rules remain the authority. */
+    fun syncForeground(context: Context, plans: BlockingPlans, app: String?, host: String?, unobscured: Boolean) {
+        runCatching {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            val config = FocusProtectionStore(context).readConfiguration()
+            val available = unobscured && config.enabled && config.blockSelectedApps && plans.usageGranted() &&
+                manager.areNotificationsEnabled() &&
+                context.getSystemService(android.os.PowerManager::class.java).isInteractive &&
+                !context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
+                (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) &&
+                (Build.VERSION.SDK_INT < 26 || manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
+            val now = System.currentTimeMillis()
+            val values = plans.plans()
+            var selected: Timer? = null
+            if (app != null && app !in FocusProtectionManager(context).essentialPackages()) {
+                for (i in 0 until values.length()) {
+                    val p = values.getJSONObject(i)
+                    val match = app in BlockingPlans.strings(p.getJSONArray("apps")) ||
+                        (plans.websiteConsent() && host != null && BlockingPlans.strings(p.getJSONArray("sites")).any { BlockingDomains.matches(host, it) })
+                    val remaining = BlockingBudgetTimerPolicy.remaining(p.optBoolean("enabled", true),
+                        p.optLong("pausedUntil"), now, p.optInt("budgetMinutes"),
+                        if (available && match) plans.used(p) else 0, match, available) ?: continue
+                    val timer = Timer(p.getString("id"), p.getString("name"), now + remaining)
+                    if (selected == null || timer.end < selected.end) selected = timer
+                }
+            }
+            if (selected == null) {
+                manager.cancel(BUDGET_TAG, 1); budgetPublished = null
+                return@runCatching
+            }
+            val timer = selected
+            val old = budgetPublished
+            if (old?.id == "${timer.id}:$app" && old.name == timer.name && kotlin.math.abs(old.end - timer.end) < 5500 &&
+                manager.activeNotifications.any { it.tag == BUDGET_TAG }) return@runCatching
+            val label = runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(app!!, 0)).toString() }.getOrDefault(app ?: "App")
+            val pending = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context)
+            builder.setSmallIcon(R.drawable.app_notification_mark).setContentTitle(label)
+                .setContentText("Plan · ${timer.name}").setSubText("Remaining")
+                .setWhen(timer.end).setUsesChronometer(true).setChronometerCountDown(true)
+                .setContentIntent(pending).setOngoing(true).setOnlyAlertOnce(true).setSound(null)
+                .setCategory(Notification.CATEGORY_PROGRESS).setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setPublicVersion((if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context))
+                    .setSmallIcon(R.drawable.app_notification_mark).setContentTitle("MyLifeGraph").setContentText("Daily limit active").build())
+            if (Build.VERSION.SDK_INT >= 26) builder.setTimeoutAfter(timer.end - now)
+            manager.notify(BUDGET_TAG, 1, builder.build())
+            budgetPublished = timer.copy(id = "${timer.id}:$app")
+        }
+    }
 
     // This optional UI must never turn a durable plan save into a failed save.
     fun sync(context: Context) { runCatching { reconcile(context.applicationContext) } }
@@ -127,8 +188,10 @@ object BlockingTimerNotifications {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.activeNotifications.filter { it.tag?.startsWith(PREFIX) == true }
                 .forEach { manager.cancel(it.tag, it.id) }
+            manager.cancel(BUDGET_TAG, 1)
         }
         published = emptyList()
+        budgetPublished = null
         lastInputs = ""
     }
 }

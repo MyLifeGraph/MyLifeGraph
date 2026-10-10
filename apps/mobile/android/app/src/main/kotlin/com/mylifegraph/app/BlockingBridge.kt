@@ -24,7 +24,7 @@ import java.util.concurrent.Executors
 
 class BlockingBridge(private val activity: FlutterActivity) {
     private val plans = BlockingPlans(activity)
-    private val strictSession = StrictScreenSession { plans.cancelUnlockRequest() }
+    private val strictSession = StrictScreenSession(plans::stayOnScreen) { plans.cancelUnlockRequest() }
     private val handler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val nfcRequest = BlockingPendingRequest<MethodChannel.Result>()
@@ -85,7 +85,9 @@ class BlockingBridge(private val activity: FlutterActivity) {
                         if (android.os.Build.VERSION.SDK_INT >= 33 &&
                             activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
                             !activity.getSharedPreferences("mylifegraph_blocking_timer_ui", 0).getBoolean("asked", false) &&
-                            (0 until plans.plans().length()).any { plans.plans().getJSONObject(it).optLong("untilEpochMs") > System.currentTimeMillis() }) {
+                            (0 until plans.plans().length()).any { plans.plans().getJSONObject(it).let { p ->
+                                p.optLong("untilEpochMs") > System.currentTimeMillis() || p.optInt("budgetMinutes") > 0
+                            } }) {
                             activity.getSharedPreferences("mylifegraph_blocking_timer_ui", 0).edit().putBoolean("asked", true).apply()
                             activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), TIMER_PERMISSION_REQUEST)
                         }
@@ -111,28 +113,35 @@ class BlockingBridge(private val activity: FlutterActivity) {
                         }
                     }
                 }
-                "strict" -> result.success(plans.setStrict(call.arguments as Map<*, *>))
+                "strict" -> { result.success(plans.setStrict(call.arguments as Map<*, *>)); runCatching { DisciplineUnlockScheduler.reconcile(activity) } }
+                "stayOnScreen" -> result.success(plans.setStayOnScreen(call.arguments as Map<*, *>))
+                "cancelUnlock" -> { plans.cancelUnlockRequest(); runCatching { DisciplineUnlockScheduler.reconcile(activity) }; result.success(plans.status()) }
                 "strictVisibility" -> {
                     val visible = call.argument<Boolean>("visible") == true
                     strictSession.visibility(visible)
                     if (!visible && nfcRequest.pending != null) cancelNfc("Unlock wait reset.")
                     result.success(plans.status())
                 }
-                "requestUnlock" -> { requireStrictScreen(); result.success(plans.requestUnlock(call.argument<String>("mode"))) }
+                "requestUnlock" -> { requireStrictScreen(); result.success(plans.requestUnlock(call.argument<String>("mode"))); runCatching { DisciplineUnlockScheduler.reconcile(activity) } }
                 "finishUnlock" -> { requireStrictScreen(); result.success(plans.finishUnlock()) }
                 "tryFinishUnlock" -> {
                     if (!screenUnlocked()) stopped()
-                    result.success(if (strictSession.canComplete()) plans.finishUnlock(onlyIfReady = true) else plans.status())
+                    result.success(if (strictSession.canFinishUnlock()) plans.finishUnlock(onlyIfReady = true) else plans.status())
+                    runCatching { DisciplineUnlockScheduler.reconcile(activity) }
                 }
-                "relock" -> result.success(plans.relock())
+                "relock" -> { result.success(plans.relock()); runCatching { DisciplineUnlockScheduler.reconcile(activity) } }
                 "removeNfcTag" -> result.success(plans.removeNfcTag(
                     call.argument<String>("id") ?: "", call.argument<Number>("revision")))
                 "nfc" -> {
                     val enroll = call.argument<Boolean>("enroll") == true
+                    val recovery = call.argument<Boolean>("recovery") == true
+                    val replaceId = call.argument<String>("replaceId")
+                    require(!recovery || enroll) { "Choose chip enrollment." }
                     val revision = call.argument<Number>("revision")
                     val name = call.argument<String>("name") ?: "Main chip"
-                    if (enroll) plans.requireNfcRevision(revision)
+                    if (enroll) plans.requireNfcRevision(revision, recovery)
                     else requireStrictScreen()
+                    if (recovery) requireStrictScreen()
                     val adapter = NfcAdapter.getDefaultAdapter(activity)
                     check(adapter != null && adapter.isEnabled) { "Enable NFC first." }
                     check(nfcRequest.pending == null) { "A tag scan is already running." }
@@ -163,8 +172,8 @@ class BlockingBridge(private val activity: FlutterActivity) {
                                     android.widget.Toast.makeText(activity, "Remove the tag, then scan it again.", android.widget.Toast.LENGTH_LONG).show()
                                     return@post
                                 }
-                                if (!enroll) requireStrictScreen()
-                                plans.acceptNfc(hash, enroll, name, revision)
+                                if (!enroll || recovery) requireStrictScreen()
+                                plans.acceptNfc(hash, enroll, name, revision, recovery, replaceId)
                                 // Complete ready requests in the same native turn as the proof.
                                 // A remaining timer/other conditions still retain their normal guard.
                                 if (!enroll && strictSession.canComplete()) plans.finishUnlock(onlyIfReady = true)

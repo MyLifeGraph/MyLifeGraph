@@ -94,7 +94,7 @@ class _CheckInStreakCard extends StatelessWidget {
           TodayInfoDisclosure(
             topic: 'Check-in streak',
             description:
-                'Both check-ins count as one day. Complete them anytime today; your streak stays until the day ends.',
+                'Both check-ins count as one day. Catch up within 48 hours after the day ends to keep your streak.',
             headerBuilder: (context, infoButton) => Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [

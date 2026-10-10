@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'support/blocking_navigation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
@@ -19,7 +21,8 @@ class _ReadyProtectionGateway extends UnsupportedFocusProtectionGateway {
       notificationPolicyGranted: false,
       lease: null,
       configuration: value.configuration.copyWith(
-        enabled: true, blockSelectedApps: true,
+        enabled: true,
+        blockSelectedApps: true,
       ),
     );
   }
@@ -86,9 +89,10 @@ Future<void> _openConfiguration(
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.widgetWithText(TextButton, 'Strict'));
+  await tester.tap(find.widgetWithText(TextButton, 'Discipline'));
   await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(OutlinedButton, 'Configure'));
+  await enterUnlockMethod(tester);
   await tester.pumpAndSettle();
 }
 
@@ -113,7 +117,7 @@ void main() {
       await tester.tap(wifi);
       await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(wifi).value, isFalse);
-      await tester.tap(find.widgetWithText(FilledButton, 'Enable'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await tester.pumpAndSettle();
       expect(gateway.saves.single['wifi'], isFalse);
       expect(gateway.wifiRequired, isFalse);

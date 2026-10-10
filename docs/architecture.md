@@ -2027,3 +2027,12 @@ repository assessment, not a ten-user load test or live-host measurement.
   passes with the deterministic fake provider. Standard automation remains
   fake-provider-only, and these checks do not establish remote state, another
   developer's account, or production readiness.
+
+## Local blocking and streak refinements
+
+Android Accessibility supplies foreground package/consented host to the silent local
+shared-budget countdown; it never uploads these notification observations. Flutter
+Blocking reuses the core root pager and the native Strict visibility/verification seams.
+Today reads Capture request receipts through its existing service repository to calculate
+48-hour grace, returning the unchanged overview payload. Older deployed backends retain
+their prior streak semantics until this backend is deployed. No migration is required.

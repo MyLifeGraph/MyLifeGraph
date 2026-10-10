@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'support/blocking_navigation.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -139,7 +141,7 @@ Future<void> _pumpPage(
 
 Future<void> _openInsights(WidgetTester tester) async {
   await tester.tap(find.widgetWithText(TextButton, 'Insights').last);
-  await tester.pump();
+  await tester.pumpAndSettle();
 }
 
 Future<void> _retainedEditor(
@@ -181,7 +183,10 @@ void main() {
     await tester.tap(find.text('Study'));
     await tester.pumpAndSettle();
     expect(find.text('End Focus to edit.'), findsOneWidget);
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(
+      find.byKey(const ValueKey('blocking-unlock-method-page')),
+      findsNothing,
+    );
     expect(find.byType(BlockingPlanEditor), findsNothing);
     expect(gateway.catalogs, isEmpty);
     expect(gateway.calls.where((call) => call == 'save'), isEmpty);
@@ -198,12 +203,12 @@ void main() {
           .onPressed,
       isNull,
     );
-    await tester.tap(find.widgetWithText(TextButton, 'Strict').last);
+    await tester.tap(find.widgetWithText(TextButton, 'Discipline').last);
     await tester.pumpAndSettle();
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Enable Strict'),
+            find.widgetWithText(FilledButton, 'Enable Discipline'),
           )
           .onPressed,
       isNull,
@@ -216,9 +221,10 @@ void main() {
       final gateway = _Gateway();
       gateway.state = {...snapshot(), 'nfcAvailable': true};
       await _pumpPage(tester, gateway);
-      await tester.tap(find.widgetWithText(TextButton, 'Strict').last);
+      await tester.tap(find.widgetWithText(TextButton, 'Discipline').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Enable Strict'));
+      await tester.tap(find.text('Unlock method'));
+      await enterUnlockMethod(tester);
       await tester.pumpAndSettle();
       tester
           .widget<DropdownButtonFormField<int>>(
@@ -231,7 +237,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(SwitchListTile, 'NFC tag'));
       await tester.pumpAndSettle();
-      final save = find.widgetWithText(FilledButton, 'Enable');
+      final save = find.widgetWithText(FilledButton, 'Save');
       await tester.ensureVisible(save);
       await tester.tap(save);
       await tester.pumpAndSettle();
@@ -249,7 +255,7 @@ void main() {
     final gateway = _Gateway();
     await _pumpPage(tester, gateway);
     for (var i = 0; i < 30; i++) {
-      for (final tab in ['Strict', 'Insights', 'Customize', 'Plans']) {
+      for (final tab in ['Discipline', 'Insights', 'Customize', 'Plans']) {
         await tester.tap(find.widgetWithText(TextButton, tab).last);
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: 'round $i $tab');
@@ -383,7 +389,10 @@ void main() {
     await tester.pumpAndSettle();
     final button = find.widgetWithText(OutlinedButton, 'Allow usage access');
     expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
-    expect(gateway.calls, ['status', 'strictVisibility']);
+    expect(gateway.calls.where((call) => call != 'strictVisibility'), [
+      'status',
+    ]);
+    expect(gateway.calls, contains('strictVisibility'));
     expect(gateway.opened, isEmpty);
   });
 
@@ -444,9 +453,10 @@ void main() {
   ) async {
     final gateway = _Gateway()..failStrictOnce = true;
     await _pumpPage(tester, gateway);
-    await tester.tap(find.widgetWithText(TextButton, 'Strict').last);
+    await tester.tap(find.widgetWithText(TextButton, 'Discipline').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Enable Strict'));
+    await tester.tap(find.text('Unlock method'));
+    await enterUnlockMethod(tester);
     await tester.pumpAndSettle();
     tester
         .widget<DropdownButtonFormField<int>>(
@@ -455,13 +465,13 @@ void main() {
         .onChanged!(60);
     await tester.tap(find.widgetWithText(SwitchListTile, 'Charger connected'));
     await tester.pumpAndSettle();
-    final save = find.widgetWithText(FilledButton, 'Enable');
+    final save = find.widgetWithText(FilledButton, 'Save');
     await tester.ensureVisible(save);
     await tester.tap(save);
     await tester.pumpAndSettle();
     expect(
       find.descendant(
-        of: find.byType(BottomSheet),
+        of: find.byKey(const ValueKey('blocking-unlock-method-page')),
         matching: find.text('Unlock method'),
       ),
       findsOneWidget,
@@ -472,7 +482,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.descendant(
-        of: find.byType(BottomSheet),
+        of: find.byKey(const ValueKey('blocking-unlock-method-page')),
         matching: find.text('Unlock method'),
       ),
       findsNothing,

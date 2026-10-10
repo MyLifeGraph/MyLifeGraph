@@ -62,7 +62,7 @@ class BlockingScreenView(
         setPadding(dp(24), dp(32), dp(24), dp(32))
     }
     private val summaryText = text(summary, 24f, true)
-    private val strictText = text("Strict mode", 14f)
+    private val strictText = text("Discipline mode", 14f)
     private val returnButton = ReturnProgressButton(context)
     private var disposed = false
 

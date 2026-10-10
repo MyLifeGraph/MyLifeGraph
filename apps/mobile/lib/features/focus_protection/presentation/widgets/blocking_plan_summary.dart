@@ -31,7 +31,8 @@ String blockingPlanTiming(
       0,
       plan.budget * 60000,
     );
-    return 'All day · ${(left / 60000).ceil()}m left';
+    final seconds = (left / 1000).ceil();
+    return 'All day · ${seconds ~/ 60}m ${seconds % 60}s left';
   }
   if (!plan.active) {
     return kinds == 0 && plan.until > 0 ? 'Expired' : 'Scheduled';

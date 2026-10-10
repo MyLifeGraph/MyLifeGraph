@@ -68,13 +68,20 @@ object BlockingMigrationPolicy {
 }
 
 object BlockingEditPolicy {
+    fun stayOnScreen(configured: Boolean?, strictEnabled: Boolean): Boolean =
+        configured ?: strictEnabled
+
+    fun requireStayPolicyEditable(strictEnabled: Boolean) {
+        check(!strictEnabled) { "Turn off Discipline to change this setting." }
+    }
+
     // A temporary editing window is not permission to release protection.
     fun requireEmergencyAllowed(strictEnabled: Boolean) {
-        check(!strictEnabled) { "Turn off Strict mode first." }
+        check(!strictEnabled) { "Turn off Discipline mode first." }
     }
 
     fun requireEditable(locked: Boolean, focusActive: Boolean) {
-        check(!locked) { "Unlock Strict mode first." }
+        check(!locked) { "Unlock Discipline mode first." }
         check(!focusActive) { "Finish the active Focus session first." }
     }
 }

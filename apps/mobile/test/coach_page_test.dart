@@ -295,7 +295,7 @@ void main() {
     expect(chat.controller!.position.maxScrollExtent, greaterThan(0));
     expect(chat.controller!.offset, chat.controller!.position.maxScrollExtent);
     expect(find.byType(CustomScrollView), findsNothing);
-    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(find.byKey(const Key('coach-chat-scroll')), findsOneWidget);
     final frame = tester.getRect(find.byKey(const Key('app-page-body-outline')));
     final provider = tester.getRect(find.byKey(const Key('coach-model-button')));
     expect(provider.top, greaterThan(frame.top));

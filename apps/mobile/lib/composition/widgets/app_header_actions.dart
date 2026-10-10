@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_radii.dart';
-import '../../core/feedback/app_haptics.dart';
 import '../../core/navigation/app_routes.dart';
-import '../../core/navigation/root_tab_pager.dart';
 import '../../core/theme/app_icons.dart';
-import '../../core/theme/app_motion_tokens.dart';
 import '../../core/theme/app_visual_tokens.dart';
 import '../../core/widgets/app_surface.dart';
 import '../../core/widgets/app_page_header_actions_scope.dart';
@@ -28,104 +23,15 @@ class AppHeaderActions extends ConsumerStatefulWidget {
   final List<Widget> pageActions;
   final bool settingsSelected;
 
-  /// Custom page actions call this before their guarded callback. Pointer and
-  /// keyboard activation are also handled by the shared menu.
-  static void dismissForAction(BuildContext context) => context
-      .getInheritedWidgetOfExactType<_HeaderActionActivation>()
-      ?.dismiss();
+  /// Compatibility seam for page callbacks; the always-open island has no menu
+  /// to dismiss. Keep existing guarded action callbacks unchanged.
+  static void dismissForAction(BuildContext context) {}
 
   @override
   ConsumerState<AppHeaderActions> createState() => _AppHeaderActionsState();
 }
 
-class _AppHeaderActionsState extends ConsumerState<AppHeaderActions>
-    with SingleTickerProviderStateMixin {
-  final _link = LayerLink();
-  final _portal = OverlayPortalController();
-  final _tapGroup = Object();
-  final _menuBounds = GlobalKey();
-  final _overflowButton = GlobalKey();
-  final _overflowFocus = FocusNode();
-  Offset? _menuPointerStart;
-  late final _animation = AnimationController(vsync: this);
-  late final _reveal = CurvedAnimation(
-    parent: _animation,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInCubic,
-  );
-  bool _expanded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointer);
-    _animation.addStatusListener((status) {
-      if (status == AnimationStatus.dismissed && !_expanded) _portal.hide();
-    });
-  }
-
-  void _onGlobalPointer(PointerEvent event) {
-    if (!_expanded || event is! PointerScrollEvent) return;
-    final box = _menuBounds.currentContext?.findRenderObject();
-    if (box is! RenderBox ||
-        !(Offset.zero & box.size).contains(box.globalToLocal(event.position))) {
-      _close();
-    }
-  }
-
-  void _toggle() {
-    AppHaptics.selection(context);
-    if (_expanded) {
-      _close();
-    } else {
-      setState(() => _expanded = true);
-      _portal.show();
-      _animation.forward();
-    }
-  }
-
-  void _close() {
-    if (!_expanded) return;
-    setState(() => _expanded = false);
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _animation.value = 0;
-      _portal.hide();
-    } else {
-      _animation.reverse();
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _animation.duration = context.motionTokens.emphasisFor(context);
-    // Subscribe while closed too; opening via setState does not re-run this hook.
-    final routeCurrent = ModalRoute.of(context)?.isCurrent != false;
-    final tabVisible = RootTabVisibility.of(context);
-    if (_expanded && (!routeCurrent || !tabVisible)) {
-      // Route/visibility notifications can arrive during the build phase.
-      // Close the overlay only after that frame, not while it is building.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_expanded) return;
-        if (ModalRoute.of(context)?.isCurrent == false ||
-            !RootTabVisibility.of(context)) {
-          setState(() => _expanded = false);
-          _animation.value = 0;
-          _portal.hide();
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointer);
-    _reveal.dispose();
-    _animation.dispose();
-    _overflowFocus.dispose();
-    super.dispose();
-  }
-
+class _AppHeaderActionsState extends ConsumerState<AppHeaderActions> {
   @override
   Widget build(BuildContext context) {
     final notice = ref.watch(coachTurnNoticeProvider);
@@ -136,7 +42,7 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions>
               View.of(context).devicePixelRatio;
     final menuWidth =
         (AppPageHeaderActionsScope.maxWidthOf(context) ?? screenWidth - 32)
-            .clamp(48.0, double.infinity);
+            .clamp(48.0, 180.0);
     final actions = Row(
       key: const ValueKey('global-header-actions'),
       mainAxisSize: MainAxisSize.min,
@@ -144,16 +50,13 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions>
         ...widget.pageActions.map(
           (action) => ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            child: action is IconButton
-                ? _dismissibleIconButton(action)
-                : action,
+            child: action,
           ),
         ),
         if (notice != null)
           _CoachNoticeButton(
             notice: notice,
             onPressed: () {
-              _close();
               _showCoachNotice(context, notice);
             },
           ),
@@ -164,7 +67,6 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions>
             onPressed: GoRouter.maybeOf(context) == null
                 ? null
                 : () {
-                    _close();
                     context.push(AppRoutes.alerts);
                   },
             padding: EdgeInsets.zero,
@@ -181,230 +83,21 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions>
               onPressed: GoRouter.maybeOf(context) == null
                   ? null
                   : () {
-                      _close();
                       context.push(AppRoutes.focusProtection);
                     },
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 44, height: 44),
               icon: const Icon(AppIcons.shieldOutlined),
             ),
-          _SettingsButton(selected: false, onActivate: _close),
+          _SettingsButton(selected: false, onActivate: () {}),
         ],
       ],
     );
-    if (widget.settingsSelected &&
-        notice == null &&
-        widget.pageActions.isEmpty) {
-      return actions;
-    }
-    return PopScope(
-      canPop: !_expanded,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) _close();
-      },
-      child: OverlayPortal(
-        controller: _portal,
-        overlayChildBuilder: (context) => Stack(
-          children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              child: CompositedTransformFollower(
-                link: _link,
-                showWhenUnlinked: false,
-                targetAnchor: Alignment.topRight,
-                followerAnchor: Alignment.topRight,
-                offset: Offset.zero,
-                child: FadeTransition(
-                  opacity: _reveal,
-                  child: SizeTransition(
-                    sizeFactor: _reveal,
-                    axis: Axis.horizontal,
-                    alignment: Alignment.centerRight,
-                    child: IgnorePointer(
-                      ignoring: !_expanded,
-                      child: ExcludeSemantics(
-                        excluding: !_expanded,
-                        child: ConstrainedBox(
-                          key: _menuBounds,
-                          constraints: BoxConstraints(maxWidth: menuWidth),
-                          child: FocusScope(
-                            autofocus: true,
-                            child: Focus(
-                              autofocus: true,
-                              onKeyEvent: (_, event) {
-                                if (event is KeyDownEvent &&
-                                    event.logicalKey ==
-                                        LogicalKeyboardKey.escape) {
-                                  _close();
-                                  return KeyEventResult.handled;
-                                }
-                                if (!_overflowFocus.hasFocus &&
-                                    ((event is KeyDownEvent &&
-                                            event.logicalKey ==
-                                                LogicalKeyboardKey.enter) ||
-                                        (event is KeyUpEvent &&
-                                            event.logicalKey ==
-                                                LogicalKeyboardKey.space))) {
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    if (mounted) _close();
-                                  });
-                                }
-                                return KeyEventResult.ignored;
-                              },
-                              child: TapRegion(
-                                groupId: _tapGroup,
-                                child: Material(
-                                  color: Theme.of(context).colorScheme.surface,
-                                  shape: const StadiumBorder(),
-                                  child: Listener(
-                                    // Reverse after activation without replacing a
-                                    // caller's callback or disabling its existing guard.
-                                    onPointerDown: (event) =>
-                                        _menuPointerStart = event.position,
-                                    onPointerCancel: (_) =>
-                                        _menuPointerStart = null,
-                                    onPointerUp: (event) {
-                                      final start = _menuPointerStart;
-                                      _menuPointerStart = null;
-                                      final overflowBox = _overflowButton
-                                          .currentContext
-                                          ?.findRenderObject();
-                                      final tappedOverflow =
-                                          overflowBox is RenderBox &&
-                                          (Offset.zero & overflowBox.size)
-                                              .contains(
-                                                overflowBox.globalToLocal(
-                                                  event.position,
-                                                ),
-                                              );
-                                      if (start != null &&
-                                          !tappedOverflow &&
-                                          (start - event.position).distance <
-                                              kTouchSlop) {
-                                        _close();
-                                      }
-                                    },
-                                    child: _surface(
-                                      context,
-                                      _HeaderIconsViewport(
-                                        controlKey: _overflowButton,
-                                        controlFocus: _overflowFocus,
-                                        child: _HeaderActionActivation(
-                                          dismiss: _close,
-                                          child: actions,
-                                        ),
-                                      ),
-                                      key: const ValueKey('header-action-menu'),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        child: CompositedTransformTarget(
-          link: _link,
-          child: TapRegion(
-            groupId: _tapGroup,
-            onTapOutside: (_) => _close(),
-            child: ExcludeSemantics(
-              excluding: _expanded,
-              child: _surface(
-                context,
-                Semantics(
-                  expanded: _expanded,
-                  child: IconButton(
-                    key: const ValueKey('header-island-toggle'),
-                    tooltip: _expanded ? 'Close actions' : 'Page actions',
-                    onPressed: _toggle,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 44,
-                      height: 44,
-                    ),
-                    icon: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: context.motionTokens.selectionFor(context),
-                          child: Icon(
-                            _expanded ? AppIcons.close : AppIcons.menu,
-                            key: ValueKey(_expanded),
-                          ),
-                        ),
-                        if (notice != null)
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Semantics(
-                              label: notice.semanticsLabel,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.error,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const SizedBox.square(dimension: 7),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: menuWidth),
+      child: _surface(context, _HeaderIconsViewport(child: actions)),
     );
   }
-
-  // Page actions use standard IconButtons. Wrap their callback rather than
-  // replacing semantics: Flutter must retain focus, tooltip and disabled state.
-  Widget _dismissibleIconButton(IconButton action) => IconButton(
-    key: action.key,
-    iconSize: action.iconSize,
-    visualDensity: action.visualDensity,
-    padding: action.padding,
-    alignment: action.alignment,
-    splashRadius: action.splashRadius,
-    color: action.color,
-    focusColor: action.focusColor,
-    hoverColor: action.hoverColor,
-    highlightColor: action.highlightColor,
-    splashColor: action.splashColor,
-    disabledColor: action.disabledColor,
-    onPressed: action.onPressed == null
-        ? null
-        : () {
-            _close();
-            action.onPressed!();
-          },
-    onHover: action.onHover,
-    onLongPress: action.onLongPress,
-    mouseCursor: action.mouseCursor,
-    focusNode: action.focusNode,
-    autofocus: action.autofocus,
-    tooltip: action.tooltip,
-    enableFeedback: action.enableFeedback,
-    constraints: action.constraints,
-    style: action.style,
-    isSelected: action.isSelected,
-    selectedIcon: action.selectedIcon,
-    statesController: action.statesController,
-    icon: action.icon,
-  );
 
   Widget _surface(BuildContext context, Widget child, {Key? key}) => AppSurface(
     key: key ?? const ValueKey('header-action-island'),
@@ -418,6 +111,7 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions>
               visualDensity: VisualDensity.standard,
               minimumSize: const WidgetStatePropertyAll(Size.square(44)),
               fixedSize: const WidgetStatePropertyAll(Size.square(44)),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
               // One shared glass surface, not a tiny glass tile per icon.
               backgroundBuilder: (context, states, child) =>
@@ -436,14 +130,7 @@ class _AppHeaderActionsState extends ConsumerState<AppHeaderActions>
 }
 
 class _HeaderIconsViewport extends StatefulWidget {
-  const _HeaderIconsViewport({
-    required this.controlKey,
-    required this.controlFocus,
-    required this.child,
-  });
-
-  final GlobalKey controlKey;
-  final FocusNode controlFocus;
+  const _HeaderIconsViewport({required this.child});
   final Widget child;
 
   @override
@@ -489,17 +176,6 @@ class _HeaderIconsViewportState extends State<_HeaderIconsViewport> {
     });
   }
 
-  void _showMore() {
-    if (!_scroll.hasClients) return;
-    final target = _atEnd ? 0.0 : _scroll.position.maxScrollExtent;
-    final duration = context.motionTokens.stateFor(context);
-    if (duration == Duration.zero) {
-      _scroll.jumpTo(target);
-    } else {
-      _scroll.animateTo(target, duration: duration, curve: Curves.easeOutCubic);
-    }
-  }
-
   @override
   void dispose() {
     _scroll.dispose();
@@ -511,7 +187,6 @@ class _HeaderIconsViewportState extends State<_HeaderIconsViewport> {
     builder: (context, constraints) {
       _availableWidth = constraints.maxWidth;
       _queueMetrics();
-      final showControl = _overflow && constraints.maxWidth >= 88;
       final icons = NotificationListener<ScrollMetricsNotification>(
         onNotification: (_) {
           _queueMetrics();
@@ -535,44 +210,22 @@ class _HeaderIconsViewportState extends State<_HeaderIconsViewport> {
                 icons,
                 // At exceptionally narrow widths, preserve the icon hit target;
                 // an inert edge hint accompanies the existing swipe interaction.
-                if (_overflow && !showControl)
-                  const IgnorePointer(
+                if (_overflow)
+                  IgnorePointer(
                     child: ExcludeSemantics(
-                      child: Icon(AppIcons.chevronRight, size: 12),
+                      child: Icon(
+                        _atEnd ? AppIcons.chevronLeft : AppIcons.chevronRight,
+                        size: 12,
+                      ),
                     ),
                   ),
               ],
             ),
           ),
-          if (showControl)
-            SizedBox.square(
-              key: widget.controlKey,
-              dimension: 44,
-              child: IconButton(
-                key: const ValueKey('header-island-overflow'),
-                focusNode: widget.controlFocus,
-                tooltip: _atEnd ? 'First actions' : 'More actions',
-                padding: EdgeInsets.zero,
-                onPressed: _showMore,
-                icon: Icon(
-                  _atEnd ? AppIcons.chevronLeft : AppIcons.chevronRight,
-                  size: 16,
-                ),
-              ),
-            ),
         ],
       );
     },
   );
-}
-
-class _HeaderActionActivation extends InheritedWidget {
-  const _HeaderActionActivation({required this.dismiss, required super.child});
-
-  final VoidCallback dismiss;
-
-  @override
-  bool updateShouldNotify(_HeaderActionActivation oldWidget) => false;
 }
 
 class _CoachNoticeButton extends StatelessWidget {

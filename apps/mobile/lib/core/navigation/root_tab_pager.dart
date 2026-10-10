@@ -34,6 +34,8 @@ class RootTabPager extends StatefulWidget {
     required this.count,
     required this.pageBuilder,
     required this.onSettled,
+    this.enabled = true,
+    this.onMovementChanged,
     super.key,
   });
 
@@ -41,6 +43,8 @@ class RootTabPager extends StatefulWidget {
   final int count;
   final IndexedWidgetBuilder pageBuilder;
   final ValueChanged<int> onSettled;
+  final bool enabled;
+  final ValueChanged<bool>? onMovementChanged;
 
   @override
   State<RootTabPager> createState() => _RootTabPagerState();
@@ -117,11 +121,23 @@ class _RootTabPagerState extends State<RootTabPager> {
 
   @override
   Widget build(BuildContext context) {
-    final focusContext = FocusManager.instance.primaryFocus?.context;
+    final candidate = FocusManager.instance.primaryFocus?.context;
+    final focusContext = candidate?.mounted == true ? candidate : null;
+    var focusedEditor = focusContext?.widget is EditableText;
+    try {
+      focusedEditor =
+          focusedEditor ||
+          focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+    } on FlutterError catch (error) {
+      // Focus repair happens after layout. A popped editor can still be mounted
+      // but deactivated for this frame: hold navigation until focus is repaired.
+      if (!error.message.contains('deactivated widget')) {
+        rethrow;
+      }
+      focusedEditor = true;
+    }
     final editing =
-        MediaQuery.viewInsetsOf(context).bottom > 0 ||
-        focusContext?.widget is EditableText ||
-        focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+        MediaQuery.viewInsetsOf(context).bottom > 0 || focusedEditor;
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -131,9 +147,15 @@ class _RootTabPagerState extends State<RootTabPager> {
         }
         if (notification is ScrollStartNotification) {
           _origin = widget.index;
-          if (!_moving) setState(() => _moving = true);
+          if (!_moving) {
+            setState(() => _moving = true);
+            widget.onMovementChanged?.call(true);
+          }
         } else if (notification is ScrollEndNotification) {
-          if (_moving) setState(() => _moving = false);
+          if (_moving) {
+            setState(() => _moving = false);
+            widget.onMovementChanged?.call(false);
+          }
           // A pushed page owns navigation while this route is covered. A late
           // swipe must not change its history or leave a different page on Back.
           if (ModalRoute.of(context)?.isCurrent == false) {
@@ -167,7 +189,7 @@ class _RootTabPagerState extends State<RootTabPager> {
             key: const ValueKey('root-tab-pager'),
             controller: _controller,
             pageSnapping: false,
-            physics: editing || reducedMotion
+            physics: !widget.enabled || editing || reducedMotion
                 ? const NeverScrollableScrollPhysics()
                 : _RootSnapPhysics(
                     origin: () => _origin,

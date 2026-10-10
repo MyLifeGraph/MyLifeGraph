@@ -205,7 +205,7 @@ void main() {
 
       const disclosures = <String, String>{
         'Check-in streak':
-            'Both check-ins count as one day. Complete them anytime today; your streak stays until the day ends.',
+            'Both check-ins count as one day. Catch up within 48 hours after the day ends to keep your streak.',
         'Today\'s progress':
             'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
         'Today\'s schedule': 'Today\'s scheduled time blocks, in order.',
