@@ -6,6 +6,7 @@ import 'package:my_life_graph/core/constants/app_radii.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -18,6 +19,7 @@ import '../../domain/entities/personal_patterns.dart';
 import '../../domain/entities/sleep_recommendation.dart';
 import '../../domain/services/correlation_analyzer.dart';
 import '../../domain/services/coaching_observation.dart';
+import '../../domain/services/overview_observations.dart';
 import '../../../optimization/domain/entities/skillset_profile.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
@@ -69,8 +71,10 @@ class InsightsPage extends ConsumerWidget {
         compactHeader: true,
         actions: [
           AppHeaderActions(
-            pageActions: [if (MediaQuery.sizeOf(context).width >= 600)
-              _InsightsRefreshButton(onRefresh: retry)],
+            pageActions: [
+              if (MediaQuery.sizeOf(context).width >= 600)
+                _InsightsRefreshButton(onRefresh: retry),
+            ],
           ),
         ],
         children: [_InsightsLoadError(onRetry: retry)],
@@ -83,8 +87,10 @@ class InsightsPage extends ConsumerWidget {
         compactHeader: true,
         actions: [
           AppHeaderActions(
-            pageActions: [if (MediaQuery.sizeOf(context).width >= 600)
-              _InsightsRefreshButton(onRefresh: retry)],
+            pageActions: [
+              if (MediaQuery.sizeOf(context).width >= 600)
+                _InsightsRefreshButton(onRefresh: retry),
+            ],
           ),
         ],
         children: const [Center(child: CircularProgressIndicator())],
@@ -159,8 +165,9 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
   final Set<String> _trendMetricIds = {'sleep_hours', 'useful_progress'};
   Future<void>? _refreshing;
 
-  Future<void> _refresh() => _refreshing ??= _refreshInsights(ref)
-      .whenComplete(() => _refreshing = null);
+  Future<void> _refresh() => _refreshing ??= _refreshInsights(
+    ref,
+  ).whenComplete(() => _refreshing = null);
 
   @override
   void didUpdateWidget(covariant _InsightsHome oldWidget) {
@@ -207,90 +214,92 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
     final metricA = widget.report.metricById(_metricAId);
     final metricB = widget.report.metricById(_metricBId);
     return SafeArea(
-      child: RefreshIndicator(onRefresh: _refresh, child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              isMobile ? AppSpacing.md : AppSpacing.lg,
-              isMobile ? AppSpacing.md : AppSpacing.lg,
-              isMobile ? AppSpacing.md : AppSpacing.lg,
-              AppSpacing.xl,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _InsightsHeader(
-                    isMobile: isMobile,
-                    onRefresh: _refresh,
-                  ),
-                  SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                  _InsightsViewToggle(
-                    selected: _view,
-                    onChanged: (view) => setState(() => _view = view),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (widget.readFailed) _InsightsLoadError(onRetry: _refresh),
-                  Visibility(
-                    visible: _view == _InsightsView.overview,
-                    maintainState: true,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (widget.showPersonalPatterns) ...[
-                          _PersonalStudyPatternCard(
-                            patterns: widget.personalPatterns,
-                            onRetry: () =>
-                                ref.invalidate(personalPatternsProvider),
-                          ),
-                          SizedBox(
-                            height: isMobile ? AppSpacing.md : AppSpacing.lg,
-                          ),
-                          _SleepRecommendationCard(
-                            value: widget.sleepRecommendation,
-                            onRetry: () =>
-                                ref.invalidate(sleepRecommendationProvider),
-                          ),
-                        ] else
-                          _CoachingObservationCard(observation: observation),
-                        SizedBox(
-                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
-                        ),
-                        if (widget.skillset != null) ...[
-                          _SkillsetProfileCard(
-                            skillset: widget.skillset!,
-                            onRetry: () =>
-                                ref.invalidate(skillsetProfileProvider),
-                          ),
-                          SizedBox(
-                            height: isMobile ? AppSpacing.md : AppSpacing.lg,
-                          ),
-                        ],
-                      ],
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                isMobile ? AppSpacing.md : AppSpacing.lg,
+                isMobile ? AppSpacing.md : AppSpacing.lg,
+                isMobile ? AppSpacing.md : AppSpacing.lg,
+                AppSpacing.xl,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _InsightsHeader(isMobile: isMobile, onRefresh: _refresh),
+                    SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
+                    _InsightsViewToggle(
+                      selected: _view,
+                      onChanged: (view) => setState(() => _view = view),
                     ),
-                  ),
-                  Visibility(
-                    visible: _view == _InsightsView.advanced,
-                    maintainState: true,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: _advancedChildren(
-                        isMobile: isMobile,
-                        windowDays: windowDays,
-                        metricA: metricA,
-                        metricB: metricB,
-                        activeResult: activeResult,
-                        values: values,
+                    const SizedBox(height: AppSpacing.md),
+                    if (widget.readFailed)
+                      _InsightsLoadError(onRetry: _refresh),
+                    Visibility(
+                      visible: _view == _InsightsView.overview,
+                      maintainState: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (widget.showPersonalPatterns) ...[
+                            _PersonalStudyPatternCard(
+                              patterns: widget.personalPatterns,
+                              onRetry: () =>
+                                  ref.invalidate(personalPatternsProvider),
+                            ),
+                            SizedBox(
+                              height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                            ),
+                            _SleepRecommendationCard(
+                              value: widget.sleepRecommendation,
+                              patterns: widget.personalPatterns,
+                              onRetry: () =>
+                                  ref.invalidate(sleepRecommendationProvider),
+                            ),
+                          ] else
+                            _CoachingObservationCard(observation: observation),
+                          SizedBox(
+                            height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                          ),
+                          if (widget.skillset != null) ...[
+                            _SkillsetProfileCard(
+                              skillset: widget.skillset!,
+                              onRetry: () =>
+                                  ref.invalidate(skillsetProfileProvider),
+                            ),
+                            SizedBox(
+                              height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    Visibility(
+                      visible: _view == _InsightsView.advanced,
+                      maintainState: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: _advancedChildren(
+                          isMobile: isMobile,
+                          windowDays: windowDays,
+                          metricA: metricA,
+                          metricB: metricB,
+                          activeResult: activeResult,
+                          values: values,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      )),
+          ],
+        ),
+      ),
     );
   }
 

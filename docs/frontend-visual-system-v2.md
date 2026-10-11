@@ -1,5 +1,13 @@
 # Frontend Visual System V2
 
+Overview guidance keeps the two existing glass panels and four theme palettes.
+A small trailing information mark uses semantic danger red for labelled general
+guidance; an amber warning triangle identifies descriptive early observations.
+Existing mature supported patterns/ready sleep use a success check, never color
+alone. Short labels and at most two measured lines remain visible, with sources,
+coverage and limitations in the existing Details disclosure. Narrow/large-text
+headers wrap while the trailing mark stays reachable; no new large warning card.
+
 Coach restores the existing 44px trailing overflow control with a 16px chevron
 and theme-owned reduced-motion-aware scroll animation. It stays always open;
 other headers retain their current geometry and swipe behavior.

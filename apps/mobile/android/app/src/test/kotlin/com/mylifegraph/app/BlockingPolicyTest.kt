@@ -240,6 +240,55 @@ class BlockingPolicyTest {
         assertFalse(active(budget = 0, used = 9999999))
         assertTrue(active(always = true, budget = 45, access = false))
     }
+    @Test fun stillResumedActivityOfSameAppRetainsItsFourMinutes() {
+        val usage = BlockingUsageReducer(0, 360000)
+        usage.resume("instagram", "feed", 0)
+        usage.resume("instagram", "viewer", 30000)
+        usage.pause("instagram", "viewer", 60000)
+        usage.pause("instagram", "feed", 300000)
+        assertEquals(mapOf("instagram" to 300000L), usage.result())
+    }
+
+    @Test fun rapidSameAppNavigationAndPackageSwitchesCountExactElapsedTime() {
+        val usage = BlockingUsageReducer(0, 40000)
+        repeat(100) { index ->
+            val time = index * 400L
+            usage.resume("app", "feed", time)
+            repeat(5) { usage.resume("app", "feed", time + 10) }
+            usage.resume("app", "detail", time + 50)
+            usage.pause("app", "detail", time + 100)
+            usage.pause("unrelated", "feed", time + 125)
+            usage.resume("other", "one", time + 200)
+            usage.pause("app", "feed", time + 250)
+            usage.pause("other", "one", time + 300)
+        }
+        assertEquals(mapOf("app" to 20000L, "other" to 10000L), usage.result())
+    }
+
+    @Test fun overlappingSameAppClassesCountOnceAndScreenOffClearsAll() {
+        val usage = BlockingUsageReducer(100, 1000)
+        usage.resume("app", "one", 0)
+        usage.resume("app", "one", 50) // duplicate does not restart
+        usage.resume("app", "two", 200)
+        usage.pause("unrelated", "two", 300)
+        usage.screenOff(400)
+        usage.pause("app", "two", 450)
+        usage.resume("app", "three", 600)
+        usage.pause("app", "three", 800)
+        assertEquals(mapOf("app" to 500L), usage.result())
+        assertEquals(mapOf("app" to 500L), usage.result())
+    }
+
+    @Test fun newPackageDoesNotCreditPreviousAppWithItsTime() {
+        val usage = BlockingUsageReducer(0, 1000)
+        usage.resume("app", "one", 0)
+        usage.resume("app", "two", 100)
+        usage.resume("other", "one", 200)
+        usage.pause("app", "two", 300)
+        usage.pause("other", "one", 600)
+        assertEquals(mapOf("app" to 200L, "other" to 400L), usage.result())
+    }
+
     @Test fun foregroundIntervalsIgnoreStaleActivityPausesAndClampDayBoundaries() {
         val usage = BlockingUsageReducer(100, 600)
         usage.resume("app", "one", 50)

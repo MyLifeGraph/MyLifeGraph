@@ -1,5 +1,13 @@
 # UI Language And Copy Contract
 
+Insights Overview uses `General guidance`, `Early observations`, `Your check-ins`,
+`Your Focus activity` and `Your sleep observations`. Medians and observed-day counts
+are explicit, not correlations or recommended targets. General copy is brief:
+`Space study across several days.`, `Test yourself, not just reread.`,
+`Keep a regular sleep routine.` and `Wind down before bed.` Sources, missing
+history and noncausal explanation stay in Details. Existing disabled/read-error
+copy remains distinct. Terminal Focus sessions are not labelled as all starts.
+
 NFC management uses named chip rows, `Remove chip`, `Remove chip?`, `Add chip`
 and a short `Name` field before `Scan`. Defaults are `Main chip` and `Backup chip`.
 Successful scans say `Chip recognized. Remove the chip.` No permanent recovery

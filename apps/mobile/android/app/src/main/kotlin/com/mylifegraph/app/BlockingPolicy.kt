@@ -102,9 +102,10 @@ class BlockingPendingRequest<T : Any> {
     fun take(): T? = pending.also { pending = null }
 }
 
-/** Latest resumed activity owns the interval; stale pauses cannot clear a newer activity. */
+/** Latest resumed package owns the interval; overlapping classes within it count once. */
 class BlockingUsageReducer(private val start: Long, private val end: Long) {
     private var foreground: Pair<String, String>? = null
+    private val resumedActivities = linkedSetOf<String>()
     private var since = start
     private val totals = mutableMapOf<String, Long>()
     private fun finish(at: Long) {
@@ -113,13 +114,25 @@ class BlockingUsageReducer(private val start: Long, private val end: Long) {
         totals[pkg] = (totals[pkg] ?: 0) + amount
     }
     fun resume(pkg: String, activity: String, at: Long) {
-        if (foreground != (pkg to activity)) { finish(at); foreground = pkg to activity; since = at }
+        if (foreground?.first != pkg) {
+            finish(at); resumedActivities.clear(); since = at
+        }
+        resumedActivities.add(activity)
+        foreground = pkg to activity
     }
     fun pause(pkg: String, activity: String, at: Long) {
-        if (foreground == pkg to activity) { finish(at); foreground = null }
+        if (foreground?.first != pkg || !resumedActivities.remove(activity)) return
+        if (resumedActivities.isEmpty()) {
+            finish(at); foreground = null
+        } else if (foreground?.second == activity) {
+            foreground = pkg to resumedActivities.last()
+        }
     }
-    fun screenOff(at: Long) { finish(at); foreground = null }
-    fun result(): Map<String, Long> { finish(end); foreground = null; return totals.filterValues { it > 0 }.toMap() }
+    fun screenOff(at: Long) { finish(at); foreground = null; resumedActivities.clear() }
+    fun result(): Map<String, Long> {
+        finish(end); foreground = null; resumedActivities.clear()
+        return totals.filterValues { it > 0 }.toMap()
+    }
 }
 
 /** Persist boot identity with monotonic timestamps. A reboot never completes a wait. */

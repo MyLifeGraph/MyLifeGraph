@@ -21,6 +21,9 @@ Enable and **Sync now** deliberately collect seven profile-timezone days of
 foreground app minutes, up to ten top app names, and today's blocking-attempt
 count when its native day boundary matches. Unavailable counts remain null.
 These are app-use aggregates, not guaranteed screen-on time or medical evidence.
+The shared native usage reducer preserves overlapping resumed classes within one
+package without double counting them; see the [Blocking usage boundary](android-focus-protection-v1-contract.md#usage-budgets-and-charts).
+No new collection, consent, automatic upload or correlation input is introduced.
 No messages, notification contents, URLs or browsing history are collected.
 The sheet shows the saved sample and timestamp; no invisible background upload
 or automatic refresh on every Coach message is promised.

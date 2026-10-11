@@ -1036,7 +1036,7 @@ void main() {
     expect(
       service,
       contains(
-        'if (!plans.websiteObservationEnabled()) { currentHost = null; return }',
+        'if (!plans.websiteObservationEnabled()) { currentHost = null; budgetHost = null; return }',
       ),
     );
   });

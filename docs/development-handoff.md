@@ -7,6 +7,11 @@ results belong in [Verification](verification.md#current-verified-baseline).
 
 ## Current delivery boundary
 
+Private-source/public-distribution discussion is recorded in
+[the deferred repository plan](private-source-public-distribution-plan.md).
+Consult it when repository privacy, Vercel costs or release separation comes up
+again. It is not an implemented migration or permission to change hosting.
+
 The published RC26 refinement names Android Strict `Discipline`,
 adds dedicated Unlock settings with optional default-off Stay on screen,
 deliberate Stay focused cancellation, guarded native background completion and

@@ -31,6 +31,67 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Blocking reliability and Insights Overview candidate — 2026-10-12
+
+Task base `22e50f8f7f92041195621e50c1e5f65c22059c93`;
+branch `codex/blocking-insights-rc28`, not yet published. Native Java-21
+unit tests passed **104 tests**, zero failures/errors, and Android Lint passed.
+Regression coverage includes same-package activity overlap, System UI/own
+notification events, 500 repeated visits and stale dismissal callbacks across
+later visits and process instances. Native runs exclude Flutter build tasks.
+
+The focused Flutter observation/domain, Insights widget and sleep-contract
+suite passed **110 tests**. It includes all four themes at 320px/200% text,
+expanded disclosures, consent-disabled/error states, empty stable reports,
+invalid values, duplicate dates and per-metric seven-day thresholds. Three
+Liquid Glass catalog renders passed; these are widget-rendered fixtures, not
+installed-device screenshots. Existing correlations and backend contracts are
+unchanged. A further **108** Flutter Blocking, Discipline, lifecycle and
+correlation regression tests passed. Flutter analyze reports no issues.
+Docs **19** and Visual **1** tests passed; base-bound affected dry-run selects
+Full verification, to be executed on the candidate in Linux CI.
+
+No connected Android device is available; the owner explicitly deferred the
+physical test. Instagram/OEM timing, notification-shade gestures, NFC and
+background survival remain unverified on hardware. Public production health
+and readiness respond, but the synthetic-account live Coach test is blocked
+by human verification (`captcha_failed`); readiness is not inference proof.
+This local evidence is not a release, remote CI pass or production deployment.
+
+### Local blocking usage and allowance notifications — 2026-10-12
+
+Task base `22e50f8f7f92041195621e50c1e5f65c22059c93`; uncommitted local
+candidate only. Two focused regression tests failed before the correction
+(43 tests, two failures): a newer same-package activity pausing lost four minutes
+while another class remained resumed, and own notification window events replaced
+the remembered budget app. The production reducer now retains the union of
+resumed classes within the latest package without double counting; the service's
+budget foreground policy ignores own/System UI windows and retains actual
+Activity-resume authority. Explicit notification deletion suppresses redisplay
+within the process-local app/plan visit without changing any rule. Tests cover
+repeated ticks, delayed callbacks for another app, duplicate/unrelated events,
+screen-off, package switches, interval clipping and idempotent results.
+
+Final native Java-21 `:app:testDebugUnitTest` passed **98 tests**, zero failures
+or errors. These runs exclude `:app:compileFlutterBuildDebug`; the Kotlin/native
+sources compile, but this is not a new Flutter/APK build. Android Lint initially
+failed on two pre-existing ignored `local.properties` path-escaping errors.
+Those workstation-only paths were escaped (no tracked SDK configuration change).
+A fresh `:app:lintDebug --rerun-tasks` then passed. Docs **19**, Visual **1** and
+Android release/configuration **7** tests passed; `git diff --check` passed.
+Base-bound affected **dry-run** selects Full, including protected unrelated
+retention edits and untracked media. It is classification, not a Full-gate pass;
+the full Flutter/backend/database/browser suites were not run for this local
+native fix. Existing unrelated changes and media remain untouched.
+
+ADB device inventory is empty. No physical Instagram comparison, notification
+shade gesture, OEM background survival, installed APK or cloud/production rollout
+is claimed. A reproduced reducer error can explain missing minutes but does not
+prove it caused the owner's exact observation or guarantee agreement with another
+app's different measurement rules. No schema, cloud collection/consent, Focus
+session, Discipline guard or public channel version changes are introduced.
+Repository separation is documented as a deferred recommendation, not performed.
+
 ### Deterministic Check-in test fixtures — 2026-10-11
 
 Task base `ae4c1fb334dbb876954d6477d0340149b5c59eb5`. The two affected

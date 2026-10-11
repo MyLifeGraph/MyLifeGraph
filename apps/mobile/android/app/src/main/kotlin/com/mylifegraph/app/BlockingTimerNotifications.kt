@@ -29,6 +29,20 @@ object BlockingBudgetTimerPolicy {
     }
 }
 
+/** A user dismissal belongs only to the current foreground app/plan visit. */
+class BlockingBudgetNotificationSession {
+    private val instance = java.util.UUID.randomUUID().toString()
+    private var current: String? = null
+    private var dismissed: String? = null
+    private var visit = 0L
+    fun dismissalToken(): String? = current?.let { "$instance:$visit:$it" }
+    fun select(key: String?): Boolean {
+        if (current != key) { current = key; dismissed = null; visit++ }
+        return key != null && dismissed != key
+    }
+    fun dismiss(token: String) { if (dismissalToken() == token) dismissed = current }
+}
+
 /** Android renders the ticking clock; only lifecycle changes issue a notification. */
 object BlockingTimerNotifications {
     private const val CHANNEL = "mylifegraph-blocking-timers-v1"
@@ -43,6 +57,10 @@ object BlockingTimerNotifications {
     private var channelCreated = false
     private const val BUDGET_TAG = "mylifegraph-budget-foreground"
     private var budgetPublished: Timer? = null
+    private val budgetSession = BlockingBudgetNotificationSession()
+    const val DISMISS_BUDGET = "com.mylifegraph.app.DISMISS_BUDGET_TIMER"
+
+    fun dismissBudget(key: String) { budgetSession.dismiss(key) }
 
     /** This is presentation only; persisted usage/rules remain the authority. */
     fun syncForeground(context: Context, plans: BlockingPlans, app: String?, host: String?, unobscured: Boolean) {
@@ -71,21 +89,31 @@ object BlockingTimerNotifications {
                 }
             }
             if (selected == null) {
+                budgetSession.select(null)
                 manager.cancel(BUDGET_TAG, 1); budgetPublished = null
                 return@runCatching
             }
             val timer = selected
+            val key = "${timer.id}:$app"
+            if (!budgetSession.select(key)) return@runCatching
+            val dismissToken = budgetSession.dismissalToken()!!
             val old = budgetPublished
             if (old?.id == "${timer.id}:$app" && old.name == timer.name && kotlin.math.abs(old.end - timer.end) < 5500 &&
                 manager.activeNotifications.any { it.tag == BUDGET_TAG }) return@runCatching
             val label = runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(app!!, 0)).toString() }.getOrDefault(app ?: "App")
             val pending = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val dismiss = PendingIntent.getBroadcast(context, 9106,
+                Intent(context, BlockingTimerReceiver::class.java).setAction(DISMISS_BUDGET)
+                    // Bind dismissal to this visit, including later visits to the same app.
+                    .setData(android.net.Uri.Builder().scheme("mylifegraph-budget").authority("dismiss").appendPath(dismissToken).build())
+                    .putExtra("budgetKey", dismissToken), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context)
             builder.setSmallIcon(R.drawable.app_notification_mark).setContentTitle(label)
                 .setContentText("Plan · ${timer.name}").setSubText("Remaining")
                 .setWhen(timer.end).setUsesChronometer(true).setChronometerCountDown(true)
-                .setContentIntent(pending).setOngoing(true).setOnlyAlertOnce(true).setSound(null)
+                .setContentIntent(pending).setDeleteIntent(dismiss).setOngoing(false)
+                .setAutoCancel(false).setOnlyAlertOnce(true).setSound(null)
                 .setCategory(Notification.CATEGORY_PROGRESS).setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setPublicVersion((if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context))
                     .setSmallIcon(R.drawable.app_notification_mark).setContentTitle("MyLifeGraph").setContentText("Daily limit active").build())
@@ -192,10 +220,15 @@ object BlockingTimerNotifications {
         }
         published = emptyList()
         budgetPublished = null
+        budgetSession.select(null)
         lastInputs = ""
     }
 }
 
 class BlockingTimerReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent?) { BlockingTimerNotifications.sync(context) }
+    override fun onReceive(context: Context, intent: Intent?) {
+        if (intent?.action == BlockingTimerNotifications.DISMISS_BUDGET) {
+            intent.getStringExtra("budgetKey")?.let(BlockingTimerNotifications::dismissBudget)
+        } else BlockingTimerNotifications.sync(context)
+    }
 }
