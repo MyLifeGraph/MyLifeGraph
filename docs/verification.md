@@ -31,7 +31,59 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
-### Local swipe/Discipline follow-up — 2026-10-11 (not published)
+### Pilot RC27 publication and production — 2026-10-11
+
+- [PR 43](https://github.com/MyLifeGraph/MyLifeGraph/pull/43) merged candidate
+  `7a57557672e19a28555e1f5baf52f297bf14f244` into protected Main
+  `e7b5f9c55182fb28de98538efc92d45ec7f78119`. Candidate and merge trees match.
+  No Main force-push, administrator merge bypass or check removal was used.
+- [Required PR CI 38095310303](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38095310303)
+  and [complete manual Linux CI 38095309378](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38095309378)
+  succeeded. Complete Flutter/Android JVM/lint, source/docs/visual, web build,
+  fresh isolated migration/pgTAP checks passed; backend **2011 passed, 2 skipped**;
+  browser E2E **8 passed**. Local narrowed regression: **122 passed**, analysis
+  clean. The base-bound Windows affected run failed (`setsid`, missing Python,
+  date-sensitive Check-in assertions and platform Golden differences); it is
+  not recorded as green and no production behavior was changed to silence it.
+- [Signed APK build 38096111939](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38096111939)
+  succeeded. [Published RC27](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.27)
+  is a non-draft pilot prerelease with four uploaded assets. APK versionCode
+  `10000115`, size **153175284 bytes**, SHA256
+  `f293dae5b53777c2c4f5ec4c0bc6205176ccf82982ec934d8679c9054fabdd69`.
+  Strict local bundle validation and independent `apksigner verify` passed;
+  signer certificate `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+- VPS installed helpers prepared/sealed and promoted the exact RC27 source
+  archive (SHA256 `7ce61551b122eef912ea46ec7866f0ad3968b0d3ced19e9c4d14c72c1cb8fbe2`).
+  Local and public exact-tag/SHA health checks passed; public API and Coach
+  capability checks report ready. Free space after promotion **16196030464 bytes**
+  preserves the 15-GiB reserve. Active/rollback releases were not deleted.
+  No new SQL migration: readiness attests the required unchanged 83-migration
+  prefix, head `20261006135421_coach_operator_sol61_standard.sql`, identity
+  `4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+- Existing Vercel app production deployment `dpl_GEQhqzXJFnuuzdeZ1Hk8CuyfuzzE`
+  is READY for the same Main SHA and aliases `my-life-graph-mu.vercel.app`.
+  Public index/JS returned HTTP 200; JS contains the exact SHA. A separate
+  blocked deployment belongs to another team association, not this production
+  app. No new website or hosting/automatic-deployment configuration was created.
+- Laptop finalization verified published assets and freshly downloaded bytes,
+  then applied its exact dry-run: **153468215 bytes removed**, keeping registered
+  oldest RC6 and newest RC27. Originals, signing, backups and unrelated edits
+  remain protected. VM finalization also completed its fresh download proof,
+  exact dry-run and apply: **153468215 bytes removed**, registered oldest RC21
+  and newest RC27 retained. It used the reviewed standalone retention tool
+  SHA256 `5416d29515ba94c15ef418e13a51342c9a1fbb6b330c2f56976020b5facf791c`
+  and identity helper `ce8ed23a56b727a6ca4063052ec06dc72ce88b523998e0759484de82926ff3d4`.
+  Neither the older VM checkout nor its retired development stack was changed.
+  Host logs are under `.tools/nfc-cancel-local`; no broader cleanup was performed.
+- Release scope: NFC Cancel/underlying countdown regression, persistent shared
+  swipe backdrop, native current-host Discipline admission and restored Coach
+  overflow chevron. Declined Exam/Today proposals were not implemented. Unrelated
+  retention source/doc edits remain outside these commits.
+- No physical handset/NFC/OEM acceptance is claimed. Animated Flutter admission
+  and a JVM stale-host callback case are verified; the user's exact handset
+  `Open Discipline to unlock` symptom still needs installed-device confirmation.
+
+### Local swipe/Discipline follow-up — 2026-10-11 (pre-publication evidence)
 
 Base `281ab3bdf4931c4b32fef3fe54c5df5637e7e2d0`. The backdrop assertion
 failed before removing the moving-only solid pager cover and passed afterward.
