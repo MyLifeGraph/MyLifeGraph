@@ -33,6 +33,17 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ### Pilot RC27 publication and production — 2026-10-11
 
+- Documentation-only follow-up [PR 44](https://github.com/MyLifeGraph/MyLifeGraph/pull/44)
+  remains unmerged: CI `38097312116`, started after UTC midnight, failed seven
+  date-sensitive guest/Evening Check-in assertions in `widget_test.dart` and
+  `quick_mood_check_in_page_test.dart`. The prior-day Evening-link behavior
+  before noon conflicts with their real-clock assumptions (for example, the
+  merge test saved two entry dates rather than its expected one). Docs/visual,
+  backend and Flutter analysis passed; Android JVM/lint did not run after the
+  Flutter failure. No check bypass or product behavior change was made to
+  silence these assertions. This later failure does not replace the earlier successful
+  exact-source release gates below, nor does that earlier success make this
+  follow-up run green.
 - [PR 43](https://github.com/MyLifeGraph/MyLifeGraph/pull/43) merged candidate
   `7a57557672e19a28555e1f5baf52f297bf14f244` into protected Main
   `e7b5f9c55182fb28de98538efc92d45ec7f78119`. Candidate and merge trees match.
