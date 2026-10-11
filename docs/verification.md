@@ -40,8 +40,14 @@ local evening instant; the guest Morning/Evening merge journey also fixes its
 clock. The Recording store returns an entry only for its actual date, not every
 queried date. No runtime code, product semantics or assertions were removed.
 Explicit tests cover midnight, 02:00, 11:59:59, 12:00, 23:59:59, and a saved
-yesterday before noon. Both focused reruns passed **33 tests** each. Full
-Linux checks and protected Main merge are recorded separately once complete.
+yesterday before noon. Both focused reruns passed **33 tests** each; Flutter
+analysis found no issues, Docs **19 tests** and Visual **1 test** passed.
+Base-bound local affected selection chose Full (including protected unrelated
+files) and hit the existing Windows `setsid` limitation; it is not a pass.
+See [PR 44](https://github.com/MyLifeGraph/MyLifeGraph/pull/44)'s final required
+checks and merge record for Linux verification and protected Main promotion;
+focused local tests alone do not establish either. Feature/mobile contracts
+remain accurate because no runtime behavior or supported guarantee changed.
 
 ### Pilot RC27 publication and production — 2026-10-11
 
