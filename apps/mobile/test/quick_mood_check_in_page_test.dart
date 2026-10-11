@@ -28,15 +28,33 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'support/ui_catalog_capture.dart';
 
 void main() {
-  for (final hour in [2, 11, 12]) {
-    testWidgets('missing Evening uses yesterday only before noon ($hour)', (tester) async {
+  for (final instant in [
+    DateTime(2026, 10, 10),
+    DateTime(2026, 10, 10, 2),
+    DateTime(2026, 10, 10, 11, 59, 59),
+    DateTime(2026, 10, 10, 12),
+    DateTime(2026, 10, 10, 23, 59, 59),
+  ]) {
+    testWidgets('missing Evening uses yesterday only before noon ($instant)', (tester) async {
       final store = _RecordingCaptureStore();
-      await _pumpEveningPage(tester, store, currentInstant: DateTime(2026, 10, 10, hour));
+      await _pumpEveningPage(tester, store, currentInstant: instant);
       final picker = tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker));
-      expect(picker.date, DateTime(2026, 10, hour < 12 ? 9 : 10));
-      expect(find.text('Yesterday'), hour < 12 ? findsOneWidget : findsNothing);
+      expect(picker.date, DateTime(2026, 10, instant.hour < 12 ? 9 : 10));
+      expect(find.text('Yesterday'), instant.hour < 12 ? findsOneWidget : findsNothing);
     });
   }
+  testWidgets('saved yesterday Evening keeps today selected before noon', (tester) async {
+    final store = _RecordingCaptureStore(
+      initial: DailyCaptureEntry(
+        entryDate: '2026-10-09',
+        evening: _eveningDraft().copyWith(entryDate: '2026-10-09'),
+      ),
+    );
+    await _pumpEveningPage(tester, store, currentInstant: DateTime(2026, 10, 10, 2));
+    final picker = tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker));
+    expect(picker.date, DateTime(2026, 10, 10));
+    expect(find.text('Yesterday'), findsNothing);
+  });
   if (captureUiCatalog) {
     testWidgets('compact evening note catalog', (tester) async {
       await loadCatalogFonts();
@@ -625,6 +643,10 @@ void main() {
 
 final _reflectionNow = DateTime(2026, 8, 5, 18);
 
+// Ordinary form tests describe today's Evening, not the before-noon entry
+// shortcut. Keep both the profile date and capture timestamps on this clock.
+final _eveningNow = DateTime(2026, 8, 5, 18);
+
 Future<void> _openReflectionSheet(WidgetTester tester) async {
   await _completeEveningDraft(tester, includeOptionals: false);
   await _tapVisible(
@@ -648,6 +670,7 @@ Future<void> _pumpEveningPage(
   bool skillsetEnabled = false,
   ThemeData? theme,
 }) async {
+  final instant = currentInstant ?? _eveningNow;
   final router = GoRouter(
     initialLocation: '/quick-mood-check-in',
     routes: [
@@ -681,13 +704,10 @@ Future<void> _pumpEveningPage(
         profileLocalDateSourceProvider.overrideWithValue(
           SessionProfileLocalDateSource(
             session: null,
-            currentInstant: currentInstant == null
-                ? DateTime.now
-                : () => currentInstant,
+            currentInstant: () => instant,
           ),
         ),
-        if (currentInstant != null)
-          currentInstantProvider.overrideWithValue(() => currentInstant),
+        currentInstantProvider.overrideWithValue(() => instant),
         quickCheckInStoreProvider.overrideWithValue(store),
         if (focusSource != null)
           eveningFocusReflectionSourceProvider.overrideWithValue(focusSource),
@@ -764,7 +784,7 @@ EveningShutdownDraft _eveningDraft({
   String reflectionNote = 'Saved reflection',
   String specificBlocker = 'Saved blocker',
 }) {
-  final now = DateTime.now();
+  final now = _eveningNow;
   return EveningShutdownDraft(
     captureId: 'saved-evening',
     entryDate: dailyCaptureEntryDate(now),
@@ -799,7 +819,8 @@ class _RecordingCaptureStore implements QuickCheckInStore {
   QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.guest;
 
   @override
-  Future<DailyCaptureEntry?> loadToday(DateTime today) async => initial;
+  Future<DailyCaptureEntry?> loadToday(DateTime today) async =>
+      initial?.entryDate == dailyCaptureEntryDate(today) ? initial : null;
 
   @override
   Future<EveningShutdownDraft?> loadLatestEvening() async =>

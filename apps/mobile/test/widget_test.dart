@@ -7,6 +7,7 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/app.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/features/auth/domain/intake_response.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
@@ -589,6 +590,9 @@ Future<void> _pumpTestApp(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        // Evening and Morning are intentionally saved for the same day here.
+        // The before-noon prior-day shortcut has its own boundary tests.
+        currentInstantProvider.overrideWithValue(() => DateTime(2026, 8, 5, 18)),
         appConfigProvider.overrideWithValue(
           const AppConfig(
             environment: 'test',

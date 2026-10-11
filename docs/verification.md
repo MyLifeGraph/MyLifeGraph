@@ -31,10 +31,22 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Deterministic Check-in test fixtures — 2026-10-11
+
+Task base `ae4c1fb334dbb876954d6477d0340149b5c59eb5`. The two affected
+widget suites reproduced seven failures locally before correction. Ordinary
+Evening fixtures and both existing clock providers now use the same fixed
+local evening instant; the guest Morning/Evening merge journey also fixes its
+clock. The Recording store returns an entry only for its actual date, not every
+queried date. No runtime code, product semantics or assertions were removed.
+Explicit tests cover midnight, 02:00, 11:59:59, 12:00, 23:59:59, and a saved
+yesterday before noon. Both focused reruns passed **33 tests** each. Full
+Linux checks and protected Main merge are recorded separately once complete.
+
 ### Pilot RC27 publication and production — 2026-10-11
 
 - Documentation-only follow-up [PR 44](https://github.com/MyLifeGraph/MyLifeGraph/pull/44)
-  remains unmerged: CI `38097312116`, started after UTC midnight, failed seven
+  was initially held: CI `38097312116`, started after UTC midnight, failed seven
   date-sensitive guest/Evening Check-in assertions in `widget_test.dart` and
   `quick_mood_check_in_page_test.dart`. The prior-day Evening-link behavior
   before noon conflicts with their real-clock assumptions (for example, the
