@@ -11,6 +11,7 @@ import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/widgets/app_surface.dart';
+import 'package:my_life_graph/core/widgets/app_backdrop.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
 import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
 import 'package:my_life_graph/features/insights/domain/entities/personal_patterns.dart';
@@ -20,26 +21,391 @@ import 'package:my_life_graph/features/insights/presentation/widgets/insights_sk
 import 'package:my_life_graph/features/insights/presentation/providers/insights_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
+import 'support/ui_catalog_capture.dart';
 
 const _fingerprint =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  for (final failingRead in ['insights', 'correlations']) {
-    for (final sparse in [true, false]) {
-      for (final largeText in [false, true]) {
-    testWidgets(
-      'failed Insights pull keeps prior content and exposes retry: $failingRead sparse=$sparse largeText=$largeText',
-      (tester) async {
-        tester.view.physicalSize = Size(largeText ? 320 : 390, 844);
+  for (final theme in {
+    'glass': AppTheme.liquidGlass,
+    'dark': AppTheme.dark,
+    'light': AppTheme.light,
+    'space': AppTheme.space,
+  }.entries) {
+    for (final mode in ['general', 'checkins', 'focus']) {
+      testWidgets(
+        'overview observations ${theme.key} $mode remain usable at 320px/200%',
+        (tester) async {
+          tester.view.physicalSize = const Size(320, 900);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                _realSurfaceOverride(),
+                _skillsetSelectionOverride(),
+                insightsProvider.overrideWith((_) async => const []),
+                correlationReportProvider.overrideWith(
+                  (_) async => const CorrelationReport(
+                    windowDays: 14,
+                    metrics: [],
+                    points: [],
+                    results: [],
+                  ),
+                ),
+                personalPatternsProvider.overrideWith(
+                  (_) async => _earlyPatterns(mode),
+                ),
+                sleepRecommendationProvider.overrideWith(
+                  (_) async => _sleepRecommendation(
+                    SleepRecommendationStatus.collecting,
+                  ),
+                ),
+              ],
+              child: MaterialApp(
+                theme: theme.value,
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: const TextScaler.linear(2)),
+                  child: child!,
+                ),
+                home: const Scaffold(body: InsightsPage()),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.text(
+              mode == 'general'
+                  ? 'Study guidance'
+                  : mode == 'focus'
+                  ? 'Your Focus activity'
+                  : 'Your check-ins',
+            ),
+            findsOneWidget,
+          );
+          if (mode == 'checkins') {
+            expect(find.text('Energy · 7/10 median'), findsOneWidget);
+          }
+          if (mode == 'focus') {
+            expect(
+              find.text('14 terminal Focus sessions · 7 days'),
+              findsOneWidget,
+            );
+          }
+          await tester.scrollUntilVisible(
+            find.byKey(const Key('sleep-recommendation-collecting')),
+            200,
+            scrollable: find.byType(Scrollable).first,
+          );
+          expect(
+            find.text(
+              mode == 'checkins' ? 'Your sleep observations' : 'Sleep guidance',
+            ),
+            findsOneWidget,
+          );
+          if (mode == 'checkins') {
+            expect(find.text('Sleep duration · 7h 30m median'), findsOneWidget);
+          }
+          expect(find.text('Best-supported sleep window'), findsNothing);
+          final details = find.descendant(
+            of: find.byKey(const Key('sleep-recommendation-collecting')),
+            matching: find.byType(ExpansionTile),
+          );
+          final detailsTitle = find.descendant(
+            of: details,
+            matching: find.text('Details'),
+          );
+          await tester.scrollUntilVisible(
+            detailsTitle,
+            150,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.ensureVisible(detailsTitle);
+          await tester.pumpAndSettle();
+          await tester.tap(detailsTitle);
+          await tester.pumpAndSettle();
+          expect(
+            find.text(
+              mode == 'checkins'
+                  ? 'Descriptive observations only; not a stable pattern or a causal conclusion.'
+                  : 'General sleep habits, not a personal sleep recommendation.',
+            ),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+  if (captureUiCatalog) {
+    for (final mode in ['general', 'checkins', 'focus']) {
+      testWidgets('catalog overview observations $mode', (tester) async {
+        tester.view.physicalSize = const Size(390, 900);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
-        var insightReads = 0;
-        var reportReads = 0;
+        await loadCatalogFonts();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              _realSurfaceOverride(),
+              _skillsetSelectionOverride(),
+              insightsProvider.overrideWith((_) async => const []),
+              correlationReportProvider.overrideWith(
+                (_) async => const CorrelationReport(
+                  windowDays: 14,
+                  metrics: [],
+                  points: [],
+                  results: [],
+                ),
+              ),
+              personalPatternsProvider.overrideWith(
+                (_) async => _earlyPatterns(mode),
+              ),
+              sleepRecommendationProvider.overrideWith(
+                (_) async =>
+                    _sleepRecommendation(SleepRecommendationStatus.collecting),
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.liquidGlass,
+              debugShowCheckedModeBanner: false,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(disableAnimations: true),
+                child: AppBackdrop(child: child!),
+              ),
+              home: const Scaffold(body: InsightsPage()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await captureCatalog(tester, 'overview-$mode');
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+  for (final scenario in ['stable-empty', 'pattern-error', 'sleep-disabled']) {
+    testWidgets('Overview evidence remains independent: $scenario', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            _realSurfaceOverride(),
+            _skillsetSelectionOverride(),
+            insightsProvider.overrideWith((_) async => const []),
+            correlationReportProvider.overrideWith(
+              (_) async => const CorrelationReport(
+                windowDays: 14,
+                metrics: [],
+                points: [],
+                results: [],
+              ),
+            ),
+            personalPatternsProvider.overrideWith((_) async {
+              if (scenario == 'pattern-error') {
+                throw StateError('controlled failure');
+              }
+              return _earlyPatterns(
+                'checkins',
+                status: scenario == 'stable-empty'
+                    ? PersonalPatternsStatus.stable
+                    : PersonalPatternsStatus.collecting,
+              );
+            }),
+            sleepRecommendationProvider.overrideWith(
+              (_) async => _sleepRecommendation(
+                scenario == 'sleep-disabled'
+                    ? SleepRecommendationStatus.disabled
+                    : SleepRecommendationStatus.collecting,
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.liquidGlass,
+            home: const Scaffold(body: InsightsPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (scenario == 'stable-empty') {
+        expect(find.text('Your check-ins'), findsOneWidget);
+        expect(find.text('Stable'), findsNothing);
+        expect(
+          find.text('Early observations · 7 observed days'),
+          findsNWidgets(2),
+        );
+      } else if (scenario == 'pattern-error') {
+        expect(
+          find.byKey(const Key('personal-study-pattern-error')),
+          findsOneWidget,
+        );
+        expect(find.text('Your sleep observations'), findsNothing);
+        expect(find.text('No stable window yet'), findsOneWidget);
+      } else {
+        expect(
+          find.byKey(const Key('sleep-recommendation-disabled')),
+          findsOneWidget,
+        );
+        expect(find.text('Your sleep observations'), findsNothing);
+        expect(find.text('Disabled'), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+  for (final failingRead in ['insights', 'correlations']) {
+    for (final sparse in [true, false]) {
+      for (final largeText in [false, true]) {
+        testWidgets(
+          'failed Insights pull keeps prior content and exposes retry: $failingRead sparse=$sparse largeText=$largeText',
+          (tester) async {
+            tester.view.physicalSize = Size(largeText ? 320 : 390, 844);
+            tester.view.devicePixelRatio = 1;
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            var insightReads = 0;
+            var reportReads = 0;
+            final report = CorrelationReport(
+              windowDays: 14,
+              metrics: sparse ? const [] : correlationMetrics,
+              points: const [],
+              results: const [],
+            );
+            await tester.pumpWidget(
+              ProviderScope(
+                overrides: [
+                  _demoSurfaceOverride(),
+                  _skillsetSelectionOverride(),
+                  insightsProvider.overrideWith((_) async {
+                    insightReads++;
+                    if (failingRead == 'insights' && insightReads == 2) {
+                      throw StateError('controlled refresh failure');
+                    }
+                    return const [];
+                  }),
+                  correlationReportProvider.overrideWith((_) async {
+                    reportReads++;
+                    if (failingRead == 'correlations' && reportReads == 2) {
+                      throw StateError('controlled refresh failure');
+                    }
+                    return report;
+                  }),
+                  personalPatternsProvider.overrideWith((_) async => null),
+                  sleepRecommendationProvider.overrideWith((_) async => null),
+                  skillsetProfileProvider.overrideWith(
+                    (_) async => _skillsetProfile(),
+                  ),
+                ],
+                child: MaterialApp(
+                  theme: AppTheme.liquidGlass,
+                  home: const Scaffold(body: InsightsPage()),
+                  builder: (context, child) => MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler: TextScaler.linear(largeText ? 2 : 1),
+                    ),
+                    child: child!,
+                  ),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Advanced'));
+            await tester.pumpAndSettle();
+            final pageScroll = find
+                .descendant(
+                  of: find.byType(CustomScrollView).first,
+                  matching: find.byType(Scrollable),
+                )
+                .first;
+            tester.state<ScrollableState>(pageScroll).position.jumpTo(0);
+            await tester.pumpAndSettle();
+            final container = ProviderScope.containerOf(
+              tester.element(find.byType(InsightsPage)),
+            );
+            final before = container
+                .read(correlationReportProvider)
+                .requireValue;
+
+            await tester.drag(
+              find.byType(CustomScrollView).first,
+              const Offset(0, 320),
+            );
+            await tester.pumpAndSettle();
+
+            expect(insightReads, 2);
+            expect(reportReads, 2);
+            expect(find.byType(RefreshProgressIndicator), findsNothing);
+            expect(
+              find.byKey(const Key('insights-view-toggle')),
+              findsOneWidget,
+            );
+            expect(
+              tester
+                  .widget<SegmentedButton>(
+                    find.byKey(const Key('insights-view-toggle')),
+                  )
+                  .selected
+                  .single
+                  .toString(),
+              contains('advanced'),
+            );
+            expect(
+              container.read(correlationReportProvider).valueOrNull,
+              same(before),
+            );
+            expect(
+              find.text('Could not load account insights.'),
+              findsOneWidget,
+            );
+            expect(
+              find.widgetWithText(OutlinedButton, 'Retry'),
+              findsOneWidget,
+            );
+            expect(tester.takeException(), isNull);
+
+            final retry = find.widgetWithText(OutlinedButton, 'Retry');
+            await Scrollable.ensureVisible(
+              tester.element(retry),
+              alignment: .5,
+            );
+            await tester.pumpAndSettle();
+            expect(retry.hitTestable(), findsOneWidget);
+            await tester.tap(retry);
+            await tester.pumpAndSettle();
+            expect(insightReads, 3);
+            expect(reportReads, 3);
+            expect(find.text('Could not load account insights.'), findsNothing);
+            expect(
+              find.byKey(const Key('insights-view-toggle')),
+              findsOneWidget,
+            );
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
+  for (final sparse in [true, false]) {
+    testWidgets(
+      'mobile pull awaits Insights reads and retains filters; sparse=$sparse',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final pending = Completer<CorrelationReport>();
+        var reads = 0, patternReads = 0, sleepReads = 0;
         final report = CorrelationReport(
-          windowDays: 14,
+          windowDays: 30,
           metrics: sparse ? const [] : correlationMetrics,
           points: const [],
           results: const [],
@@ -49,123 +415,61 @@ void main() {
             overrides: [
               _demoSurfaceOverride(),
               _skillsetSelectionOverride(),
-              insightsProvider.overrideWith((_) async {
-                insightReads++;
-                if (failingRead == 'insights' && insightReads == 2) {
-                  throw StateError('controlled refresh failure');
-                }
-                return const [];
+              insightsProvider.overrideWith((_) async => const []),
+              correlationReportProvider.overrideWith(
+                (_) async => ++reads == 1 ? report : pending.future,
+              ),
+              personalPatternsProvider.overrideWith((_) async {
+                patternReads++;
+                return null;
               }),
-              correlationReportProvider.overrideWith((_) async {
-                reportReads++;
-                if (failingRead == 'correlations' && reportReads == 2) {
-                  throw StateError('controlled refresh failure');
-                }
-                return report;
+              sleepRecommendationProvider.overrideWith((_) async {
+                sleepReads++;
+                return null;
               }),
-              personalPatternsProvider.overrideWith((_) async => null),
-              sleepRecommendationProvider.overrideWith((_) async => null),
-              skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
+              skillsetProfileProvider.overrideWith(
+                (_) async => _skillsetProfile(),
+              ),
             ],
             child: MaterialApp(
               theme: AppTheme.liquidGlass,
               home: const Scaffold(body: InsightsPage()),
-              builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: TextScaler.linear(largeText ? 2 : 1),
-                ),
-                child: child!,
-              ),
             ),
           ),
         );
         await tester.pumpAndSettle();
+        expect(find.byTooltip('Refresh correlations'), findsNothing);
         await tester.tap(find.text('Advanced'));
         await tester.pumpAndSettle();
-        final pageScroll = find.descendant(
-          of: find.byType(CustomScrollView).first,
-          matching: find.byType(Scrollable),
-        ).first;
-        tester.state<ScrollableState>(pageScroll).position.jumpTo(0);
-        await tester.pumpAndSettle();
-        final container = ProviderScope.containerOf(
-          tester.element(find.byType(InsightsPage)),
+        await tester.drag(
+          find.byType(CustomScrollView).first,
+          const Offset(0, 320),
         );
-        final before = container.read(correlationReportProvider).requireValue;
-
-        await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 320));
+        for (var i = 0; i < 10 && reads < 2; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(reads, 2);
+        expect(patternReads, 2);
+        expect(sleepReads, 2);
+        expect(find.byType(RefreshProgressIndicator), findsOneWidget);
+        pending.complete(report);
         await tester.pumpAndSettle();
-
-        expect(insightReads, 2);
-        expect(reportReads, 2);
         expect(find.byType(RefreshProgressIndicator), findsNothing);
-        expect(find.byKey(const Key('insights-view-toggle')), findsOneWidget);
         expect(
-          tester.widget<SegmentedButton>(find.byKey(const Key('insights-view-toggle')))
-              .selected.single.toString(),
+          tester
+              .widget<SegmentedButton>(
+                find
+                    .byWidgetPredicate((widget) => widget is SegmentedButton)
+                    .first,
+              )
+              .selected
+              .single
+              .toString(),
           contains('advanced'),
         );
-        expect(container.read(correlationReportProvider).valueOrNull, same(before));
-        expect(find.text('Could not load account insights.'), findsOneWidget);
-        expect(find.widgetWithText(OutlinedButton, 'Retry'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-
-        final retry = find.widgetWithText(OutlinedButton, 'Retry');
-        await Scrollable.ensureVisible(
-          tester.element(retry),
-          alignment: .5,
-        );
-        await tester.pumpAndSettle();
-        expect(retry.hitTestable(), findsOneWidget);
-        await tester.tap(retry);
-        await tester.pumpAndSettle();
-        expect(insightReads, 3);
-        expect(reportReads, 3);
-        expect(find.text('Could not load account insights.'), findsNothing);
-        expect(find.byKey(const Key('insights-view-toggle')), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
-      }
-    }
-  }
-  for (final sparse in [true, false]) {
-    testWidgets('mobile pull awaits Insights reads and retains filters; sparse=$sparse', (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final pending = Completer<CorrelationReport>();
-      var reads = 0, patternReads = 0, sleepReads = 0;
-      final report = CorrelationReport(windowDays: 30,
-        metrics: sparse ? const [] : correlationMetrics, points: const [], results: const []);
-      await tester.pumpWidget(ProviderScope(overrides: [
-        _demoSurfaceOverride(), _skillsetSelectionOverride(),
-        insightsProvider.overrideWith((_) async => const []),
-        correlationReportProvider.overrideWith((_) async => ++reads == 1 ? report : pending.future),
-        personalPatternsProvider.overrideWith((_) async { patternReads++; return null; }),
-        sleepRecommendationProvider.overrideWith((_) async { sleepReads++; return null; }),
-        skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
-      ], child: MaterialApp(theme: AppTheme.liquidGlass,
-        home: const Scaffold(body: InsightsPage()))));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Refresh correlations'), findsNothing);
-      await tester.tap(find.text('Advanced'));
-      await tester.pumpAndSettle();
-      await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 320));
-      for (var i = 0; i < 10 && reads < 2; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
-      expect(reads, 2);
-      expect(patternReads, 2);
-      expect(sleepReads, 2);
-      expect(find.byType(RefreshProgressIndicator), findsOneWidget);
-      pending.complete(report);
-      await tester.pumpAndSettle();
-      expect(find.byType(RefreshProgressIndicator), findsNothing);
-      expect(tester.widget<SegmentedButton>(find.byWidgetPredicate((widget) => widget is SegmentedButton).first).selected.single.toString(), contains('advanced'));
-      expect(tester.takeException(), isNull);
-    });
   }
   testWidgets(
     'sparse Compare advances the shared window without promising data',
@@ -941,8 +1245,12 @@ void main() {
             find.byKey(const Key('sleep-recommendation-warning')),
             findsOneWidget,
           );
-        } else {
+        } else if (status == SleepRecommendationStatus.disabled) {
           expect(find.text('No stable window yet'), findsOneWidget);
+        } else {
+          expect(find.text('Sleep guidance'), findsOneWidget);
+          expect(find.text('Keep a regular sleep routine.'), findsOneWidget);
+          expect(find.text('General guidance'), findsOneWidget);
         }
         expect(tester.takeException(), isNull);
       },
@@ -2353,6 +2661,42 @@ PersonalPatterns _personalPatterns() => PersonalPatterns.fromJson({
   ],
   'evidence_fingerprint': _fingerprint,
 });
+
+PersonalPatterns _earlyPatterns(
+  String mode, {
+  PersonalPatternsStatus status = PersonalPatternsStatus.collecting,
+}) {
+  final base = _disabledPersonalPatterns();
+  return PersonalPatterns(
+    status: status,
+    summary: 'No rated Focus comparison yet.',
+    timezone: base.timezone,
+    window: base.window,
+    sample: base.sample,
+    baseline: null,
+    patterns: const [],
+    plannerPreference: base.plannerPreference,
+    limitations: const ['Observations do not show cause.'],
+    correlationPoints: const [],
+    evidenceFingerprint: _fingerprint,
+    skillsetPoints: mode == 'general'
+        ? const []
+        : [
+            for (var i = 0; i < 7; i++)
+              CorrelationDataPoint(
+                date: DateTime.utc(2026, 7, 20 + i),
+                values: mode == 'focus'
+                    ? {'focus_count': 2, 'focus_completed': 1}
+                    : {
+                        'energy_level': 7,
+                        'mood_score': 8,
+                        'sleep_hours': 7.5,
+                        'sleep_quality': 8,
+                      },
+              ),
+          ],
+  );
+}
 
 PersonalPatterns _disabledPersonalPatterns() => PersonalPatterns(
   status: PersonalPatternsStatus.disabled,

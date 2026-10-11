@@ -162,9 +162,27 @@ Own DND and OEM/system notification settings can hide this optional display.
 
 ### Usage budgets and charts
 
+The foreground daily-budget notification keeps its remembered app through System
+UI and MyLifeGraph-generated notification window events; actual MyLifeGraph entry
+is reported separately by Activity resume. Closing the notification shade is not
+a dismissal. The allowance notification is dismissible, and its explicit Android
+delete callback suppresses redisplay for the current app/plan visit. Its opaque
+process-instance/visit token prevents an old callback from dismissing another app,
+a later visit to the same app, or a restarted process's timer. Leaving that visit resets suppression;
+expiry, permission/protection loss and real app exit still remove the display.
+This session is process-local, not a durable notification preference. Restarting
+the service/process may show the optional display again. Rule enforcement is
+unaffected. Physical OEM shade behavior remains a separate acceptance check.
+Consented website-budget display retains its last observed host through shade
+windows, while observation/metering never queries an unrelated System UI root.
+Real browser-host changes refresh it; actual app exit clears it.
+
 Budgets require separately disclosed Android Usage Access. Native reduction
-tracks resumed activity class through the public UsageEvents API, ignores
-pauses for different classes, clips to the current
+tracks resumed activity classes through the public UsageEvents API. The latest
+resumed package owns the interval, but multiple resumed classes in that package
+count once until the last class pauses. Pausing a newer class does not drop time
+while another remains resumed; duplicates and unrelated pauses do not add time.
+The reducer clips to the current
 device-local day and stops at screen-off. Denied access is not zero usage and
 cannot authorize a budget. App usage refreshes within five seconds while the
 service runs. Today/Week/Month ranges use calendar days, not fixed 24-hour
@@ -546,7 +564,7 @@ starts the same five-second gate and requires a second action after it arms;
 `ACTION_LONG_CLICK` has no shortcut. The screen scrolls, scales text, and
 exposes accessibility descriptions.
 
-While the overlay is visible, window events from MyLifeGraph itself and events
+Window events from MyLifeGraph itself (including its notifications) and events
 without a package do not replace the remembered foreground package. The service
 still rechecks the lease on those events. MainActivity reports actual app resume
 directly to dismiss the overlay, while other app/System UI events retain the

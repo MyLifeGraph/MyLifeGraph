@@ -123,95 +123,104 @@ class _SparseInsightsHome extends StatelessWidget {
         ? 'No comparable signal has enough data in this window yet.'
         : '${report.metrics.single.label} is available, but a relationship needs a second measured signal.';
     return SafeArea(
-      child: RefreshIndicator(onRefresh: onRefresh, child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              isMobile ? AppSpacing.md : AppSpacing.lg,
-              isMobile ? AppSpacing.md : AppSpacing.lg,
-              isMobile ? AppSpacing.md : AppSpacing.lg,
-              AppSpacing.xl,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _InsightsHeader(isMobile: isMobile, onRefresh: onRefresh),
-                  SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                  _InsightsViewToggle(selected: view, onChanged: onViewChanged),
-                  const SizedBox(height: AppSpacing.md),
-                  if (readFailed) _InsightsLoadError(onRetry: onRefresh),
-                  Visibility(
-                    visible: view == _InsightsView.overview,
-                    maintainState: true,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (showPersonalPatterns) ...[
-                          _PersonalStudyPatternCard(
-                            patterns: personalPatterns,
-                            onRetry: onRefresh,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _SleepRecommendationCard(
-                            value: sleepRecommendation,
-                            onRetry: onRefresh,
-                          ),
-                        ] else
-                          _CoachingObservationCard(observation: observation),
-                        const SizedBox(height: AppSpacing.md),
-                        if (skillset != null)
-                          _SkillsetProfileCard(
-                            skillset: skillset!,
-                            onRetry: onRefresh,
-                          ),
-                      ],
+      child: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                isMobile ? AppSpacing.md : AppSpacing.lg,
+                isMobile ? AppSpacing.md : AppSpacing.lg,
+                isMobile ? AppSpacing.md : AppSpacing.lg,
+                AppSpacing.xl,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _InsightsHeader(isMobile: isMobile, onRefresh: onRefresh),
+                    SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
+                    _InsightsViewToggle(
+                      selected: view,
+                      onChanged: onViewChanged,
                     ),
-                  ),
-                  Visibility(
-                    visible: view == _InsightsView.advanced,
-                    maintainState: true,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _AdvancedPaneTabs(
-                          selected: advancedPane,
-                          onSelected: onPaneSelected,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        if (advancedPane != _AdvancedPane.discovered &&
-                            advancedPane != _AdvancedPane.past) ...[
-                          windowSelector,
-                          const SizedBox(height: AppSpacing.md),
-                        ],
-                        if (advancedPane == _AdvancedPane.skillset)
-                          skillsetCard
-                        else if (advancedPane == _AdvancedPane.past)
-                          const PeriodComparisonCard()
-                        else
-                          _InsightsPanel(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Not enough signals yet',
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(measured),
-                              ],
+                    const SizedBox(height: AppSpacing.md),
+                    if (readFailed) _InsightsLoadError(onRetry: onRefresh),
+                    Visibility(
+                      visible: view == _InsightsView.overview,
+                      maintainState: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (showPersonalPatterns) ...[
+                            _PersonalStudyPatternCard(
+                              patterns: personalPatterns,
+                              onRetry: onRefresh,
                             ),
-                          ),
-                      ],
+                            const SizedBox(height: AppSpacing.md),
+                            _SleepRecommendationCard(
+                              value: sleepRecommendation,
+                              patterns: personalPatterns,
+                              onRetry: onRefresh,
+                            ),
+                          ] else
+                            _CoachingObservationCard(observation: observation),
+                          const SizedBox(height: AppSpacing.md),
+                          if (skillset != null)
+                            _SkillsetProfileCard(
+                              skillset: skillset!,
+                              onRetry: onRefresh,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Visibility(
+                      visible: view == _InsightsView.advanced,
+                      maintainState: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _AdvancedPaneTabs(
+                            selected: advancedPane,
+                            onSelected: onPaneSelected,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          if (advancedPane != _AdvancedPane.discovered &&
+                              advancedPane != _AdvancedPane.past) ...[
+                            windowSelector,
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                          if (advancedPane == _AdvancedPane.skillset)
+                            skillsetCard
+                          else if (advancedPane == _AdvancedPane.past)
+                            const PeriodComparisonCard()
+                          else
+                            _InsightsPanel(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Not enough signals yet',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(measured),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      )),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -232,8 +241,10 @@ class _InsightsHeader extends StatelessWidget {
             : Theme.of(context).textTheme.headlineLarge,
       ),
       actions: AppHeaderActions(
-        pageActions: [if (MediaQuery.sizeOf(context).width >= 600)
-          _InsightsRefreshButton(onRefresh: onRefresh)],
+        pageActions: [
+          if (MediaQuery.sizeOf(context).width >= 600)
+            _InsightsRefreshButton(onRefresh: onRefresh),
+        ],
       ),
     );
   }
@@ -253,6 +264,136 @@ class _InsightsRefreshButton extends StatelessWidget {
         onRefresh();
       },
       icon: const Icon(AppIcons.refresh),
+    );
+  }
+}
+
+class _OverviewObservationContent extends StatelessWidget {
+  const _OverviewObservationContent({
+    required this.heading,
+    required this.icon,
+    required this.observation,
+    this.additionalDetails = const [],
+    this.padding = const EdgeInsets.all(AppSpacing.md),
+  });
+
+  final String heading;
+  final IconData icon;
+  final OverviewObservation observation;
+  final List<String> additionalDetails;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final early = observation.tier == OverviewObservationTier.preliminary;
+    final color = early
+        ? context.visualTokens.attention
+        : context.visualTokens.danger;
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  heading,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Tooltip(
+                message: observation.label,
+                child: Semantics(
+                  label: observation.label,
+                  child: Icon(
+                    early
+                        ? AppIcons.warningAmberOutlined
+                        : AppIcons.infoOutline,
+                    size: 20,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            observation.title,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          for (final bullet in observation.bullets)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(bullet),
+            ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '${observation.label}${early ? ' · ${observation.observedDays} observed days' : ''}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          ExpansionTile(
+            title: const Text('Details'),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            children: [
+              for (final detail in [
+                ...observation.details,
+                ...observation.missingSources,
+                ...additionalDetails,
+              ])
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: Text(
+                      detail,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ),
+              for (final source in observation.sourceUrls)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(AppIcons.openInNew, size: 16),
+                    label: Text(
+                      source.contains('nhlbi')
+                          ? 'Sleep guidance source'
+                          : 'Study guidance source',
+                    ),
+                    onPressed: () async {
+                      try {
+                        if (!await launchUrl(
+                          Uri.parse(source),
+                          mode: LaunchMode.externalApplication,
+                        )) {
+                          throw StateError('Launch unavailable');
+                        }
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Could not open source. Try again.'),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -337,6 +478,22 @@ class _PersonalStudyPatternContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (patterns.status != PersonalPatternsStatus.disabled &&
+        patterns.patterns.isEmpty) {
+      final observation = overviewObservations(patterns).study;
+      if (observation != null) {
+        return _OverviewObservationContent(
+          heading: 'PERSONAL STUDY PATTERN',
+          icon: AppIcons.schoolOutlined,
+          observation: observation,
+          additionalDetails: [
+            patterns.summary,
+            '${patterns.sample.ratedSessions} rated sessions · ${patterns.sample.ratedLocalDays} rated days · ${patterns.timezone} · 90-day window',
+            ...patterns.limitations,
+          ],
+        );
+      }
+    }
     final status = switch (patterns.status) {
       PersonalPatternsStatus.disabled => 'Disabled',
       PersonalPatternsStatus.collecting => 'Collecting',
@@ -368,7 +525,17 @@ class _PersonalStudyPatternContent extends StatelessWidget {
                 'PERSONAL STUDY PATTERN',
                 style: Theme.of(context).textTheme.labelLarge,
               ),
-              Chip(label: Text(status), visualDensity: VisualDensity.compact),
+              AppStatusPill(
+                label: status,
+                icon: patterns.status == PersonalPatternsStatus.stable
+                    ? AppIcons.checkCircleOutline
+                    : AppIcons.warningAmberOutlined,
+                tone: patterns.status == PersonalPatternsStatus.stable
+                    ? AppStatusTone.success
+                    : patterns.status == PersonalPatternsStatus.disabled
+                    ? AppStatusTone.neutral
+                    : AppStatusTone.attention,
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -490,9 +657,14 @@ class _PersonalStudyPatternContent extends StatelessWidget {
 }
 
 class _SleepRecommendationCard extends StatelessWidget {
-  const _SleepRecommendationCard({required this.value, required this.onRetry});
+  const _SleepRecommendationCard({
+    required this.value,
+    required this.patterns,
+    required this.onRetry,
+  });
 
   final AsyncValue<SleepRecommendation?> value;
+  final AsyncValue<PersonalPatterns?> patterns;
   final VoidCallback onRetry;
 
   @override
@@ -542,7 +714,12 @@ class _SleepRecommendationCard extends StatelessWidget {
           ),
           data: (recommendation) => recommendation == null
               ? const SizedBox.shrink()
-              : _SleepRecommendationContent(value: recommendation),
+              : _SleepRecommendationContent(
+                  value: recommendation,
+                  patterns: !patterns.hasError && !patterns.isLoading
+                      ? patterns.valueOrNull
+                      : null,
+                ),
         ),
       ),
     );
@@ -550,12 +727,31 @@ class _SleepRecommendationCard extends StatelessWidget {
 }
 
 class _SleepRecommendationContent extends StatelessWidget {
-  const _SleepRecommendationContent({required this.value});
+  const _SleepRecommendationContent({required this.value, this.patterns});
 
   final SleepRecommendation value;
+  final PersonalPatterns? patterns;
 
   @override
   Widget build(BuildContext context) {
+    if (value.status != SleepRecommendationStatus.disabled &&
+        value.recommendation == null &&
+        patterns != null &&
+        patterns!.status != PersonalPatternsStatus.disabled) {
+      final observation = overviewObservations(patterns!).sleep;
+      if (observation != null) {
+        return KeyedSubtree(
+          key: Key('sleep-recommendation-${value.status.name}'),
+          child: _OverviewObservationContent(
+            heading: 'SLEEP RECOMMENDATION',
+            icon: AppIcons.bedtimeOutlined,
+            observation: observation,
+            padding: EdgeInsets.zero,
+            additionalDetails: [value.summary, ...value.limitations],
+          ),
+        );
+      }
+    }
     final (status, tone) = switch (value.status) {
       SleepRecommendationStatus.disabled => ('Disabled', AppStatusTone.neutral),
       SleepRecommendationStatus.collecting => (
@@ -587,7 +783,11 @@ class _SleepRecommendationContent extends StatelessWidget {
               'SLEEP RECOMMENDATION',
               style: Theme.of(context).textTheme.labelLarge,
             ),
-            AppStatusPill(label: status, tone: tone),
+            AppStatusPill(
+              label: status,
+              tone: tone,
+              icon: ready != null ? AppIcons.checkCircleOutline : null,
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),

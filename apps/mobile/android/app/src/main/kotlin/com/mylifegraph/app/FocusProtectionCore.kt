@@ -79,12 +79,21 @@ data class LocalFocusLease(
 }
 
 object FocusProtectionDecision {
+    fun budgetForeground(eventPackage: String?, current: String?, ownPackage: String): String? =
+        // Notifications/overlays also emit our package. Actual app entry is
+        // authoritative through MainActivity.onResume, not a window event.
+        if (eventPackage == "com.android.systemui" || eventPackage == ownPackage ||
+            eventPackage.isNullOrBlank()) current else eventPackage
+
+    fun budgetHost(eventPackage: String?, observedHost: String?, current: String?, ownPackage: String): String? =
+        if (eventPackage == "com.android.systemui" || eventPackage == ownPackage ||
+            eventPackage.isNullOrBlank()) current else observedHost
+
     fun ignoreForegroundEvent(
         eventPackage: String?,
         ownPackage: String,
-        overlayVisible: Boolean,
     ): Boolean = eventPackage.isNullOrBlank() ||
-        (overlayVisible && eventPackage == ownPackage)
+        eventPackage == ownPackage
 
     fun reconcileActivation(
         currentLease: LocalFocusLease?,

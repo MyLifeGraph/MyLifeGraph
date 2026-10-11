@@ -30,6 +30,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private var homePackages: Set<String> = emptySet()
     private var lastForegroundPackage: String? = null
     private var budgetForegroundPackage: String? = null
+    private var budgetHost: String? = null
     private var emergencyArmRunnable: Runnable? = null
     private lateinit var plans: BlockingPlans
     private var currentHost: String? = null
@@ -65,16 +66,19 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         // Our overlay emits window events too. Keep the underlying package;
         // real entry into MyLifeGraph is reported by MainActivity.onResume.
         if (!FocusProtectionDecision.ignoreForegroundEvent(
-                foregroundPackage, packageName, overlay != null,
+                foregroundPackage, packageName,
             )
         ) {
             if (lastForegroundPackage != foregroundPackage) { currentHost = null; lastMeterAt = SystemClock.elapsedRealtime() }
             lastForegroundPackage = foregroundPackage
-            if (foregroundPackage != "com.android.systemui") budgetForegroundPackage = foregroundPackage
+            budgetForegroundPackage = FocusProtectionDecision.budgetForeground(
+                foregroundPackage, budgetForegroundPackage, packageName,
+            )
         }
         checkBrowser()
+        budgetHost = FocusProtectionDecision.budgetHost(foregroundPackage, currentHost, budgetHost, packageName)
         refreshOverlay()
-        BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, currentHost, overlay == null)
+        BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, budgetHost, overlay == null)
     }
 
     override fun onInterrupt() {
@@ -304,7 +308,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             if (::plans.isInitialized) {
                 runCatching { DisciplineUnlockScheduler.reconcile(applicationContext) }
                 BlockingTimerNotifications.sync(applicationContext)
-                BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, currentHost, overlay == null)
+                BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, budgetHost, overlay == null)
                 val elapsed = SystemClock.elapsedRealtime()
                 val host = currentHost
                 val browser = lastForegroundPackage
@@ -337,15 +341,21 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     @Suppress("DEPRECATION")
     private fun checkBrowser() {
         if (!::plans.isInitialized) return
-        if (!plans.websiteObservationEnabled()) { currentHost = null; return }
+        if (!plans.websiteObservationEnabled()) { currentHost = null; budgetHost = null; return }
         val pkg = lastForegroundPackage ?: return
         if (pkg !in BrowserAddressBars.adapters) { currentHost = null; return }
         // Whole-browser app rules win; do not miscount their URL as a site attempt.
         if (manager.shouldBlock(pkg)) { currentHost = null; return }
         // Only query a known URL resource ID after explicit website consent.
         val root = rootInActiveWindow ?: run { currentHost = null; return }
+        // Shade/notification roots are not the remembered browser. Preserve its
+        // display-only host, but never meter or inspect those unrelated windows.
+        if (root.packageName?.toString() != pkg) {
+            root.recycle(); currentHost = null; return
+        }
         val host = try { BrowserAddressBars.host(root, pkg) } finally { root.recycle() }
         currentHost = host
+        budgetHost = host
         if (host == null || pkg in manager.essentialPackages() || plans.blocked(pkg, host) == null) return
         val key = "$pkg|$host"
         val elapsed = SystemClock.elapsedRealtime()
@@ -378,6 +388,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             runningService?.get()?.let { service ->
                 service.lastForegroundPackage = context.packageName
                 service.budgetForegroundPackage = context.packageName
+                service.budgetHost = null
                 service.currentHost = null
                 service.lastMeterAt = SystemClock.elapsedRealtime()
                 service.plans.flushSiteUsage()

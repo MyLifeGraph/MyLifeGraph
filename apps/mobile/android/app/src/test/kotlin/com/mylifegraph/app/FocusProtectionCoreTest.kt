@@ -95,14 +95,39 @@ class FocusProtectionCoreTest {
     fun ownOverlayEventsDoNotReplaceTheBlockedForegroundPackage() {
         var foreground = "com.instagram.android"
         for (eventPackage in listOf("com.mylifegraph.app", null, "", "com.instagram.android")) {
-            if (!FocusProtectionDecision.ignoreForegroundEvent(eventPackage, "com.mylifegraph.app", true)) {
+            if (!FocusProtectionDecision.ignoreForegroundEvent(eventPackage, "com.mylifegraph.app")) {
                 foreground = eventPackage!!
             }
             assertEquals("com.instagram.android", foreground)
         }
-        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("com.android.settings", "com.mylifegraph.app", true))
-        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("launcher.app", "com.mylifegraph.app", true))
-        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("com.mylifegraph.app", "com.mylifegraph.app", false))
+        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("com.android.settings", "com.mylifegraph.app"))
+        assertFalse(FocusProtectionDecision.ignoreForegroundEvent("launcher.app", "com.mylifegraph.app"))
+        assertTrue(FocusProtectionDecision.ignoreForegroundEvent("com.mylifegraph.app", "com.mylifegraph.app"))
+    }
+
+    @Test fun notificationWindowEventsDoNotReplaceBudgetApp() {
+        var app: String? = "com.instagram.android"
+        for (event in listOf("com.android.systemui", "com.mylifegraph.app", null, "", "com.android.systemui")) {
+            app = FocusProtectionDecision.budgetForeground(event, app, "com.mylifegraph.app")
+            assertEquals("com.instagram.android", app)
+        }
+        assertEquals("launcher.app", FocusProtectionDecision.budgetForeground("launcher.app", app, "com.mylifegraph.app"))
+        assertEquals("com.android.settings", FocusProtectionDecision.budgetForeground("com.android.settings", app, "com.mylifegraph.app"))
+    }
+
+    @Test fun ownNotificationWindowIsNotAnActualAppEntryEvenWithoutOverlay() {
+        assertTrue(FocusProtectionDecision.ignoreForegroundEvent("com.mylifegraph.app", "com.mylifegraph.app"))
+    }
+
+    @Test fun websiteBudgetHostSurvivesShadeButClearsOnTrueAppExit() {
+        var host: String? = "instagram.com"
+        for (event in listOf("com.android.systemui", "com.mylifegraph.app", null, "")) {
+            host = FocusProtectionDecision.budgetHost(event, null, host, "com.mylifegraph.app")
+            assertEquals("instagram.com", host)
+        }
+        assertNull(FocusProtectionDecision.budgetHost("launcher.app", null, host, "com.mylifegraph.app"))
+        assertNull(FocusProtectionDecision.budgetHost("com.android.chrome", null, host, "com.mylifegraph.app"))
+        assertEquals("other.com", FocusProtectionDecision.budgetHost("com.android.chrome", "other.com", host, "com.mylifegraph.app"))
     }
 
     private val lease = LocalFocusLease(

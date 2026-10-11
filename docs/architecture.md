@@ -1,5 +1,11 @@
 # Architecture
 
+Insights early Overview observations are a pure Flutter projection of existing
+consent-gated Skillset points. General guidance and seven-day descriptive summaries
+do not modify backend correlations, fingerprints, learned planning, sleep-window
+algorithms, stored captures or Cloud collection. Existing source/read-error and
+analysis-disabled authority remains intact.
+
 Planner's optional-duration Habit path composes the existing Habit application
 writer at the composition layer; the Planner feature does not import another
 feature's private data implementation. Owner changes invalidate its controller,

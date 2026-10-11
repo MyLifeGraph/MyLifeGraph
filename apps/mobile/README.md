@@ -1,5 +1,11 @@
 # MyLifeGraph Mobile App
 
+Insights Overview now keeps sourced general guidance visible while collecting,
+and shows descriptive check-in/sleep or terminal-Focus summaries after seven valid
+distinct days per measure. Small red/amber/green evidence marks supplement labels.
+Existing mature pattern/sleep evidence, disabled/error states, correlations,
+Planner inputs and backend contracts are unchanged; see Personal Learning.
+
 Coach uses the existing full-size More actions / First actions overflow arrow
 when its always-open header icons exceed the available width. Other tabs remain
 unchanged; horizontal swiping and title-bounded layout are retained.
@@ -45,6 +51,14 @@ block-screen Return timer and Android essential exits are unchanged. Planner
 creation, rescheduling and drag/drop are explicitly outside this change.
 
 ## Android blocking plans
+
+The daily-budget timer ignores System UI and own notification window events when
+remembering the budget app. Actual app entry still comes from Activity resume.
+Closing the shade is not dismissal; explicit swipe dismissal suppresses the
+display for that process-local app/plan visit, without changing protection.
+Usage reduction retains time when one same-app activity pauses while another
+class remains resumed, without counting overlapping classes twice. Device/OEM
+acceptance is distinct from native regression tests.
 
 Pending NFC verification shows only its scan dialog, not timer instructions
 behind it. Cancel ends the unlock request and returns to locked Unblock.

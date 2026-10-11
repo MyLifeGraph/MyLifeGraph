@@ -101,6 +101,38 @@ non-effects, save/retry state, and confirmed clear consequence remain visible.
 
 ## Personal patterns
 
+### Overview guidance and early observations
+
+The two real-account Overview cards add a read-only Flutter projection of the
+existing consent-gated `skillset-observations-v1` points. No new endpoint, stored
+score, wire version, analysis call, correlation, fingerprint or Planner input
+is introduced. Existing supported comparisons and ready sleep windows retain
+their algorithms and full evidence.
+
+With analysis enabled but insufficient evidence, sourced general study/sleep
+habits are available from the first visit, labelled `General guidance` with a
+small semantic red information mark. They are not personalized findings. Study
+copy follows distributed practice/self-testing research; sleep copy follows NHLBI
+healthy habits. External sources are allowlisted and visible under Details.
+
+At least seven unique valid profile-local days **per displayed metric** enable
+amber `Early observations`: descriptive medians of check-in energy/mood/stress
+or sleep duration/quality, or terminal Focus counts and whole-window completion
+when only Focus history is available. Missing values never become zero; invalid,
+duplicate, non-date, future or out-of-window observations do not qualify.
+Overlapping activity days count once. Focus completion is summed completed/summed
+terminal count, not the average of daily percentages. Summary dates may be sparse
+across 90 days; copy says observed days, not last week. Missing source/coverage and
+noncausal limits stay under Details. No inferred optimum or sleep target is shown.
+
+Green remains reserved for an existing stable report **with a supported comparison**
+or the independently validated ready sleep response. Maturity alone does not
+make an empty pattern list green. Emerging supported patterns stay amber.
+Disabled analysis, loading and failed reads retain their distinct states; no
+general fallback hides errors or restores personal data against consent. A missing
+old-server Skillset extension remains compatible with general guidance. A failed
+pattern read cannot remove an independently ready sleep window.
+
 `GET /v1/insights/personal-patterns` is side-effect free. It uses one captured
 UTC instant, the profile IANA timezone, and the closed-open 90-day interval
 ending at that instant. It never persists a pattern and never calls a model.
