@@ -275,6 +275,7 @@ class _OverviewObservationContent extends StatelessWidget {
     required this.observation,
     this.additionalDetails = const [],
     this.padding = const EdgeInsets.all(AppSpacing.md),
+    required this.nextEvidence,
   });
 
   final String heading;
@@ -282,6 +283,7 @@ class _OverviewObservationContent extends StatelessWidget {
   final OverviewObservation observation;
   final List<String> additionalDetails;
   final EdgeInsets padding;
+  final String nextEvidence;
 
   @override
   Widget build(BuildContext context) {
@@ -314,12 +316,49 @@ class _OverviewObservationContent extends StatelessWidget {
                 message: observation.label,
                 child: Semantics(
                   label: observation.label,
-                  child: Icon(
-                    early
-                        ? AppIcons.warningAmberOutlined
-                        : AppIcons.infoOutline,
-                    size: 20,
-                    color: color,
+                  button: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      Tooltip.dismissAllToolTips();
+                      showDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          scrollable: true,
+                          title: Row(
+                            children: [
+                              Icon(
+                                early
+                                    ? AppIcons.warningAmberOutlined
+                                    : AppIcons.infoOutline,
+                                color: color,
+                                size: 22,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(child: Text(observation.label)),
+                            ],
+                          ),
+                          content: Text(
+                            early
+                                ? 'Based on: ${observation.sourceLabel}.\nNot yet a reliable pattern.\n\nFor more reliable insights: $nextEvidence\nA supported comparison is also required.'
+                                : 'General advice, not based on your data.\n\nNext: ${heading == 'SLEEP RECOMMENDATION' ? '7 valid days of sleep check-ins.' : '7 valid days of check-ins or Focus activity.'}\n${observation.missingSources.where((source) => heading != 'SLEEP RECOMMENDATION' || source.startsWith('Sleep history:')).join('\n')}',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: Icon(
+                      early
+                          ? AppIcons.warningAmberOutlined
+                          : AppIcons.infoOutline,
+                      size: 20,
+                      color: color,
+                    ),
                   ),
                 ),
               ),
@@ -486,6 +525,8 @@ class _PersonalStudyPatternContent extends StatelessWidget {
           heading: 'PERSONAL STUDY PATTERN',
           icon: AppIcons.schoolOutlined,
           observation: observation,
+          nextEvidence:
+              'Rated Focus sessions (${patterns.sample.ratedSessions}/20), spanning at least 28 days.',
           additionalDetails: [
             patterns.summary,
             '${patterns.sample.ratedSessions} rated sessions · ${patterns.sample.ratedLocalDays} rated days · ${patterns.timezone} · 90-day window',
@@ -746,6 +787,8 @@ class _SleepRecommendationContent extends StatelessWidget {
             heading: 'SLEEP RECOMMENDATION',
             icon: AppIcons.bedtimeOutlined,
             observation: observation,
+            nextEvidence:
+                'Morning check-in + rated Focus session on the same day (${value.eligibleFocusDays}/30 days).',
             padding: EdgeInsets.zero,
             additionalDetails: [value.summary, ...value.limitations],
           ),

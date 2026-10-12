@@ -31,6 +31,55 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### RC29 candidate — 2026-10-12
+
+User authorized publication of the local Capture calendar/date drafts and
+Insights evidence dialogs. The final combined targeted suite passed **175 tests**.
+The candidate excludes pre-existing retention edits and local generated media.
+Full exact-candidate GitHub checks, merge, signed tag build and live rollout are
+pending; the local evidence below is not a publication claim.
+
+### Local Insights evidence explanations — 2026-10-12
+
+General/early icons now open a theme-owned explanation dialog on tap while
+retaining the long-press tooltip and existing inline geometry. The focused
+copy identifies the displayed source, seven-day general-to-personal thresholds,
+and existing 20-rating/28-day-span or 30 eligible sleep/Focus-day floors with
+actual counts. A supported comparison is explicitly still required for green.
+No new floor or maturity algorithm is introduced. The focused
+observation/page suite passed **106 tests**, including four themes at 320px/200%,
+dialog Close and unchanged heading/icon coordinates. Three opt-in catalog
+scenarios passed, capturing actual dialogs, tooltips and Details with synthetic
+fixtures. Flutter analyze, docs/visual guards and diff whitespace checks pass.
+No calculation, backend, consent or data-write change; local only, not released.
+
+### Local Capture calendar and date drafts — 2026-10-12
+
+Uncommitted local task based on `5da4209599712cd6f4a124bc6ae9b38d4347dfce`.
+The focused calendar, Morning, Evening, reversible-flow and voice-review suite
+passed **69 tests**. Coverage includes direct selection without confirmation,
+eight-day read/bounds, independent complete branches, failed/mismatched reads,
+month/DST boundaries, cancelled late responses, all four themes at 320px/200%,
+note/sleep/step restoration, and saving one date while retaining another dirty
+date. Existing voice/account guards remain covered. An intrinsic-dialog layout
+failure and a large-text footer overflow in the new widget were reproduced and
+fixed before the final pass; neither is a released app regression.
+
+Flutter analyze reports no issues. The final calendar catalog render passed.
+Two additional opt-in flow catalog tests pass and capture eight actual Flutter
+page/dialog renders, using taps through Morning/Evening date selection and
+asserting the restored Morning note. These are local synthetic fixtures, not
+screenshots of an installed Android package or a live user account.
+The approved Liquid Glass calendar is rendered from the actual widget with
+synthetic status fixtures, not photographed from an Android device. Doc/visual
+guards pass (**19** / **1**); `git diff --check` passes. The base-bound affected
+dry-run selects Full because the checkout also contains protected unrelated
+retention edits and untracked media. Full Linux/browser/database CI and installed
+device checks are not claimed. No schema, backend, capture wire version,
+completion/streak formula or cloud data is changed. No push, release or deployment
+was performed at that local checkpoint; publication was subsequently authorized
+for the RC29 candidate above.
+
 ### Published RC28 — 2026-10-12
 
 - PR [#45](https://github.com/MyLifeGraph/MyLifeGraph/pull/45) merged candidate

@@ -1,5 +1,19 @@
 # Frontend Visual System V2
 
+General/early Insights evidence icons keep their existing 20px geometry and
+text placement. Tap opens a theme-owned explanation dialog with Close; long
+press retains the tooltip. Dialog content scrolls for narrow/large-text views.
+
+The approved Capture calendar keeps existing theme-owned dialog material.
+Today uses a filled brand circle with on-brand dark/light text, never an
+invisible number on a pale circle. Other saved complete days use only a fine
+success outline; open past days only a danger outline; unknown/disabled days
+stay neutral. No checkmarks, dots or status fills. The calendar is Monday-first,
+date taps select directly, with a small outline-ring Done/Open legend. Separate
+visual circles leave gaps inside unchanged 44px-or-larger day targets. Semantic
+labels retain date, Today, completion and selection; large text scrolls the
+dialog without hiding Cancel. Morning/Evening show their own saved branch.
+
 Overview guidance keeps the two existing glass panels and four theme palettes.
 A small trailing information mark uses semantic danger red for labelled general
 guidance; an amber warning triangle identifies descriptive early observations.

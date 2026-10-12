@@ -7,7 +7,11 @@ Dictation is draft-only and cannot save or overwrite Capture answers implicitly.
 
 ## Optional edits and reconciliation
 
-Unsaved Morning/Evening values require confirmation before route/date departure.
+Unsaved Morning/Evening values require confirmation before route departure.
+Date selection itself is immediate and preserves visited drafts/steps in
+route-local memory, scoped to account/timezone. It performs no write. A context
+change blocks reuse until the flow is reopened. Saving one date keeps the flow
+open if other visited dates still have unsaved edits.
 Wearable sleep is an optional draft proposal, never an independent Capture writer;
 manual/saved values retain authority and the normal Save uses unchanged CAS.
 Completed Focus corrections use the additive owner-locked service RPC described
@@ -17,8 +21,10 @@ restore uses the existing lifecycle ledger/CAS/reload contract.
 
 Manual Morning/Evening backfill (today plus seven previous calendar dates) uses
 the existing date-addressed Capture read/write and branch CAS path. Date changes
-discard drafts only after confirmation, clear stale form state, reload the
-selected date and refresh projections for that written date. A failed read is
+retain drafts only within the open flow, isolate form state by date, load a
+first visit or restore its draft, and refresh projections only for a saved date.
+Calendar status reads are bounded to the same eight selectable dates; failed
+or mismatched reads remain unknown, never missing. A failed read is
 not an empty existing branch. Future-day sleep plans must not prefill historical
 Capture. Voice review remains bound to today's owner/date/timezone and preserves
 unmentioned stored answers; explicit proposed clocks replace the stored clocks.

@@ -13,7 +13,6 @@ import '../../domain/quick_check_in.dart';
 import '../../domain/capture_draft_proposal.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
-import '../widgets/capture_leave_guard.dart';
 import '../widgets/capture_date_picker.dart';
 import '../../../../composition/skillset_providers.dart';
 import '../../domain/skillset_signals.dart';
@@ -35,6 +34,7 @@ class MorningCalibrationPage extends ConsumerStatefulWidget {
 class _MorningCalibrationPageState
     extends ConsumerState<MorningCalibrationPage> {
   late MorningCalibrationDraft _draft;
+  late final (String?, String?) _draftScope;
   final _noteController = TextEditingController();
   bool _dictating = false;
   MorningCalibrationDraft? _cleanDraft;
@@ -50,6 +50,20 @@ class _MorningCalibrationPageState
   var _revisingSavedCapture = false;
   String? _loadError;
   String? _saveError;
+  final _dateDrafts =
+      <
+        (String?, String?, String),
+        ({
+          MorningCalibrationDraft draft,
+          MorningCalibrationDraft? clean,
+          int step,
+          bool sleepTouched,
+          bool safe,
+          bool eveningUnavailable,
+          bool continueWithoutPlan,
+          bool revising,
+        })
+      >{};
 
   static const _steps = <_MorningStep>[
     _MorningStep(
@@ -67,6 +81,10 @@ class _MorningCalibrationPageState
   @override
   void initState() {
     super.initState();
+    _draftScope = (
+      ref.read(captureDraftOwnerProvider),
+      ref.read(profileLocalDateSourceProvider).timezoneName,
+    );
     final capturedAt = ref.read(currentInstantProvider)();
     _draft = MorningCalibrationDraft.empty(
       capturedAt,
@@ -83,6 +101,8 @@ class _MorningCalibrationPageState
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(captureDraftOwnerProvider);
+    ref.watch(profileLocalDateSourceProvider);
     final proposalOwnerMatches =
         widget.proposal == null ||
         ref.watch(captureDraftOwnerProvider) == widget.proposal!.ownerId;
@@ -102,11 +122,17 @@ class _MorningCalibrationPageState
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save',
-      hasUnsavedChanges: _cleanDraft != null && !identical(_draft, _cleanDraft),
+      hasUnsavedChanges:
+          (_cleanDraft != null && !identical(_draft, _cleanDraft)) ||
+          _dateDrafts.values.any(
+            (d) => d.clean != null && !identical(d.draft, d.clean),
+          ),
       errorMessage: _saveError,
       loadErrorMessage:
           (!_proposalMatchesContext
-              ? 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
+              ? widget.proposal == null
+                    ? 'The account or timezone changed. Reopen this check-in.'
+                    : 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
               : _loadError) ??
           (_eveningPlanUnavailable && !_continueWithoutEveningPlan
               ? 'The previous Evening sleep plan could not be loaded. Retry, or explicitly continue without that plan.'
@@ -133,6 +159,11 @@ class _MorningCalibrationPageState
                     today: ref.read(profileLocalDateSourceProvider).today(),
                     enabled: !_isLoading && !_isSaving && !_dictating,
                     onChanged: _changeDate,
+                    loadStatuses: () => loadCaptureCalendarStatuses(
+                      ref.read(quickCheckInStoreProvider),
+                      ref.read(profileLocalDateSourceProvider).today(),
+                      morning: true,
+                    ),
                   ),
                 _buildStep(step.kind),
               ],
@@ -473,6 +504,11 @@ class _MorningCalibrationPageState
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveMorning(draft);
       _cleanDraft = _draft;
+      _dateDrafts.remove((
+        ref.read(captureDraftOwnerProvider),
+        ref.read(profileLocalDateSourceProvider).timezoneName,
+        _draft.entryDate,
+      ));
       await ref
           .read(projectionRefreshCoordinatorProvider)
           .dailyCaptureChanged(
@@ -488,7 +524,11 @@ class _MorningCalibrationPageState
             ? 'Morning check-in saved on this device.'
             : 'Morning check-in saved.',
       );
-      context.go(AppRoutes.dashboard);
+      if (!_dateDrafts.values.any(
+        (d) => d.clean != null && !identical(d.draft, d.clean),
+      )) {
+        context.go(AppRoutes.dashboard);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -637,7 +677,13 @@ class _MorningCalibrationPageState
 
   bool get _proposalMatchesContext {
     final proposal = widget.proposal;
-    if (proposal == null) return true;
+    if (proposal == null) {
+      return _draftScope ==
+          (
+            ref.read(captureDraftOwnerProvider),
+            ref.read(profileLocalDateSourceProvider).timezoneName,
+          );
+    }
     final dates = ref.read(profileLocalDateSourceProvider);
     return proposal.matches(
           ownerId: ref.read(captureDraftOwnerProvider),
@@ -653,10 +699,43 @@ class _MorningCalibrationPageState
       return;
     }
     if (dailyCaptureEntryDate(date) == _draft.entryDate) return;
-    if (_cleanDraft != null && !identical(_draft, _cleanDraft)) {
-      if (!await confirmCaptureDiscard(context) || !mounted || _isSaving) {
-        return;
-      }
+    if (!_proposalMatchesContext) return;
+    final contextKey = (
+      ref.read(captureDraftOwnerProvider),
+      ref.read(profileLocalDateSourceProvider).timezoneName,
+    );
+    _dateDrafts[(contextKey.$1, contextKey.$2, _draft.entryDate)] = (
+      draft: _draft,
+      clean: _cleanDraft,
+      step: _stepIndex,
+      sleepTouched: _sleepTouched,
+      safe: _safeCaptureLoaded,
+      eveningUnavailable: _eveningPlanUnavailable,
+      continueWithoutPlan: _continueWithoutEveningPlan,
+      revising: _revisingSavedCapture,
+    );
+    final cached =
+        _dateDrafts[(
+          contextKey.$1,
+          contextKey.$2,
+          dailyCaptureEntryDate(date),
+        )];
+    if (cached != null) {
+      setState(() {
+        _draft = cached.draft;
+        _cleanDraft = cached.clean;
+        _stepIndex = cached.step;
+        _sleepTouched = cached.sleepTouched;
+        _safeCaptureLoaded = cached.safe;
+        _eveningPlanUnavailable = cached.eveningUnavailable;
+        _continueWithoutEveningPlan = cached.continueWithoutPlan;
+        _revisingSavedCapture = cached.revising;
+        _noteController.text = _draft.reflectionNote ?? '';
+        _saveError = null;
+        _loadError = null;
+      });
+      if (!cached.safe) _loadToday();
+      return;
     }
     setState(() {
       _draft = MorningCalibrationDraft.empty(

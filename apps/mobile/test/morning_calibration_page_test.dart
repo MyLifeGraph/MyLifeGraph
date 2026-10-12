@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_life_graph/composition/capture_draft_providers.dart';
 import 'package:my_life_graph/composition/health_connect_providers.dart';
 import 'package:my_life_graph/features/health_connect/domain/health_sleep_suggestion.dart';
 import 'package:my_life_graph/composition/skillset_providers.dart';
@@ -17,7 +18,75 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'support/ui_catalog_capture.dart';
 
 void main() {
+  testWidgets('saving one day keeps another edited day available', (
+    tester,
+  ) async {
+    final store = _TwoDayMorningStore();
+    await _pumpPage(tester, store, currentInstant: DateTime(2026, 9, 25, 9));
+    await _tapVisible(tester, find.text('Next'));
+    await tester.enterText(find.byType(TextField), 'Today draft');
+    tester
+        .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+        .onChanged(DateTime(2026, 9, 24));
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('Next'));
+    await tester.enterText(find.byType(TextField), 'Yesterday saved');
+    await _tapVisible(tester, find.text('Save'));
+    expect(store.attempts.single.entryDate, '2026-09-24');
+    expect(find.byType(MorningCalibrationPage), findsOneWidget);
+    tester
+        .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+        .onChanged(DateTime(2026, 9, 25));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'Today draft',
+    );
+    await _tapVisible(tester, find.text('Save'));
+    expect(store.attempts.last.entryDate, '2026-09-25');
+    expect(store.attempts.last.reflectionNote, 'Today draft');
+  });
   if (captureUiCatalog) {
+    testWidgets('actual morning calendar flow catalog', (tester) async {
+      await loadCatalogFonts();
+      await _pumpPage(
+        tester,
+        _CalendarCatalogMorningStore(),
+        currentInstant: DateTime(2026, 10, 12, 9),
+        viewSize: const Size(390, 844),
+        theme: AppTheme.liquidGlass,
+        skillsetEnabled: true,
+      );
+      await captureCatalog(tester, '01-morning-open');
+      await _tapVisible(tester, find.text('Next'));
+      await tester.enterText(find.byType(TextField), 'Ready for today.');
+      FocusScope.of(tester.element(find.byType(TextField))).unfocus();
+      await captureCatalog(tester, '02-morning-draft');
+      await _tapVisible(tester, find.text('Today · Change date'));
+      await captureCatalog(tester, '03-morning-calendar');
+      await tester.tap(find.byKey(const Key('capture-day-2026-10-11')));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(
+        tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker)).date,
+        DateTime(2026, 10, 11),
+      );
+      await captureCatalog(tester, '04-morning-yesterday');
+      await _tapVisible(
+        tester,
+        find.descendant(
+          of: find.byType(CaptureDatePicker),
+          matching: find.byType(TextButton),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('capture-day-2026-10-12')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Ready for today.',
+      );
+      await captureCatalog(tester, '05-morning-restored');
+    });
     testWidgets('compact morning note catalog', (tester) async {
       await loadCatalogFonts();
       final now = DateTime(2026, 9, 25, 9);
@@ -61,8 +130,10 @@ void main() {
           .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
           .onChanged(DateTime(2026, 9, 24));
       await tester.pumpAndSettle();
-      expect(find.text('Discard changes?'), findsOneWidget);
-      await tester.tap(find.text('Keep editing'));
+      expect(find.text('Discard changes?'), findsNothing);
+      tester
+          .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+          .onChanged(DateTime(2026, 9, 25));
       await tester.pumpAndSettle();
       await _tapVisible(tester, find.text('Save'));
       final saved = store.attempts.single;
@@ -249,8 +320,10 @@ void main() {
           .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
           .onChanged(DateTime(2026, 9, 24));
       await tester.pumpAndSettle();
-      expect(find.text('Discard changes?'), findsOneWidget);
-      await tester.tap(find.text('Keep editing'));
+      expect(find.text('Discard changes?'), findsNothing);
+      tester
+          .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+          .onChanged(DateTime(2026, 9, 25));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -770,6 +843,7 @@ Future<void> _pumpPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        captureDraftOwnerProvider.overrideWithValue(null),
         healthSleepSuggestionProvider.overrideWith(
           (ref, day) async => watchSleep,
         ),
@@ -832,7 +906,8 @@ class _MorningStore implements QuickCheckInStore {
   QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.guest;
 
   @override
-  Future<DailyCaptureEntry?> loadToday(DateTime today) async => initial;
+  Future<DailyCaptureEntry?> loadToday(DateTime today) async =>
+      initial?.entryDate == dailyCaptureEntryDate(today) ? initial : null;
 
   @override
   Future<EveningShutdownDraft?> loadLatestEvening() async => sleepPlan;
@@ -852,6 +927,35 @@ class _MorningStore implements QuickCheckInStore {
 class _NoSleepPlanMorningStore extends _MorningStore {
   @override
   Future<EveningShutdownDraft?> loadLatestEvening() async => null;
+}
+
+class _TwoDayMorningStore extends _MorningStore {
+  @override
+  Future<DailyCaptureEntry?> loadToday(DateTime day) async {
+    if (day.day != 24 && day.day != 25) return null;
+    final morning = _savedMorning(
+      DateTime(day.year, day.month, day.day, 9),
+      estimatedMinutes: 480,
+    );
+    return DailyCaptureEntry(
+      entryDate: dailyCaptureEntryDate(day),
+      morning: morning,
+    );
+  }
+}
+
+class _CalendarCatalogMorningStore extends _MorningStore {
+  @override
+  Future<DailyCaptureEntry?> loadToday(DateTime day) async {
+    if ({8, 10}.contains(day.day)) return null;
+    return DailyCaptureEntry(
+      entryDate: dailyCaptureEntryDate(day),
+      morning: _savedMorning(
+        DateTime(day.year, day.month, day.day, 9),
+        estimatedMinutes: 480,
+      ),
+    );
+  }
 }
 
 EveningShutdownDraft _latestSleepPlan() {
