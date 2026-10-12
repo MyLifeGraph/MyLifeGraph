@@ -13,6 +13,7 @@ class OverviewObservation {
     required List<String> details,
     required List<String> missingSources,
     List<String> sourceUrls = const [],
+    this.sourceLabel = 'General advice',
   }) : bullets = List.unmodifiable(bullets),
        details = List.unmodifiable(details),
        missingSources = List.unmodifiable(missingSources),
@@ -25,6 +26,7 @@ class OverviewObservation {
   final List<String> details;
   final List<String> missingSources;
   final List<String> sourceUrls;
+  final String sourceLabel;
 
   String get label => switch (tier) {
     OverviewObservationTier.general => 'General guidance',
@@ -111,6 +113,7 @@ OverviewObservations overviewObservations(PersonalPatterns report) {
       title: 'Your check-ins',
       metrics: studyMetrics,
       missing: studyMissing,
+      sourceLabel: 'Check-in data',
     );
   } else if (focus.length >= overviewMinimumObservedDays) {
     final count = focus.fold<double>(
@@ -124,6 +127,7 @@ OverviewObservations overviewObservations(PersonalPatterns report) {
     study = OverviewObservation(
       tier: OverviewObservationTier.preliminary,
       title: 'Your Focus activity',
+      sourceLabel: 'Focus activity',
       bullets: [
         '${count.toStringAsFixed(0)} terminal Focus sessions · ${focus.length} days',
         '${(completed / count * 100).toStringAsFixed(0)}% completed',
@@ -160,6 +164,7 @@ OverviewObservations overviewObservations(PersonalPatterns report) {
             title: 'Your sleep observations',
             metrics: sleepMetrics,
             missing: sleepMissing,
+            sourceLabel: 'Sleep check-in data',
           )
         : OverviewObservation(
             tier: OverviewObservationTier.general,
@@ -183,9 +188,11 @@ OverviewObservation _descriptive({
   required String title,
   required List<_Metric> metrics,
   required List<String> missing,
+  required String sourceLabel,
 }) => OverviewObservation(
   tier: OverviewObservationTier.preliminary,
   title: title,
+  sourceLabel: sourceLabel,
   bullets: [for (final metric in metrics) metric.summary],
   observedDays: _unionDays(metrics),
   details: [

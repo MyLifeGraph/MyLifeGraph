@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_icons.dart';
+import 'capture_calendar_dialog.dart';
+export 'capture_calendar_dialog.dart';
 
 /// Calendar-day arithmetic deliberately avoids 23/25-hour DST day offsets.
 DateTime captureDayOffset(DateTime day, int offset) =>
@@ -12,11 +14,13 @@ class CaptureDatePicker extends StatelessWidget {
     required this.today,
     required this.onChanged,
     this.enabled = true,
+    this.loadStatuses,
   });
   final DateTime date;
   final DateTime today;
   final ValueChanged<DateTime> onChanged;
   final bool enabled;
+  final Future<Map<String, CaptureDayStatus>> Function()? loadStatuses;
 
   @override
   Widget build(BuildContext context) => Align(
@@ -31,42 +35,20 @@ class CaptureDatePicker extends StatelessWidget {
       onPressed: !enabled
           ? null
           : () async {
-              final picked = await showDatePicker(
+              final picked = await showDialog<DateTime>(
                 context: context,
-                initialDate: date.isAfter(today)
-                    ? today
-                    : date.isBefore(captureDayOffset(today, -7))
-                    ? captureDayOffset(today, -7)
-                    : date,
-                firstDate: captureDayOffset(today, -7),
-                lastDate: today,
-                helpText: 'Check-in date',
+                builder: (_) => CaptureCalendarDialog(
+                  date: date,
+                  today: today,
+                  loadStatuses: loadStatuses,
+                ),
               );
               if (picked == null ||
                   !context.mounted ||
                   DateUtils.isSameDay(picked, date)) {
                 return;
               }
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Change check-in date?'),
-                  content: const Text(
-                    'Unsaved answers will be replaced by the selected day’s answers.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Keep editing'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Change date'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true && context.mounted) onChanged(picked);
+              onChanged(picked);
             },
     ),
   );

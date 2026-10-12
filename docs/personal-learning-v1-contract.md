@@ -103,6 +103,16 @@ non-effects, save/retry state, and confirmed clear consequence remain visible.
 
 ### Overview guidance and early observations
 
+Tapping the existing general/early evidence icon opens a theme-owned, scrollable
+explanation dialog. Long press retains the short tooltip. This adds no inline
+copy or layout changes and performs no data read/write; Details remains separate.
+The dialog names the displayed source and the next evidence requirement. General
+guidance needs seven valid days per metric (check-ins or Focus for study, sleep
+check-ins for sleep). Early study names the existing 20-rating/28-day-span floor;
+sleep names the existing 30 eligible Morning-plus-rated-Focus days and reports
+the server's eligible count. These are necessary floors, not guarantees: a
+supported consistent comparison is still required. No maturity rule is changed.
+
 The two real-account Overview cards add a read-only Flutter projection of the
 existing consent-gated `skillset-observations-v1` points. No new endpoint, stored
 score, wire version, analysis call, correlation, fingerprint or Planner input

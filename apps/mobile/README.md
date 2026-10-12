@@ -1,5 +1,8 @@
 # MyLifeGraph Mobile App
 
+Tap the existing general/early Insights evidence icon for its compact explanation
+dialog; long press still shows the short tooltip. Inline layout is unchanged.
+
 Insights Overview now keeps sourced general guidance visible while collecting,
 and shows descriptive check-in/sleep or terminal-Focus summaries after seven valid
 distinct days per measure. Small red/amber/green evidence marks supplement labels.
@@ -223,7 +226,10 @@ Cancel/Create preview stay above the keyboard; non-Exam single-plan paths retain
 Back/Continue. Large text stacks the actions without hiding fields or changing
 validation.
 
-Morning/Evening warn before discarding unsaved edits through Back/date changes.
+Morning/Evening warn before discarding unsaved edits through Back/Close.
+Date changes are immediate and retain each visited draft/step in route-local
+memory, including notes and edited sleep times. Saving one day does not close
+the flow while another visited day has unsaved answers.
 This does not persist incomplete forms or protect browser refreshes. A connected
 Android device can offer `Watch sleep / Use times` when Morning opens. Acceptance
 is explicit; saved/manual/voice values are never silently replaced, and normal
@@ -284,8 +290,11 @@ High Contrast uses opaque surfaces without decorative glass effects. See the
 [visual owner](../../docs/frontend-visual-system-v2.md#liquid-glass).
 
 Manual Morning/Evening supports today plus seven earlier calendar dates using
-the existing reviewed Capture save path. The date picker confirms discarding
-unsaved edits before loading another day; historical Morning needs explicit
+the existing reviewed Capture save path. The date picker opens/selects directly;
+saved complete branches have green outlines, open past days red outlines,
+unknown reads neutral, and Today a filled theme-brand circle with a readable
+on-brand number. Morning and Evening histories remain separate. Drafts are not
+shared across accounts/timezones and are not persisted; historical Morning needs explicit
 sleep times. Voice review remains today-bound. Focus's optional start reminders
 are a passive list with one Ready & start confirmation, never persisted/scored.
 Items remain editable in Settings → Setup → Focus setup. Planner distinguishes releasing time

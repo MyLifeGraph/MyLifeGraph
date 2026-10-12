@@ -24,17 +24,24 @@ The additive migration and compatible API must precede the new client.
 ## Capture editing safeguards
 
 Morning and Evening track unsaved edits, including optional text and reviewed
-voice values. Leaving via the header/system Back or choosing a different date
-asks `Discard changes?`; saving blocks navigation. Internal step navigation keeps
-the draft. A confirmed Save resets the dirty baseline. This is a route guard,
+voice values. Leaving via the header/system Back asks `Discard changes?`;
+saving blocks navigation. Date taps open the calendar directly and select a day
+without a second confirmation. Each visited date retains its draft and step in
+memory for this open flow, bound to account/timezone. Internal step navigation keeps
+the draft. A confirmed Save resets that date's dirty baseline; when another date
+still has edits the flow remains open rather than silently losing them. This is a route guard,
 not browser-refresh/crash recovery or a draft Cloud autosave. Morning may offer
 explicit wearable sleep acceptance; see [Health Connect](health-connect-v1-contract.md).
 
 ## Manual recent-day capture
 
 Morning and Evening offer a shared date picker for today and the previous seven
-profile-local calendar dates. Changing date confirms replacement of unsaved
-answers, loads that date's existing branch and retains the normal reviewed Save
+profile-local calendar dates. First visits load that date's existing branch;
+return visits restore the local draft. The calendar uses bounded existing reads
+for separate Morning/Evening completion: done green outline, open past days red
+outline, failed/unknown reads neutral. Today uses the theme's filled brand circle
+and on-brand number. No symbols are added; semantic labels expose each status.
+Date changes retain the normal reviewed Save
 and compare-and-swap authority. Historical Morning never invents a wake time
 from the current clock; defaults may only come from an earlier Evening, not a
 future plan. Historical Focus reflections use the selected entry date. The

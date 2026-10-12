@@ -1,5 +1,11 @@
 # UI Language And Copy Contract
 
+Insights evidence explanations use `General guidance`, `Early observations`
+and `Close`. General advice is not a personal finding; early summaries are not
+reliable patterns or causal conclusions. Details still owns sources/coverage.
+Short popup copy uses `Based on`, `Next` and `For more reliable insights`, naming check-in/sleep/Focus data and
+actual observed or eligible counts. It never promises green from counts alone.
+
 Insights Overview uses `General guidance`, `Early observations`, `Your check-ins`,
 `Your Focus activity` and `Your sleep observations`. Medians and observed-day counts
 are explicit, not correlations or recommended targets. General copy is brief:
@@ -121,7 +127,9 @@ overlap explanation in the editor. Actions retain accessible tooltips.
 `Push reminders` is an optional Settings surface. Use `Important reminders`,
 `Before bedtime`, `Today's deadlines`, `Important patterns`, `Morning check-in`,
 `Evening check-in` and `Quiet hours`. Check-in times are profile-local. Manual
-Capture uses `Today · Change date` and an explicit unsaved-answer confirmation.
+Capture uses `Today · Change date`, calendar `Check-in date` / `Done` / `Open`,
+and `Status unavailable · Retry` for failed history reads. Date changes preserve
+route-local drafts without confirmation; leaving still confirms unsaved answers.
 The selected date remains visible throughout review. Plan removal says
 `Remove plan from calendar`; reservation release remains a different action,
 and confirmation explicitly preserves Focus history and imported source events.

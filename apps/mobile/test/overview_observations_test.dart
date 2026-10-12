@@ -55,6 +55,8 @@ void main() {
       ),
     );
     expect(result.study!.tier, OverviewObservationTier.preliminary);
+    expect(result.study!.sourceLabel, 'Check-in data');
+    expect(result.sleep!.sourceLabel, 'Sleep check-in data');
     expect(result.study!.bullets, [
       'Energy · 6/10 median',
       'Mood · 8/10 median',

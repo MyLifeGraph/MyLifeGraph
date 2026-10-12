@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:my_life_graph/composition/capture_draft_providers.dart';
 import 'package:my_life_graph/composition/skillset_providers.dart';
 import 'dart:ui' show PointerDeviceKind;
 
@@ -28,6 +29,48 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'support/ui_catalog_capture.dart';
 
 void main() {
+  testWidgets('Evening switches dates without discarding text or step', (
+    tester,
+  ) async {
+    final store = _RecordingCaptureStore();
+    await _pumpEveningPage(
+      tester,
+      store,
+      currentInstant: DateTime(2026, 9, 25, 21),
+    );
+    for (final label in [
+      'evening mood 7 of 10',
+      'evening energy 6 of 10',
+      'evening stress 3 of 10',
+    ]) {
+      await _tapVisible(tester, find.bySemanticsLabel(label));
+    }
+    await _tapVisible(tester, find.text('Next'));
+    tester
+        .widget<CaptureClockControl>(find.byType(CaptureClockControl))
+        .onChanged('23:00');
+    await tester.pump();
+    await _tapVisible(tester, find.text('Next'));
+    await tester.enterText(
+      find.byType(TextField).last,
+      'Keep this unsaved note',
+    );
+    tester
+        .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+        .onChanged(DateTime(2026, 9, 24));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsNothing);
+    tester
+        .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+        .onChanged(DateTime(2026, 9, 25));
+    await tester.pumpAndSettle();
+    expect(find.text('What should tomorrow know?'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+      'Keep this unsaved note',
+    );
+    expect(store.eveningAttempts, isEmpty);
+  });
   for (final instant in [
     DateTime(2026, 10, 10),
     DateTime(2026, 10, 10, 2),
@@ -35,37 +78,84 @@ void main() {
     DateTime(2026, 10, 10, 12),
     DateTime(2026, 10, 10, 23, 59, 59),
   ]) {
-    testWidgets('missing Evening uses yesterday only before noon ($instant)', (tester) async {
+    testWidgets('missing Evening uses yesterday only before noon ($instant)', (
+      tester,
+    ) async {
       final store = _RecordingCaptureStore();
       await _pumpEveningPage(tester, store, currentInstant: instant);
-      final picker = tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker));
+      final picker = tester.widget<CaptureDatePicker>(
+        find.byType(CaptureDatePicker),
+      );
       expect(picker.date, DateTime(2026, 10, instant.hour < 12 ? 9 : 10));
-      expect(find.text('Yesterday'), instant.hour < 12 ? findsOneWidget : findsNothing);
+      expect(
+        find.text('Yesterday'),
+        instant.hour < 12 ? findsOneWidget : findsNothing,
+      );
     });
   }
-  testWidgets('saved yesterday Evening keeps today selected before noon', (tester) async {
+  testWidgets('saved yesterday Evening keeps today selected before noon', (
+    tester,
+  ) async {
     final store = _RecordingCaptureStore(
       initial: DailyCaptureEntry(
         entryDate: '2026-10-09',
         evening: _eveningDraft().copyWith(entryDate: '2026-10-09'),
       ),
     );
-    await _pumpEveningPage(tester, store, currentInstant: DateTime(2026, 10, 10, 2));
-    final picker = tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker));
+    await _pumpEveningPage(
+      tester,
+      store,
+      currentInstant: DateTime(2026, 10, 10, 2),
+    );
+    final picker = tester.widget<CaptureDatePicker>(
+      find.byType(CaptureDatePicker),
+    );
     expect(picker.date, DateTime(2026, 10, 10));
     expect(find.text('Yesterday'), findsNothing);
   });
   if (captureUiCatalog) {
+    testWidgets('actual evening calendar flow catalog', (tester) async {
+      await loadCatalogFonts();
+      await _pumpEveningPage(
+        tester,
+        _RecordingCaptureStore(),
+        currentInstant: DateTime(2026, 10, 12, 21),
+        viewSize: const Size(390, 844),
+        theme: AppTheme.liquidGlass,
+      );
+      await captureCatalog(tester, '06-evening-open');
+      await _tapVisible(tester, find.text('Today · Change date'));
+      await captureCatalog(tester, '07-evening-calendar');
+      await tester.tap(find.byKey(const Key('capture-day-2026-10-11')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker)).date,
+        DateTime(2026, 10, 11),
+      );
+      expect(find.text('Discard changes?'), findsNothing);
+      await captureCatalog(tester, '08-evening-yesterday');
+    });
     testWidgets('compact evening note catalog', (tester) async {
       await loadCatalogFonts();
-      await _pumpEveningPage(tester, _RecordingCaptureStore(),
-        viewSize: const Size(390, 844), theme: AppTheme.liquidGlass,
-        currentInstant: DateTime(2026, 9, 25, 21), skillsetEnabled: true);
-      for (final label in ['evening mood 7 of 10', 'evening energy 6 of 10', 'evening stress 3 of 10']) {
+      await _pumpEveningPage(
+        tester,
+        _RecordingCaptureStore(),
+        viewSize: const Size(390, 844),
+        theme: AppTheme.liquidGlass,
+        currentInstant: DateTime(2026, 9, 25, 21),
+        skillsetEnabled: true,
+      );
+      for (final label in [
+        'evening mood 7 of 10',
+        'evening energy 6 of 10',
+        'evening stress 3 of 10',
+      ]) {
         await _tapVisible(tester, find.bySemanticsLabel(label));
       }
       await _tapVisible(tester, find.text('Next'));
-      tester.widget<CaptureClockControl>(find.byType(CaptureClockControl)).onChanged('23:00');
+      tester
+          .widget<CaptureClockControl>(find.byType(CaptureClockControl))
+          .onChanged('23:00');
       await tester.pump();
       await _tapVisible(tester, find.text('Next'));
       await captureCatalog(tester, 'evening-after');
@@ -73,79 +163,138 @@ void main() {
   }
   testWidgets('Evening backfill writes only the selected date', (tester) async {
     final store = _RecordingCaptureStore();
-    await _pumpEveningPage(tester, store, currentInstant: DateTime(2026, 9, 25, 21));
-    tester.widget<CaptureDatePicker>(find.byType(CaptureDatePicker)).onChanged(DateTime(2026, 9, 23));
+    await _pumpEveningPage(
+      tester,
+      store,
+      currentInstant: DateTime(2026, 9, 25, 21),
+    );
+    tester
+        .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
+        .onChanged(DateTime(2026, 9, 23));
     await tester.pumpAndSettle();
-    for (final label in ['evening mood 7 of 10', 'evening energy 6 of 10', 'evening stress 3 of 10']) {
+    for (final label in [
+      'evening mood 7 of 10',
+      'evening energy 6 of 10',
+      'evening stress 3 of 10',
+    ]) {
       await _tapVisible(tester, find.bySemanticsLabel(label));
     }
     await _tapVisible(tester, find.text('Next'));
-    tester.widget<CaptureClockControl>(find.byType(CaptureClockControl)).onChanged('23:00');
+    tester
+        .widget<CaptureClockControl>(find.byType(CaptureClockControl))
+        .onChanged('23:00');
     await tester.pump();
     await _tapVisible(tester, find.text('Next'));
     await _tapVisible(tester, find.text('Save'));
     expect(store.eveningAttempts.single.entryDate, '2026-09-23');
     expect(store.eveningAttempts.single.mood, 7);
   });
-  testWidgets('context choices share dimensions and blocker stays with its source', (tester) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final store = _RecordingCaptureStore();
-    await _pumpEveningPage(tester, store, skillsetEnabled: true);
-    await _tapVisible(tester, find.bySemanticsLabel('evening mood 2 of 10'));
-    await _tapVisible(tester, find.bySemanticsLabel('evening energy 9 of 10'));
-    await _tapVisible(tester, find.bySemanticsLabel('evening stress 8 of 10'));
-    await tester.pump();
-    await _tapVisible(tester, find.text('Next'));
-    await _tapVisible(tester, find.text('Next'));
-    final blocker = _textFieldWithLabel('Specific blocker (optional)');
-    expect(blocker, findsNothing);
-    await _tapVisible(tester, find.bySemanticsLabel('stress influence hardly_controllable'));
-    final controls = find.byWidgetPredicate((w) => w is CaptureChoiceControl<StressControllability>);
-    final reference = tester.getSize(find.descendant(of: controls, matching: find.byType(ChoiceChip)).first);
-    for (final label in ['Sport today', 'Social contact']) {
-      final chips = find.descendant(of: find.widgetWithText(OptionalSkillsetChoice, label),
-        matching: find.byType(ChoiceChip));
-      for (var i = 0; i < 3; i++) { expect(tester.getSize(chips.at(i)), reference); }
-    }
-    await _tapVisible(tester, find.bySemanticsLabel('stress source workload'));
-    expect(blocker, findsNothing);
-    await _tapVisible(tester, find.bySemanticsLabel('stress source workload'));
-    await tester.enterText(blocker, 'Too many deadlines');
-    expect(tester.widget<TextField>(blocker).decoration!.enabledBorder, InputBorder.none);
-    expect(tester.widget<TextField>(blocker).decoration!.focusedBorder, InputBorder.none);
-    for (final (source, next) in [
-      ('workload', 'avoidable_pressure'),
-      ('avoidable_pressure', 'private_emotional'),
-      ('physical_recovery', 'external_environment'),
-    ]) {
-      final selected = find.bySemanticsLabel('stress source $source');
-      if (source != 'workload') {
-        await _tapVisible(tester, selected);
-        expect(blocker, findsNothing);
-        await _tapVisible(tester, selected);
+  testWidgets(
+    'context choices share dimensions and blocker stays with its source',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = _RecordingCaptureStore();
+      await _pumpEveningPage(tester, store, skillsetEnabled: true);
+      await _tapVisible(tester, find.bySemanticsLabel('evening mood 2 of 10'));
+      await _tapVisible(
+        tester,
+        find.bySemanticsLabel('evening energy 9 of 10'),
+      );
+      await _tapVisible(
+        tester,
+        find.bySemanticsLabel('evening stress 8 of 10'),
+      );
+      await tester.pump();
+      await _tapVisible(tester, find.text('Next'));
+      await _tapVisible(tester, find.text('Next'));
+      final blocker = _textFieldWithLabel('Specific blocker (optional)');
+      expect(blocker, findsNothing);
+      await _tapVisible(
+        tester,
+        find.bySemanticsLabel('stress influence hardly_controllable'),
+      );
+      final controls = find.byWidgetPredicate(
+        (w) => w is CaptureChoiceControl<StressControllability>,
+      );
+      final reference = tester.getSize(
+        find.descendant(of: controls, matching: find.byType(ChoiceChip)).first,
+      );
+      for (final label in ['Sport today', 'Social contact']) {
+        final chips = find.descendant(
+          of: find.widgetWithText(OptionalSkillsetChoice, label),
+          matching: find.byType(ChoiceChip),
+        );
+        for (var i = 0; i < 3; i++) {
+          expect(tester.getSize(chips.at(i)), reference);
+        }
       }
-      await tester.pumpAndSettle();
-      expect(blocker, findsOneWidget);
-      expect(find.text('Too many deadlines'), findsOneWidget);
-      expect(tester.getTopLeft(blocker).dy,
-        greaterThanOrEqualTo(tester.getBottomLeft(selected).dy));
-      expect(tester.getBottomLeft(blocker).dy,
-        lessThan(tester.getTopLeft(find.bySemanticsLabel('stress source $next')).dy));
-    }
-    await _tapVisible(tester, find.text('Save'));
-    expect(store.eveningAttempts.single.specificBlocker, 'Too many deadlines');
-    expect(store.eveningAttempts.single.stressSource, StressSource.physicalRecovery);
-  });
+      await _tapVisible(
+        tester,
+        find.bySemanticsLabel('stress source workload'),
+      );
+      expect(blocker, findsNothing);
+      await _tapVisible(
+        tester,
+        find.bySemanticsLabel('stress source workload'),
+      );
+      await tester.enterText(blocker, 'Too many deadlines');
+      expect(
+        tester.widget<TextField>(blocker).decoration!.enabledBorder,
+        InputBorder.none,
+      );
+      expect(
+        tester.widget<TextField>(blocker).decoration!.focusedBorder,
+        InputBorder.none,
+      );
+      for (final (source, next) in [
+        ('workload', 'avoidable_pressure'),
+        ('avoidable_pressure', 'private_emotional'),
+        ('physical_recovery', 'external_environment'),
+      ]) {
+        final selected = find.bySemanticsLabel('stress source $source');
+        if (source != 'workload') {
+          await _tapVisible(tester, selected);
+          expect(blocker, findsNothing);
+          await _tapVisible(tester, selected);
+        }
+        await tester.pumpAndSettle();
+        expect(blocker, findsOneWidget);
+        expect(find.text('Too many deadlines'), findsOneWidget);
+        expect(
+          tester.getTopLeft(blocker).dy,
+          greaterThanOrEqualTo(tester.getBottomLeft(selected).dy),
+        );
+        expect(
+          tester.getBottomLeft(blocker).dy,
+          lessThan(
+            tester.getTopLeft(find.bySemanticsLabel('stress source $next')).dy,
+          ),
+        );
+      }
+      await _tapVisible(tester, find.text('Save'));
+      expect(
+        store.eveningAttempts.single.specificBlocker,
+        'Too many deadlines',
+      );
+      expect(
+        store.eveningAttempts.single.stressSource,
+        StressSource.physicalRecovery,
+      );
+    },
+  );
   testWidgets('sport and social save with no Insights dimensions selected', (
     tester,
   ) async {
     final store = _RecordingCaptureStore();
     await _pumpEveningPage(tester, store, skillsetEnabled: true);
     expect(find.text('Close today in under a minute'), findsOneWidget);
-    expect(find.text('Three quick ratings are enough for today\'s state.'), findsNothing);
+    expect(
+      find.text('Three quick ratings are enough for today\'s state.'),
+      findsNothing,
+    );
     expect(find.text('Sport today'), findsNothing);
     await _completeEveningDraft(tester, includeOptionals: false);
     expect(find.text('More (optional)'), findsNothing);
@@ -699,6 +848,7 @@ Future<void> _pumpEveningPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        captureDraftOwnerProvider.overrideWithValue(null),
         optionalSkillsetCaptureProvider.overrideWithValue(skillsetEnabled),
         skillsetDimensionsProvider.overrideWith((ref) => <String>{}),
         profileLocalDateSourceProvider.overrideWithValue(
@@ -761,7 +911,10 @@ Future<void> _completeEveningDraft(
   );
 
   if (includeOptionals) {
-    await _tapVisible(tester, find.bySemanticsLabel('stress source private_emotional'));
+    await _tapVisible(
+      tester,
+      find.bySemanticsLabel('stress source private_emotional'),
+    );
     await tester.enterText(
       _textFieldWithLabel('Reflection (optional)'),
       'Exact retry reflection',

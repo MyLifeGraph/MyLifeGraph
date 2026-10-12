@@ -97,6 +97,54 @@ void main() {
               findsOneWidget,
             );
           }
+          final evidence = find
+              .byWidgetPredicate(
+                (widget) =>
+                    widget is Tooltip &&
+                    widget.message ==
+                        (mode == 'general'
+                            ? 'General guidance'
+                            : 'Early observations'),
+              )
+              .first;
+          final headingPosition = tester.getTopLeft(
+            find.text('PERSONAL STUDY PATTERN'),
+          );
+          final evidencePosition = tester.getTopLeft(evidence);
+          await tester.tap(evidence);
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsOneWidget);
+          if (mode != 'general') {
+            expect(
+              find.textContaining(
+                'Based on: ${mode == 'focus' ? 'Focus activity' : 'Check-in data'}.',
+              ),
+              findsOneWidget,
+            );
+            expect(find.textContaining('/20)'), findsOneWidget);
+          } else {
+            expect(
+              find.textContaining('Check-in history: 0/7 days'),
+              findsOneWidget,
+            );
+          }
+          expect(
+            find.textContaining(
+              mode == 'general'
+                  ? 'not based on your data'
+                  : 'Not yet a reliable pattern',
+            ),
+            findsOneWidget,
+          );
+          await tester.ensureVisible(find.text('Close'));
+          await tester.tap(find.text('Close'));
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsNothing);
+          expect(
+            tester.getTopLeft(find.text('PERSONAL STUDY PATTERN')),
+            headingPosition,
+          );
+          expect(tester.getTopLeft(evidence), evidencePosition);
           await tester.scrollUntilVisible(
             find.byKey(const Key('sleep-recommendation-collecting')),
             200,
@@ -185,6 +233,43 @@ void main() {
         );
         await tester.pumpAndSettle();
         await captureCatalog(tester, 'overview-$mode');
+        // Capture the existing tooltip and disclosure; no new app interaction.
+        final statusTooltip = find
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is Tooltip &&
+                  widget.message ==
+                      (mode == 'general'
+                          ? 'General guidance'
+                          : 'Early observations'),
+            )
+            .first;
+        await tester.tap(statusTooltip);
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsOneWidget);
+        await captureCatalog(tester, 'overview-$mode-explanation');
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+        final sleepTooltip = find
+            .descendant(
+              of: find.byKey(const Key('sleep-recommendation-collecting')),
+              matching: find.byType(Tooltip),
+            )
+            .first;
+        await tester.ensureVisible(sleepTooltip);
+        await tester.tap(sleepTooltip);
+        await tester.pumpAndSettle();
+        await captureCatalog(tester, 'overview-$mode-sleep-explanation');
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+        await tester.longPress(statusTooltip);
+        await tester.pump(const Duration(milliseconds: 200));
+        await captureCatalog(tester, 'overview-$mode-tooltip');
+        Tooltip.dismissAllToolTips();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Details').first);
+        await tester.pumpAndSettle();
+        await captureCatalog(tester, 'overview-$mode-details');
         expect(tester.takeException(), isNull);
       });
     }

@@ -16,7 +16,6 @@ import '../../domain/quick_check_in.dart';
 import '../../domain/capture_draft_proposal.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
-import '../widgets/capture_leave_guard.dart';
 import '../widgets/capture_date_picker.dart';
 import '../../../../composition/skillset_providers.dart';
 import '../../domain/skillset_signals.dart';
@@ -38,6 +37,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   final _blockerController = TextEditingController();
 
   late EveningShutdownDraft _draft;
+  late final (String?, String?) _draftScope;
   EveningShutdownDraft? _cleanDraft;
   String _cleanReflection = '';
   String _cleanBlocker = '';
@@ -52,6 +52,23 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   bool _automaticDateResolved = false;
   String? _loadError;
   String? _saveError;
+  final _dateDrafts =
+      <
+        (String?, String?, String),
+        ({
+          EveningShutdownDraft draft,
+          EveningShutdownDraft? clean,
+          String reflection,
+          String blocker,
+          String cleanReflection,
+          String cleanBlocker,
+          int step,
+          bool safe,
+          bool revising,
+          List<FocusSession> sessions,
+          Map<String, FocusReflection> reflections,
+        })
+      >{};
   List<FocusSession> _todayFocusSessions = const [];
   Map<String, FocusReflection> _todayFocusReflections = const {};
 
@@ -76,6 +93,10 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   @override
   void initState() {
     super.initState();
+    _draftScope = (
+      ref.read(captureDraftOwnerProvider),
+      ref.read(profileLocalDateSourceProvider).timezoneName,
+    );
     final capturedAt = ref.read(currentInstantProvider)();
     _draft = EveningShutdownDraft.empty(
       capturedAt,
@@ -99,6 +120,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(captureDraftOwnerProvider);
+    ref.watch(profileLocalDateSourceProvider);
     final proposalOwnerMatches =
         widget.proposal == null ||
         ref.watch(captureDraftOwnerProvider) == widget.proposal!.ownerId;
@@ -120,13 +143,22 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       isSaving: _isSaving,
       saveLabel: 'Save',
       hasUnsavedChanges:
-          _cleanDraft != null &&
-          (!identical(_draft, _cleanDraft) ||
-              _reflectionController.text != _cleanReflection ||
-              _blockerController.text != _cleanBlocker),
+          (_cleanDraft != null &&
+              (!identical(_draft, _cleanDraft) ||
+                  _reflectionController.text != _cleanReflection ||
+                  _blockerController.text != _cleanBlocker)) ||
+          _dateDrafts.values.any(
+            (d) =>
+                d.clean != null &&
+                (!identical(d.draft, d.clean) ||
+                    d.reflection != d.cleanReflection ||
+                    d.blocker != d.cleanBlocker),
+          ),
       errorMessage: _saveError,
       loadErrorMessage: !_proposalMatchesContext
-          ? 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
+          ? widget.proposal == null
+                ? 'The account or timezone changed. Reopen this check-in.'
+                : 'This voice draft belongs to a different account, day or timezone. Start a new check-in.'
           : _loadError,
       onRetryLoad: _loadToday,
       onClose: () =>
@@ -152,6 +184,11 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
                     today: ref.read(profileLocalDateSourceProvider).today(),
                     enabled: !_isLoading && !_isSaving && !_dictating,
                     onChanged: _changeDate,
+                    loadStatuses: () => loadCaptureCalendarStatuses(
+                      ref.read(quickCheckInStoreProvider),
+                      ref.read(profileLocalDateSourceProvider).today(),
+                      morning: false,
+                    ),
                   ),
                 _buildStep(step.kind),
               ],
@@ -459,6 +496,11 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveEvening(draft);
       _cleanDraft = _draft;
+      _dateDrafts.remove((
+        ref.read(captureDraftOwnerProvider),
+        ref.read(profileLocalDateSourceProvider).timezoneName,
+        _draft.entryDate,
+      ));
       _cleanReflection = _reflectionController.text;
       _cleanBlocker = _blockerController.text;
       await ref
@@ -476,7 +518,15 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             ? 'Evening check-in saved on this device.'
             : 'Evening check-in saved.',
       );
-      context.go(AppRoutes.dashboard);
+      if (!_dateDrafts.values.any(
+        (d) =>
+            d.clean != null &&
+            (!identical(d.draft, d.clean) ||
+                d.reflection != d.cleanReflection ||
+                d.blocker != d.cleanBlocker),
+      )) {
+        context.go(AppRoutes.dashboard);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -628,7 +678,13 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
 
   bool get _proposalMatchesContext {
     final proposal = widget.proposal;
-    if (proposal == null) return true;
+    if (proposal == null) {
+      return _draftScope ==
+          (
+            ref.read(captureDraftOwnerProvider),
+            ref.read(profileLocalDateSourceProvider).timezoneName,
+          );
+    }
     final dates = ref.read(profileLocalDateSourceProvider);
     return proposal.matches(
           ownerId: ref.read(captureDraftOwnerProvider),
@@ -640,15 +696,53 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _changeDate(DateTime date) async {
-    if (_isLoading || _isSaving || widget.proposal != null) return;
+    if (_isLoading || _isSaving || _dictating || widget.proposal != null) {
+      return;
+    }
     if (dailyCaptureEntryDate(date) == _draft.entryDate) return;
-    if (_cleanDraft != null &&
-        (!identical(_draft, _cleanDraft) ||
-            _reflectionController.text != _cleanReflection ||
-            _blockerController.text != _cleanBlocker)) {
-      if (!await confirmCaptureDiscard(context) || !mounted || _isSaving) {
-        return;
-      }
+    if (!_proposalMatchesContext) return;
+    final contextKey = (
+      ref.read(captureDraftOwnerProvider),
+      ref.read(profileLocalDateSourceProvider).timezoneName,
+    );
+    _dateDrafts[(contextKey.$1, contextKey.$2, _draft.entryDate)] = (
+      draft: _draft,
+      clean: _cleanDraft,
+      reflection: _reflectionController.text,
+      blocker: _blockerController.text,
+      cleanReflection: _cleanReflection,
+      cleanBlocker: _cleanBlocker,
+      step: _stepIndex,
+      safe: _safeCaptureLoaded,
+      revising: _revisingSavedCapture,
+      sessions: _todayFocusSessions,
+      reflections: _todayFocusReflections,
+    );
+    final cached =
+        _dateDrafts[(
+          contextKey.$1,
+          contextKey.$2,
+          dailyCaptureEntryDate(date),
+        )];
+    _automaticDateResolved = true;
+    if (cached != null) {
+      setState(() {
+        _draft = cached.draft;
+        _cleanDraft = cached.clean;
+        _stepIndex = cached.step;
+        _safeCaptureLoaded = cached.safe;
+        _revisingSavedCapture = cached.revising;
+        _cleanReflection = cached.cleanReflection;
+        _cleanBlocker = cached.cleanBlocker;
+        _reflectionController.text = cached.reflection;
+        _blockerController.text = cached.blocker;
+        _todayFocusSessions = cached.sessions;
+        _todayFocusReflections = cached.reflections;
+        _saveError = null;
+        _loadError = null;
+      });
+      if (!cached.safe) _loadToday();
+      return;
     }
     setState(() {
       _draft = EveningShutdownDraft.empty(
