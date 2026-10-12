@@ -31,7 +31,44 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
-### Local RC30 native foreground recovery candidate — 2026-10-12
+### Published RC30 native foreground recovery — 2026-10-12
+
+- PR [#49](https://github.com/MyLifeGraph/MyLifeGraph/pull/49) merged candidate
+  `4fcefd793da852f19c7a78e63ce98d266ce62f9b` into Main
+  `eeb27d97e323b08170f035d21ea5d31f0da2acf5`; both source trees are identical
+  (`da8c20a9d4d3c6c749010e1493964029c0ba20ee`). Annotated
+  `v0.1.0-pilot.1-rc.30` resolves to that Main source.
+- Full manual Linux CI
+  [38265097504](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38265097504)
+  passed all seven jobs: Flutter **1,911**, backend **2,011 passed / 2 skipped**,
+  browser **8**, fresh migrations/pgTAP, web build, native JVM/Lint and source
+  gates. PR run **38265101320** also passed, including native verification.
+- Signed workflow
+  [38266872530](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38266872530)
+  passed. Independent verification of downloaded bytes retained certificate
+  `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+- [RC30](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.30)
+  published **2026-10-12T15:09:13Z**, non-draft, **not prerelease**, latest.
+  Version `0.1.0-pilot.1-rc.30`, versionCode **10000121**, APK **153,289,968 bytes**,
+  SHA-256 `61a1df02439f1a574c84f181cc4f5b5998eab344ce9f49adac83ea51c85bedd4`.
+  All four uploaded APK/SBOM/metadata/SHA256SUMS asset identities, sizes and
+  GitHub SHA-256 digests match the independent local files.
+- Existing production app deployment **dpl_EJsoNqsPPpzaVXaotwtVT8uBFZef** is
+  READY at the same Main SHA. Both existing app aliases returned HTTP200, CSP
+  and JavaScript containing the exact source SHA and existing calendar/Insights
+  copy. Marketing hosting, accounts, redirects and automatic-deployment settings
+  were unchanged.
+- Existing VPS health/readiness remain `ok`/`ready`, RC27 API source
+  `e7b5f9c55182fb28de98538efc92d45ec7f78119`, **83** migrations, head
+  `20261006135421_coach_operator_sol61_standard.sql`. This Android-only fix
+  requires no API reinstall or SQL mutation. A real authenticated Coach turn
+  is not inferred from readiness or mocked CI.
+- Local retention tests passed **36**. Laptop finalization verified the streamed
+  public asset bytes, printed its dry-run, rechecked the exact plan and removed
+  only four verified managed RC29 files (**153,664,827 bytes**). Original copies,
+  signing material, unpublished/unknown files and active/rollback server releases
+  remain protected. VM retention is incomplete: the current authenticated LAN VM
+  SSH attempt timed out; no network settings or VM files were changed.
 
 Task base `75f4ca9ede67d8f8b7eb4c1b94e8cfdfdfe900c9`. A guest/mock debug build
 on an isolated read-only Pixel emulator (Android API37) reproduced a connected
@@ -51,7 +88,7 @@ escaping and rerunning analysis. Initial root Gradle plug-in DataStore tests fai
 with Windows filesystem IO; no third-party dependency/assertion was changed.
 Checksum-verified temporary Java21 was used because local Studio Java25 could
 not run this pinned Gradle setup. Docs/visual and whitespace checks pass.
-Full Linux CI, signed release and live publication are pending. No wire, storage,
+Full Linux CI, signed release and live publication passed as recorded above. No wire, storage,
 consent, website-node, DND/Focus or backend/schema change. Samsung/OEM/hardware
 acceptance is not inferred from this generic emulator; force-stop/disabled access
 and first-unlock startup limitations remain explicit.
