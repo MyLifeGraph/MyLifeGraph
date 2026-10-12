@@ -162,6 +162,18 @@ Own DND and OEM/system notification settings can hide this optional display.
 
 ### Usage budgets and charts
 
+On Accessibility connection/reconnection and normal ticks, enabled app protection
+can recover a missed foreground transition from the existing consented UsageEvents
+read. The same five-second daily cache is reused, not a new per-event history scan.
+Only newer resumed-activity evidence may replace a remembered window event;
+MyLifeGraph/System UI, unknown evidence, screen-off and locked-device states do
+not restore a blocked target. Real MyLifeGraph resume remains authoritative.
+Recovery clears old browser-host meter/display state. No foreground nodes or
+additional screen content are queried, and denied Usage Access has no fallback.
+Without that optional access, protection still relies on the existing window
+events; exact restart-time/OEM survival is not guaranteed. The boot receiver and
+persisted rules remain unchanged; Android permits startup after first unlock.
+
 The foreground daily-budget notification keeps its remembered app through System
 UI and MyLifeGraph-generated notification window events; actual MyLifeGraph entry
 is reported separately by Activity resume. Closing the notification shade is not

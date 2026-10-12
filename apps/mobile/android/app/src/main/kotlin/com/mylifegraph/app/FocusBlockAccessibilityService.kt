@@ -29,6 +29,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private val returnDelay = BlockReturnDelay()
     private var homePackages: Set<String> = emptySet()
     private var lastForegroundPackage: String? = null
+    private var lastForegroundObservedAt = 0L
     private var budgetForegroundPackage: String? = null
     private var budgetHost: String? = null
     private var emergencyArmRunnable: Runnable? = null
@@ -71,6 +72,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         ) {
             if (lastForegroundPackage != foregroundPackage) { currentHost = null; lastMeterAt = SystemClock.elapsedRealtime() }
             lastForegroundPackage = foregroundPackage
+            lastForegroundObservedAt = System.currentTimeMillis() -
+                (SystemClock.uptimeMillis() - event.eventTime).coerceAtLeast(0)
             budgetForegroundPackage = FocusProtectionDecision.budgetForeground(
                 foregroundPackage, budgetForegroundPackage, packageName,
             )
@@ -306,6 +309,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private val scheduleTick = object : Runnable {
         override fun run() {
             if (::plans.isInitialized) {
+                recoverForegroundFromUsage()
                 runCatching { DisciplineUnlockScheduler.reconcile(applicationContext) }
                 BlockingTimerNotifications.sync(applicationContext)
                 BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, budgetHost, overlay == null)
@@ -323,6 +327,21 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             handler.postDelayed(this, if (::plans.isInitialized && plans.migrated()) 1000L
                 else 60_000L - System.currentTimeMillis() % 60_000L)
         }
+    }
+
+    private fun recoverForegroundFromUsage() {
+        if (!getSystemService(android.os.PowerManager::class.java).isInteractive ||
+            getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) return
+        val config = FocusProtectionStore(applicationContext).readConfiguration()
+        if (!config.enabled || !config.blockSelectedApps) return
+        val observed = runCatching { plans.foregroundObservation() }.getOrNull() ?: return
+        val recovered = FocusProtectionDecision.recoverForeground(lastForegroundPackage,
+            lastForegroundObservedAt, observed.first, observed.second, packageName)
+        if (recovered == lastForegroundPackage) return
+        lastForegroundPackage = recovered
+        lastForegroundObservedAt = observed.second
+        budgetForegroundPackage = recovered
+        currentHost = null; budgetHost = null; lastMeterAt = SystemClock.elapsedRealtime()
     }
 
     private val browserTick = Runnable { checkBrowser() }
@@ -387,6 +406,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         fun onAppResumed(context: Context) {
             runningService?.get()?.let { service ->
                 service.lastForegroundPackage = context.packageName
+                service.lastForegroundObservedAt = System.currentTimeMillis()
                 service.budgetForegroundPackage = context.packageName
                 service.budgetHost = null
                 service.currentHost = null

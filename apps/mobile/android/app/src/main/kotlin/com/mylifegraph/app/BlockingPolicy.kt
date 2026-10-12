@@ -108,12 +108,16 @@ class BlockingUsageReducer(private val start: Long, private val end: Long) {
     private val resumedActivities = linkedSetOf<String>()
     private var since = start
     private val totals = mutableMapOf<String, Long>()
+    var foregroundChangedAt: Long = 0
+        private set
+    val foregroundPackage: String? get() = foreground?.first
     private fun finish(at: Long) {
         val pkg = foreground?.first ?: return
         val amount = (at.coerceAtMost(end) - since.coerceAtLeast(start)).coerceAtLeast(0)
         totals[pkg] = (totals[pkg] ?: 0) + amount
     }
     fun resume(pkg: String, activity: String, at: Long) {
+        foregroundChangedAt = at
         if (foreground?.first != pkg) {
             finish(at); resumedActivities.clear(); since = at
         }
@@ -123,12 +127,12 @@ class BlockingUsageReducer(private val start: Long, private val end: Long) {
     fun pause(pkg: String, activity: String, at: Long) {
         if (foreground?.first != pkg || !resumedActivities.remove(activity)) return
         if (resumedActivities.isEmpty()) {
-            finish(at); foreground = null
+            finish(at); foreground = null; foregroundChangedAt = at
         } else if (foreground?.second == activity) {
             foreground = pkg to resumedActivities.last()
         }
     }
-    fun screenOff(at: Long) { finish(at); foreground = null; resumedActivities.clear() }
+    fun screenOff(at: Long) { finish(at); foreground = null; resumedActivities.clear(); foregroundChangedAt = at }
     fun result(): Map<String, Long> {
         finish(end); foreground = null; resumedActivities.clear()
         return totals.filterValues { it > 0 }.toMap()

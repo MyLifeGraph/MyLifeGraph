@@ -31,6 +31,31 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local RC30 native foreground recovery candidate — 2026-10-12
+
+Task base `75f4ca9ede67d8f8b7eb4c1b94e8cfdfdfe900c9`. A guest/mock debug build
+on an isolated read-only Pixel emulator (Android API37) reproduced a connected
+Accessibility service with Usage Access, an already active synthetic app,
+null remembered foreground and no budget notification after controlled rebind.
+The recovery fixes that exact case: same fixture reports the synthetic package
+and a real active Android notification. Shade open/close retains it, actual
+app exit clears it, return/new visit restores it, and deliberate dismissal stays
+dismissed for that visit. A full emulator reboot automatically bound the persisted
+service; opening the probe produced one budget notification without manual service
+reenabling. Denied Usage Access does not recover or publish a timer.
+
+Owned app JVM suite: **110 tests / zero failures**, including six new recovery
+tests and a finite500-iteration stale/source-policy check. Ten controlled emulator
+rebinds passed. Local app Lint passes after fixing ignored Windows SDK-property
+escaping and rerunning analysis. Initial root Gradle plug-in DataStore tests failed
+with Windows filesystem IO; no third-party dependency/assertion was changed.
+Checksum-verified temporary Java21 was used because local Studio Java25 could
+not run this pinned Gradle setup. Docs/visual and whitespace checks pass.
+Full Linux CI, signed release and live publication are pending. No wire, storage,
+consent, website-node, DND/Focus or backend/schema change. Samsung/OEM/hardware
+acceptance is not inferred from this generic emulator; force-stop/disabled access
+and first-unlock startup limitations remain explicit.
+
 ### Published RC29 — 2026-10-12
 
 - PR [#47](https://github.com/MyLifeGraph/MyLifeGraph/pull/47) merged candidate
