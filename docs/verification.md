@@ -31,13 +31,50 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
-### RC29 candidate — 2026-10-12
+### Published RC29 — 2026-10-12
 
-User authorized publication of the local Capture calendar/date drafts and
-Insights evidence dialogs. The final combined targeted suite passed **175 tests**.
-The candidate excludes pre-existing retention edits and local generated media.
-Full exact-candidate GitHub checks, merge, signed tag build and live rollout are
-pending; the local evidence below is not a publication claim.
+- PR [#47](https://github.com/MyLifeGraph/MyLifeGraph/pull/47) merged candidate
+  `8463a9a353a07416d5e6a8645959b567d21f2b61` into Main
+  `d561fc9af8f74be99068e68e985d0fddccdce047`. Their source tree is identical
+  (`50ab766370825764cc05dc31500c11fb0af17a91`). Annotated tag
+  `v0.1.0-pilot.1-rc.29` resolves to that Main source.
+- Full manual Linux CI
+  [38239287179](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38239287179)
+  passed all seven jobs: Flutter **1,911**, backend **2,011 passed / 2 skipped**,
+  browser **8**, fresh migration/pgTAP, web build, native JVM/Lint and source
+  gates. PR run **38239288482** also passed. The final local combined targeted
+  suite passed **175 tests**, with no Flutter analyze issues.
+- Signed tag workflow
+  [38240792079](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38240792079)
+  passed. Independent verification of the downloaded APK retained certificate
+  `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+- [RC29](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.29)
+  published **2026-10-12T11:19:11Z**, non-draft, **not prerelease**, latest.
+  Version `0.1.0-pilot.1-rc.29`, versionCode **10000119**, APK **153,289,972 bytes**,
+  SHA-256 `5c2c1fde8e070a7ef3316dd10cd9cf7f6e46ff48f2d6e857c01cb8ad5fe08bad`.
+  All four uploaded APK/SBOM/metadata/SHA256SUMS asset identities, sizes and
+  GitHub SHA-256 digests match local files; streamed published bytes were checked
+  again by the mandatory local finalizer before bounded cleanup.
+- Existing production Vercel deployment **dpl_DSMaEFwLWH1YMtYEGv4qaV1K6XDk**
+  is READY for the same Main source. Both existing app aliases return HTTP 200,
+  CSP and JavaScript with that exact SHA plus new calendar/evidence-dialog copy.
+  The marketing website, Auth redirects and hosting setup were untouched.
+- Existing VPS API health/readiness remain `ok`/`ready` on RC27 source
+  `e7b5f9c55182fb28de98538efc92d45ec7f78119`, **83** migrations, head
+  `20261006135421_coach_operator_sol61_standard.sql`. No backend/schema changes
+  exist in RC29; no server reinstall or database mutation was necessary.
+- Laptop finalization succeeded: only the four verified managed RC28 output
+  files were pruned (**153,632,055 bytes**). Originals, signing material,
+  unpublished/unknown files and server active/rollback versions remain protected.
+  VM retention remains incomplete: the current authenticated SSH attempt to the
+  known LAN VM timed out; no firewall/routes or VM files were changed.
+- Physical-device acceptance remains pending; generated/actual widget captures
+  do not prove NFC/OEM behavior. An authenticated live Coach turn remains the
+  earlier CAPTCHA-gated gap, not inferred from health/capability or CI.
+
+The local checkpoints below describe pre-publication evidence; RC29 above
+supersedes their unpublished delivery status. Unrelated retention edits and
+generated local media were excluded from the release candidate.
 
 ### Local Insights evidence explanations — 2026-10-12
 
