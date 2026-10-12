@@ -1,5 +1,11 @@
 # MyLifeGraph Mobile App
 
+Android app protection now recovers missed foreground events/reconnections using
+already-consented UsageEvents and the existing five-second usage cache. Stale,
+own/System UI and locked/screen-off observations cannot resurrect a target.
+No new permissions, UI-node reads or cloud data are introduced; OEM/force-stop
+and missing-access startup limits remain explicit in the Focus Protection owner.
+
 Tap the existing general/early Insights evidence icon for its compact explanation
 dialog; long press still shows the short tooltip. Inline layout is unchanged.
 

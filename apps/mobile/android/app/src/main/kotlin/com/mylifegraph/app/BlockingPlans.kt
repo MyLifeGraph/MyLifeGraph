@@ -125,10 +125,13 @@ class BlockingPlans(private val context: Context) {
         meteredSites?.let { commit(prefs.edit().putString("web_usage", it.toString())) }
         lastSiteFlush = SystemClock.elapsedRealtime()
     }
-    fun appUsage(start: Long, end: Long): Map<String, Long> {
-        if (!usageGranted()) return emptyMap()
+    private data class UsageSnapshot(val usage: Map<String, Long>, val app: String?, val changedAt: Long)
+    fun appUsage(start: Long, end: Long): Map<String, Long> = appUsageSnapshot(start, end).usage
+    private fun appUsageSnapshot(start: Long, end: Long): UsageSnapshot {
+        if (!usageGranted()) return UsageSnapshot(emptyMap(), null, 0)
         val service = context.getSystemService(UsageStatsManager::class.java)
-        val events = service.queryEvents((start - 86400000).coerceAtLeast(0), end) ?: return emptyMap()
+        val events = service.queryEvents((start - 86400000).coerceAtLeast(0), end)
+            ?: return UsageSnapshot(emptyMap(), null, 0)
         val reducer = BlockingUsageReducer(start, end)
         val event = UsageEvents.Event()
         while (events.hasNextEvent()) {
@@ -145,16 +148,27 @@ class BlockingPlans(private val context: Context) {
                 }
             }
         }
-        return reducer.result()
+        val app = reducer.foregroundPackage
+        val changedAt = reducer.foregroundChangedAt
+        return UsageSnapshot(reducer.result(), app, changedAt)
     }
     // Memoize briefly; Accessibility events must not rescan a whole day's history per event.
     private var usageAt = -1L
     private var usageDay = 0L
     private var todayUsage: Map<String, Long> = emptyMap()
+    private var todayForeground: Pair<String?, Long> = null to 0L
+    /** Same consent and five-second cache as budgets; never retrieves UI nodes. */
+    fun foregroundObservation(): Pair<String?, Long>? {
+        if (!usageGranted()) return null
+        todayApps()
+        return todayForeground
+    }
     private fun todayApps(): Map<String, Long> {
         val elapsed = SystemClock.elapsedRealtime(); val date = startOfDay(now())
         if (elapsed - usageAt > 5000 || date != usageDay || elapsed < usageAt) {
-            todayUsage = appUsage(date, now()); usageAt = elapsed; usageDay = date
+            val snapshot = appUsageSnapshot(date, now())
+            todayUsage = snapshot.usage; todayForeground = snapshot.app to snapshot.changedAt
+            usageAt = elapsed; usageDay = date
         }
         return todayUsage
     }

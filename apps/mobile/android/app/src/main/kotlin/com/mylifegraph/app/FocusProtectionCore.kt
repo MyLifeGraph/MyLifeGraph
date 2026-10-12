@@ -79,6 +79,13 @@ data class LocalFocusLease(
 }
 
 object FocusProtectionDecision {
+    /** Recover only newer resumed-activity evidence; transient/own windows stay safe. */
+    fun recoverForeground(current: String?, observedAt: Long, candidate: String?,
+                          candidateAt: Long, ownPackage: String): String? =
+        if (candidateAt > observedAt && candidateAt > 0 &&
+            !ignoreForegroundEvent(candidate, ownPackage) && candidate != "com.android.systemui")
+            candidate else current
+
     fun budgetForeground(eventPackage: String?, current: String?, ownPackage: String): String? =
         // Notifications/overlays also emit our package. Actual app entry is
         // authoritative through MainActivity.onResume, not a window event.
