@@ -31,6 +31,51 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC28 — 2026-10-12
+
+- PR [#45](https://github.com/MyLifeGraph/MyLifeGraph/pull/45) merged candidate
+  `5ae6c357772ed2857393c697fba03b5916435dc9` into Main
+  `a1d8254aa7804b93c19587b22e857678e9e92a72`. Annotated tag
+  `v0.1.0-pilot.1-rc.28` resolves to that Main source.
+- Complete manual Linux CI
+  [38185059647](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38185059647)
+  passed all seven jobs: Flutter **1,898**, backend **2,011 passed / 2 skipped**,
+  browser **8**, fresh migrations/pgTAP, web build, native JVM/Lint and source/docs
+  gates. PR run **38185060158** also passed. This supersedes the local-only scope
+  of the candidate notes below; it does not supply physical-device evidence.
+- Signed tag build
+  [38185963796](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/38185963796)
+  passed. Independent downloaded-APK signature verification retained certificate
+  `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+- [RC28](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.28)
+  published **2026-10-12T00:03:05Z**, non-draft, **not prerelease**, latest.
+  Version `0.1.0-pilot.1-rc.28`, versionCode **10000117**, APK **153,257,200 bytes**,
+  SHA-256 `f8f708ef637639baf5dc09efd1aaebc9ff41628b38a532da405eadc7c756f87d`.
+  APK, source SBOM, metadata and SHA256SUMS were checked against all four uploaded
+  GitHub asset identities, sizes and digests before publication.
+- Existing Vercel app deployment **dpl_9bn8jHsEeoqL5j4Bfje2ZHVECQCj** is READY
+  for source `a1d8254aa7804b93c19587b22e857678e9e92a72`. Both existing app aliases
+  returned HTTP 200 and JavaScript containing that exact `main-<SHA>` identity;
+  CSP was present. The marketing website and hosting configuration were untouched.
+- Production API health/readiness remain healthy on RC27, source
+  `e7b5f9c55182fb28de98538efc92d45ec7f78119`, with **83** migrations and head
+  `20261006135421_coach_operator_sol61_standard.sql`. RC28 changes no backend,
+  deployment code or schema; no server replacement or SQL application was made.
+  A further server release is also constrained by the existing 15-GiB reserve.
+- Hardware testing was explicitly deferred by the owner. Actual Instagram timing,
+  shade gestures, NFC and OEM background behavior remain pending. Synthetic-account
+  live Coach inference was blocked by CAPTCHA; capability/readiness must not be
+  described as a successful inference turn. Neither gap was hidden in release notes.
+- Laptop mandatory finalization passed using the committed tool exported into a
+  separate local folder, leaving unrelated dirty retention code untouched. It
+  verified publication/tag identity and downloaded bytes, printed the exact
+  dry-run, then removed **153,550,139 bytes** from the marked store. Oldest/newest
+  published bundles and originals remain; removed copies are recoverable from
+  GitHub. VM SSH timed out on
+  both recorded Tailscale and LAN targets; current laptop WLAN is `.72`, while the
+  connected Tailnet does not list codex-devbox. VM cleanup remains incomplete;
+  no VPN, route, firewall, protected artifact or server release was changed.
+
 ### Blocking reliability and Insights Overview candidate — 2026-10-12
 
 Task base `22e50f8f7f92041195621e50c1e5f65c22059c93`;
