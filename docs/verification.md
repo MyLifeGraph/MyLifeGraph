@@ -31,6 +31,64 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC31 — 2026-10-13
+
+PR [51](https://github.com/MyLifeGraph/MyLifeGraph/pull/51) merged through
+the normal checked path. Immutable APK/tag source is
+`24de9feb8ad2c59c58e21df8fc629d50cb616566`; candidate and merge trees match.
+Complete candidate run `38392701422` and exact-Main run `38394687759` pass
+all seven jobs: source/docs/security boundaries, full FastAPI suite, Flutter
+analysis/tests, Android JVM/lint, debug web build, fresh migrations/pgTAP and
+full browser regression. The suite reports **1931 Flutter tests**, **2011
+backend passes / 2 skips**, and **8 browser passes**. Local native evidence
+below covers **117 tests**. The signed immutable-tag run `38394696957` passes.
+
+The normal, latest, non-draft/non-prerelease GitHub Release is
+[RC31](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.31),
+release id `411640024`, Android build number `10000123`. All four uploaded
+asset identities, states, sizes and GitHub SHA-256 digests match the downloaded
+local files. APK SHA-256 is
+`80af21e0fa3d53df3996fb658ca77ef6b0ae4bdd2c1b7f7ace863599030d82bc`.
+Independent `apksigner verify` succeeds with the unchanged certificate
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+Signing material remains outside the bundle. GitHub reported the configured
+actor's tag-creation restriction bypass on the annotated tag push only; no
+rules were changed and no Main check/admin bypass was used.
+
+Existing app Vercel production `dpl_GdWEgDXvLwYERB5rYkdRuwvXWb2y` is READY
+at that source. Both existing app aliases return HTTP 200, a CSP and a web
+bundle containing the expected source SHA and new Insights copy. The marketing
+site was not redeployed. VPS `/v1/health`, `/v1/ready` and the authorized project
+check pass; deployed backend source remains
+`e7b5f9c55182fb28de98538efc92d45ec7f78119` (RC27). There are **no** service or
+Supabase source differences from that deployment, so no unnecessary server
+reinstall or migration was performed. Readiness is not a real Coach-turn proof.
+
+Focus-only supplemental local regression uses 28 rated Focus dates, no check-ins
+and null sleep/energy inputs: existing valid Focus pairs/rankings remain
+available, with no fallback. Mature 14/28-day fixtures additionally prove exact
+Focus coefficient, metric, summary and ranking equivalence. Check-in-only
+associations use the documented additional path; no missing data is fabricated.
+No physical Samsung/MobileSoft AppBlock/NFC acceptance is claimed. The five-minute
+cross-blocker accounting difference remains unconfirmed.
+
+Laptop publication finalization verifies downloaded GitHub bytes before its
+dry-run/fresh-bound apply. It keeps registered RC6/RC31 and removes only the
+four managed RC30 copies (**153664823 bytes**), recoverable from GitHub.
+Original build folders, signing material and unrelated dirty working-tree files
+remain untouched. Post-deployment `vercel:cleanup:auto` removes two obsolete
+app deployments (`dpl_EETNmG7CXgV3XQzaZnAgcn5gea5c`,
+`dpl_95KoYeWoEDrwB6jqUFBS9ozmySsN`) after a fresh content-bound inventory and
+provider acknowledgments. The new live app output, two trustworthy rollback
+sources, current targets/recent previews and all four marketing-site outputs
+remain protected. This is not a claimed Vercel byte-meter reset.
+VM finalization also completes: the independently downloaded RC31 bundle is
+validated on `codex-devbox`, registered RC21/RC31 remain, and only the four
+managed RC27 APK/SBOM/manifest/metadata copies are removed (**153550139 bytes**).
+These are not the VPS's active RC27 server files; active/rollback installations
+remain outside the managed artifact store and untouched. Removed copies on
+both hosts remain recoverable from their verified public GitHub Releases.
+
 ### Check-in-only Insights correlation candidate — 2026-10-13
 
 Base `1ade7b3d6156c67c6098cdf7190bf29c434dd5ba`. The authorized additive
@@ -50,8 +108,8 @@ at 320px/200% text. Synthetic Liquid Glass captures were inspected, not presente
 as physical-device or real-account evidence. An initial navigation fixture tapped
 before scroll layout settled; waiting for layout fixes the test, with no product
 navigation change or weakened assertion. Flutter analysis is clean; docs/visual
-checks pass. Signed publication and production evidence must be recorded after
-their actual gates finish, not inferred from this local candidate.
+checks pass. This paragraph records the initial local candidate; subsequent
+signed publication and production evidence are recorded in the RC31 entry above.
 
 ### Local foreign Blocking overlay correction — 2026-10-13
 
@@ -83,8 +141,9 @@ arithmetic, wire/storage format, Focus/DND or backend/schema change. User-named
 MobileSoft AppBlock, Instagram, the user's installed APK/version and Samsung
 window/shade behavior were not tested physically: no handset was connected.
 Unknown/unavailable OEM window metadata and the five-minute cross-app accounting
-difference remain unconfirmed. No publication, PR, commit or deployment was
-performed. Ignored fixtures and before/after logs are in
+difference remain unconfirmed. This paragraph records the initial local-only
+check; subsequent checked promotion is recorded in the RC31 entry above.
+Ignored fixtures and before/after logs are in
 `.tools/blocking-conflict-20261013`; the temporary emulator was closed.
 
 ### Authorized Vercel deployment cleanup — 2026-10-13
