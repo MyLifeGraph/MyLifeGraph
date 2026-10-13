@@ -31,6 +31,101 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Check-in-only Insights correlation candidate — 2026-10-13
+
+Base `1ade7b3d6156c67c6098cdf7190bf29c434dd5ba`. The authorized additive
+Flutter fallback uses existing consent-gated Skillset points only when the
+entire rated-Focus correlation list is empty. Any rated Focus point preserves
+the original calculation/metrics/thresholds/rankings; backend learning,
+fingerprints, Planner and sleep-window authority remain unchanged.
+Overview and Advanced use per-pair shared-day/variation gates, amber early
+associations and a 28-day/two-half consistency gate for semantic green.
+No causal or statistical-significance claim is made.
+
+Focused regression checks cover source precedence, absent/invalid values,
+duplicate/future dates, sparse windows, constant signals, ordinal zero, disabled
+analysis and inconsistent halves. Rendered UI journeys exercise Overview →
+Advanced → Top Patterns → 90d → evidence explanation → Close in four themes
+at 320px/200% text. Synthetic Liquid Glass captures were inspected, not presented
+as physical-device or real-account evidence. An initial navigation fixture tapped
+before scroll layout settled; waiting for layout fixes the test, with no product
+navigation change or weakened assertion. Flutter analysis is clean; docs/visual
+checks pass. Signed publication and production evidence must be recorded after
+their actual gates finish, not inferred from this local candidate.
+
+### Local foreign Blocking overlay correction — 2026-10-13
+
+Task base `1ade7b3d6156c67c6098cdf7190bf29c434dd5ba`. On an isolated read-only
+API37 emulator, the retained guest/mock RC30 debug build and a second synthetic
+Accessibility service reproduce the reported kind of conflict with **real**
+`TYPE_ACCESSIBILITY_OVERLAY` windows: three show/remove cycles replace the
+remembered target with the foreign package and leave its budget notification
+absent. A first exploratory run lacked a stable initial notification; the
+accepted repeat explicitly establishes and checks that prerequisite.
+
+The locally rebuilt correction classifies window ID/type metadata without
+reading roots, sources, titles or contents. In the identical three-cycle test,
+the target remains remembered and its real Android notification remains present
+both during and after each overlay. Normal shade open/close retain the display;
+actual Settings exit clears it, target return restores it, the explicit delete
+callback suppresses it for that visit, and the next visit restores it. The
+delete callback test is not a physical sideways-swipe acceptance assertion.
+
+The owned native suite passes **117 tests / zero failures**, including seven
+new metadata-cache/foreign-window regressions. Local mock debug APK assembly
+and Android Lint pass. Docs and visual contract checks pass, as does whitespace
+checking. The captured-base affected dry-run conservatively selects Full for
+the combined dirty tree (including prior unrelated workflow/media changes);
+no full-product/remote CI run is claimed for this local Android-only fix.
+
+There is no package-specific AppBlock exception, new permission request, budget
+arithmetic, wire/storage format, Focus/DND or backend/schema change. User-named
+MobileSoft AppBlock, Instagram, the user's installed APK/version and Samsung
+window/shade behavior were not tested physically: no handset was connected.
+Unknown/unavailable OEM window metadata and the five-minute cross-app accounting
+difference remain unconfirmed. No publication, PR, commit or deployment was
+performed. Ignored fixtures and before/after logs are in
+`.tools/blocking-conflict-20261013`; the temporary emulator was closed.
+
+### Authorized Vercel deployment cleanup — 2026-10-13
+
+The owner authorized cleanup and recurring retention for both existing Vercel
+projects in `my-life-graph-s-projects`. Fresh scoped inventories, project targets,
+aliases/open PRs, READY rollback outputs and a content-bound dry-run preceded
+individual deletion guards and provider acknowledgments. No project, domain,
+environment variable, Auth connection, database or source deployment was changed.
+
+- `my-life-graph`: **127 → 4**, **123** obsolete deployments removed. Live output
+  `dpl_8GLPqVU8vp1GB3iczG9k5ExfS3Xb` retains Main source
+  `1ade7b3d6156c67c6098cdf7190bf29c434dd5ba`. Rollback outputs
+  `dpl_FruBvQaaUQLPa6x48gBednYbT2u6` and `dpl_95KoYeWoEDrwB6jqUFBS9ozmySsN`,
+  plus current preview `dpl_EETNmG7CXgV3XQzaZnAgcn5gea5c`, remain protected.
+- `mylifegraph-website`: **12 → 4**, **8** obsolete deployments removed. Live
+  `dpl_J2fUCvWZNh72mEnLmZqBEwVzMRxD`, rollbacks
+  `dpl_EfTxP4U7Dptm8qBooj7toX4ijVNT` / `dpl_AUYdoDZbDgr1WyzU31DXkLPQGj1g`,
+  and additional recent output `dpl_29DxtdQwgtSG3VyaJ4xhGL2ERAoD` remain READY.
+- **131 total** confirmed deletions. Fresh repeated inventory finds zero further
+  deletion candidates. Both app aliases return HTTP200/CSP and the unchanged Main
+  SHA; the marketing website returns HTTP200 with the expected product title.
+- Dedicated native retention API applied and independently reread: Production
+  **7 days**; Preview/Canceled/Errored **1 day**, both projects. Existing provider
+  `deploymentsToKeep:10` was preserved, not reduced. Provider recent/alias rollback
+  exceptions remain. The fixed minimum is a background safeguard, not the manual
+  cleanup count. Vercel usage CLI returns `Costs not found (404)` for this Hobby
+  account; no reclaimed-GB or immediate usage-percentage reduction is claimed.
+- Local recurring operator command and AGENTS publication workflow now use the
+  same bounded protections. **18** new safety tests pass. Actual new-command
+  dry-run succeeds; repeating `vercel:cleanup:auto` reports **0** removals and
+  verifies native policy. Windows native environment casing was corrected without
+  forwarding application secrets. Existing combined Vercel tests have three
+  Linux `/bin/bash` prerequisites unavailable on native Windows; installed WSL
+  lacks Node. No assertion/dependency was weakened or replaced, and no full Linux
+  CI result is claimed for these local workflow edits. Documentation checks pass.
+
+Successful built deployments enter Vercel's documented recovery period; retained
+source and GitHub releases are untouched. Dated provider output and deletion
+receipts are in the ignored local `.tools/vercel-retention-20261013` audit folder.
+
 ### Published RC30 native foreground recovery — 2026-10-12
 
 - PR [#49](https://github.com/MyLifeGraph/MyLifeGraph/pull/49) merged candidate

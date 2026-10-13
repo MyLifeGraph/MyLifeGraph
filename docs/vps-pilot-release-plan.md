@@ -1472,6 +1472,36 @@ application environment remains an explicitly named pilot/staging tier. The
 UI and documentation must not label that shared subscription provider as a
 general production service.
 
+### Existing-project deployment retention
+
+Owner authorization on 2026-10-13 covers bounded recurring cleanup of the two
+existing `my-life-graph` and `mylifegraph-website` projects only. After an authorized
+push/deployment, run `npm run vercel:cleanup:auto` using the operator's authenticated
+Vercel CLI. It prints the dry-run, binds the exact inventory, rechecks protections
+and removes only known obsolete deployments. A standalone preview is
+`npm run vercel:cleanup`; apply it with
+`npm run vercel:cleanup:apply -- <exact-confirmation>`. Missing access or drift
+fails closed. Do not replace this with project deletion or generic provider cleanup.
+
+The tool preserves the live READY production output, two prior distinct trustworthy
+production sources, project targets, recent outputs, current open-PR previews,
+custom domains and unknown/in-flight outputs. Too little trustworthy rollback
+history removes nothing. Provider deletion acknowledgments and fresh policy reads
+are required; incomplete cleanup must be reported. Old build history is reduced,
+not source repositories, user data, domains, Auth connections or environment values.
+
+Vercel-native automatic retention is also enabled: Production seven days;
+Preview/Canceled/Errored one day. Existing provider rollback minimums/exceptions
+remain unchanged. Its timed background cleanup runs without an agent, but does
+not promise immediate deletion or a storage-meter reset on each push. The explicit
+operator step prevents accumulated obsolete output between those background runs.
+These commands do not create/promote deployments or enable automatic Git deployment.
+CI's existing source/Vercel-release gates test the policy's safety, not remote state;
+no destructive job or administrator secret is added to an untrusted build.
+
+See [local operator commands](local-dev.md#vercel-deployment-retention) and
+[dated cleanup evidence](verification.md#current-verified-baseline).
+
 ## Android Release
 
 - Create a private release keystore and ignored `key.properties`; never use the

@@ -162,6 +162,19 @@ Own DND and OEM/system notification settings can hide this optional display.
 
 ### Usage budgets and charts
 
+Window-state events use Android window ID/type metadata to distinguish real
+application windows from foreign Accessibility/system/keyboard overlays.
+Confirmed foreign overlay events neither replace the remembered foreground app
+or browser host nor advance its observation timestamp. System UI keeps its
+existing safety/shade behavior; application windows and unavailable/unknown
+metadata retain normal app-change handling. Up to thirty-two transient window
+IDs are kept process-locally for removal events; application reuse clears an ID.
+The existing Accessibility capability enables interactive-window metadata, but
+this path never queries roots, sources, titles, text or other screen contents.
+No package-specific AppBlock exemption, permission request, upload or usage
+arithmetic change is introduced. OEM events without identifiable window metadata
+and the reported cross-app five-minute usage difference still need device evidence.
+
 On Accessibility connection/reconnection and normal ticks, enabled app protection
 can recover a missed foreground transition from the existing consented UsageEvents
 read. The same five-second daily cache is reused, not a new per-event history scan.

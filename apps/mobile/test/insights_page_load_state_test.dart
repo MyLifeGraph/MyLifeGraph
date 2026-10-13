@@ -22,12 +22,122 @@ import 'package:my_life_graph/features/insights/presentation/providers/insights_
 import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
 import 'support/ui_catalog_capture.dart';
+import 'checkin_correlations_test.dart' as checkin;
 
 const _fingerprint =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  for (final theme in {
+    'glass': AppTheme.liquidGlass,
+    'dark': AppTheme.dark,
+    'light': AppTheme.light,
+    'space': AppTheme.space,
+  }.entries) {
+    for (final days in [7, 28]) {
+      testWidgets(
+        'check-in-only $days-day evidence renders ${theme.key} at 320px/200%',
+        (tester) async {
+          tester.view.physicalSize = const Size(320, 900);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          if (captureUiCatalog) await loadCatalogFonts();
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                _realSurfaceOverride(),
+                _skillsetSelectionOverride(),
+                insightsProvider.overrideWith((ref) async => const []),
+                personalPatternsProvider.overrideWith(
+                  (ref) async => checkin.fixture(days),
+                ),
+                sleepRecommendationProvider.overrideWith(
+                  (ref) async => _sleepRecommendation(
+                    SleepRecommendationStatus.collecting,
+                  ),
+                ),
+              ],
+              child: MaterialApp(
+                theme: theme.value,
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: const TextScaler.linear(2)),
+                  child: child!,
+                ),
+                home: const Scaffold(body: InsightsPage()),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            find.text('Your sleep patterns'),
+            150,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.text(
+              days == 7
+                  ? 'Early patterns · 7 observed days'
+                  : 'Consistent observations · 28 observed days',
+            ),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+          if (captureUiCatalog && theme.key == 'glass') {
+            await captureCatalog(tester, 'checkin-only-$days-overview');
+          }
+          await tester.ensureVisible(find.text('Advanced'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Advanced'));
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            find.text('Top patterns').first,
+            150,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Top patterns').first);
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            find.text('90d'),
+            150,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('90d'));
+          await tester.pumpAndSettle();
+          final evidence = find.byTooltip(
+            days == 7 ? 'Early patterns' : 'Consistent observations',
+          );
+          await tester.scrollUntilVisible(
+            evidence,
+            150,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(evidence);
+          await tester.pumpAndSettle();
+          expect(
+            find.textContaining('Based on: check-in data.'),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+          if (captureUiCatalog && theme.key == 'glass') {
+            await captureCatalog(
+              tester,
+              'checkin-only-$days-advanced-explanation',
+            );
+          }
+          await tester.tap(find.text('Close'));
+          await tester.pumpAndSettle();
+        },
+      );
+    }
+  }
   for (final theme in {
     'glass': AppTheme.liquidGlass,
     'dark': AppTheme.dark,

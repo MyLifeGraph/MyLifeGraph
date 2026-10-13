@@ -1,5 +1,10 @@
 # Architecture
 
+Check-in-only Insights correlations are an additive Flutter display projection
+of existing consent-gated Skillset points, selected only with no rated-Focus
+correlation points. Any rated-Focus evidence retains the prior calculation path.
+There is no backend/schema, fingerprint, Planner or sleep-window mutation.
+
 Insights early Overview observations are a pure Flutter projection of existing
 consent-gated Skillset points. General guidance and seven-day descriptive summaries
 do not modify backend correlations, fingerprints, learned planning, sleep-window

@@ -1,5 +1,11 @@
 # UI Language And Copy Contract
 
+Check-in-only correlation fallback uses `Early patterns` (amber) and
+`Consistent observations` (green), with `Check-in associations · not causes.`
+in Top Patterns. Evidence names shared days and the two-half consistency gate.
+This is not a learning-performance claim, diagnosis or causal recommendation;
+existing Focus-derived copy and thresholds remain unchanged.
+
 Insights evidence explanations use `General guidance`, `Early observations`
 and `Close`. General advice is not a personal finding; early summaries are not
 reliable patterns or causal conclusions. Details still owns sources/coverage.

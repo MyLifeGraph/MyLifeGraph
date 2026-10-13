@@ -78,7 +78,32 @@ data class LocalFocusLease(
     }
 }
 
+enum class BlockingWindowKind { APPLICATION, TRANSIENT, UNKNOWN }
+
+/** Window IDs/types only, bounded and process-local; never stores app content. */
+class BlockingTransientWindows {
+    private val ids = linkedSetOf<Int>()
+    fun observe(id: Int, kind: BlockingWindowKind): Boolean {
+        if (id < 0) return false
+        when (kind) {
+            BlockingWindowKind.APPLICATION -> ids.remove(id)
+            BlockingWindowKind.TRANSIENT -> {
+                ids.add(id)
+                if (ids.size > 32) ids.remove(ids.first())
+            }
+            BlockingWindowKind.UNKNOWN -> Unit
+        }
+        return id in ids
+    }
+}
+
 object FocusProtectionDecision {
+    /** Overlay/keyboard windows do not mean the underlying activity was left.
+     * System UI still follows the existing safety/shade path. Unknown window
+     * metadata never suppresses a genuine app transition. */
+    fun ignoreOverlayWindow(eventPackage: String?, overlayWindow: Boolean): Boolean =
+        overlayWindow && eventPackage != "com.android.systemui"
+
     /** Recover only newer resumed-activity evidence; transient/own windows stay safe. */
     fun recoverForeground(current: String?, observedAt: Long, candidate: String?,
                           candidateAt: Long, ownPackage: String): String? =

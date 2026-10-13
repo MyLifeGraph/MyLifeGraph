@@ -1,5 +1,11 @@
 # Frontend Visual System V2
 
+Check-in-only association fallback preserves the two existing glass panels and
+their header/icon geometry. Amber warning and semantic success check identify
+preliminary/consistent evidence; the existing tap/long-press explanation remains.
+Fallback Top Patterns uses confidence color rather than judging negative
+associations as bad. Existing rated-Focus colors/layout remain unchanged.
+
 General/early Insights evidence icons keep their existing 20px geometry and
 text placement. Tap opens a theme-owned explanation dialog with Close; long
 press retains the tooltip. Dialog content scrolls for narrow/large-text views.

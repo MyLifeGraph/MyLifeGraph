@@ -1,5 +1,11 @@
 # MyLifeGraph Mobile App
 
+Check-in-only Insights supports per-pair exploratory/consistent associations
+without Focus sessions. Existing rated-Focus correlation points take precedence
+unchanged; the fallback reads the existing Skillset projection only and does not
+change backend learning, Planner preferences or sleep recommendations. See the
+Personal Learning contract for exact source and confidence gates.
+
 Android app protection now recovers missed foreground events/reconnections using
 already-consented UsageEvents and the existing five-second usage cache. Stale,
 own/System UI and locked/screen-off observations cannot resurrect a target.
@@ -60,6 +66,13 @@ block-screen Return timer and Android essential exits are unchanged. Planner
 creation, rescheduling and drag/drop are explicitly outside this change.
 
 ## Android blocking plans
+
+Foreign overlay/keyboard window events are classified through Android window
+ID/type metadata, not an AppBlock package blacklist. Confirmed overlays preserve
+the budget app/host and its timestamp; true application windows still clear or
+replace them normally. The bounded process-local removal cache retains no app
+content. No new permission, cloud data, or usage-counting rule is introduced;
+unknown/OEM window metadata and physical two-blocker behavior need device testing.
 
 The daily-budget timer ignores System UI and own notification window events when
 remembering the budget app. Actual app entry still comes from Activity resume.

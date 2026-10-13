@@ -288,7 +288,10 @@ class _OverviewObservationContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final early = observation.tier == OverviewObservationTier.preliminary;
-    final color = early
+    final supported = observation.tier == OverviewObservationTier.supported;
+    final color = supported
+        ? context.visualTokens.success
+        : early
         ? context.visualTokens.attention
         : context.visualTokens.danger;
     return Padding(
@@ -328,7 +331,9 @@ class _OverviewObservationContent extends StatelessWidget {
                           title: Row(
                             children: [
                               Icon(
-                                early
+                                supported
+                                    ? AppIcons.checkCircleOutline
+                                    : early
                                     ? AppIcons.warningAmberOutlined
                                     : AppIcons.infoOutline,
                                 color: color,
@@ -339,7 +344,9 @@ class _OverviewObservationContent extends StatelessWidget {
                             ],
                           ),
                           content: Text(
-                            early
+                            observation.isCorrelation
+                                ? 'Based on: check-in data.\n${supported ? 'The association repeats in both time halves.' : 'Preliminary association.'}\n\n28 shared days and consistent results in both time halves are required for stronger evidence.\nAssociation does not prove cause.'
+                                : early
                                 ? 'Based on: ${observation.sourceLabel}.\nNot yet a reliable pattern.\n\nFor more reliable insights: $nextEvidence\nA supported comparison is also required.'
                                 : 'General advice, not based on your data.\n\nNext: ${heading == 'SLEEP RECOMMENDATION' ? '7 valid days of sleep check-ins.' : '7 valid days of check-ins or Focus activity.'}\n${observation.missingSources.where((source) => heading != 'SLEEP RECOMMENDATION' || source.startsWith('Sleep history:')).join('\n')}',
                           ),
@@ -353,7 +360,9 @@ class _OverviewObservationContent extends StatelessWidget {
                       );
                     },
                     child: Icon(
-                      early
+                      supported
+                          ? AppIcons.checkCircleOutline
+                          : early
                           ? AppIcons.warningAmberOutlined
                           : AppIcons.infoOutline,
                       size: 20,
@@ -377,7 +386,7 @@ class _OverviewObservationContent extends StatelessWidget {
             ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '${observation.label}${early ? ' · ${observation.observedDays} observed days' : ''}',
+            '${observation.label}${early || supported ? ' · ${observation.observedDays} observed days' : ''}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           ExpansionTile(

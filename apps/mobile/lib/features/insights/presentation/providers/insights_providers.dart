@@ -15,6 +15,7 @@ import '../../domain/entities/period_comparison.dart';
 import '../../domain/entities/sleep_recommendation.dart';
 import '../../domain/repositories/insights_repository.dart';
 import '../../domain/services/correlation_analyzer.dart';
+import '../../domain/services/checkin_correlations.dart';
 
 final insightsMockDataSourceProvider = Provider<InsightsMockDataSource>(
   (_) => const InsightsMockDataSource(),
@@ -129,6 +130,16 @@ final correlationReportProvider = FutureProvider<CorrelationReport>((
     ref.watch(insightsWindowDaysProvider),
   );
   final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+  if (!capabilities.isLocalDemo) {
+    final personal = ref.watch(personalPatternsProvider).valueOrNull;
+    if (personal != null) {
+      return checkInCorrelationReport(
+        personal,
+        windowDays: windowDays,
+        analyzer: ref.watch(correlationAnalyzerProvider),
+      );
+    }
+  }
   final points = capabilities.isLocalDemo
       ? await ref
             .watch(insightsRepositoryProvider)

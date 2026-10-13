@@ -1,8 +1,9 @@
 import '../entities/correlation.dart';
 import '../entities/personal_patterns.dart';
+import 'checkin_correlations.dart';
 
 /// Descriptive fallbacks only: never a correlation or learned preference.
-enum OverviewObservationTier { general, preliminary }
+enum OverviewObservationTier { general, preliminary, supported }
 
 class OverviewObservation {
   OverviewObservation({
@@ -14,6 +15,7 @@ class OverviewObservation {
     required List<String> missingSources,
     List<String> sourceUrls = const [],
     this.sourceLabel = 'General advice',
+    this.isCorrelation = false,
   }) : bullets = List.unmodifiable(bullets),
        details = List.unmodifiable(details),
        missingSources = List.unmodifiable(missingSources),
@@ -27,10 +29,13 @@ class OverviewObservation {
   final List<String> missingSources;
   final List<String> sourceUrls;
   final String sourceLabel;
+  final bool isCorrelation;
 
   String get label => switch (tier) {
     OverviewObservationTier.general => 'General guidance',
-    OverviewObservationTier.preliminary => 'Early observations',
+    OverviewObservationTier.preliminary =>
+      isCorrelation ? 'Early patterns' : 'Early observations',
+    OverviewObservationTier.supported => 'Consistent observations',
   };
 }
 
@@ -158,29 +163,71 @@ OverviewObservations overviewObservations(PersonalPatterns report) {
   }
 
   return OverviewObservations(
-    study: study,
-    sleep: sleepMetrics.isNotEmpty
-        ? _descriptive(
-            title: 'Your sleep observations',
-            metrics: sleepMetrics,
-            missing: sleepMissing,
-            sourceLabel: 'Sleep check-in data',
-          )
-        : OverviewObservation(
-            tier: OverviewObservationTier.general,
-            title: 'Sleep guidance',
-            bullets: const [
-              'Keep a regular sleep routine.',
-              'Wind down before bed.',
-            ],
-            observedDays: _unionDays(sleep),
-            details: const [
-              'General sleep habits, not a personal sleep recommendation.',
-              'Personal summaries need 7 valid days for each displayed measure.',
-            ],
-            missingSources: sleepMissing,
-            sourceUrls: const [_sleepSource],
-          ),
+    study: _checkInPattern(report, sleep: false) ?? study,
+    sleep:
+        _checkInPattern(report, sleep: true) ??
+        (sleepMetrics.isNotEmpty
+            ? _descriptive(
+                title: 'Your sleep observations',
+                metrics: sleepMetrics,
+                missing: sleepMissing,
+                sourceLabel: 'Sleep check-in data',
+              )
+            : OverviewObservation(
+                tier: OverviewObservationTier.general,
+                title: 'Sleep guidance',
+                bullets: const [
+                  'Keep a regular sleep routine.',
+                  'Wind down before bed.',
+                ],
+                observedDays: _unionDays(sleep),
+                details: const [
+                  'General sleep habits, not a personal sleep recommendation.',
+                  'Personal summaries need 7 valid days for each displayed measure.',
+                ],
+                missingSources: sleepMissing,
+                sourceUrls: const [_sleepSource],
+              )),
+  );
+}
+
+OverviewObservation? _checkInPattern(
+  PersonalPatterns report, {
+  required bool sleep,
+}) {
+  final correlations = checkInCorrelationReport(report, windowDays: 90);
+  if (!correlations.isCheckInFallback) return null;
+  final matches = correlations.rankedResults
+      .where((r) {
+        final sleepPair = {
+          r.metricAId,
+          r.metricBId,
+        }.any((id) => id == 'sleep_hours' || id == 'sleep_quality');
+        return sleepPair == sleep;
+      })
+      .take(2)
+      .toList();
+  if (matches.isEmpty) return null;
+  final supported = matches.every((r) => r.status == CorrelationStatus.ready);
+  return OverviewObservation(
+    tier: supported
+        ? OverviewObservationTier.supported
+        : OverviewObservationTier.preliminary,
+    isCorrelation: true,
+    title: sleep ? 'Your sleep patterns' : 'Your check-in patterns',
+    bullets: matches.map((r) => r.summary).toList(),
+    observedDays: matches
+        .map((r) => r.sampleSize)
+        .reduce((a, b) => a < b ? a : b),
+    sourceLabel: 'Check-in data',
+    missingSources: const [],
+    details: [
+      for (final r in matches)
+        '${correlations.metricById(r.metricAId).label} / ${correlations.metricById(r.metricBId).label}: ${r.sampleSize} shared days, r = ${r.coefficientLabel}.',
+      'Associations, not causes or recommended targets.',
+      'For more reliable insights: 28 shared days and the same direction in both chronological halves.',
+      'Focus learning patterns remain separate.',
+    ],
   );
 }
 

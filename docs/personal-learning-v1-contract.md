@@ -138,6 +138,23 @@ noncausal limits stay under Details. No inferred optimum or sleep target is show
 Green remains reserved for an existing stable report **with a supported comparison**
 or the independently validated ready sleep response. Maturity alone does not
 make an empty pattern list green. Emerging supported patterns stay amber.
+An additive client-only check-in correlation fallback applies only while the
+entire existing rated-Focus `correlation_points` list is empty. Any rated Focus
+point preserves the original Advanced/Overview learning path, even below its
+maturity floor or outside the selected display window. Demo is unchanged.
+The fallback consumes existing consent-gated Skillset observations without a new
+backend read, wire field, persistence, fingerprint or Planner/sleep authority.
+Each pair requires seven unique shared valid profile-local days and variation;
+missing/invalid/duplicate/future/out-of-window facts never become zero. Optional
+sport/social/motivation retain their native ordinal 0–2 scale.
+Yellow `Early patterns` remain exploratory. Green `Consistent observations`
+requires at least 28 shared days spanning 28 calendar dates, |r| >= 0.2, and
+the same coefficient direction with |r| >= 0.2 in each chronological half.
+These are conservative product display gates, not proof of statistical
+significance or causality. Fallback Top Patterns may list amber comparisons
+from seven days; existing Focus rankings retain fourteen-day gating unchanged.
+Overview keeps summaries/general guidance when no supported association exists.
+Check-in-only results never infer an optimal sleep target or learned timing.
 Disabled analysis, loading and failed reads retain their distinct states; no
 general fallback hides errors or restores personal data against consent. A missing
 old-server Skillset extension remains compatible with general guidance. A failed
