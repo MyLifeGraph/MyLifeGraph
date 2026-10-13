@@ -913,7 +913,9 @@ class _TopPatternsCard extends StatelessWidget {
           Text('Top patterns', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Strongest pairs in this window.',
+            report.isCheckInFallback
+                ? 'Check-in associations · not causes.'
+                : 'Strongest pairs in this window.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -948,7 +950,11 @@ class _TopPatternTile extends StatelessWidget {
     final metricA = report.metricById(result.metricAId);
     final metricB = report.metricById(result.metricBId);
     // Sign is descriptive, not a judgment about either health signal.
-    final color = result.coefficient! < 0
+    final color = report.isCheckInFallback
+        ? (result.status == CorrelationStatus.ready
+              ? context.visualTokens.success
+              : context.visualTokens.attention)
+        : result.coefficient! < 0
         ? Theme.of(context).colorScheme.error
         : _resultColor(context, result, metricA, metricB);
     return Container(
@@ -966,12 +972,54 @@ class _TopPatternTile extends StatelessWidget {
               color: color.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            child: Icon(
-              result.coefficient! >= 0
-                  ? AppIcons.trendingUp
-                  : AppIcons.trendingDown,
-              color: color,
-            ),
+            child: !report.isCheckInFallback
+                ? Icon(
+                    result.coefficient! >= 0
+                        ? AppIcons.trendingUp
+                        : AppIcons.trendingDown,
+                    color: color,
+                  )
+                : GestureDetector(
+                    onTap: !report.isCheckInFallback
+                        ? null
+                        : () => showDialog<void>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              scrollable: true,
+                              title: Text(
+                                result.status == CorrelationStatus.ready
+                                    ? 'Consistent observations'
+                                    : 'Early patterns',
+                              ),
+                              content: Text(
+                                'Based on: check-in data.\n${result.sampleSize} shared days.\n\nFor more reliable insights: 28 shared days and the same direction in both time halves.\nAssociation does not prove cause.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          ),
+                    child: Tooltip(
+                      message: report.isCheckInFallback
+                          ? (result.status == CorrelationStatus.ready
+                                ? 'Consistent observations'
+                                : 'Early patterns')
+                          : result.strengthLabel,
+                      child: Icon(
+                        report.isCheckInFallback
+                            ? (result.status == CorrelationStatus.ready
+                                  ? AppIcons.checkCircleOutline
+                                  : AppIcons.warningAmberOutlined)
+                            : result.coefficient! >= 0
+                            ? AppIcons.trendingUp
+                            : AppIcons.trendingDown,
+                        color: color,
+                      ),
+                    ),
+                  ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(

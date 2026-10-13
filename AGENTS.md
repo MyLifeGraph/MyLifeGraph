@@ -288,6 +288,29 @@ Report failed/partial cleanup explicitly; do not claim completion. Publication
 authority includes this bounded local step, not unrelated deletions. A request
 to configure retention alone does not authorize GitHub publication or deployment.
 
+### Mandatory Existing Vercel Deployment Retention
+
+After an authorized push/deployment affecting the existing `my-life-graph` or
+`mylifegraph-website` projects, complete `npm run vercel:cleanup:auto` with the
+authorized operator's Vercel CLI access. The command prints a dry-run, binds its
+exact inventory, rechecks live/rollback/preview/PR/alias protections and applies
+only obsolete deployment deletions in those two allowlisted projects. Do not
+put operator tokens into Flutter defines, build logs or this repository.
+
+Keep each live READY production output and two prior trustworthy production
+sources, current project targets, recent outputs, active PR previews, custom
+domains and unknown/in-flight deployments. Drift, unavailable inventories or
+missing access stop cleanup; report incomplete cleanup rather than bypassing
+the checks. Never delete projects, domains, settings, Auth, user data or provider
+accounts. No cleanup step creates/promotes a deployment or enables Git integration.
+
+Vercel's separately verified automatic retention is the background safety net:
+Production seven days; Preview/Canceled/Errored one day. Preserve Vercel's
+rollback minimum and exceptions. This is not an immediate per-push storage-meter
+reset. The operator workflow and dated evidence are in
+`docs/vps-pilot-release-plan.md` and `docs/verification.md`. General local work
+without publication authorization does not authorize a push or remote cleanup.
+
 ### Authorization Before Updating Main
 
 An explicit instruction to publish the current task, including in the initial

@@ -45,11 +45,7 @@ class CorrelationPairPolicy {
 
   CorrelationPairDecision decision(String metricAId, String metricBId) {
     final pair = {metricAId, metricBId};
-    if (_samePair(
-          pair,
-          'sleep_hours',
-          'sleep_target_deviation_minutes',
-        ) ||
+    if (_samePair(pair, 'sleep_hours', 'sleep_target_deviation_minutes') ||
         _samePair(pair, 'activity_level', 'steps')) {
       return CorrelationPairDecision.overlappingSignals;
     }
@@ -95,10 +91,7 @@ int normalizeInsightsWindowDays(int windowDays) {
 }
 
 class CorrelationDataPoint {
-  const CorrelationDataPoint({
-    required this.date,
-    required this.values,
-  });
+  const CorrelationDataPoint({required this.date, required this.values});
 
   final DateTime date;
   final Map<String, double> values;
@@ -110,12 +103,14 @@ class CorrelationReport {
     required this.metrics,
     required this.points,
     required this.results,
+    this.isCheckInFallback = false,
   });
 
   final int windowDays;
   final List<CorrelationMetric> metrics;
   final List<CorrelationDataPoint> points;
   final List<CorrelationResult> results;
+  final bool isCheckInFallback;
 
   CorrelationMetric metricById(String id) {
     return metrics.firstWhere(
@@ -144,16 +139,16 @@ class CorrelationReport {
     final ranked = results
         .where(
           (result) =>
-              result.status == CorrelationStatus.ready &&
-              result.sampleSize >= 14 &&
+              (result.status == CorrelationStatus.ready ||
+                  (isCheckInFallback &&
+                      result.status == CorrelationStatus.earlyEvidence)) &&
+              result.sampleSize >= (isCheckInFallback ? 7 : 14) &&
               result.coefficient != null &&
               result.coefficient!.abs() >= 0.2,
         )
         .toList(growable: false);
     return ranked
-      ..sort(
-        (a, b) => b.coefficient!.abs().compareTo(a.coefficient!.abs()),
-      );
+      ..sort((a, b) => b.coefficient!.abs().compareTo(a.coefficient!.abs()));
   }
 }
 

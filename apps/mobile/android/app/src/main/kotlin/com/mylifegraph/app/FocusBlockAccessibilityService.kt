@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Button
 import org.json.JSONObject
 import java.lang.ref.WeakReference
@@ -39,6 +40,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private var lastRedirect = ""
     private var lastRedirectAt = 0L
     private var lastProtectionCheck = -1000L
+    // Retain a bounded set of overlay IDs for removal events after a window
+    // disappears. No package names, roots, titles or content are retained.
+    private val transientWindows = BlockingTransientWindows()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -50,6 +54,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             PackageManager.MATCH_ALL,
         ).map { it.activityInfo.packageName }.toSet()
         runningService = WeakReference(this)
+        updateBrowserSubscription()
         handler.removeCallbacks(scheduleTick)
         handler.post(scheduleTick)
     }
@@ -64,6 +69,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         }
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val foregroundPackage = event.packageName?.toString()
+        if (FocusProtectionDecision.ignoreOverlayWindow(foregroundPackage,
+                transientWindow(event.windowId))) return
         // Our overlay emits window events too. Keep the underlying package;
         // real entry into MyLifeGraph is reported by MainActivity.onResume.
         if (!FocusProtectionDecision.ignoreForegroundEvent(
@@ -82,6 +89,26 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         budgetHost = FocusProtectionDecision.budgetHost(foregroundPackage, currentHost, budgetHost, packageName)
         refreshOverlay()
         BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, budgetHost, overlay == null)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun transientWindow(id: Int): Boolean {
+        if (id < 0) return false
+        // Metadata only: never call getRoot/getSource or inspect another app.
+        val type = runCatching {
+            val snapshot = windows
+            try { snapshot.firstOrNull { it.id == id }?.type }
+            finally { snapshot.forEach { it.recycle() } }
+        }.getOrNull()
+        val kind = when (type) {
+            AccessibilityWindowInfo.TYPE_APPLICATION -> BlockingWindowKind.APPLICATION
+            AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY,
+            AccessibilityWindowInfo.TYPE_SYSTEM, AccessibilityWindowInfo.TYPE_INPUT_METHOD,
+            AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER,
+            AccessibilityWindowInfo.TYPE_MAGNIFICATION_OVERLAY -> BlockingWindowKind.TRANSIENT
+            else -> BlockingWindowKind.UNKNOWN
+        }
+        return transientWindows.observe(id, kind)
     }
 
     override fun onInterrupt() {
@@ -350,8 +377,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         val enabled = plans.websiteObservationEnabled()
         val events = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
             if (enabled) AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED else 0
-        val flags = if (enabled) info.flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
-            else info.flags and AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS.inv()
+        val windowFlags = info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        val flags = if (enabled) windowFlags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+            else windowFlags and AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS.inv()
         if (info.eventTypes != events || info.flags != flags) {
             info.eventTypes = events; info.flags = flags; serviceInfo = info
         }

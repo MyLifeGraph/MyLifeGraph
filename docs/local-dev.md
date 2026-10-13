@@ -2028,6 +2028,27 @@ This automated browser smoke covers the manual Supabase-backed smoke path for
 the listed screens. Keep manual testing for flows not listed in
 `docs/verification.md`.
 
+## Vercel Deployment Retention
+
+After an authorized push/deployment of the two existing MyLifeGraph projects,
+`npm run vercel:cleanup:auto` previews and applies their bounded cleanup with fresh
+live/rollback/preview/alias checks. Vercel also enforces its verified timed native
+retention as a background safety net. Local development alone does not authorize
+remote writes. `npm run vercel:cleanup` is read-only; to apply that exact preview,
+use `npm run vercel:cleanup:apply -- <confirmation>`. This is separate from local
+APK retention and never deletes local files, projects or provider accounts.
+
+Requires Node20+, Git, authenticated `gh` read access to open PRs, and the operator's
+authenticated Vercel CLI. Defaults are `gh` and `vercel` on PATH. `MLG_GH_CLI` and
+`MLG_VERCEL_CLI` select existing executables. If the authorized CLI is already on
+an SSH host, explicitly set `MLG_VERCEL_SSH_HOST` to that trusted host and
+`MLG_VERCEL_CLI` to its CLI path; BatchMode and host-key validation remain enabled.
+No private credential file is copied/read by the tool, and application secrets are
+excluded from its child environment. Do not put a new administrator token into
+Flutter/Vercel builds to make cleanup work. Unavailable access means incomplete
+cleanup, never permission to bypass protection. See
+[the deployment owner](vps-pilot-release-plan.md#existing-project-deployment-retention).
+
 ## Troubleshooting
 
 - If `flutter` is not found, install Flutter or set `FLUTTER_BIN`.
