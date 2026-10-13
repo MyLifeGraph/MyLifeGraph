@@ -81,8 +81,13 @@ app deployments (`dpl_EETNmG7CXgV3XQzaZnAgcn5gea5c`,
 `dpl_95KoYeWoEDrwB6jqUFBS9ozmySsN`) after a fresh content-bound inventory and
 provider acknowledgments. The new live app output, two trustworthy rollback
 sources, current targets/recent previews and all four marketing-site outputs
-remain protected. This is not a claimed Vercel byte-meter reset. VM finalization
-is recorded once its independently checked command completes.
+remain protected. This is not a claimed Vercel byte-meter reset.
+VM finalization also completes: the independently downloaded RC31 bundle is
+validated on `codex-devbox`, registered RC21/RC31 remain, and only the four
+managed RC27 APK/SBOM/manifest/metadata copies are removed (**153550139 bytes**).
+These are not the VPS's active RC27 server files; active/rollback installations
+remain outside the managed artifact store and untouched. Removed copies on
+both hosts remain recoverable from their verified public GitHub Releases.
 
 ### Check-in-only Insights correlation candidate — 2026-10-13
 
