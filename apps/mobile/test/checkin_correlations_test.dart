@@ -6,6 +6,64 @@ import 'package:my_life_graph/features/insights/domain/services/correlation_anal
 import 'package:my_life_graph/features/insights/domain/services/overview_observations.dart';
 
 void main() {
+  for (final count in [14, 28]) {
+    test(
+      '$count rated Focus days preserve every existing coefficient and ranked pair',
+      () {
+        final p = fixture(28, focus: true);
+        p.correlationPoints.clear();
+        p.correlationPoints.addAll([
+          for (var i = 0; i < count; i++)
+            PersonalPatternCorrelationPoint(
+              localDate: DateTime(2026, 10, i + 1),
+              focusQuality: 1 + i % 5,
+              usefulProgress: 1 + i % 5,
+              plannedFocusMinutes: 25,
+              actualFocusMinutes: 20 + i % 5,
+              completed: 1,
+              sleepHours: 5 + (i % 5) / 2,
+              sleepTargetDeviationMinutes: null,
+              sleepQuality: 5 + i % 5,
+              morningEnergy: 5 + i % 5,
+            ),
+        ]);
+        final before = const CorrelationAnalyzer().analyze(
+          windowDays: 90,
+          points: p.correlationDataPoints(windowDays: 90),
+        );
+        final after = checkInCorrelationReport(p, windowDays: 90);
+        expect(before.rankedResults, isNotEmpty);
+        expect(after.isCheckInFallback, isFalse);
+        expect(
+          after.results.map(
+            (r) => [
+              r.metricAId,
+              r.metricBId,
+              r.sampleSize,
+              r.coefficient,
+              r.status,
+              r.summary,
+            ],
+          ),
+          before.results.map(
+            (r) => [
+              r.metricAId,
+              r.metricBId,
+              r.sampleSize,
+              r.coefficient,
+              r.status,
+              r.summary,
+            ],
+          ),
+        );
+        expect(
+          after.rankedResults.map((r) => [r.metricAId, r.metricBId]),
+          before.rankedResults.map((r) => [r.metricAId, r.metricBId]),
+        );
+        expect(overviewObservations(p).sleep!.isCorrelation, isFalse);
+      },
+    );
+  }
   test('check-ins alone calculate real correlations; seven days are amber', () {
     final r = checkInCorrelationReport(fixture(7), windowDays: 90);
     expect(r.isCheckInFallback, isTrue);
