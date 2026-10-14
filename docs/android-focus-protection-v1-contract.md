@@ -430,10 +430,28 @@ arbitrary node text are never inspected or uploaded.
 Whole-browser app rules take precedence over domain handling. Matching domains
 open non-exported `LocalBlockPageActivity`: an offline WebView document with
 JavaScript, network, file and content access off, escaped user text and rejected
-navigation. Return and Back/predictive Back go Home, not immediately to the
-same blocked tab. It does **not** rewrite a third-party tab, perform address-bar
-actions, use a VPN or provide DNS filtering. This avoids an immediate return
-loop without pretending universal browser control.
+navigation. Return and Back/predictive Back go Home. Before opening that page,
+a bounded current-browser/current-window operation attempts to navigate the
+denied tab to `about:blank`, a local browser document with no server/network
+destination. Only allowlisted address-bar/editor IDs are queried. It clicks an
+unfocused bar, requires a focused editable field still naming the denied host
+(or the empty/hint-only editor the browser opened after our own focus)
+and advertised IME submit support before setting the fixed neutral address,
+then submits and verifies a non-editing neutral address. No arbitrary URL,
+keyboard injection, page-content query, tab enumeration or broad click traversal.
+The operation ends after five seconds, cancels on package/window/consent/rule
+changes and retains normal blocking on unsupported/failed actions. API 30+ and
+browser-provided IME support are required for automatic navigation; other cases
+retain the offline page/Home route and do not claim a rewritten tab.
+Real return to MyLifeGraph clears the duplicate-launch guard so a new denied
+browser entry is checked again. Whole-browser app rules still take precedence.
+No VPN/DNS filtering or temporary domain permission is introduced.
+App overlay Return waits for its existing monotonic delay, requests Home before
+dismissing, then opens MyLifeGraph after a confirmed Home foreground event.
+Queued origin events cannot start another attempt during that transition;
+the existing Return button stays retryable. Other foreground apps are immediately
+checked against their own rules. Failed Home navigation retains the attempt
+for retry; no force-stop, lease release or Strict/rule mutation.
 The offline Activity uses the existing AndroidX back dispatcher for both legacy
 and predictive Back, preserving its monotonic return countdown.
 

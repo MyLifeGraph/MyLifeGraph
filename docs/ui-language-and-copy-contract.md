@@ -711,8 +711,11 @@ than `180s` and adds no helper sentence. Header overflow uses `More actions` /
 Focus session, Always, Add time, Daily budget and Block now are combinable
 choices, not exclusive modes. Sensitive usage/website/Wi-Fi/NFC disclosures and
 limitations remain explicit at consent/setup or inside Limits. Website protection
-must not claim browser-universal or DNS filtering; the offline return page does
-not rewrite third-party tabs. A return delay never grants access to a blocked app.
+must not claim browser-universal or DNS filtering. Website consent describes
+moving denied tabs to a local blank page through supported address-bar actions;
+unsupported actions retain the offline page/Home route. A return delay never
+grants access to a blocked app. App Return backgrounds the target through Home
+before opening MyLifeGraph; it must not claim force-stopping another app.
 Customize labels non-native surfaces `Approximate preview · native on Android`.
 The Android preview uses `Preview` rather than claiming a live plan countdown;
 its Return replays only its local timer. Native return copy uses compact seconds

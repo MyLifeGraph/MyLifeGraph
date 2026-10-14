@@ -31,6 +31,42 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local browser/app return candidate — 2026-10-14 (not published)
+
+Task base `dac8612237dda72e44e3a6d76d74ed9edbe12a1e`. Website blocking
+attempts a bounded current-window `about:blank` navigation through known
+address-bar IDs and advertised IME actions before the existing offline page.
+No domain permission, plan pause, Focus/Strict mutation, remote destination,
+keyboard injection or page-content inspection is introduced. Unsupported actions
+retain the existing block/Home fallback; automatic tab replacement is not a
+browser-universal guarantee. App Return requests Home before opening MyLifeGraph,
+keeps failed navigation retryable and prevents queued origin events from
+resurrecting the completed attempt. No force-stop permission is claimed.
+
+Local Android App module JVM coverage is **126 passes**, including finite
+timeouts, user/context changes, unsupported actions, 1000 repeated state-machine
+sequences, return delay/Home failure/retry, queued origin events until confirmed
+Home and 1000 app reentries. App Lint and
+debug APK build pass on the existing Java 21/Android 36 setup. Focused Flutter
+coverage is **92 passes** across Blocking pages, stress, Strict request, consent
+and Focus Protection/lifecycle tests; docs and visual source gates pass.
+
+The isolated Android 36 emulator uses synthetic device-local plans and no
+MyLifeGraph account. Three Chrome deny → offline page → Return home → reopen
+cycles confirm the same tab at non-editing `about:blank`; new denied visits still
+block. Three synthetic app → native Return button → Back cycles remove the
+overlay and return to Home, never into the denied app; reentry blocks again.
+Saved Strict and plans remain unchanged. Actual emulator screenshots were
+inspected; an unblocked domain remains usable in the same browser. Flutter
+analysis reports no issues. This does not prove Samsung/OEM behavior or other
+browser adapters.
+
+The broader root Gradle run encounters Windows plugin DataStore filesystem
+failures; App-module tests are not a substitute for the full Linux CI gate.
+The captured-base affected selector cannot finish under local WSL because Node
+is unavailable. Full exact-candidate GitHub verification remains required before
+promotion; no release or deployment is claimed by this candidate entry.
+
 ### Published RC32 — 2026-10-14
 
 PR [53](https://github.com/MyLifeGraph/MyLifeGraph/pull/53) merged normally after

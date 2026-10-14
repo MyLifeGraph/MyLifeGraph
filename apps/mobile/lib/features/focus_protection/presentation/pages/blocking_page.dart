@@ -440,7 +440,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     final accepted = await _disclose(
       kind == 'website' ? 'Website protection' : 'Usage access',
       kind == 'website'
-          ? 'Read only the address bar in supported browsers to block selected domains. No page content or browsing data is uploaded. Hidden address bars and other browsers may not be detected.'
+          ? 'Use the address bar in supported browsers to block selected domains and move blocked tabs to a local blank page. No page content or browsing data is uploaded. Hidden bars or unsupported browser actions may prevent detection or redirection.'
           : 'Use Android app-usage history for daily budgets and charts. It stays on this device.',
     );
     if (!accepted || !mounted || _busy || _configurationLocked) return;

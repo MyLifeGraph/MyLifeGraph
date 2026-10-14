@@ -1,5 +1,12 @@
 # MyLifeGraph Mobile App
 
+Android website blocking attempts bounded, address-bar-only `about:blank`
+navigation of the denied current tab before the existing offline block screen.
+Package/window changes and unsupported actions stop that operation; whole-browser
+rules keep priority. App Return goes through Home before opening MyLifeGraph and
+does not release Strict, a Focus lease or any blocking rule. See Focus Protection
+for consent, API/browser support and physical-device verification limits.
+
 Check-in-only Insights supports per-pair exploratory/consistent associations
 without Focus sessions. Computable rated-Focus comparisons take precedence
 per pair, unchanged; missing comparisons can use check-ins even when some Focus
