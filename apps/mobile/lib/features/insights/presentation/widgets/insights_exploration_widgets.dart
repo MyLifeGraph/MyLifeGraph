@@ -561,7 +561,8 @@ class _TrendOverlayCard extends StatelessWidget {
   ) {
     return metrics
         .map((metric) {
-          final rawValues = points
+          final rawValues = report
+              .pointsForMetric(metric.id)
               .map((point) {
                 final value = point.values[metric.id];
                 if (value == null || !value.isFinite) {
@@ -821,7 +822,7 @@ class _CorrelationBadge extends StatelessWidget {
     final label = result?.coefficientLabel ?? '--';
     final caption = result?.strengthLabel ?? 'No pair';
     final color = _resultColor(context, result, metricA, metricB);
-    return Container(
+    final badge = Container(
       key: const ValueKey('compare-correlation-badge'),
       width: compact ? 92 : 112,
       padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.md),
@@ -840,6 +841,32 @@ class _CorrelationBadge extends StatelessWidget {
             style: Theme.of(context).textTheme.labelSmall,
           ),
         ],
+      ),
+    );
+    if (result?.isCheckInEvidence != true) return badge;
+    return Tooltip(
+      message: 'Check-in data · ${result!.sampleSize} shared days',
+      child: InkWell(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            scrollable: true,
+            title: Text(result!.strengthLabel),
+            content: Text(
+              'Based on: check-in data.\n${result!.sampleSize} shared days.\n\n'
+              'A comparison needs 7 shared days with varying values. '
+              'For more reliable insights: 28 shared days and the same direction in both time halves.\n'
+              'Association does not prove cause.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        ),
+        child: badge,
       ),
     );
   }
@@ -950,7 +977,7 @@ class _TopPatternTile extends StatelessWidget {
     final metricA = report.metricById(result.metricAId);
     final metricB = report.metricById(result.metricBId);
     // Sign is descriptive, not a judgment about either health signal.
-    final color = report.isCheckInFallback
+    final color = result.isCheckInEvidence
         ? (result.status == CorrelationStatus.ready
               ? context.visualTokens.success
               : context.visualTokens.attention)
@@ -972,7 +999,7 @@ class _TopPatternTile extends StatelessWidget {
               color: color.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            child: !report.isCheckInFallback
+            child: !result.isCheckInEvidence
                 ? Icon(
                     result.coefficient! >= 0
                         ? AppIcons.trendingUp
@@ -980,7 +1007,7 @@ class _TopPatternTile extends StatelessWidget {
                     color: color,
                   )
                 : GestureDetector(
-                    onTap: !report.isCheckInFallback
+                    onTap: !result.isCheckInEvidence
                         ? null
                         : () => showDialog<void>(
                             context: context,
@@ -1003,13 +1030,13 @@ class _TopPatternTile extends StatelessWidget {
                             ),
                           ),
                     child: Tooltip(
-                      message: report.isCheckInFallback
+                      message: result.isCheckInEvidence
                           ? (result.status == CorrelationStatus.ready
                                 ? 'Consistent observations'
                                 : 'Early patterns')
                           : result.strengthLabel,
                       child: Icon(
-                        report.isCheckInFallback
+                        result.isCheckInEvidence
                             ? (result.status == CorrelationStatus.ready
                                   ? AppIcons.checkCircleOutline
                                   : AppIcons.warningAmberOutlined)
@@ -2100,6 +2127,11 @@ Color _resultColor(
   final coefficient = result?.coefficient;
   if (coefficient == null) {
     return colors.onSurfaceVariant;
+  }
+  if (result?.isCheckInEvidence == true) {
+    return result!.status == CorrelationStatus.ready
+        ? tokens.success
+        : tokens.attention;
   }
   if (result?.status == CorrelationStatus.earlyEvidence) {
     return colors.onSurfaceVariant;

@@ -6,6 +6,11 @@ in Top Patterns. Evidence names shared days and the two-half consistency gate.
 This is not a learning-performance claim, diagnosis or causal recommendation;
 existing Focus-derived copy and thresholds remain unchanged.
 
+Compare's existing check-in coefficient badge opens a compact explanation on tap,
+with a source/shared-days tooltip on long press. It names the seven-day comparison
+floor and 28-day consistency requirement without promising a result from counts.
+Mixed reports label each added Top Pattern using its own source, not a global tier.
+
 Insights evidence explanations use `General guidance`, `Early observations`
 and `Close`. General advice is not a personal finding; early summaries are not
 reliable patterns or causal conclusions. Details still owns sources/coverage.

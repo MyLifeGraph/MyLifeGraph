@@ -1,8 +1,10 @@
 # MyLifeGraph Mobile App
 
 Check-in-only Insights supports per-pair exploratory/consistent associations
-without Focus sessions. Existing rated-Focus correlation points take precedence
-unchanged; the fallback reads the existing Skillset projection only and does not
+without Focus sessions. Computable rated-Focus comparisons take precedence
+per pair, unchanged; missing comparisons can use check-ins even when some Focus
+history exists. Scatter data follows that same source. The fallback reads the
+existing Skillset projection only and does not
 change backend learning, Planner preferences or sleep recommendations. See the
 Personal Learning contract for exact source and confidence gates.
 

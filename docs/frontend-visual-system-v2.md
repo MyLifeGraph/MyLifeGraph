@@ -6,6 +6,11 @@ preliminary/consistent evidence; the existing tap/long-press explanation remains
 Fallback Top Patterns uses confidence color rather than judging negative
 associations as bad. Existing rated-Focus colors/layout remain unchanged.
 
+Compare uses the same semantic amber/green confidence colors for check-in pairs.
+The existing coefficient badge is tappable with no extra inline text or layout
+shift; its theme-owned explanation scrolls. Mixed Top Patterns apply confidence
+decoration per result while original Focus tiles remain unchanged.
+
 General/early Insights evidence icons keep their existing 20px geometry and
 text placement. Tap opens a theme-owned explanation dialog with Close; long
 press retains the tooltip. Dialog content scrolls for narrow/large-text views.
