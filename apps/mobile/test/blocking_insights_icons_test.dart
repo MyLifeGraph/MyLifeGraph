@@ -140,12 +140,12 @@ void main() {
       await tester.tap(find.text('Enable websites'));
       await tester.pumpAndSettle();
       expect(
-        find.textContaining('Read only the address bar in supported browsers'),
+        find.textContaining('Use the address bar in supported browsers'),
         findsOneWidget,
       );
       expect(
         find.textContaining(
-          'Hidden address bars and other browsers may not be detected',
+          'Hidden bars or unsupported browser actions may prevent detection or redirection',
         ),
         findsOneWidget,
       );

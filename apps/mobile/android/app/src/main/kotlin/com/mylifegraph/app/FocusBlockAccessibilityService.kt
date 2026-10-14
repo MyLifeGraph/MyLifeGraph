@@ -31,6 +31,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private var homePackages: Set<String> = emptySet()
     private var lastForegroundPackage: String? = null
     private var lastForegroundObservedAt = 0L
+    private var returnNavigationAt = 0L
     private var budgetForegroundPackage: String? = null
     private var budgetHost: String? = null
     private var emergencyArmRunnable: Runnable? = null
@@ -39,6 +40,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private var lastMeterAt = 0L
     private var lastRedirect = ""
     private var lastRedirectAt = 0L
+    private var neutralBrowser: BrowserNeutralization? = null
+    private val neutralTick = Runnable { advanceNeutralBrowser() }
     private var lastProtectionCheck = -1000L
     // Retain a bounded set of overlay IDs for removal events after a window
     // disappears. No package names, roots, titles or content are retained.
@@ -68,7 +71,15 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             return
         }
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        // Queued origin events must not resurrect a completed return attempt.
+        if (event.eventTime < returnNavigationAt) return
         val foregroundPackage = event.packageName?.toString()
+        // Opening our bounded address-bar editor may emit an IME event before
+        // its window metadata is available. It is not an application switch.
+        if (neutralBrowser != null && getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                .inputMethodList.any { it.packageName == foregroundPackage }) {
+            advanceNeutralBrowser(); return
+        }
         if (FocusProtectionDecision.ignoreOverlayWindow(foregroundPackage,
                 transientWindow(event.windowId))) return
         // Our overlay emits window events too. Keep the underlying package;
@@ -77,7 +88,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
                 foregroundPackage, packageName,
             )
         ) {
-            if (lastForegroundPackage != foregroundPackage) { currentHost = null; lastMeterAt = SystemClock.elapsedRealtime() }
+            if (lastForegroundPackage != foregroundPackage) { currentHost = null; lastMeterAt = SystemClock.elapsedRealtime(); lastRedirect = "" }
             lastForegroundPackage = foregroundPackage
             lastForegroundObservedAt = System.currentTimeMillis() -
                 (SystemClock.uptimeMillis() - event.eventTime).coerceAtLeast(0)
@@ -112,12 +123,14 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        cancelNeutralBrowser()
         BlockingTimerNotifications.disconnected(applicationContext)
         if (::plans.isInitialized) plans.flushSiteUsage()
         hideOverlay()
     }
 
     override fun onDestroy() {
+        cancelNeutralBrowser()
         BlockingTimerNotifications.disconnected(applicationContext)
         if (::plans.isInitialized) plans.flushSiteUsage()
         if (runningService?.get() === this) runningService = null
@@ -266,12 +279,27 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun returnToMyLifeGraph() {
-        if (!returnDelay.complete(SystemClock.elapsedRealtime())) return
-        // Clear origin before launch so resume/ticks cannot redraw this attempt.
-        lastForegroundPackage = packageName
-        currentHost = null
-        hideOverlay()
-        launchMyLifeGraph()
+        returnDelay.exitViaHome(SystemClock.elapsedRealtime(), {
+            // Put the denied app behind Home before removing its blocking screen.
+            performGlobalAction(GLOBAL_ACTION_HOME) || runCatching {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+        }, {
+            // No lease, Strict setting or rule is released by this navigation.
+            lastForegroundPackage = packageName
+            returnNavigationAt = SystemClock.uptimeMillis()
+            lastForegroundObservedAt = System.currentTimeMillis()
+            budgetForegroundPackage = packageName
+            budgetHost = null
+            currentHost = null
+            hideOverlay()
+            // GLOBAL_ACTION_HOME is asynchronous; let its task transition win
+            // before opening our task, otherwise the two launches can race.
+            handler.postDelayed({
+                if (lastForegroundPackage == packageName || lastForegroundPackage in homePackages) launchMyLifeGraph()
+            }, 250)
+        })
     }
 
     private fun launchMyLifeGraph() {
@@ -388,6 +416,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     @Suppress("DEPRECATION")
     private fun checkBrowser() {
         if (!::plans.isInitialized) return
+        if (neutralBrowser != null) { advanceNeutralBrowser(); return }
         if (!plans.websiteObservationEnabled()) { currentHost = null; budgetHost = null; return }
         val pkg = lastForegroundPackage ?: return
         if (pkg !in BrowserAddressBars.adapters) { currentHost = null; return }
@@ -400,6 +429,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         if (root.packageName?.toString() != pkg) {
             root.recycle(); currentHost = null; return
         }
+        val windowId = root.windowId
         val host = try { BrowserAddressBars.host(root, pkg) } finally { root.recycle() }
         currentHost = host
         budgetHost = host
@@ -410,10 +440,61 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         lastRedirect = key; lastRedirectAt = elapsed
         plans.recordAttempt("web:$host")
         currentHost = null
-        // Deliberately do not edit the browser URL or invent a reliable submit action.
-        // Our offline page consumes Back by returning Home, never to the blocked tab.
-        startActivity(Intent(this, LocalBlockPageActivity::class.java)
-            .putExtra("target", host).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        neutralBrowser = BrowserNeutralization(pkg, host, windowId, elapsed)
+        advanceNeutralBrowser()
+    }
+
+    private fun cancelNeutralBrowser(clearDuplicate: Boolean = true) {
+        handler.removeCallbacks(neutralTick)
+        neutralBrowser = null
+        if (clearDuplicate) lastRedirect = ""
+    }
+
+    @Suppress("DEPRECATION")
+    private fun advanceNeutralBrowser() {
+        val pending = neutralBrowser ?: return
+        handler.removeCallbacks(neutralTick)
+        if (!plans.websiteObservationEnabled() || lastForegroundPackage != pending.packageName ||
+            manager.shouldBlock(pending.packageName) || plans.blocked(pending.packageName, pending.host) == null) {
+            cancelNeutralBrowser(); return
+        }
+        val active = rootInActiveWindow
+        if (active != null && (active.windowId != pending.windowId || active.packageName?.toString() != pending.packageName)) {
+            active.recycle(); cancelNeutralBrowser(); return
+        }
+        val root = if (active != null) active else {
+            val snapshot = windows
+            try { snapshot.firstOrNull { it.id == pending.windowId &&
+                it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive }?.root }
+            finally { snapshot.forEach { it.recycle() } }
+        }
+        if (root == null) {
+            if (!pending.expired(SystemClock.elapsedRealtime())) handler.postDelayed(neutralTick, 80)
+            else { cancelNeutralBrowser(false); openWebsiteBlock(pending.host) }
+            return
+        }
+        val action = try {
+            if (root.packageName?.toString() != pending.packageName || root.windowId != pending.windowId) {
+                cancelNeutralBrowser(); return
+            }
+            runCatching { BrowserAddressBars.neutralStep(root, pending, SystemClock.elapsedRealtime()) }
+                .getOrDefault(BrowserNeutralization.Action.ABORT)
+        } finally { root.recycle() }
+        when (action) {
+            BrowserNeutralization.Action.WAIT -> handler.postDelayed(neutralTick, 80)
+            BrowserNeutralization.Action.COMPLETE, BrowserNeutralization.Action.ABORT -> {
+                cancelNeutralBrowser(false); currentHost = null; budgetHost = null
+                openWebsiteBlock(pending.host)
+            }
+            else -> { cancelNeutralBrowser(false); openWebsiteBlock(pending.host) }
+        }
+    }
+
+    private fun openWebsiteBlock(host: String) {
+        runCatching {
+            startActivity(Intent(this, LocalBlockPageActivity::class.java)
+                .putExtra("target", host).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        }.onFailure { performGlobalAction(GLOBAL_ACTION_HOME) }
     }
 
     private fun hideOverlay(clearAttempt: Boolean = true) {
@@ -438,6 +519,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
                 service.budgetForegroundPackage = context.packageName
                 service.budgetHost = null
                 service.currentHost = null
+                service.cancelNeutralBrowser()
+                // A real new browser entry must re-check the same denied host.
+                service.lastRedirect = ""
                 service.lastMeterAt = SystemClock.elapsedRealtime()
                 service.plans.flushSiteUsage()
                 service.refreshOverlay()

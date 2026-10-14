@@ -26,6 +26,13 @@ class BlockReturnDelay {
         return true
     }
 
+    fun exitViaHome(now: Long, navigateHome: () -> Boolean, returnToApp: () -> Unit): Boolean {
+        if (target == null || remaining(now) > 0 || !navigateHome()) return false
+        if (!complete(now)) return false
+        returnToApp()
+        return true
+    }
+
     fun clear() { target = null; durationMs = 0; startedAt = 0 }
 
     fun retain(sourceStillBlocked: Boolean, foregroundBlocked: Boolean, homeOrOwn: Boolean): Boolean =
