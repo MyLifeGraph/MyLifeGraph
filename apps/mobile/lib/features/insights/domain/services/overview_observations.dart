@@ -196,8 +196,8 @@ OverviewObservation? _checkInPattern(
   required bool sleep,
 }) {
   final correlations = checkInCorrelationReport(report, windowDays: 90);
-  if (!correlations.isCheckInFallback) return null;
   final matches = correlations.rankedResults
+      .where((r) => r.isCheckInEvidence)
       .where((r) {
         final sleepPair = {
           r.metricAId,

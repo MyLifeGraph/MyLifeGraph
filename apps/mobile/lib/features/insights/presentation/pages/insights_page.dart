@@ -207,7 +207,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
     _ensureSelectedMetricsExist();
     final activeResult = widget.report.resultFor(_metricAId, _metricBId);
     final values = const CorrelationAnalyzer().pairValues(
-      points: widget.report.points,
+      points: widget.report.pointsForPair(_metricAId, _metricBId),
       metricAId: _metricAId,
       metricBId: _metricBId,
     );

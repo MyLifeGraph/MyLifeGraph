@@ -168,44 +168,101 @@ void main() {
       isEmpty,
     );
   });
+  test('one rated session cannot suppress usable check-in comparisons', () {
+    final p = fixture(28, focus: true);
+    final after = checkInCorrelationReport(p, windowDays: 90);
+    final pair = after.resultFor('sleep_hours', 'energy_level')!;
+    expect(pair.isCheckInEvidence, isTrue);
+    expect(pair.sampleSize, 28);
+    expect(pair.coefficient, closeTo(1, 1e-10));
+    expect(after.pointsForPair('sleep_hours', 'energy_level').length, 28);
+    expect(
+      after.resultFor('focus_quality', 'useful_progress')!.isCheckInEvidence,
+      isFalse,
+    );
+    expect(after.pointsForPair('focus_quality', 'useful_progress').length, 1);
+    expect(after.rankedResults, contains(pair));
+    expect(overviewObservations(p).sleep!.isCorrelation, isTrue);
+  });
+
   test(
-    'any rated Focus data preserves original values, metrics, thresholds and rankings',
+    'mixed report preserves early Focus pairs and their exact chart source',
     () {
       final p = fixture(28, focus: true);
-      final before = const CorrelationAnalyzer().analyze(
+      p.correlationPoints.clear();
+      p.correlationPoints.addAll([
+        for (var i = 0; i < 7; i++)
+          PersonalPatternCorrelationPoint(
+            localDate: DateTime(2026, 10, i + 1),
+            focusQuality: 1 + i % 5,
+            usefulProgress: 1 + i % 5,
+            plannedFocusMinutes: 25,
+            actualFocusMinutes: 20 + i % 5,
+            completed: 1,
+            sleepHours: 5 + (i % 5) / 2,
+            sleepTargetDeviationMinutes: null,
+            sleepQuality: null,
+            morningEnergy: 5 + i % 5,
+          ),
+      ]);
+      for (final point in p.skillsetPoints) {
+        point.values['mood_score'] = point.values['energy_level']!;
+      }
+      final legacy = const CorrelationAnalyzer().analyze(
         windowDays: 90,
         points: p.correlationDataPoints(windowDays: 90),
       );
-      final after = checkInCorrelationReport(p, windowDays: 90);
-      expect(after.isCheckInFallback, isFalse);
-      expect(after.metrics.map((m) => m.id), before.metrics.map((m) => m.id));
-      expect(
-        after.points.map((p) => p.values),
-        before.points.map((p) => p.values),
-      );
-      expect(
-        after.results.map(
-          (r) => [
-            r.metricAId,
-            r.metricBId,
-            r.sampleSize,
-            r.coefficient,
-            r.status,
-            r.summary,
-          ],
-        ),
-        before.results.map(
-          (r) => [
-            r.metricAId,
-            r.metricBId,
-            r.sampleSize,
-            r.coefficient,
-            r.status,
-            r.summary,
-          ],
-        ),
-      );
-      expect(after.rankedResults.length, before.rankedResults.length);
+      final result = checkInCorrelationReport(p, windowDays: 90);
+      for (final pair in legacy.results.where((r) => r.isReady)) {
+        final selected = result.resultFor(pair.metricAId, pair.metricBId)!;
+        expect(selected.isCheckInEvidence, isFalse);
+        expect(selected.coefficient, pair.coefficient);
+        expect(selected.sampleSize, pair.sampleSize);
+        expect(selected.status, pair.status);
+        expect(result.pointsForPair(pair.metricAId, pair.metricBId).length, 7);
+      }
+      final added = result.resultFor('mood_score', 'energy_level')!;
+      expect(added.isCheckInEvidence, isTrue);
+      expect(added.sampleSize, 28);
+      expect(result.pointsForPair('energy_level', 'mood_score').length, 28);
+      expect(result.pointsForMetric('mood_score').length, 28);
+      expect(result.rankedResults.where((r) => !r.isCheckInEvidence), isEmpty);
+    },
+  );
+
+  test('Focus outside selected window cannot disable current check-ins', () {
+    final result = checkInCorrelationReport(
+      fixture(28, focus: true),
+      windowDays: 7,
+    );
+    final pair = result.resultFor('sleep_hours', 'energy_level')!;
+    expect(pair.isCheckInEvidence, isTrue);
+    expect(pair.sampleSize, 7);
+    expect(pair.status, CorrelationStatus.earlyEvidence);
+  });
+
+  test('disabled mixed report never exposes fallback observations', () {
+    final result = checkInCorrelationReport(
+      fixture(28, focus: true, disabled: true),
+      windowDays: 90,
+    );
+    expect(result.points, isEmpty);
+    expect(result.checkInPoints, isEmpty);
+    expect(result.results, isEmpty);
+  });
+
+  test(
+    'no Focus: selected window reports fewer pairs without inventing values',
+    () {
+      final p = fixture(28);
+      for (final point in p.skillsetPoints.skip(21)) {
+        point.values.remove('energy_level');
+      }
+      final short = checkInCorrelationReport(p, windowDays: 7);
+      expect(short.rankedResults, isEmpty);
+      final longer = checkInCorrelationReport(p, windowDays: 90);
+      expect(longer.resultFor('sleep_hours', 'energy_level')!.sampleSize, 21);
+      expect(longer.rankedResults, isNotEmpty);
     },
   );
 }

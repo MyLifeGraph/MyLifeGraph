@@ -31,6 +31,26 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local per-pair Insights fallback — 2026-10-14 (not published)
+
+Task base `d10daffccce702cf273e0585ba464a214afaaa06`. Check-in fallback is now
+selected per comparison instead of disabled by any rated Focus point. Existing
+computable Focus pairs keep their coefficients, samples, statuses and ranking
+thresholds; added check-in results carry their own source/confidence and scatter
+points. Disabled analysis explicitly returns no observations, even with stale
+Focus data in a supplied report. No backend, schema or Planner changes.
+
+The focused Flutter run passes **139 tests** across `checkin_correlations_test`,
+`correlation_analyzer_test`, `overview_observations_test` and
+`insights_page_load_state_test`. Coverage includes no Focus, sparse/mature Focus,
+out-of-window sessions, missing/constant/invalid data, consent, original result
+equivalence, and mixed-result source selection. Four-theme 320px/200% journeys
+exercise Overview/Advanced/Top Patterns and the tappable Compare explanation.
+Docs and visual source gates pass. This is synthetic local evidence, not a
+diagnosis of the owner's private data or proof of an installed APK update.
+Overview's 90-day history and Advanced's default 14-day window remain distinct;
+changing the display period does not manufacture shared observations.
+
 ### Published RC31 — 2026-10-13
 
 PR [51](https://github.com/MyLifeGraph/MyLifeGraph/pull/51) merged through

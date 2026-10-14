@@ -37,7 +37,7 @@ void main() {
   }.entries) {
     for (final days in [7, 28]) {
       testWidgets(
-        'check-in-only $days-day evidence renders ${theme.key} at 320px/200%',
+        'check-in $days-day evidence with optional sparse Focus renders ${theme.key} at 320px/200%',
         (tester) async {
           tester.view.physicalSize = const Size(320, 900);
           tester.view.devicePixelRatio = 1;
@@ -51,7 +51,7 @@ void main() {
                 _skillsetSelectionOverride(),
                 insightsProvider.overrideWith((ref) async => const []),
                 personalPatternsProvider.overrideWith(
-                  (ref) async => checkin.fixture(days),
+                  (ref) async => checkin.fixture(days, focus: days == 28),
                 ),
                 sleepRecommendationProvider.overrideWith(
                   (ref) async => _sleepRecommendation(
@@ -94,6 +94,35 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text('Advanced'));
           await tester.pumpAndSettle();
+          // Select a check-in pair even when sparse Focus metrics also exist.
+          final scope = ProviderScope.containerOf(
+            tester.element(find.byType(InsightsPage)),
+          );
+          final report = scope.read(correlationReportProvider).requireValue;
+          expect(
+            report.resultFor('sleep_hours', 'energy_level')!.isCheckInEvidence,
+            isTrue,
+          );
+          if (days == 7) {
+            final badge = find.byKey(
+              const ValueKey('compare-correlation-badge'),
+            );
+            await tester.scrollUntilVisible(
+              badge,
+              150,
+              scrollable: find.byType(Scrollable).first,
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(badge);
+            await tester.pumpAndSettle();
+            expect(
+              find.textContaining('Based on: check-in data.'),
+              findsOneWidget,
+            );
+            expect(tester.takeException(), isNull);
+            await tester.tap(find.text('Close'));
+            await tester.pumpAndSettle();
+          }
           await tester.scrollUntilVisible(
             find.text('Top patterns').first,
             150,

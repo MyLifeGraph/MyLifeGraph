@@ -104,6 +104,7 @@ class CorrelationReport {
     required this.points,
     required this.results,
     this.isCheckInFallback = false,
+    this.checkInPoints = const [],
   });
 
   final int windowDays;
@@ -111,6 +112,13 @@ class CorrelationReport {
   final List<CorrelationDataPoint> points;
   final List<CorrelationResult> results;
   final bool isCheckInFallback;
+  final List<CorrelationDataPoint> checkInPoints;
+
+  List<CorrelationDataPoint> pointsForPair(String a, String b) =>
+      resultFor(a, b)?.isCheckInEvidence == true ? checkInPoints : points;
+
+  List<CorrelationDataPoint> pointsForMetric(String id) =>
+      points.any((p) => p.values.containsKey(id)) ? points : checkInPoints;
 
   CorrelationMetric metricById(String id) {
     return metrics.firstWhere(
@@ -140,9 +148,9 @@ class CorrelationReport {
         .where(
           (result) =>
               (result.status == CorrelationStatus.ready ||
-                  (isCheckInFallback &&
+                  (result.isCheckInEvidence &&
                       result.status == CorrelationStatus.earlyEvidence)) &&
-              result.sampleSize >= (isCheckInFallback ? 7 : 14) &&
+              result.sampleSize >= (result.isCheckInEvidence ? 7 : 14) &&
               result.coefficient != null &&
               result.coefficient!.abs() >= 0.2,
         )
@@ -160,6 +168,7 @@ class CorrelationResult {
     required this.summary,
     this.coefficient,
     this.status = CorrelationStatus.ready,
+    this.isCheckInEvidence = false,
   });
 
   final String metricAId;
@@ -168,6 +177,7 @@ class CorrelationResult {
   final double? coefficient;
   final CorrelationStatus status;
   final String summary;
+  final bool isCheckInEvidence;
 
   bool get isReady =>
       coefficient != null &&

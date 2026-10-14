@@ -9,9 +9,8 @@ CorrelationReport checkInCorrelationReport(
   CorrelationAnalyzer analyzer = const CorrelationAnalyzer(),
 }) {
   final legacy = report.correlationDataPoints(windowDays: windowDays);
-  if (report.status == PersonalPatternsStatus.disabled ||
-      report.correlationPoints.isNotEmpty) {
-    return analyzer.analyze(windowDays: windowDays, points: legacy);
+  if (report.status == PersonalPatternsStatus.disabled) {
+    return analyzer.analyze(windowDays: windowDays, points: const []);
   }
   final metrics = [
     ...correlationMetrics.where(
@@ -92,12 +91,44 @@ CorrelationReport checkInCorrelationReport(
     for (final result in raw.results)
       _confidence(result, points, metrics, analyzer),
   ];
-  return CorrelationReport(
+  final fallback = CorrelationReport(
     windowDays: windowDays,
     metrics: raw.metrics,
     points: points,
     results: results,
     isCheckInFallback: true,
+    checkInPoints: points,
+  );
+  if (report.correlationPoints.isEmpty) return fallback;
+  final original = analyzer.analyze(windowDays: windowDays, points: legacy);
+  final combined = [...original.results];
+  for (final candidate in fallback.results) {
+    final previous = original.resultFor(
+      candidate.metricAId,
+      candidate.metricBId,
+    );
+    // Preserve every computable legacy comparison, including early evidence.
+    // Never blend differently selected Focus/check-in observations in one pair.
+    if (previous?.isReady == true) continue;
+    if (previous != null &&
+        !candidate.isReady &&
+        candidate.sampleSize <= previous.sampleSize) {
+      continue;
+    }
+    if (previous != null) combined.remove(previous);
+    combined.add(candidate);
+  }
+  return CorrelationReport(
+    windowDays: windowDays,
+    metrics: [
+      ...original.metrics,
+      ...fallback.metrics.where(
+        (m) => !original.metrics.any((v) => v.id == m.id),
+      ),
+    ],
+    points: original.points,
+    results: combined,
+    checkInPoints: points,
   );
 }
 
@@ -120,7 +151,6 @@ CorrelationResult _confidence(
   List<CorrelationMetric> metrics,
   CorrelationAnalyzer analyzer,
 ) {
-  if (!result.isReady) return result;
   final paired = points
       .where(
         (p) =>
@@ -129,7 +159,8 @@ CorrelationResult _confidence(
       )
       .toList();
   bool consistent = false;
-  if (paired.length >= 28 &&
+  if (result.isReady &&
+      paired.length >= 28 &&
       paired.last.date.difference(paired.first.date).inDays >= 27 &&
       result.coefficient!.abs() >= .2) {
     final middle = paired.length ~/ 2;
@@ -163,6 +194,9 @@ CorrelationResult _confidence(
     coefficient: result.coefficient,
     status: consistent
         ? CorrelationStatus.ready
-        : CorrelationStatus.earlyEvidence,
+        : result.isReady
+        ? CorrelationStatus.earlyEvidence
+        : result.status,
+    isCheckInEvidence: true,
   );
 }

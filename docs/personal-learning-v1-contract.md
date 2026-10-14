@@ -138,10 +138,14 @@ noncausal limits stay under Details. No inferred optimum or sleep target is show
 Green remains reserved for an existing stable report **with a supported comparison**
 or the independently validated ready sleep response. Maturity alone does not
 make an empty pattern list green. Emerging supported patterns stay amber.
-An additive client-only check-in correlation fallback applies only while the
-entire existing rated-Focus `correlation_points` list is empty. Any rated Focus
-point preserves the original Advanced/Overview learning path, even below its
-maturity floor or outside the selected display window. Demo is unchanged.
+An additive client-only check-in correlation fallback is selected per pair.
+Every computable rated-Focus comparison (including early evidence) retains its
+original coefficient, sample, status and ranking threshold. Otherwise a usable
+check-in comparison, or a more informative shared-day sample, can fill that pair.
+A lone rated session or one outside the selected window cannot suppress unrelated
+check-in associations. Compare's scatter points follow the selected pair's source;
+Focus and check-in samples are never blended. New trend metrics use check-in points
+only when that metric has no original points. Demo is unchanged.
 The fallback consumes existing consent-gated Skillset observations without a new
 backend read, wire field, persistence, fingerprint or Planner/sleep authority.
 Each pair requires seven unique shared valid profile-local days and variation;
