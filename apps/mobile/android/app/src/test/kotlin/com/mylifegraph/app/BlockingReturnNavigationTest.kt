@@ -42,6 +42,8 @@ class BlockingReturnNavigationTest {
                 navigation.destination("own.app", "own.app", setOf("home.app")))
             assertEquals(BlockingReturnNavigation.Destination.OTHER,
                 navigation.destination("safe.app", "own.app", setOf("home.app")))
+            assertEquals(BlockingReturnNavigation.Destination.OTHER,
+                navigation.destination("denied.app", "own.app", setOf("home.app"), false))
             navigation.clear(); assertNull(navigation.source)
         }
     }

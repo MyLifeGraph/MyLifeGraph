@@ -145,7 +145,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private fun refreshOverlay() {
         updateBrowserSubscription()
         if (returnNavigation.source != null) {
-            val destination = returnNavigation.destination(lastForegroundPackage, packageName, homePackages)
+            val destination = returnNavigation.destination(lastForegroundPackage, packageName, homePackages,
+                manager.shouldBlock(returnNavigation.source))
             if (destination == BlockingReturnNavigation.Destination.WAIT) return
             returnNavigation.clear()
             hideOverlay()
@@ -337,6 +338,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         lastProtectionCheck = elapsed
         blockScreen?.updateStrictLocked(plans.strict().optBoolean("enabled"))
         if ((returnDelay.target ?: returnNavigation.source)?.let(manager::shouldBlock) != true) {
+            returnNavigation.clear()
             hideOverlay()
             return
         }

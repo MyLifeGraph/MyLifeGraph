@@ -45,7 +45,8 @@ class BlockingReturnNavigation {
     var source: String? = null
         private set
     fun begin(packageName: String) { require(packageName.isNotBlank()); source = packageName }
-    fun destination(foreground: String?, own: String, homes: Set<String>): Destination = when {
+    fun destination(foreground: String?, own: String, homes: Set<String>, sourceStillBlocked: Boolean = true): Destination = when {
+        !sourceStillBlocked -> Destination.OTHER
         foreground == null || foreground == source || foreground == "com.android.systemui" -> Destination.WAIT
         foreground in homes -> Destination.HOME
         foreground == own -> Destination.OWN
