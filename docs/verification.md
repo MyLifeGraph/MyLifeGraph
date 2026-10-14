@@ -31,6 +31,19 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Preparation E2E workload assertion — 2026-10-14
+
+The exact-Main browser run observed a valid 30-minute Preparation proposal as
+two 15-minute blocks and failed the helper's `toHaveLength(1)`. The helper now
+checks nonempty unique block identities, positive bounded durations, the complete
+30-minute workload, and unchanged identities/intervals/minutes after explicit
+confirmation. It still starts one selected source, checks its provenance and
+tracked credit, and preserves the parallel-start conflict/reflection journey.
+No Planner, Focus, availability, session size, API, schema or user behavior changes.
+Current availability may legitimately partition preferred session lengths.
+The native RC33 tag remains a held signing candidate, not a published release,
+until fresh full final-source verification completes.
+
 ### Local browser/app return candidate — 2026-10-14 (not published)
 
 Task base `dac8612237dda72e44e3a6d76d74ed9edbe12a1e`. Website blocking

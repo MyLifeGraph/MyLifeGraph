@@ -263,7 +263,20 @@ async function createPreparationBlock(e2e, localDate) {
     200,
     'Preparation proposal',
   );
-  expect(proposed.json?.pending_revision?.blocks).toHaveLength(1);
+  // Session size is preferred, not a promise of one block: current availability
+  // can legitimately split the same 30-minute workload into several slots.
+  const proposedBlocks = proposed.json?.pending_revision?.blocks;
+  expect(Array.isArray(proposedBlocks)).toBe(true);
+  expect(proposedBlocks.length).toBeGreaterThan(0);
+  expect(proposedBlocks.reduce((total, block) => total + block.planned_minutes, 0))
+    .toBe(30);
+  expect(new Set(proposedBlocks.map((block) => block.id)).size)
+    .toBe(proposedBlocks.length);
+  for (const block of proposedBlocks) {
+    expect(block.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(block.planned_minutes).toBeGreaterThanOrEqual(5);
+    expect(block.planned_minutes).toBeLessThanOrEqual(30);
+  }
 
   const confirmed = assertHttpStatus(
     await e2e.api.request(`/v1/deadline-plans/${planId}/confirm`, {
@@ -277,6 +290,10 @@ async function createPreparationBlock(e2e, localDate) {
     'Preparation confirmation',
   );
   const block = confirmed.json?.active_revision?.blocks?.[0];
+  const reservation = ({ id, starts_at, ends_at, planned_minutes }) =>
+    ({ id, starts_at, ends_at, planned_minutes });
+  expect(confirmed.json?.active_revision?.blocks?.map(reservation))
+    .toEqual(proposedBlocks.map(reservation));
   expect(block?.id).toMatch(/^[0-9a-f-]{36}$/);
 
   return {
