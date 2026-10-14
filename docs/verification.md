@@ -31,6 +31,46 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC32 — 2026-10-14
+
+PR [53](https://github.com/MyLifeGraph/MyLifeGraph/pull/53) merged normally after
+candidate full run `38555641765` and PR run `38555642429` passed. Immutable
+APK/tag source is `7a37858b733b50e5056718bf5cfb3fda799a0274`; candidate and
+Main trees match. Exact-Main run `38557274915` passes all seven jobs, including
+full Flutter/Android verification, **2011 backend passes / 2 skips**, fresh
+migrations/pgTAP and **8 browser passes**. Immutable signing run `38557327672`
+and automatic Main APK run `38557271739` succeed. Local focused coverage is
+**139 tests**; release-retention fixtures report **36 passes**.
+
+[RC32](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.32)
+is normal/latest/non-draft/non-prerelease, release id `412654239`, published
+`2026-10-14T11:45:56Z`. Android package `com.mylifegraph.app`, versionCode
+`10000125`; APK size **153306356 bytes**, SHA-256
+`ca091ef0b3b65df3f96b7573dc287fd8153d95b2b2dc9a9990818b85c83579a5`.
+Independent `apksigner verify` confirms the unchanged certificate
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+All four uploaded asset identities, sizes and GitHub digests match local bytes.
+Tag creation reported the configured actor's creation restriction bypass;
+Main checks/admin enforcement and all rules remained unchanged.
+
+App production `dpl_7UxPmPfMRj76Kthf6YWakA8GknxW` is READY at that source.
+Both existing app aliases return HTTP 200 and CSP and serve the exact source
+identity and new Compare explanation. Public VPS health/readiness and the
+project operator check pass. API remains unchanged RC27 source
+`e7b5f9c55182fb28de98538efc92d45ec7f78119`; no backend/schema differences
+require reinstall or migration. Readiness observes **83 migrations**, head
+`20261006135421_coach_operator_sol61_standard.sql`, identity
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+No physical-phone, private-account correlation or real Coach-turn proof is claimed.
+
+Laptop publication finalization verifies public downloaded SHA-256 bytes,
+keeps registered RC6/RC32 and removes only four managed RC31 copies
+(**153681207 bytes**). Originals, signing and unrelated local edits remain.
+Vercel cleanup deletes three obsolete app deployments after fresh dry-run/apply
+checks, retaining live plus two production fallback sources and current preview.
+Marketing-site deployments remain untouched. Removed local copies are recoverable
+from GitHub; removed bytes are not a claim of net filesystem or Vercel-meter savings.
+
 ### Local per-pair Insights fallback — 2026-10-14 (not published)
 
 Task base `d10daffccce702cf273e0585ba464a214afaaa06`. Check-in fallback is now
