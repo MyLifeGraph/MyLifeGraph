@@ -31,6 +31,58 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC34 — 2026-10-14
+
+Native fix PR [55](https://github.com/MyLifeGraph/MyLifeGraph/pull/55) and
+test-only PR [56](https://github.com/MyLifeGraph/MyLifeGraph/pull/56) merged
+normally after their complete candidate checks. Final candidate full run
+`38608523860` and PR run `38608523012` succeed; candidate/Main trees match.
+Immutable tag/APK source is `1f797dfcc4355be839b65e257285a7180bf840d7`.
+Exact-Main run `38610711894` passes all seven jobs, including Flutter/Android,
+**2011 backend passes / 2 skips**, fresh migrations/pgTAP and browser E2E.
+Signing run `38610804472` and automatic Main APK run `38610709186` succeed.
+Local evidence is **126 App-module JVM passes**, Lint/debug build, **92 focused
+Flutter passes**, clean analysis and docs/visual gates. Repeated Android 36
+emulator browser/App Return/Back/reentry journeys preserve rules and Discipline.
+The optimized signed DEX also contains the new native browser action path.
+No physical Samsung, other-browser or authenticated real-Coach proof is claimed.
+
+[RC34](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.34)
+is normal/latest/non-draft/non-prerelease, release id `413042119`, published
+`2026-10-14T18:21:10Z`. Package `com.mylifegraph.app`, versionCode `10000128`;
+APK **153306352 bytes**, SHA-256
+`a4772cd861aa775a110ea42bb66118b1e69a7d1b3ba742a8a7baac7229f0d314`.
+Independent `apksigner` verification confirms the unchanged certificate
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+The four uploaded asset identities, sizes and GitHub digests match local bytes.
+RC33 remains a held, unpublished signing candidate; its erroneous E2E block-count
+assumption was fixed without changing App/Planner behavior. Tag creation reports
+the configured actor's creation restriction bypass; Main protection/admin
+enforcement and all rules remain unchanged.
+
+At publication, production `dpl_yL7AgFBimkMo9VLgBcBZGQfFWUMT` is READY at that source; both
+existing app aliases return HTTP 200/CSP and serve its exact source identity.
+Public VPS health/readiness pass. Backend remains unchanged RC27 source
+`e7b5f9c55182fb28de98538efc92d45ec7f78119`, with **83 migrations**, head
+`20261006135421_coach_operator_sol61_standard.sql`, identity
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+No service/schema differences require installation or migration. The additional
+operator preflight remains failed: observed free space **16096256000 bytes** is
+below its installed 15-GiB release reserve. No server promotion or reserve bypass
+was attempted; this is an operational warning, not a claimed passing preflight.
+
+Laptop publication finalization verifies downloaded public SHA-256 bytes, keeps
+registered RC6/RC34 and removes only four managed RC32 copies (**153681211 bytes**).
+Originals, signing, backups, repositories and unrelated changes remain protected;
+removed copies are recoverable from GitHub, not a net disk-space-saving claim.
+Vercel cleanup deletes six obsolete app deployments after fresh bound dry-run/
+apply, preserving live plus two production fallback sources and recent output.
+Marketing-site deployments remain untouched. VM finalization also verifies
+publication/downloaded SHA-256, keeps registered RC21/RC34 and removes four
+managed RC32 copies (**153681211 bytes**). Its public originals remain at
+`/home/codex/code/MyLifeGraph/.tools/rc34-published.DothgDQo`. Both hosts preserve
+unpublished/unknown outputs and all active/rollback server versions.
+
 ### Preparation E2E workload assertion — 2026-10-14
 
 The exact-Main browser run observed a valid 30-minute Preparation proposal as
@@ -41,8 +93,8 @@ confirmation. It still starts one selected source, checks its provenance and
 tracked credit, and preserves the parallel-start conflict/reflection journey.
 No Planner, Focus, availability, session size, API, schema or user behavior changes.
 Current availability may legitimately partition preferred session lengths.
-The native RC33 tag remains a held signing candidate, not a published release,
-until fresh full final-source verification completes.
+The native RC33 tag remains held and unpublished; the final, fully checked
+publication is RC34 above.
 
 ### Local browser/app return candidate — 2026-10-14 (not published)
 
