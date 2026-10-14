@@ -28,4 +28,21 @@ class BlockingReturnNavigationTest {
             assertNull(delay.target)
         }
     }
+    @Test fun queuedOriginEventsCannotResurrectARequestedReturn() {
+        val navigation = BlockingReturnNavigation()
+        repeat(1000) {
+            navigation.begin("denied.app")
+            repeat(20) { assertEquals(BlockingReturnNavigation.Destination.WAIT,
+                navigation.destination("denied.app", "own.app", setOf("home.app"))) }
+            assertEquals(BlockingReturnNavigation.Destination.WAIT,
+                navigation.destination("com.android.systemui", "own.app", setOf("home.app")))
+            assertEquals(BlockingReturnNavigation.Destination.HOME,
+                navigation.destination("home.app", "own.app", setOf("home.app")))
+            assertEquals(BlockingReturnNavigation.Destination.OWN,
+                navigation.destination("own.app", "own.app", setOf("home.app")))
+            assertEquals(BlockingReturnNavigation.Destination.OTHER,
+                navigation.destination("safe.app", "own.app", setOf("home.app")))
+            navigation.clear(); assertNull(navigation.source)
+        }
+    }
 }

@@ -43,9 +43,10 @@ browser-universal guarantee. App Return requests Home before opening MyLifeGraph
 keeps failed navigation retryable and prevents queued origin events from
 resurrecting the completed attempt. No force-stop permission is claimed.
 
-Local Android App module JVM coverage is **125 passes**, including finite
+Local Android App module JVM coverage is **126 passes**, including finite
 timeouts, user/context changes, unsupported actions, 1000 repeated state-machine
-sequences, return delay/Home failure/retry and 1000 app reentries. App Lint and
+sequences, return delay/Home failure/retry, queued origin events until confirmed
+Home and 1000 app reentries. App Lint and
 debug APK build pass on the existing Java 21/Android 36 setup. Focused Flutter
 coverage is **92 passes** across Blocking pages, stress, Strict request, consent
 and Focus Protection/lifecycle tests; docs and visual source gates pass.

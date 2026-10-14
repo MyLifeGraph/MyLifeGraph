@@ -28,6 +28,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private var overlay: View? = null
     private var blockScreen: BlockingScreenView? = null
     private val returnDelay = BlockReturnDelay()
+    private val returnNavigation = BlockingReturnNavigation()
     private var homePackages: Set<String> = emptySet()
     private var lastForegroundPackage: String? = null
     private var lastForegroundObservedAt = 0L
@@ -123,6 +124,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        returnNavigation.clear()
         cancelNeutralBrowser()
         BlockingTimerNotifications.disconnected(applicationContext)
         if (::plans.isInitialized) plans.flushSiteUsage()
@@ -130,6 +132,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        returnNavigation.clear()
         cancelNeutralBrowser()
         BlockingTimerNotifications.disconnected(applicationContext)
         if (::plans.isInitialized) plans.flushSiteUsage()
@@ -141,6 +144,18 @@ class FocusBlockAccessibilityService : AccessibilityService() {
 
     private fun refreshOverlay() {
         updateBrowserSubscription()
+        if (returnNavigation.source != null) {
+            val destination = returnNavigation.destination(lastForegroundPackage, packageName, homePackages)
+            if (destination == BlockingReturnNavigation.Destination.WAIT) return
+            returnNavigation.clear()
+            hideOverlay()
+            if (destination == BlockingReturnNavigation.Destination.HOME) {
+                handler.postDelayed({
+                    if (lastForegroundPackage in homePackages) launchMyLifeGraph()
+                }, 250)
+            }
+            if (destination != BlockingReturnNavigation.Destination.OTHER) return
+        }
         val foregroundBlocked = manager.shouldBlock(lastForegroundPackage)
         val source = returnDelay.target
         if (source != null && !manager.shouldBlock(source)) returnDelay.clear()
@@ -279,26 +294,25 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun returnToMyLifeGraph() {
+        // An accepted global action is asynchronous. Keep the screen until an
+        // actual safe destination is observed, with the enabled button retryable.
+        val source = returnNavigation.source ?: returnDelay.target ?: return
+        if (returnNavigation.source != null) {
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            return
+        }
         returnDelay.exitViaHome(SystemClock.elapsedRealtime(), {
             // Put the denied app behind Home before removing its blocking screen.
+            returnNavigationAt = SystemClock.uptimeMillis()
             performGlobalAction(GLOBAL_ACTION_HOME) || runCatching {
                 startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }.isSuccess
         }, {
             // No lease, Strict setting or rule is released by this navigation.
-            lastForegroundPackage = packageName
-            returnNavigationAt = SystemClock.uptimeMillis()
             lastForegroundObservedAt = System.currentTimeMillis()
-            budgetForegroundPackage = packageName
-            budgetHost = null
-            currentHost = null
-            hideOverlay()
-            // GLOBAL_ACTION_HOME is asynchronous; let its task transition win
-            // before opening our task, otherwise the two launches can race.
-            handler.postDelayed({
-                if (lastForegroundPackage == packageName || lastForegroundPackage in homePackages) launchMyLifeGraph()
-            }, 250)
+            returnNavigation.begin(source)
+            refreshOverlay()
         })
     }
 
@@ -322,7 +336,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         if (elapsed - lastProtectionCheck < 1000) return
         lastProtectionCheck = elapsed
         blockScreen?.updateStrictLocked(plans.strict().optBoolean("enabled"))
-        if (returnDelay.target?.let(manager::shouldBlock) != true) {
+        if ((returnDelay.target ?: returnNavigation.source)?.let(manager::shouldBlock) != true) {
             hideOverlay()
             return
         }
@@ -519,6 +533,10 @@ class FocusBlockAccessibilityService : AccessibilityService() {
                 service.budgetForegroundPackage = context.packageName
                 service.budgetHost = null
                 service.currentHost = null
+                if (service.returnNavigation.source != null) {
+                    service.returnNavigation.clear()
+                    service.hideOverlay()
+                }
                 service.cancelNeutralBrowser()
                 // A real new browser entry must re-check the same denied host.
                 service.lastRedirect = ""

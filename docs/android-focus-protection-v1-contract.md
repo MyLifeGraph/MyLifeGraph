@@ -447,7 +447,10 @@ Real return to MyLifeGraph clears the duplicate-launch guard so a new denied
 browser entry is checked again. Whole-browser app rules still take precedence.
 No VPN/DNS filtering or temporary domain permission is introduced.
 App overlay Return waits for its existing monotonic delay, requests Home before
-dismissing, then opens MyLifeGraph. Failed Home navigation retains the attempt
+dismissing, then opens MyLifeGraph after a confirmed Home foreground event.
+Queued origin events cannot start another attempt during that transition;
+the existing Return button stays retryable. Other foreground apps are immediately
+checked against their own rules. Failed Home navigation retains the attempt
 for retry; no force-stop, lease release or Strict/rule mutation.
 The offline Activity uses the existing AndroidX back dispatcher for both legacy
 and predictive Back, preserving its monotonic return countdown.
