@@ -360,6 +360,12 @@ assert_contains "$ROOT_DIR/.github/workflows/ci.yml" \
   'docker pull public.ecr.aws/supabase/postgres:15.8.1.085'
 assert_contains "$ROOT_DIR/.github/workflows/ci.yml" \
   'docker pull public.ecr.aws/supabase/postgres:17.6.1.113'
+for postgres_version in 15.8.1.085 17.6.1.113; do
+  assert_contains "$ROOT_DIR/.github/workflows/ci.yml" \
+    "docker pull ghcr.io/supabase/postgres:$postgres_version &&"
+  assert_contains "$ROOT_DIR/.github/workflows/ci.yml" \
+    "docker tag ghcr.io/supabase/postgres:$postgres_version public.ecr.aws/supabase/postgres:$postgres_version"
+done
 assert_contains "$ROOT_DIR/supabase/config.toml" \
   'major_version = 17'
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \

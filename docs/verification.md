@@ -31,6 +31,18 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Authorized reliability release candidate — 2026-10-17
+
+PR 58 contains the two local reliability audits and the Streak grace correction.
+Candidate `c1147b6d1d4ac8c8dff6e095b757e6b73fb778e6` passes Linux Flutter/Android,
+source/docs/visual, web, **2031 backend tests / 2 skips**, and **8 full browser
+journeys**. The dedicated database job twice stopped before tests on ECR's
+`toomanyrequests: Rate exceeded`. CI now falls back to the already allowlisted
+official GHCR namespace at the exact same PG15/PG17 tags, retagging only after a
+successful pull. Both mirror manifests were inspected successfully. Database
+verification, isolation, CLI versions and SQL are unchanged; the final candidate
+requires a fresh complete run. No publication is implied by this entry.
+
 ### Local internal-gap streak grace — 2026-10-17
 
 Task base `182ac9446ef41d1c712688ea54a65f941509c5a8`, with all preceding local
