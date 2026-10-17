@@ -18,6 +18,32 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'support/ui_catalog_capture.dart';
 
 void main() {
+  testWidgets(
+    'Morning conflict retains draft and requests review instead of retry',
+    (tester) async {
+      final store = _ConflictMorningStore();
+      await _pumpPage(tester, store);
+      await _tapVisible(tester, find.text('Next'));
+      await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
+      await _performSemanticTap(tester, 'morning energy 4 of 10');
+      await tester.enterText(find.byType(TextField), 'Keep my note');
+      await _tapVisible(tester, find.text('Save'));
+      expect(
+        find.text(const QuickCheckInConflictException().message),
+        findsWidgets,
+      );
+      expect(
+        find.text('Could not save. Your answers are still here. Try again.'),
+        findsNothing,
+      );
+      expect(find.text('How are you starting today?'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Keep my note',
+      );
+      expect(store.attempts, hasLength(1));
+    },
+  );
   testWidgets('saving one day keeps another edited day available', (
     tester,
   ) async {
@@ -33,7 +59,22 @@ void main() {
     await tester.enterText(find.byType(TextField), 'Yesterday saved');
     await _tapVisible(tester, find.text('Save'));
     expect(store.attempts.single.entryDate, '2026-09-24');
+    expect(store.attempts.single.writeBaseline?.captureId, 'baseline-24');
     expect(find.byType(MorningCalibrationPage), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Yesterday revised');
+    await _tapVisible(tester, find.text('Save'));
+    expect(
+      store.attempts[1].writeBaseline?.captureId,
+      store.attempts.first.captureId,
+    );
+    expect(
+      store.attempts[1].writeBaseline?.capturedAt,
+      store.attempts.first.capturedAt,
+    );
+    expect(
+      store.attempts[1].capturedAt.isAfter(store.attempts.first.capturedAt),
+      isTrue,
+    );
     tester
         .widget<CaptureDatePicker>(find.byType(CaptureDatePicker))
         .onChanged(DateTime(2026, 9, 25));
@@ -45,6 +86,7 @@ void main() {
     await _tapVisible(tester, find.text('Save'));
     expect(store.attempts.last.entryDate, '2026-09-25');
     expect(store.attempts.last.reflectionNote, 'Today draft');
+    expect(store.attempts.last.writeBaseline?.captureId, 'baseline-25');
   });
   if (captureUiCatalog) {
     testWidgets('actual morning calendar flow catalog', (tester) async {
@@ -929,6 +971,14 @@ class _NoSleepPlanMorningStore extends _MorningStore {
   Future<EveningShutdownDraft?> loadLatestEvening() async => null;
 }
 
+class _ConflictMorningStore extends _MorningStore {
+  @override
+  Future<void> saveMorning(MorningCalibrationDraft draft) async {
+    attempts.add(draft);
+    throw const QuickCheckInConflictException();
+  }
+}
+
 class _TwoDayMorningStore extends _MorningStore {
   @override
   Future<DailyCaptureEntry?> loadToday(DateTime day) async {
@@ -940,6 +990,13 @@ class _TwoDayMorningStore extends _MorningStore {
     return DailyCaptureEntry(
       entryDate: dailyCaptureEntryDate(day),
       morning: morning,
+      morningBaseline: CaptureWriteBaseline(
+        ownerId: 'test-owner',
+        entryDate: dailyCaptureEntryDate(day),
+        branch: 'morning',
+        captureId: 'baseline-${day.day}',
+        capturedAt: morning.capturedAt,
+      ),
     );
   }
 }

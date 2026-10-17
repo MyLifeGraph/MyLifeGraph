@@ -31,6 +31,165 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Authorized reliability release candidate — 2026-10-17
+
+PR 58 contains the two local reliability audits and the Streak grace correction.
+Candidate `c1147b6d1d4ac8c8dff6e095b757e6b73fb778e6` passes Linux Flutter/Android,
+source/docs/visual, web, **2031 backend tests / 2 skips**, and **8 full browser
+journeys**. The dedicated database job twice stopped before tests on ECR's
+`toomanyrequests: Rate exceeded`. CI now falls back to the already allowlisted
+official GHCR namespace at the exact same PG15/PG17 tags, retagging only after a
+successful pull. Both mirror manifests were inspected successfully. Database
+verification, isolation, CLI versions and SQL are unchanged; the final candidate
+requires a fresh complete run. No publication is implied by this entry.
+
+### Local internal-gap streak grace — 2026-10-17
+
+Task base `182ac9446ef41d1c712688ea54a65f941509c5a8`, with all preceding local
+audit/retention changes preserved. The authenticated Today calculation now
+protects the longest contiguous completed segment across unexpired internal
+gaps. It does not count missing dates or add separated segments. Timely backfill
+joins them; the first expired gap excludes older segments. Receipt queries,
+validation, IANA deadlines, Capture writes, wire shapes and Habit streaks are
+unchanged. Guest-demo parity was not part of this narrow backend correction.
+
+Eight new controlled cases failed before the accumulator fix. Final focused
+verification: **194 backend tests pass**, covering Streak/Today service/API,
+Daily State validation and Capture sleep compatibility. Regression cases include
+missing/partial/malformed gaps, 5→5→7 preservation/backfill, multiple pending
+dates, newer longer runs, 125-day pagination, late server receipts, and one
+microsecond before/exactly at/after deadlines in UTC, Berlin spring/fall DST
+and New York. Scoped Ruff and `git diff --check` pass.
+
+Only the calculation, its tests and owning documentation changed in this slice;
+no UI, database, remote account, release or deployment was changed. Evidence is
+under `.tools/streak-grace-20261017/`. The task-base affected dry-run selects the
+full mixed gate because of the pre-existing dirty checkout; this is not a claim
+that the Windows-blocked full gate or the earlier six golden failures are green.
+
+### Second local reliability audit — 2026-10-17
+
+Local, uncommitted follow-up on the same task base
+`182ac9446ef41d1c712688ea54a65f941509c5a8`, preserving the earlier audit below
+and unrelated retention/output work. Three independent reviewers examined shell
+navigation/lifetime, Blocking admission/lifecycle, and Capture/Insights races.
+No release, remote mutation, migration or personal-account write was performed.
+
+New controlled reproductions and minimal fixes:
+
+- A delayed Unlock/NFC visibility reply could start an action after leaving and
+  returning to Discipline, or after opening Permissions. Five red widget cases
+  established the stale-admission defect. A separate screen-visit identity and
+  originating-route check now reject those starts. Normal refresh and enrollment
+  from the current Unlock method route remain allowed; native background countdown
+  policy is unchanged.
+- Capture fields, keyboard input and footer Back remained active during Save,
+  allowing edits to be lost when the submitted snapshot became the clean draft.
+  Four red cases preceded a shared input/focus/semantics and footer lock. Failure
+  restores editing and retry submits the corrected draft; controllers/labels stay.
+- After an initial read error, two Retry taps before a rendered frame started two
+  reads. Their out-of-order completion could replace a newer selected date in both
+  Morning and Evening. Both red cases preceded an independent single-flight load
+  guard; delayed date-change and retry tests preserve the intended date/draft.
+
+No new Insights or shell defect was reproduced. A controlled 14/30/90-day
+out-of-order Insights response test keeps the current Compare/Top patterns window.
+Navigation tests cover interrupted swipes, route-button taps during dragging,
+subroute/Back during transition, and repeated root-tab lifetimes. Across **72
+settled switches**, 73 test pages mounted, 72 disposed and one remained active;
+1440 virtual 16-ms frame pumps were used. This is deterministic test-renderer
+work, not device FPS, a network benchmark or proof of phone smoothness. No cache,
+provider lifetime or animation timing was changed without a demonstrated defect.
+
+The final complete Flutter suite reports **1967 passes and six failures** in
+172 seconds of test execution. The six dark/light/space mobile/desktop component
+goldens have exactly the same differing-pixel counts as the first audit's final
+run (14682, 14640, 14727, 14719, 14718, 14684 respectively); no reference was
+overwritten. Actual/reference dark mobile captures were reinspected. All 23 new
+widget regressions pass, including the eight admission cases and six root-tab
+stress cases. The separate 62-test Capture/save/date regression run also passed.
+Documentation consistency (19 tests, 66 Markdown files, 96 routes) and the visual
+contract check pass. Final Flutter analysis reports no issues (176.5 seconds),
+and `git diff --check` is clean. The six golden failures remain open, not waived.
+
+Four additional native sequence tests exercise 1000 app transitions, duplicate
+events/late pauses, screen-off stops, 23/24/25-hour day bounds and 1000 stale
+foreground-evidence sequences. All **134 App-module JVM tests** passed. These
+traces verify reducers/decisions, not Samsung/OEM event delivery. Actual rendered
+390-pixel Capture idle/saving screenshots were inspected: content/layout remains
+stable, Save shows progress and no overflow was found. No new physical-device,
+hardware NFC, other-blocker coexistence or production test is claimed.
+
+Current-run logs and rendered captures are in
+`.tools/reliability-round2-20261017/` and `.tools/ui-catalog/round2-after/`.
+The task-base affected dry-run selects the full gate, including unrelated opening
+dirty paths; it is selection evidence, not a full-gate pass. The Linux-only full
+gate limitations recorded in the first audit below are not waived.
+
+### Local reliability audit — 2026-10-17
+
+Local, uncommitted follow-up to task base
+`182ac9446ef41d1c712688ea54a65f941509c5a8`; no new release, push, migration or
+production change. Three independent reviewers covered native recognition/usage,
+NFC/Discipline/return navigation, and Flutter editing/partial-data races.
+Confirmed reproductions and fixes:
+
+- Morning/Evening Save acquired a fresh database identity instead of the reviewed
+  draft identity, allowing a stale edit to overwrite a concurrent capture. Both
+  adapter regressions failed before the fix. Owner/date/branch-bound in-memory
+  baselines now preserve CAS, known absence and exact retries. HTTP 409 retains
+  answers with review/reopen guidance, never an automatic rebase.
+- Legacy Focus usage recovery remembered a blocked foreground app but skipped
+  overlay enforcement. The same synthetic Android service scenario failed with
+  `recovered=true, overlay=false` before and passed with `overlay=true` after.
+  Four JVM regression cases cover recovered, unchanged and rejected transitions.
+- Compare/Top patterns retained correlations while concealing an upstream
+  personal-pattern refresh failure. Both red widget cases now pass. Advanced
+  exposes Retry without clearing results/selection; Overview keeps its independent
+  compact error card. An initial overly broad banner was caught by the existing
+  Overview test and corrected before handoff.
+
+Focused results: **102 Capture Flutter tests**, **82 Insights Flutter tests**,
+**151 affected backend tests**, and **130 App-module JVM tests** passed. Debug APK
+assembly succeeded. No backend implementation, schema, permissions, public wire
+shape or correlation algorithm changed. The Daily Briefing owner remains accurate;
+the stabilization owner records the client enforcement of its existing CAS rule.
+
+The final complete Flutter suite reports **1944 passes and six failures**. All six
+are the same pre-existing dark/light/space mobile/desktop reference-golden failures
+seen in the before-change baseline (1929 passes, six failures); no golden was
+regenerated or suppressed. The reference and actual images were inspected. Final
+Android debug Lint passed after correcting escaped Windows SDK paths in ignored
+`android/local.properties`; no Lint rule, baseline or dependency was changed.
+Final Flutter analysis passed with no issues (217.2 seconds). Documentation
+consistency passed (19 tests, 66 Markdown files, 96 routes), the visual-contract
+check passed, and `git diff --check` is clean. These do not waive the six golden
+failures or the platform-specific full-gate limitations below.
+
+Android 36 emulator evidence uses synthetic plans and a separate QA app: three
+Chrome denied-tab/neutral-page/reopen cycles, an allowed `example.org` page, and
+three app Return/Back/reentry cycles passed without changing rules or Discipline.
+Five budget-notification cycles passed on the rebuilt native candidate: opening
+and closing the shade preserves the countdown; Home removes it; explicit delete
+callback suppresses only the current visit; a later visit restores it. The delete
+case invokes the Android callback, not a physical swipe gesture. After a real
+emulator reboot and first unlock, the service rebound and blocked the QA app
+without reopening MyLifeGraph. Actual overlay screenshots were inspected. The
+two freshly installed QA packages were removed afterward and the emulator stopped.
+
+The full task-base affected selector was attempted with both system Bash and
+installed Git Bash. WSL lacks Node; Git Bash's full source harness lacks `setsid`.
+The complete Windows backend collection also stops on missing `socket.AF_UNIX`;
+the affected 151-test subset passes with a fresh isolated temporary directory.
+No database reset, remote test login, personal-account mutation or security
+workaround was used. Physical Samsung/OEM behavior, simultaneous AppBlock use,
+hardware NFC scans and authenticated live Coach remain separate device/live gates.
+
+Audit logs and actual emulator captures are local under
+`.tools/reliability-audit-20261017/`. Pre-existing retention work and unrelated
+untracked outputs were preserved. This local evidence does not supersede the
+published RC34 deployment identity below.
+
 ### Published RC34 — 2026-10-14
 
 Native fix PR [55](https://github.com/MyLifeGraph/MyLifeGraph/pull/55) and

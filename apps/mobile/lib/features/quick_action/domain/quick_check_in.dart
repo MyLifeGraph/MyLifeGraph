@@ -191,9 +191,45 @@ const dailyCaptureV4 = 'daily-capture-v4';
 const dailyCaptureV3 = 'daily-capture-v3';
 const dailyCaptureV2 = 'daily-capture-v2';
 
+/// In-memory identity of the branch actually reviewed by this draft.
+/// A null baseline means unknown; a baseline with no capture means known absent.
+/// Never serialized into Capture JSON or guest storage.
+class CaptureWriteBaseline {
+  const CaptureWriteBaseline({
+    required this.ownerId,
+    required this.entryDate,
+    required this.branch,
+    this.captureId,
+    this.capturedAt,
+  }) : assert((captureId == null) == (capturedAt == null));
+
+  final String ownerId;
+  final String entryDate;
+  final String branch;
+  final String? captureId;
+  final DateTime? capturedAt;
+
+  Map<String, String>? get expectedCapture => captureId == null
+      ? null
+      : {
+          'capture_id': captureId!,
+          'captured_at': capturedAt!.toUtc().toIso8601String(),
+        };
+
+  CaptureWriteBaseline afterSaving(String id, DateTime instant) =>
+      CaptureWriteBaseline(
+        ownerId: ownerId,
+        entryDate: entryDate,
+        branch: branch,
+        captureId: id,
+        capturedAt: instant,
+      );
+}
+
 class EveningShutdownDraft {
   const EveningShutdownDraft({
     required this.captureId,
+    this.writeBaseline,
     this.skillset,
     required this.entryDate,
     required this.capturedAt,
@@ -297,6 +333,7 @@ class EveningShutdownDraft {
   static const defaultSleepTargetMinutes = 480;
 
   final SkillsetSignals? skillset;
+  final CaptureWriteBaseline? writeBaseline;
   final String captureId;
   final String entryDate;
   final DateTime capturedAt;
@@ -339,6 +376,7 @@ class EveningShutdownDraft {
       stressIntensityLabelFor(stress!);
 
   EveningShutdownDraft copyWith({
+    CaptureWriteBaseline? writeBaseline,
     SkillsetSignals? skillset,
     String? captureId,
     String? entryDate,
@@ -360,6 +398,7 @@ class EveningShutdownDraft {
     bool? isCompatibilityBranch,
   }) {
     return EveningShutdownDraft(
+      writeBaseline: writeBaseline ?? this.writeBaseline,
       skillset: skillset ?? this.skillset,
       captureId: captureId ?? this.captureId,
       entryDate: entryDate ?? this.entryDate,
@@ -488,6 +527,7 @@ class EveningShutdownDraft {
 class MorningCalibrationDraft {
   MorningCalibrationDraft({
     required this.captureId,
+    this.writeBaseline,
     this.skillset,
     required this.entryDate,
     required this.capturedAt,
@@ -600,6 +640,7 @@ class MorningCalibrationDraft {
   static const maxCaptureIdLength = 160;
 
   final SkillsetSignals? skillset;
+  final CaptureWriteBaseline? writeBaseline;
   final String captureId;
   final String entryDate;
   final DateTime capturedAt;
@@ -611,6 +652,7 @@ class MorningCalibrationDraft {
   final int? estimatedSleepMinutes;
   final int? sleepTargetMinutes;
   final String? sourceEveningCaptureId;
+
   /// Optional context only; null preserves an older writer's omitted field.
   final String? reflectionNote;
   final String branchVersion;
@@ -638,6 +680,7 @@ class MorningCalibrationDraft {
       (isV5 || _legacyDayShapeCode != null);
 
   MorningCalibrationDraft copyWith({
+    CaptureWriteBaseline? writeBaseline,
     SkillsetSignals? skillset,
     String? captureId,
     String? entryDate,
@@ -659,6 +702,7 @@ class MorningCalibrationDraft {
         ? this.estimatedSleepMinutes
         : estimatedSleepMinutes as int?;
     return MorningCalibrationDraft(
+      writeBaseline: writeBaseline ?? this.writeBaseline,
       skillset: skillset ?? this.skillset,
       captureId: captureId ?? this.captureId,
       entryDate: entryDate ?? this.entryDate,
@@ -734,7 +778,9 @@ class MorningCalibrationDraft {
     bool preservingCompatibility = false,
   }) {
     if (reflectionNote != null && reflectionNote!.length > 500) {
-      throw const FormatException('Keep the optional note under 500 characters.');
+      throw const FormatException(
+        'Keep the optional note under 500 characters.',
+      );
     }
     _validateCaptureIdentity(
       captureId: captureId,
@@ -904,6 +950,8 @@ class LegacyQuickCheckInValues {
 class DailyCaptureEntry {
   const DailyCaptureEntry({
     required this.entryDate,
+    this.morningBaseline,
+    this.eveningBaseline,
     this.evening,
     this.morning,
     this.legacy,
@@ -973,6 +1021,8 @@ class DailyCaptureEntry {
   };
 
   final String entryDate;
+  final CaptureWriteBaseline? morningBaseline;
+  final CaptureWriteBaseline? eveningBaseline;
   final EveningShutdownDraft? evening;
   final MorningCalibrationDraft? morning;
   final LegacyQuickCheckInValues? legacy;
@@ -1055,6 +1105,8 @@ class DailyCaptureEntry {
   }
 
   DailyCaptureEntry copyWith({
+    CaptureWriteBaseline? morningBaseline,
+    CaptureWriteBaseline? eveningBaseline,
     EveningShutdownDraft? evening,
     MorningCalibrationDraft? morning,
     LegacyQuickCheckInValues? legacy,
@@ -1062,6 +1114,8 @@ class DailyCaptureEntry {
   }) {
     return DailyCaptureEntry(
       entryDate: entryDate,
+      morningBaseline: morningBaseline ?? this.morningBaseline,
+      eveningBaseline: eveningBaseline ?? this.eveningBaseline,
       evening: evening ?? this.evening,
       morning: morning ?? this.morning,
       legacy: legacy ?? this.legacy,
@@ -1228,10 +1282,34 @@ abstract interface class QuickCheckInStore {
   Future<void> saveMorning(MorningCalibrationDraft draft);
 }
 
+/// Authenticated editors also need a known-absent branch identity. Ordinary
+/// reads retain their existing null result for an absent day.
+abstract interface class CaptureEditingStore {
+  Future<DailyCaptureEntry> loadForEditing(DateTime day);
+}
+
+Future<DailyCaptureEntry?> loadCaptureForEditing(
+  QuickCheckInStore store,
+  DateTime day,
+) => store is CaptureEditingStore
+    ? (store as CaptureEditingStore).loadForEditing(day)
+    : store.loadToday(day);
+
 class QuickCheckInUnavailableException implements Exception {
   const QuickCheckInUnavailableException(this.message);
 
   final String message;
+
+  @override
+  String toString() => message;
+}
+
+class QuickCheckInConflictException implements Exception {
+  const QuickCheckInConflictException();
+
+  String get message =>
+      'This day\'s check-in changed. Your answers are still here. '
+      'Reopen this check-in to review the latest values.';
 
   @override
   String toString() => message;

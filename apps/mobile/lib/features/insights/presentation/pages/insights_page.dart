@@ -182,6 +182,13 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
     final windowDays = ref.watch(insightsWindowDaysProvider);
     final isMobile = MediaQuery.sizeOf(context).width < 620;
     final observation = const CoachingObservationBuilder().build(widget.report);
+    // Overview already owns a compact source-error card. Advanced must also
+    // disclose failures hidden behind its retained derived correlation report.
+    final readFailed =
+        widget.readFailed ||
+        (_view == _InsightsView.advanced &&
+            widget.showPersonalPatterns &&
+            widget.personalPatterns.hasError);
     if (widget.report.metrics.length < 2) {
       return _SparseInsightsHome(
         view: _view,
@@ -201,7 +208,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         sleepRecommendation: widget.sleepRecommendation,
         showPersonalPatterns: widget.showPersonalPatterns,
         onRefresh: _refresh,
-        readFailed: widget.readFailed,
+        readFailed: readFailed,
       );
     }
     _ensureSelectedMetricsExist();
@@ -237,8 +244,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                       onChanged: (view) => setState(() => _view = view),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    if (widget.readFailed)
-                      _InsightsLoadError(onRetry: _refresh),
+                    if (readFailed) _InsightsLoadError(onRetry: _refresh),
                     Visibility(
                       visible: _view == _InsightsView.overview,
                       maintainState: true,

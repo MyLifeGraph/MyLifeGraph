@@ -41,6 +41,7 @@ class _MorningCalibrationPageState
   bool _sleepTouched = false;
   var _stepIndex = 0;
   var _isLoading = true;
+  var _loadInFlight = false;
   var _safeCaptureLoaded = false;
   var _eveningPlanUnavailable = false;
   var _continueWithoutEveningPlan = false;
@@ -502,20 +503,26 @@ class _MorningCalibrationPageState
     });
     try {
       final store = ref.read(quickCheckInStoreProvider);
+      final coordinator = ref.read(projectionRefreshCoordinatorProvider);
+      final clock = ref.read(currentInstantProvider);
+      final draftKey = (_draftScope.$1, _draftScope.$2, draft.entryDate);
       await store.saveMorning(draft);
+      final now = clock().toUtc();
+      _draft = draft.copyWith(
+        writeBaseline: draft.writeBaseline?.afterSaving(
+          draft.captureId,
+          draft.capturedAt,
+        ),
+        capturedAt: now.isAfter(draft.capturedAt)
+            ? now
+            : draft.capturedAt.add(const Duration(microseconds: 1)),
+      );
       _cleanDraft = _draft;
-      _dateDrafts.remove((
-        ref.read(captureDraftOwnerProvider),
-        ref.read(profileLocalDateSourceProvider).timezoneName,
-        _draft.entryDate,
-      ));
-      await ref
-          .read(projectionRefreshCoordinatorProvider)
-          .dailyCaptureChanged(
-            targetDate: draft.entryDate,
-            refreshDailySnapshot:
-                store.target == QuickCheckInSaveTarget.supabase,
-          );
+      _dateDrafts.remove(draftKey);
+      await coordinator.dailyCaptureChanged(
+        targetDate: draft.entryDate,
+        refreshDailySnapshot: store.target == QuickCheckInSaveTarget.supabase,
+      );
       if (!mounted) {
         return;
       }
@@ -533,7 +540,9 @@ class _MorningCalibrationPageState
       if (!mounted) {
         return;
       }
-      final message = error is QuickCheckInUnavailableException
+      final message = error is QuickCheckInConflictException
+          ? error.message
+          : error is QuickCheckInUnavailableException
           ? 'Synced check-in saving is unavailable. Your answers are still here; try again when your account connection is available.'
           : 'Could not save. Your answers are still here. Try again.';
       setState(() => _saveError = message);
@@ -546,7 +555,8 @@ class _MorningCalibrationPageState
   }
 
   Future<void> _loadToday() async {
-    if (_isLoading && _safeCaptureLoaded) return;
+    if (_loadInFlight) return;
+    _loadInFlight = true;
     setState(() {
       _isLoading = true;
       _loadError = null;
@@ -554,6 +564,7 @@ class _MorningCalibrationPageState
       _continueWithoutEveningPlan = false;
     });
     if (!_proposalMatchesContext) {
+      _loadInFlight = false;
       setState(() {
         _safeCaptureLoaded = false;
         _isLoading = false;
@@ -564,7 +575,10 @@ class _MorningCalibrationPageState
     }
     try {
       final store = ref.read(quickCheckInStoreProvider);
-      final entry = await store.loadToday(DateTime.parse(_draft.entryDate));
+      final entry = await loadCaptureForEditing(
+        store,
+        DateTime.parse(_draft.entryDate),
+      );
       _safeCaptureLoaded = true;
       EveningShutdownDraft? sleepPlan;
       try {
@@ -599,7 +613,10 @@ class _MorningCalibrationPageState
         }
         var next = (_proposalApplied ? _draft : saved ?? _draft)
             .forEditing(sleepPlan: sleepPlan)
-            .copyWith(capturedAt: saved == null ? null : _draft.capturedAt);
+            .copyWith(
+              capturedAt: saved == null ? null : _draft.capturedAt,
+              writeBaseline: entry?.morningBaseline,
+            );
         if (widget.proposal == null &&
             next.wokeAt == null &&
             _draft.entryDate ==
@@ -669,6 +686,7 @@ class _MorningCalibrationPageState
         });
       }
     } finally {
+      _loadInFlight = false;
       if (mounted) {
         setState(() => _isLoading = false);
       }

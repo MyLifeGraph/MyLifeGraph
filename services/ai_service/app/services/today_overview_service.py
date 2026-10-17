@@ -533,6 +533,7 @@ class TodayOverviewService:
         reached_end = False
         expected: date | None = None
         streak = 0
+        protected_streak = 0
         while True:
             page = await self._repository.list_daily_logs_page(
                 user_id=user_id,
@@ -570,13 +571,18 @@ class TodayOverviewService:
             while expected in by_date or (reached_end or any(d < expected for d in by_date)):
                 kinds = eligible.get(expected, frozenset())
                 if not {"morning", "evening"}.issubset(kinds):
-                    if streak == 0 and generated_at <= _streak_deadline(expected, zone):
+                    if generated_at <= _streak_deadline(expected, zone):
+                        # A newer completed date must not revoke the older run's
+                        # grace. Keep segments separate until timely backfill:
+                        # the missing day earns no credit and joins nothing yet.
+                        protected_streak = max(protected_streak, streak)
+                        streak = 0
                         expected -= timedelta(days=1)
                         continue
                     return TodayCheckIns(
                         morning_saved="morning" in today_kinds,
                         evening_saved="evening" in today_kinds,
-                        completed_days_streak=streak,
+                        completed_days_streak=max(protected_streak, streak),
                     )
                 streak += 1
                 expected -= timedelta(days=1)
@@ -586,7 +592,7 @@ class TodayOverviewService:
                 return TodayCheckIns(
                     morning_saved="morning" in today_kinds,
                     evening_saved="evening" in today_kinds,
-                    completed_days_streak=streak,
+                    completed_days_streak=max(protected_streak, streak),
                 )
             offset += len(page)
             if not page:

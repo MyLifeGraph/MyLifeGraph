@@ -1,5 +1,12 @@
 # MyLifeGraph Mobile App
 
+Capture editors keep the reviewed owner/date/branch identity with each in-memory
+draft instead of silently rebasing at Save. Concurrent edits use the existing
+conflict response; calendar reads cannot authorize overwriting newer answers.
+Insights Compare/Top patterns retain available correlations on a source refresh
+failure while exposing Retry. Legacy Focus foreground recovery enforces the
+recovered app immediately on that check, without changing permission gates.
+
 Android website blocking attempts bounded, address-bar-only `about:blank`
 navigation of the denied current tab before the existing offline block screen.
 Package/window changes and unsupported actions stop that operation; whole-browser
@@ -322,6 +329,9 @@ the existing reviewed Capture save path. The date picker opens/selects directly;
 saved complete branches have green outlines, open past days red outlines,
 unknown reads neutral, and Today a filled theme-brand circle with a readable
 on-brand number. Morning and Evening histories remain separate. Drafts are not
+editable during Save (including keyboard/accessibility), and footer Back is
+disabled during loading/saving; failures restore editing. Repeated Retry reads
+are single-flight, preserving the selected date after delayed responses. Drafts are not
 shared across accounts/timezones and are not persisted; historical Morning needs explicit
 sleep times. Voice review remains today-bound. Focus's optional start reminders
 are a passive list with one Ready & start confirmation, never persisted/scored.
@@ -473,7 +483,10 @@ defaults off for new/disabled configurations; change it only with Discipline
 fully off, never in a 15-minute release. Active legacy configurations keep their
 previous stay-required policy until deliberately configured. Optional stay mode
 shows an amber warning and resets on tab/app exit, not notification shade.
-Stay focused cancels the request without disabling protection. Background mode
+Stay focused cancels the request without disabling protection. A delayed new
+Unlock/NFC start cannot survive a tab, route or app exit;
+returning requires a fresh action. Enrollment remains bound to its visible method
+editor, while ordinary refresh preserves pending admission. Background mode
 retains a deliberate same-boot request and reconciles native conditions through
 service ticks/inexact alarm; OS restrictions can delay completion. No exact
 background deadline or reboot unlock is promised. `Lost NFC chip?` permits

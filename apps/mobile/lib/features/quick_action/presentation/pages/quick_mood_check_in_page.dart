@@ -43,6 +43,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   String _cleanBlocker = '';
   var _stepIndex = 0;
   var _isLoading = true;
+  var _loadInFlight = false;
   var _safeCaptureLoaded = false;
   var _isSaving = false;
   bool _dictating = false;
@@ -494,22 +495,28 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     });
     try {
       final store = ref.read(quickCheckInStoreProvider);
+      final coordinator = ref.read(projectionRefreshCoordinatorProvider);
+      final clock = ref.read(currentInstantProvider);
+      final draftKey = (_draftScope.$1, _draftScope.$2, draft.entryDate);
       await store.saveEvening(draft);
+      final now = clock().toUtc();
+      _draft = draft.copyWith(
+        writeBaseline: draft.writeBaseline?.afterSaving(
+          draft.captureId,
+          draft.capturedAt,
+        ),
+        capturedAt: now.isAfter(draft.capturedAt)
+            ? now
+            : draft.capturedAt.add(const Duration(microseconds: 1)),
+      );
       _cleanDraft = _draft;
-      _dateDrafts.remove((
-        ref.read(captureDraftOwnerProvider),
-        ref.read(profileLocalDateSourceProvider).timezoneName,
-        _draft.entryDate,
-      ));
+      _dateDrafts.remove(draftKey);
       _cleanReflection = _reflectionController.text;
       _cleanBlocker = _blockerController.text;
-      await ref
-          .read(projectionRefreshCoordinatorProvider)
-          .dailyCaptureChanged(
-            targetDate: draft.entryDate,
-            refreshDailySnapshot:
-                store.target == QuickCheckInSaveTarget.supabase,
-          );
+      await coordinator.dailyCaptureChanged(
+        targetDate: draft.entryDate,
+        refreshDailySnapshot: store.target == QuickCheckInSaveTarget.supabase,
+      );
       if (!mounted) {
         return;
       }
@@ -531,7 +538,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       if (!mounted) {
         return;
       }
-      final message = error is QuickCheckInUnavailableException
+      final message = error is QuickCheckInConflictException
+          ? error.message
+          : error is QuickCheckInUnavailableException
           ? 'Synced check-in saving is unavailable. Your answers are still here; try again when your account connection is available.'
           : 'Could not save. Your answers are still here. Try again.';
       setState(() => _saveError = message);
@@ -544,12 +553,14 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _loadToday() async {
-    if (_isLoading && _safeCaptureLoaded) return;
+    if (_loadInFlight) return;
+    _loadInFlight = true;
     setState(() {
       _isLoading = true;
       _loadError = null;
     });
     if (!_proposalMatchesContext) {
+      _loadInFlight = false;
       setState(() {
         _safeCaptureLoaded = false;
         _isLoading = false;
@@ -582,7 +593,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         _automaticDateResolved = true;
       }
       final targetDate = DateTime.parse(_draft.entryDate);
-      final entry = await store.loadToday(targetDate);
+      final entry = await loadCaptureForEditing(store, targetDate);
       _safeCaptureLoaded = true;
       EveningShutdownDraft? sleepPlan;
       try {
@@ -625,6 +636,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
               )
             : saved?.forEditing() ?? _draft;
         var next = source.copyWith(
+          writeBaseline: entry?.eveningBaseline,
           capturedAt: saved == null ? null : _draft.capturedAt,
           plannedSleepTime:
               source.plannedSleepTime ?? sleepPlan?.plannedSleepTime,
@@ -670,6 +682,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         });
       }
     } finally {
+      _loadInFlight = false;
       if (mounted) {
         setState(() => _isLoading = false);
       }

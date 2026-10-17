@@ -1314,6 +1314,8 @@ pytest
 
 The existing Today overview response shape is unchanged. Both valid daily Capture
 branches require service-only server receipts no later than profile-local day end plus
-48 elapsed hours. Recent missing days preserve, but do not increase, the previous run;
-late new captures cannot repair it. Later edits retain timely receipt credit. Receipt
+48 elapsed hours. Recent missing days preserve the previous run even after newer
+dates are complete: use the longest contiguous completed segment across pending
+gaps, never their sum. Timely backfill joins them; an expired gap stops protection
+of older segments. Late new captures cannot repair it. Later edits retain timely receipt credit. Receipt
 failure follows the existing unavailable check-in source path, not fabricated data.

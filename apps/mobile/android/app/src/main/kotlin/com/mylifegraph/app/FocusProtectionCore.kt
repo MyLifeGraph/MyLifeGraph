@@ -98,6 +98,10 @@ class BlockingTransientWindows {
 }
 
 object FocusProtectionDecision {
+    /** Recovered transitions need enforcement even in the legacy Focus-only mode. */
+    fun refreshAfterForegroundCheck(blockingMode: String, foregroundRecovered: Boolean): Boolean =
+        foregroundRecovered || blockingMode != "focus"
+
     /** Overlay/keyboard windows do not mean the underlying activity was left.
      * System UI still follows the existing safety/shade path. Unknown window
      * metadata never suppresses a genuine app transition. */

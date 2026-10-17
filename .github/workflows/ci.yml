@@ -239,8 +239,14 @@ jobs:
 
       - name: Fetch pinned PostgreSQL compatibility images
         run: |
-          docker pull public.ecr.aws/supabase/postgres:15.8.1.085
-          docker pull public.ecr.aws/supabase/postgres:17.6.1.113
+          docker pull public.ecr.aws/supabase/postgres:15.8.1.085 || {
+            docker pull ghcr.io/supabase/postgres:15.8.1.085 &&
+              docker tag ghcr.io/supabase/postgres:15.8.1.085 public.ecr.aws/supabase/postgres:15.8.1.085
+          }
+          docker pull public.ecr.aws/supabase/postgres:17.6.1.113 || {
+            docker pull ghcr.io/supabase/postgres:17.6.1.113 &&
+              docker tag ghcr.io/supabase/postgres:17.6.1.113 public.ecr.aws/supabase/postgres:17.6.1.113
+          }
 
       - name: Apply the fresh migration chain and run all pgTAP assertions
         run: npm run verify:db

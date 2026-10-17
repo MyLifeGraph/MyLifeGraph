@@ -76,6 +76,17 @@ successful read, or the exact `{capture_id, captured_at}` identity last read.
 The response repeats the canonical branch identity, `updated_at`, and
 `replayed`.
 
+Flutter binds this expected identity to the reviewed in-memory draft, including
+owner, local date and Morning/Evening branch. An explicit known-absent baseline
+is distinct from an unknown/failed read. Save never rereads and silently adopts
+a newer baseline; calendar status reads and cached date drafts cannot rebase it.
+Only a confirmed successful save advances that draft's baseline. An unchanged
+failed request retains its exact retry identity. These local editing fields are
+not serialized into Capture JSON or guest storage; the wire contract is unchanged.
+An HTTP 409 keeps the form answers and tells the user to reopen the check-in to
+review the latest values. It does not suggest that blindly retrying the same
+stale draft will resolve the conflict, and it never silently forces an overwrite.
+
 `apply_daily_capture_branch_v1` takes the shared owner advisory lock, claims
 `daily_capture_request_identities`, locks the daily row, and compares only the
 branch being written. Morning and Evening may therefore be merged in either
@@ -459,3 +470,6 @@ and verified owner. Both currently valid branches need timely server receipts by
 day end plus 48 elapsed hours. This read does not mutate logs, revisions or ledger rows,
 does not expose the ledger to Flutter, and does not grant late entries streak credit.
 Later edits do not remove earlier timely credit. Capture CAS and idempotency are unchanged.
+Pending internal gaps also preserve the longest contiguous completed segment;
+separate segments are not added until timely backfill connects them. Once a gap
+expires, segments older than that gap no longer contribute to the displayed run.
