@@ -183,6 +183,10 @@ MyLifeGraph/System UI, unknown evidence, screen-off and locked-device states do
 not restore a blocked target. Real MyLifeGraph resume remains authoritative.
 Recovery clears old browser-host meter/display state. No foreground nodes or
 additional screen content are queried, and denied Usage Access has no fallback.
+An accepted recovered package transition also re-evaluates the overlay in legacy
+Focus-only mode; remembering the app without enforcing its active lease is not
+sufficient. Unchanged/rejected recovery preserves the existing Focus behavior,
+and the periodic schedule cadence and permission gates remain unchanged.
 Without that optional access, protection still relies on the existing window
 events; exact restart-time/OEM survival is not guaranteed. The boot receiver and
 persisted rules remain unchanged; Android permits startup after first unlock.
@@ -317,6 +321,12 @@ At deliberate request/scan admission, Android reconciles cached resume/focus
 callbacks with the actual Activity RESUMED state, window focus and unlocked
 screen. The independent Flutter route-visibility guard is retained: current
 host facts cannot authorize a hidden Discipline route or a background request.
+Flutter also binds delayed request/reader admission to the uninterrupted screen
+visit and the originating route. Leaving and returning before a visibility reply
+does not revive that start; ordinary refresh does not cancel it. NFC enrollment
+uses its current Unlock method route, not the covered Blocking page. Opening an
+unrelated route while admission is pending invalidates it. This does not cancel
+an already admitted background-enabled countdown.
 When Stay on screen is on, actual tab/route exit, Home/background, screen lock or
 Activity recreation cancels the request and NFC proof. Notification-shade/window
 focus loss only suspends foreground completion; it does not reset the request.

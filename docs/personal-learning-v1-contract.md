@@ -249,6 +249,11 @@ points; unsupported reconstructed Planner and Habit histories are excluded.
 Failed Insights or correlation refreshes keep prior data and view selections,
 with a visible read-error and Retry in both sparse and populated layouts; retained
 AsyncValue data never masks a failed read as fresh success.
+This includes failures of the personal-pattern source used by the derived
+correlation report: Compare and Top patterns keep existing evidence but expose
+the same Retry state, even when the derived report itself still has a value.
+Independent Overview results remain available; no calculation or evidence gate
+is weakened by this error propagation.
 Flutter presents target-based sleep as non-negative `Sleep shortfall` while
 retaining the signed API property for compatibility. Previous-night sleep,
 sleep quality, and Morning energy share the local wake/Focus date. Planned and

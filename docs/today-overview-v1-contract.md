@@ -108,10 +108,15 @@ Each branch also requires an immutable server receipt in
 Use IANA timezone rules (including skipped/repeated midnight), never fixed offsets.
 Later edits retain timely receipt credit; late new entries remain valid product
 data but cannot repair a streak. Receipt reads are service-only and fail closed.
-Recent incomplete dates before the first completed day preserve the existing run
-until their deadlines, without adding days. An expired incomplete date, or a gap
-inside a completed run, ends it. Completion counts only dates with both timely
-branches; Today's Progress and save-state flags remain independent of this grace.
+Recent incomplete dates preserve the existing run until their deadlines even
+when newer dates are complete. Across still-pending gaps, display the longest
+contiguous completed segment, not a sum of disconnected segments. Missing dates
+add no days. Timely backfill joins the segments normally; the first expired
+incomplete date ends the search, so only runs on its newer side remain eligible.
+For example, a five-day run, one pending day and one new completed day displays
+five until backfill makes seven, or expiry leaves one. Completion counts only
+dates with both timely branches; Today's Progress and save-state flags remain
+independent of this grace.
 
 ## Today's Progress
 

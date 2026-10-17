@@ -379,8 +379,9 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     // No wake lock, exact alarm or new service: one check per wall-clock minute.
     private val scheduleTick = object : Runnable {
         override fun run() {
+            var foregroundRecovered = false
             if (::plans.isInitialized) {
-                recoverForegroundFromUsage()
+                foregroundRecovered = recoverForegroundFromUsage()
                 runCatching { DisciplineUnlockScheduler.reconcile(applicationContext) }
                 BlockingTimerNotifications.sync(applicationContext)
                 BlockingTimerNotifications.syncForeground(applicationContext, plans, budgetForegroundPackage, budgetHost, overlay == null)
@@ -394,25 +395,28 @@ class FocusBlockAccessibilityService : AccessibilityService() {
                 lastMeterAt = elapsed
                 checkBrowser()
             }
-            if (manager.blockingMode() != "focus") refreshOverlay()
+            if (FocusProtectionDecision.refreshAfterForegroundCheck(manager.blockingMode(), foregroundRecovered)) {
+                refreshOverlay()
+            }
             handler.postDelayed(this, if (::plans.isInitialized && plans.migrated()) 1000L
                 else 60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
 
-    private fun recoverForegroundFromUsage() {
+    private fun recoverForegroundFromUsage(): Boolean {
         if (!getSystemService(android.os.PowerManager::class.java).isInteractive ||
-            getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) return
+            getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) return false
         val config = FocusProtectionStore(applicationContext).readConfiguration()
-        if (!config.enabled || !config.blockSelectedApps) return
-        val observed = runCatching { plans.foregroundObservation() }.getOrNull() ?: return
+        if (!config.enabled || !config.blockSelectedApps) return false
+        val observed = runCatching { plans.foregroundObservation() }.getOrNull() ?: return false
         val recovered = FocusProtectionDecision.recoverForeground(lastForegroundPackage,
             lastForegroundObservedAt, observed.first, observed.second, packageName)
-        if (recovered == lastForegroundPackage) return
+        if (recovered == lastForegroundPackage) return false
         lastForegroundPackage = recovered
         lastForegroundObservedAt = observed.second
         budgetForegroundPackage = recovered
         currentHost = null; budgetHost = null; lastMeterAt = SystemClock.elapsedRealtime()
+        return true
     }
 
     private val browserTick = Runnable { checkBrowser() }

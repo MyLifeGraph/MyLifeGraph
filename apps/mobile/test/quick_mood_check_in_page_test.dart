@@ -29,6 +29,27 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'support/ui_catalog_capture.dart';
 
 void main() {
+  testWidgets(
+    'Evening conflict retains notes and requests review instead of retry',
+    (tester) async {
+      final store = _ConflictCaptureStore();
+      await _pumpEveningPage(tester, store);
+      await _completeEveningDraft(tester);
+      await _tapVisible(tester, find.text('Save'));
+      expect(
+        find.text(const QuickCheckInConflictException().message),
+        findsWidgets,
+      );
+      expect(
+        find.text('Could not save. Your answers are still here. Try again.'),
+        findsNothing,
+      );
+      expect(find.text('What should tomorrow know?'), findsOneWidget);
+      expect(find.text('Exact retry reflection'), findsOneWidget);
+      expect(find.text('Exact retry blocker'), findsOneWidget);
+      expect(store.eveningAttempts, hasLength(1));
+    },
+  );
   testWidgets('Evening switches dates without discarding text or step', (
     tester,
   ) async {
@@ -991,6 +1012,14 @@ class _RecordingCaptureStore implements QuickCheckInStore {
 class _NoSleepPlanStore extends _RecordingCaptureStore {
   @override
   Future<EveningShutdownDraft?> loadLatestEvening() async => null;
+}
+
+class _ConflictCaptureStore extends _RecordingCaptureStore {
+  @override
+  Future<void> saveEvening(EveningShutdownDraft draft) async {
+    eveningAttempts.add(draft);
+    throw const QuickCheckInConflictException();
+  }
 }
 
 class _FailOnceCaptureStore extends _RecordingCaptureStore {

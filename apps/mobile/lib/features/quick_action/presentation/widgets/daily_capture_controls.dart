@@ -956,7 +956,16 @@ class CaptureFlowScaffold extends StatelessWidget {
                           padding: const EdgeInsets.all(AppSpacing.lg),
                           child: isLoading
                               ? const Center(child: CircularProgressIndicator())
-                              : child,
+                              : Semantics(
+                                  blockUserActions: isSaving,
+                                  child: ExcludeFocus(
+                                    excluding: isSaving,
+                                    child: AbsorbPointer(
+                                      absorbing: isSaving,
+                                      child: child,
+                                    ),
+                                  ),
+                                ),
                         ),
                         const Divider(height: 1),
                         Padding(
@@ -965,7 +974,10 @@ class CaptureFlowScaffold extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: canGoBack ? onBack : null,
+                                  onPressed:
+                                      !isLoading && !isSaving && canGoBack
+                                      ? onBack
+                                      : null,
                                   icon: const Icon(AppIcons.arrowBack),
                                   label: const Text('Back'),
                                 ),

@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/supabase/app_user_resolver.dart';
 import '../../../core/supabase/supabase_tables.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../domain/quick_check_in.dart';
 
-class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
+class QuickCheckInSupabaseDataSource
+    implements QuickCheckInStore, CaptureEditingStore {
   QuickCheckInSupabaseDataSource(
     this._client, {
     ApiClient? apiClient,
@@ -28,16 +30,52 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
   QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.supabase;
 
   @override
-  Future<DailyCaptureEntry?> loadToday(DateTime today) async {
+  Future<DailyCaptureEntry?> loadToday(DateTime today) =>
+      _readDay(today, forEditing: false);
+
+  @override
+  Future<DailyCaptureEntry> loadForEditing(DateTime day) async =>
+      (await _readDay(day, forEditing: true))!;
+
+  Future<DailyCaptureEntry?> _readDay(
+    DateTime day, {
+    required bool forEditing,
+  }) async {
     final userId = await AppUserResolver(_client).resolveUserId();
-    final row = await _loadRowForUser(
-      userId: userId,
-      entryDate: dailyCaptureEntryDate(today),
-    );
-    if (row == null || row.source != source) {
+    final entryDate = dailyCaptureEntryDate(day);
+    final row = await _loadRowForUser(userId: userId, entryDate: entryDate);
+    if (_client.auth.currentUser?.id != userId ||
+        (row != null && row.entry.entryDate != entryDate)) {
+      throw const QuickCheckInUnavailableException(
+        'Daily Capture read identity changed.',
+      );
+    }
+    if (!forEditing && (row == null || row.source != source)) {
       return null;
     }
-    return row.entry;
+    final morning = CaptureWriteBaseline(
+      ownerId: userId,
+      entryDate: entryDate,
+      branch: 'morning',
+      captureId: row?.entry.morning?.captureId,
+      capturedAt: row?.entry.morning?.capturedAt,
+    );
+    final evening = CaptureWriteBaseline(
+      ownerId: userId,
+      entryDate: entryDate,
+      branch: 'evening',
+      captureId: row?.entry.evening?.captureId,
+      capturedAt: row?.entry.evening?.capturedAt,
+    );
+    final entry = row?.source == source
+        ? row!.entry
+        : DailyCaptureEntry(entryDate: entryDate);
+    return entry.copyWith(
+      morningBaseline: morning,
+      eveningBaseline: evening,
+      morning: entry.morning?.copyWith(writeBaseline: morning),
+      evening: entry.evening?.copyWith(writeBaseline: evening),
+    );
   }
 
   @override
@@ -55,8 +93,9 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
         .limit(30);
     for (final raw in rows) {
       try {
-        final evening =
-            rowMapper.map(Map<String, dynamic>.from(raw as Map)).evening;
+        final evening = rowMapper
+            .map(Map<String, dynamic>.from(raw as Map))
+            .evening;
         if (evening?.hasPreciseSleepPlan == true) {
           return evening;
         }
@@ -70,30 +109,24 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
   @override
   Future<void> saveEvening(EveningShutdownDraft draft) async {
     final userId = await AppUserResolver(_client).resolveUserId();
-    final existing = await _loadRowForUser(
-      userId: userId,
-      entryDate: draft.entryDate,
-    );
     await _writeBranch(
+      ownerId: userId,
       entryDate: draft.entryDate,
       branch: 'evening',
       capture: draft.toMetadataJson(preservingCompatibility: false),
-      expected: existing?.entry.evening,
+      baseline: draft.writeBaseline,
     );
   }
 
   @override
   Future<void> saveMorning(MorningCalibrationDraft draft) async {
     final userId = await AppUserResolver(_client).resolveUserId();
-    final existing = await _loadRowForUser(
-      userId: userId,
-      entryDate: draft.entryDate,
-    );
     await _writeBranch(
+      ownerId: userId,
       entryDate: draft.entryDate,
       branch: 'morning',
       capture: draft.toMetadataJson(preservingCompatibility: false),
-      expected: existing?.entry.morning,
+      baseline: draft.writeBaseline,
     );
   }
 
@@ -109,11 +142,32 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
       );
     }
     final migrationEntry = entry.forAuthenticatedMigration();
+    // Migration has no reviewed form. Bind its explicit merge to this read;
+    // ordinary form writes must never acquire a new baseline at save time.
+    final existing = await loadForEditing(DateTime.parse(entry.entryDate));
     if (migrationEntry.evening != null) {
-      await saveEvening(migrationEntry.evening!);
+      await _writeBranch(
+        ownerId: userId,
+        entryDate: entry.entryDate,
+        branch: 'evening',
+        capture: migrationEntry.evening!.toMetadataJson(
+          preservingCompatibility: false,
+        ),
+        baseline: existing.eveningBaseline,
+        migration: true,
+      );
     }
     if (migrationEntry.morning != null) {
-      await saveMorning(migrationEntry.morning!);
+      await _writeBranch(
+        ownerId: userId,
+        entryDate: entry.entryDate,
+        branch: 'morning',
+        capture: migrationEntry.morning!.toMetadataJson(
+          preservingCompatibility: false,
+        ),
+        baseline: existing.morningBaseline,
+        migration: true,
+      );
     }
   }
 
@@ -140,11 +194,22 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
   }
 
   Future<void> _writeBranch({
+    required String ownerId,
     required String entryDate,
     required String branch,
     required Map<String, dynamic> capture,
-    required dynamic expected,
+    required CaptureWriteBaseline? baseline,
+    bool migration = false,
   }) async {
+    if (baseline == null ||
+        baseline.ownerId != ownerId ||
+        baseline.entryDate != entryDate ||
+        baseline.branch != branch ||
+        _client.auth.currentUser?.id != ownerId) {
+      throw const QuickCheckInUnavailableException(
+        'Load this account and day before saving Daily Capture.',
+      );
+    }
     final apiClient = _apiClient;
     final accessToken = _client.auth.currentSession?.accessToken;
     if (apiClient == null || accessToken == null || accessToken.isEmpty) {
@@ -152,18 +217,15 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
         'Daily Capture sync is unavailable. Keep this draft and retry.',
       );
     }
-    final expectedCapture = switch (expected) {
-      EveningShutdownDraft value => {
-          'capture_id': value.captureId,
-          'captured_at': value.capturedAt.toUtc().toIso8601String(),
-        },
-      MorningCalibrationDraft value => {
-          'capture_id': value.captureId,
-          'captured_at': value.capturedAt.toUtc().toIso8601String(),
-        },
-      _ => null,
-    };
-    final requestKey = '$entryDate:$branch:${jsonEncode(capture)}';
+    final expectedCapture = baseline.expectedCapture;
+    final requestKey = jsonEncode([
+      ownerId,
+      entryDate,
+      branch,
+      migration,
+      if (!migration) expectedCapture,
+      capture,
+    ]);
     final pending = _pendingWrites.putIfAbsent(
       requestKey,
       () => _PendingCaptureWrite(
@@ -171,22 +233,33 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
         expectedCapture: expectedCapture,
       ),
     );
-    final response = await apiClient.putJson(
-      '/v1/daily-capture/$entryDate/$branch',
-      headers: {'Authorization': 'Bearer $accessToken'},
-      body: {
-        'contract_version': 'daily-capture-write-v1',
-        'request_id': pending.requestId,
-        'expected_capture': pending.expectedCapture,
-        'capture': capture,
-      },
+    final Map<String, dynamic> response;
+    try {
+      response = await apiClient.putJson(
+        '/v1/daily-capture/$entryDate/$branch',
+        headers: {'Authorization': 'Bearer $accessToken'},
+        body: {
+          'contract_version': 'daily-capture-write-v1',
+          'request_id': pending.requestId,
+          'expected_capture': pending.expectedCapture,
+          'capture': capture,
+        },
+      );
+    } catch (error) {
+      if (apiFailureFrom(error)?.isConflict == true) {
+        throw const QuickCheckInConflictException();
+      }
+      rethrow;
+    }
+    final returnedCapturedAt = DateTime.tryParse(
+      '${response['captured_at'] ?? ''}',
     );
-    final returnedCapturedAt =
-        DateTime.tryParse('${response['captured_at'] ?? ''}');
-    final requestedCapturedAt =
-        DateTime.tryParse('${capture['captured_at'] ?? ''}');
-    final returnedUpdatedAt =
-        DateTime.tryParse('${response['updated_at'] ?? ''}');
+    final requestedCapturedAt = DateTime.tryParse(
+      '${capture['captured_at'] ?? ''}',
+    );
+    final returnedUpdatedAt = DateTime.tryParse(
+      '${response['updated_at'] ?? ''}',
+    );
     if (response['contract_version'] != 'daily-capture-write-v1' ||
         response['entry_date'] != entryDate ||
         response['branch'] != branch ||
@@ -233,8 +306,8 @@ class QuickCheckInDailyRowMapper {
       ..remove('additional_frictions');
     final capturesRaw = metadata['captures'];
     final captureVersion = metadata['capture_version'];
-    final supportedCaptureVersion =
-        DailyCaptureEntry.supportedCaptureVersions.contains(captureVersion);
+    final supportedCaptureVersion = DailyCaptureEntry.supportedCaptureVersions
+        .contains(captureVersion);
     if ((supportedCaptureVersion && capturesRaw == null) ||
         (capturesRaw != null && !supportedCaptureVersion)) {
       throw const FormatException('Capture metadata version is invalid.');
@@ -249,8 +322,8 @@ class QuickCheckInDailyRowMapper {
     final morningRaw = captures['morning'];
     final legacyCapturedAt =
         DateTime.tryParse('${metadata['captured_at'] ?? ''}') ??
-            DateTime.tryParse('${row['updated_at'] ?? ''}') ??
-            DateTime.parse('${entryDate}T12:00:00');
+        DateTime.tryParse('${row['updated_at'] ?? ''}') ??
+        DateTime.parse('${entryDate}T12:00:00');
     final legacy = LegacyQuickCheckInValues(
       captureId:
           '${metadata['capture_id'] ?? 'legacy-$entryDate-${legacyCapturedAt.toUtc().microsecondsSinceEpoch}'}',
@@ -259,8 +332,8 @@ class QuickCheckInDailyRowMapper {
       energy: (row['energy_level'] as num?)?.toInt(),
       sleepHours: (row['sleep_hours'] as num?)?.toDouble(),
       stress: (row['stress_level'] as num?)?.toInt(),
-      contextNote:
-          '${metadata['context_note'] ?? row['reflection'] ?? ''}'.trim(),
+      contextNote: '${metadata['context_note'] ?? row['reflection'] ?? ''}'
+          .trim(),
     );
     legacy.validatePresentValues();
 
@@ -280,8 +353,9 @@ class QuickCheckInDailyRowMapper {
               entryDate: entryDate,
               containerVersion: '$captureVersion',
             ),
-      legacy:
-          legacy.hasAnySignal || legacy.contextNote.isNotEmpty ? legacy : null,
+      legacy: legacy.hasAnySignal || legacy.contextNote.isNotEmpty
+          ? legacy
+          : null,
       preservedMetadata: preservedMetadata,
     );
   }
@@ -451,16 +525,16 @@ class _EventOrigin {
   const _EventOrigin({this.kind, this.captureId, this.capturedAt});
 
   factory _EventOrigin.evening(EveningShutdownDraft draft) => _EventOrigin(
-        kind: 'evening',
-        captureId: draft.captureId,
-        capturedAt: draft.capturedAt,
-      );
+    kind: 'evening',
+    captureId: draft.captureId,
+    capturedAt: draft.capturedAt,
+  );
 
   factory _EventOrigin.morning(MorningCalibrationDraft draft) => _EventOrigin(
-        kind: 'morning',
-        captureId: draft.captureId,
-        capturedAt: draft.capturedAt,
-      );
+    kind: 'morning',
+    captureId: draft.captureId,
+    capturedAt: draft.capturedAt,
+  );
 
   final String? kind;
   final String? captureId;

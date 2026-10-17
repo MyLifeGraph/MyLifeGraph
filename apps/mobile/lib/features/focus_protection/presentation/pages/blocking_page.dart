@@ -88,8 +88,10 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   bool _routeVisible = true;
   bool _unlockDialog = false;
   bool _startingNfc = false;
+  ModalRoute<dynamic>? _nfcAdmissionRoute;
   bool _strictPresent = true, _finishingUnlock = false;
   bool _requestingUnlock = false;
+  int _strictExitGeneration = 0;
   BlockingGateway get _gateway => ref.read(blockingGatewayProvider);
   bool get _configurationLocked =>
       _snapshot?.locked == true || _legacy?.lease?.isActive == true;
@@ -157,10 +159,17 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
 
   Future<void> _syncStrictVisibility() async {
     final generation = ++_generation;
+    final inUnlockDialog =
+        _unlockDialog &&
+        (!_startingNfc || _nfcAdmissionRoute?.isCurrent != false);
+    final visible =
+        _strictPresent && (_routeVisible || inUnlockDialog) && _tab == 1;
+    // A return to the same tab must not revive admission that began before
+    // leaving. Ordinary status reads do not invalidate this visit identity.
+    if (!visible) ++_strictExitGeneration;
     try {
       final value = await _gateway.command('strictVisibility', {
-        'visible':
-            _strictPresent && (_routeVisible || _unlockDialog) && _tab == 1,
+        'visible': visible,
       });
       if (!mounted || generation != _generation) return;
       setState(() => _snapshot = value);
@@ -331,8 +340,14 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         return;
       }
       _routeVisible = ModalRoute.of(context)?.isCurrent ?? true;
+      final exitGeneration = _strictExitGeneration;
       await _syncStrictVisibility();
-      if (!mounted || !_foreground || _tab != 1) return;
+      if (!mounted ||
+          !_foreground ||
+          _tab != 1 ||
+          exitGeneration != _strictExitGeneration) {
+        return;
+      }
       final requested = await _perform(
         () => _gateway.command('requestUnlock', {'mode': mode!}),
       );
@@ -1405,6 +1420,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       : '${seconds ~/ 60}m ${seconds % 60}s';
   Future<BlockingSnapshot?> _scan(
     bool enroll, {
+    BuildContext? host,
     String? name,
     int? revision,
     bool recovery = false,
@@ -1412,6 +1428,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
   }) async {
     if (_busy || _startingNfc) return null;
     _startingNfc = true;
+    final admissionRoute = ModalRoute.of(host ?? context);
+    _nfcAdmissionRoute = admissionRoute;
     var cancelling = false;
     var cancelled = false;
     final navigator = Navigator.of(context, rootNavigator: true);
@@ -1455,10 +1473,17 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     // visibility established before starting reader mode (including queued
     // route-visibility commands from the setup sheet).
     _unlockDialog = true;
+    final exitGeneration = _strictExitGeneration;
     await _syncStrictVisibility();
     _startingNfc = false;
-    if (!mounted) {
+    _nfcAdmissionRoute = null;
+    if (!mounted ||
+        !_foreground ||
+        _tab != 1 ||
+        admissionRoute?.isCurrent == false ||
+        exitGeneration != _strictExitGeneration) {
       _unlockDialog = false;
+      if (mounted) unawaited(_syncStrictVisibility());
       return null;
     }
     unawaited(navigator.push(route));
@@ -1759,6 +1784,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                           }
                           final next = await _scan(
                             true,
+                            host: ctx,
                             name: chipName,
                             revision: expectedRevision,
                           );

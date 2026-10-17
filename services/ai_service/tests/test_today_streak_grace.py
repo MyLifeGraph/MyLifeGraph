@@ -21,11 +21,12 @@ def test_deadline_is_48_elapsed_hours_after_actual_local_boundary(zone, day, end
     assert _streak_deadline(date.fromisoformat(day), ZoneInfo(zone)) == datetime.fromisoformat(end)
 
 
-def read(repository, now):
+def read(repository, now, zone_name="Europe/Berlin"):
     service = _service(repository)
+    zone = ZoneInfo(zone_name)
     return asyncio.run(service._load_check_ins(
-        user_id=USER_ID, local_date=now.astimezone(ZoneInfo("Europe/Berlin")).date(),
-        generated_at=now, zone=ZoneInfo("Europe/Berlin"),
+        user_id=USER_ID, local_date=now.astimezone(zone).date(),
+        generated_at=now, zone=zone,
     ))
 
 
@@ -34,6 +35,99 @@ def test_pending_recent_days_preserve_but_do_not_increment_streak():
     repository.daily_logs = [_capture_row(date(2026, 10, 7))]
     assert read(repository, datetime(2026, 10, 9, 12, tzinfo=UTC)).completed_days_streak == 1
     assert read(repository, datetime(2026, 10, 11, 0, tzinfo=UTC)).completed_days_streak == 0
+
+
+@pytest.mark.parametrize("gap", ["missing", "morning", "evening", "malformed"])
+def test_newer_completion_preserves_old_run_until_gap_is_filled(gap):
+    repository = Repository()
+    now = datetime(2026, 10, 9, 21, tzinfo=UTC)
+    old_run = [_capture_row(date(2026, 10, 7) - timedelta(days=i)) for i in range(5)]
+    repository.daily_logs = old_run
+    assert read(repository, now).completed_days_streak == 5
+
+    gap_rows = [] if gap == "missing" else [_capture_row(
+        date(2026, 10, 8), morning=gap != "evening", evening=gap != "morning",
+        malformed=gap == "malformed",
+    )]
+    repository.daily_logs = [_capture_row(date(2026, 10, 9)), *gap_rows, *old_run]
+    result = read(repository, now)
+    assert result.completed_days_streak == 5  # Neither 1 nor a fabricated 6/7.
+    assert result.morning_saved and result.evening_saved
+
+    repository.daily_logs = [
+        _capture_row(date(2026, 10, 9)), _capture_row(date(2026, 10, 8)), *old_run,
+    ]
+    assert read(repository, now).completed_days_streak == 7
+
+
+@pytest.mark.parametrize("delta,expected", [(-1, 5), (0, 5), (1, 1)])
+@pytest.mark.parametrize("zone_name,gap_date", [
+    ("UTC", "2026-10-08"),
+    ("Europe/Berlin", "2026-03-28"),
+    ("Europe/Berlin", "2026-10-24"),
+    ("America/New_York", "2026-03-07"),
+])
+def test_internal_gap_breaks_only_after_its_exact_deadline(delta, expected, zone_name, gap_date):
+    repository = Repository()
+    gap = date.fromisoformat(gap_date)
+    repository.daily_logs = [
+        _capture_row(gap + timedelta(days=1)),
+        *[_capture_row(gap - timedelta(days=i)) for i in range(1, 6)],
+    ]
+    now = _streak_deadline(gap, ZoneInfo(zone_name)) + timedelta(microseconds=delta)
+    assert read(repository, now, zone_name).completed_days_streak == expected
+
+
+def test_late_internal_gap_backfill_cannot_restore_the_old_run():
+    repository = Repository()
+    gap = date(2026, 10, 8)
+    repository.daily_logs = [
+        _capture_row(date(2026, 10, 9)), _capture_row(gap),
+        *[_capture_row(gap - timedelta(days=i)) for i in range(1, 6)],
+    ]
+    deadline = _streak_deadline(gap, ZoneInfo("Europe/Berlin"))
+    normal_receipts = repository.list_capture_receipts
+
+    async def receipts(**kwargs):
+        rows = await normal_receipts(**kwargs)
+        for row in rows:
+            if row["entry_date"] == gap.isoformat():
+                row["created_at"] = (deadline + timedelta(microseconds=1)).isoformat()
+        return rows
+
+    repository.list_capture_receipts = receipts
+    assert read(repository, deadline + timedelta(hours=1)).completed_days_streak == 1
+
+
+def test_multiple_pending_dates_do_not_add_days_or_join_segments():
+    repository = Repository()
+    now = datetime(2026, 10, 10, 21, tzinfo=UTC)
+    old_run = [_capture_row(date(2026, 10, 7) - timedelta(days=i)) for i in range(5)]
+    repository.daily_logs = [_capture_row(date(2026, 10, 10)), *old_run]
+    assert read(repository, now).completed_days_streak == 5
+    repository.daily_logs.insert(1, _capture_row(date(2026, 10, 8)))
+    assert read(repository, now).completed_days_streak == 6
+    repository.daily_logs.insert(1, _capture_row(date(2026, 10, 9)))
+    assert read(repository, now).completed_days_streak == 8
+
+
+def test_newer_longer_run_is_not_reduced_to_an_older_protected_run():
+    repository = Repository()
+    repository.daily_logs = [
+        _capture_row(date(2026, 10, 10)), _capture_row(date(2026, 10, 9)),
+        _capture_row(date(2026, 10, 7)),
+    ]
+    assert read(repository, datetime(2026, 10, 10, 21, tzinfo=UTC)).completed_days_streak == 2
+
+
+def test_protected_run_continues_across_repository_pages():
+    repository = Repository()
+    repository.daily_logs = [
+        _capture_row(date(2026, 10, 9)),
+        *[_capture_row(date(2026, 10, 7) - timedelta(days=i)) for i in range(125)],
+    ]
+    assert read(repository, datetime(2026, 10, 9, 21, tzinfo=UTC)).completed_days_streak == 125
+    assert repository.capture_calls == [(0, 100), (100, 100)]
 
 
 @pytest.mark.parametrize("late", [False, True])

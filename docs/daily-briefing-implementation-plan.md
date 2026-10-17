@@ -25,7 +25,11 @@ The additive migration and compatible API must precede the new client.
 
 Morning and Evening track unsaved edits, including optional text and reviewed
 voice values. Leaving via the header/system Back asks `Discard changes?`;
-saving blocks navigation. Date taps open the calendar directly and select a day
+saving blocks navigation and draft edits, including keyboard and assistive input;
+the footer Back action is disabled during loading/saving. A failed save restores
+editing without resetting answers. Initial reads and Retry are single-flight,
+including repeated activation before the next frame, so an older retry cannot
+replace a subsequently selected date. Date taps open the calendar directly and select a day
 without a second confirmation. Each visited date retains its draft and step in
 memory for this open flow, bound to account/timezone. Internal step navigation keeps
 the draft. A confirmed Save resets that date's dirty baseline; when another date

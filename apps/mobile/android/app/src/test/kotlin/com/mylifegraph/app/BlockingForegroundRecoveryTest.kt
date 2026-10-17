@@ -12,6 +12,33 @@ class BlockingForegroundRecoveryTest {
             usage.foregroundPackage, usage.foregroundChangedAt, own))
         assertEquals(400L, usage.result()["game"])
     }
+    @Test fun coldLegacyFocusRecoveryTriggersEnforcementWithoutAnotherWindowEvent() {
+        val recovered = FocusProtectionDecision.recoverForeground(null, 0, "game", 50, own)
+        assertEquals("game", recovered)
+        assertTrue(FocusProtectionDecision.refreshAfterForegroundCheck("focus", recovered != null))
+        assertTrue(FocusProtectionDecision.shouldBlockPackage(true, true, true,
+            setOf("game"), setOf(own), recovered, LocalFocusLease("session", 1, 1000), 100))
+    }
+    @Test fun unchangedLegacyFocusForegroundDoesNotAddPeriodicEnforcement() {
+        val recovered = FocusProtectionDecision.recoverForeground("game", 100, "game", 200, own)
+        assertFalse(FocusProtectionDecision.refreshAfterForegroundCheck("focus", recovered != "game"))
+    }
+    @Test fun rejectedRecoveryDoesNotTriggerLegacyFocusEnforcement() {
+        for (current in listOf(own, "com.android.systemui")) {
+            val recovered = FocusProtectionDecision.recoverForeground(current, 300, "game", 200, own)
+            assertFalse(FocusProtectionDecision.refreshAfterForegroundCheck("focus", recovered != current))
+        }
+        for (candidate in listOf(null, "", own, "com.android.systemui")) {
+            val recovered = FocusProtectionDecision.recoverForeground("game", 100, candidate, 200, own)
+            assertFalse(FocusProtectionDecision.refreshAfterForegroundCheck("focus", recovered != "game"))
+        }
+    }
+    @Test fun otherModesKeepTheirPeriodicRuleBoundaryChecks() {
+        for (mode in listOf("plans", "rules", "weekly", "always")) {
+            assertTrue(FocusProtectionDecision.refreshAfterForegroundCheck(mode, false))
+            assertTrue(FocusProtectionDecision.refreshAfterForegroundCheck(mode, true))
+        }
+    }
     @Test fun missedNewAppEventRecoversButOlderSnapshotsCannotUndoEvents() {
         assertEquals("new", FocusProtectionDecision.recoverForeground("old", 100, "new", 200, own))
         assertEquals("new", FocusProtectionDecision.recoverForeground("new", 200, "old", 100, own))
