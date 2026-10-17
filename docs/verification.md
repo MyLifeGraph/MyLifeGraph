@@ -31,6 +31,70 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC35 reliability and Streak grace — 2026-10-17
+
+PR [58](https://github.com/MyLifeGraph/MyLifeGraph/pull/58) merged normally after
+complete candidate `39069657205` and PR `39069648608` passed. Candidate
+`9d0ae80f1ebb87c7fab3ace360b3b080afd44420` and release Main
+`1f853c356932c02aedfcc38f111dcd861fef142b` have identical trees. Exact-Main full
+run `39070730900` passes all seven jobs: **1973 Flutter tests**, Android JVM/Lint,
+**2031 backend passes / 2 skips**, web, docs/visual, fresh migrations/pgTAP and
+**8 browser journeys**. Database proof includes **715 assertions / 36 files**,
+isolated compatibility harnesses and PG17 full restore/deletion replay. The six
+Windows-only golden differences recorded below do not reproduce on this Linux
+run; no golden reference was overwritten. Native focused evidence remains the
+**134 App-module JVM passes** recorded in the second audit.
+
+Tagged signing run `39070728172` and automatic Main APK run `39070704686` pass.
+[RC35](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.35)
+is normal/latest/non-draft/non-prerelease, id `416079035`, published
+`2026-10-17T21:39:09Z`. The annotated immutable tag names the Main source above.
+Configured actor tag creation reports its creation restriction bypass; no rule
+or Main protection was changed. Package `com.mylifegraph.app`, versionCode
+`10000130`, APK **153306356 bytes**, SHA-256
+`f26e698481e2b68188770c21663fbf7e00f73800c2fb8112e831de0c3a9f1b80`.
+Independent local `apksigner` verifies the unchanged certificate
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+All four asset identities, sizes, GitHub digests and newly downloaded bytes
+verify. APK asset id is `651669988`; source SBOM SHA-256 is
+`a5e4f8360157debf490ba43c3c54019cccf44fcca376abbfa136e70aa13e8fb7`.
+
+VPS RC35 was prepared from the exact tagged archive, then promoted through the
+installed rollback-capable helper. Public health reports RC35/Main above and
+readiness reports **83 migrations**, head
+`20261006135421_coach_operator_sol61_standard.sql`, identity
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+No schema migration was required. Promotion reports `coach_ready:true`.
+An immediate additional operator check stopped at `health_check.py`; independent
+public probes still passed and a subsequent complete operator check passed
+(`public_api_and_coach_ready:true`). No service restart, security weakening or
+unproven product fix was used to hide the transient failure. This capability
+evidence is not an authenticated real Coach-turn proof.
+
+At publication, Vercel production `dpl_3qtdWS4tACvoqWQ9T2hCLMQAxqT7` is READY
+at the same Main source. Both existing app aliases pass HTTP 200/CSP and serve
+its `main-<SHA>` identity. Bounded retention removes two obsolete app deployments,
+keeping live plus two prior production sources; marketing-site outputs remain.
+
+Before preparation, nine explicitly authorized obsolete VPS APK downloads were
+matched to published asset identities/sizes/digests and freshly downloaded hashes,
+then rehashed/stat-checked and individually removed: **1355719140 bytes** freed.
+Oldest RC11 and newest RC22/23 downloads remain. Free space afterward was
+**17475375104 bytes**. Active/rollback server versions, repositories, secrets,
+signing and backups were untouched; deleted downloads remain recoverable from
+GitHub. Laptop and VM publication finalizers also complete downloaded-byte proof,
+each removing four managed RC34 files (**153681207 bytes** per host), keeping
+RC6/RC35 and RC21/RC35 respectively. This is managed-copy removal, not a net
+free-space claim after copying RC35. VM originals remain under
+`/home/codex/code/MyLifeGraph/.tools/rc35-published.AcZn9jj3`.
+
+The fixes and deterministic reproductions are described in the two audits and
+Streak entry below. No new physical Samsung, hardware NFC, other-blocker
+coexistence or authenticated production Coach-turn test is claimed. Read-only
+ADB inventory found RC31 installed; no personal-account data or device settings
+were changed. Evidence/logs are under `.tools/release-20261017/`. Unrelated local
+retention edits and output/failure captures remain outside the release commits.
+
 ### Authorized reliability release candidate — 2026-10-17
 
 PR 58 contains the two local reliability audits and the Streak grace correction.
