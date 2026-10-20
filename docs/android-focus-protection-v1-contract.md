@@ -115,18 +115,40 @@ the normal V2 bounds.
 
 The disclosed launcher picker uses native icons, search, Clear, Social media,
 and Games (Android-declared category). Its bounded, independently scrolling list
-keeps the Apps disclosure reachable; a fixed footer repeats the disclosure and
-selection count beside Save, above keyboard/navigation insets. Checks use the
+uses separate Rules, Apps and Websites editor sections; a fixed footer retains
+the Apps shortcut, selection count and Save above keyboard/navigation insets. Checks use the
 current theme's primary/on-primary contrast. Preset chips reflect whether all
 their installed apps are selected; tapping remains additive and never removes
-manual choices. Collapse and search preserve the draft; only Save persists it.
+manual choices. Section changes and search preserve the draft; only Save persists it.
 Missing categories are not guessed. Domains match exact host or subdomain boundaries;
 optional category suggestions never silently select websites. The editor snapshots
-selected apps first on opening, preserving catalog order inside both groups and
-keeping row order stable during edits. App row sizes and picker bounds are unchanged.
+selected targets first immediately after every selection, preserving the original
+catalog/domain order inside both groups. Deselecting returns a target to that
+order. Apps and websites share visible-row anchoring: a mid-list selection or
+additive preset moves targets, not the user's viewport. Near the new end, bounded
+trailing space preserves the anchor instead of pulling it upwards. Explicit
+search/category changes may change the visible result set. App row sizes and
+picker bounds are unchanged; selected targets remain visible through filtering.
 Websites use checkbox rows, local bundled marks for known hosts and a globe fallback;
 no external favicon requests expose the user's domain list. Custom normalized domains
 and unchecked draft rows remain available. Social media and Video switch suggestions.
+Known marks use pinned Simple Icons brand geometry (attribution in
+`apps/mobile/assets/brand/WEBSITE-MARKS.md`), not hand-drawn approximations.
+Only exact hosts and real subdomains match; unknown/lookalike hosts retain the
+neutral globe. App rows continue displaying the installed PackageManager PNG,
+bound to package ID through every selection reorder; missing/invalid images
+fall back safely. Website glyphs never replace installed-app artwork.
+
+The plan name and six existing icons remain editable in the compact header/icon
+dialog; short/keyboard layouts let the name scroll. Each section retains its
+draft and scroll position. Customize uses Content, Style and Delay sections with
+the same title/message limits, six icons, five accents, three layouts, four
+backgrounds and existing delay values. Its compact same-renderer preview can be
+expanded; on short large-text/keyboard layouts the expand action keeps the full
+preview reachable without squeezing out the controls. The labelled desktop/web
+approximation has an isolated theme background, not text showing through from
+the underlying page. Save/failure/Cancel and unknown stored appearance keys are
+unchanged. No native policy, wire version, lease, consent or persisted format changes.
 
 Rules uses separate Time windows and Shared daily budget toggles. Existing saved
 rules reopen enabled; unused rules start disabled. Disabled controls hide their

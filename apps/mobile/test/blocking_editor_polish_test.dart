@@ -6,6 +6,7 @@ import 'package:my_life_graph/core/widgets/app_backdrop.dart';
 import 'package:my_life_graph/core/widgets/app_surface.dart';
 import 'package:my_life_graph/features/focus_protection/domain/blocking_plan.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/pages/blocking_page.dart';
+import 'package:my_life_graph/features/focus_protection/presentation/widgets/blocking_target_list.dart';
 
 import 'support/ui_catalog_capture.dart';
 
@@ -95,24 +96,29 @@ Future<void> _open(
 }
 
 Future<void> _reveal(WidgetTester tester, Finder target) async {
+  if (target.evaluate().isEmpty) {
+    for (final index in [1, 2, 0]) {
+      await tester.ensureVisible(
+        find.byKey(ValueKey('blocking-editor-tab-$index')),
+      );
+      await tester.tap(find.byKey(ValueKey('blocking-editor-tab-$index')));
+      await tester.pumpAndSettle();
+      if (target.evaluate().isNotEmpty) break;
+    }
+  }
   await tester.scrollUntilVisible(target, 170, scrollable: _outer);
   await tester.pumpAndSettle();
 }
 
 List<String> _visibleAppOrder(WidgetTester tester) => tester
-    .widget<ListView>(find.byKey(const ValueKey('blocking-app-list')))
-    .childrenDelegate
-    .letAppLabels();
-
-extension on SliverChildDelegate {
-  List<String> letAppLabels() {
-    final widgets = (this as SliverChildListDelegate).children;
-    return [
-      for (final tile in widgets.whereType<CheckboxListTile>())
-        ((tile.title! as Tooltip).child as Text).data!,
-    ];
-  }
-}
+    .widget<BlockingTargetList>(find.byType(BlockingTargetList))
+    .orderedIds
+    .map(
+      (id) =>
+          _catalog.firstWhere((app) => app['packageName'] == id)['label']
+              as String,
+    )
+    .toList();
 
 void main() {
   testWidgets(
@@ -123,7 +129,11 @@ void main() {
       await _reveal(tester, _windows);
       await tester.tap(_windows);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.byTooltip('Close'), -170, scrollable: _outer);
+      await tester.scrollUntilVisible(
+        find.byTooltip('Close'),
+        -170,
+        scrollable: _outer,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Close'));
       await tester.pumpAndSettle();
@@ -131,7 +141,7 @@ void main() {
       expect(find.text('Open editor'), findsOneWidget);
       await tester.tap(find.text('Open editor'));
       await tester.pumpAndSettle();
-    await _reveal(tester, _windows);
+      await _reveal(tester, _windows);
       expect(tester.widget<SwitchListTile>(_windows).value, isFalse);
       expect(_plan.windows, isEmpty);
       expect(tester.takeException(), isNull);
@@ -162,27 +172,32 @@ void main() {
     expect(submitted!.sites, _plan.sites);
   });
 
-  testWidgets(
-    'opening selected apps first; toggling never reorders the draft',
-    (tester) async {
-      await _open(tester);
-      await _reveal(tester, find.byKey(const ValueKey('blocking-app-list')));
-      final opening = _visibleAppOrder(tester);
-      expect(opening.take(2).toSet(), {'Instagram', 'Notes'});
-      expect(opening.skip(2).toList(), ['Calculator', 'YouTube', 'Puzzle']);
-      final selected = _app(opening.first);
-      await tester.ensureVisible(selected);
-      await tester.tap(selected);
-      await tester.pumpAndSettle();
-      expect(_visibleAppOrder(tester), opening);
-      final tile = tester.widget<CheckboxListTile>(selected);
-      expect(tile.value, isFalse);
-      expect(tile.contentPadding, EdgeInsets.zero);
-      expect(tile.checkboxScaleFactor, 1.25);
-      expect(_save.hitTestable(), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('selected apps first; deselection restores original position', (
+    tester,
+  ) async {
+    await _open(tester);
+    await _reveal(tester, find.byKey(const ValueKey('blocking-app-list')));
+    final opening = _visibleAppOrder(tester);
+    expect(opening.take(2).toSet(), {'Instagram', 'Notes'});
+    expect(opening.skip(2).toList(), ['Calculator', 'YouTube', 'Puzzle']);
+    final selected = _app(opening.first);
+    await tester.ensureVisible(selected);
+    await tester.tap(selected);
+    await tester.pumpAndSettle();
+    expect(_visibleAppOrder(tester), [
+      'Notes',
+      'Calculator',
+      'Instagram',
+      'YouTube',
+      'Puzzle',
+    ]);
+    final tile = tester.widget<CheckboxListTile>(selected);
+    expect(tile.value, isFalse);
+    expect(tile.contentPadding, EdgeInsets.zero);
+    expect(tile.checkboxScaleFactor, 1.25);
+    expect(_save.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('disabled rule toggles hide settings and exclude them on Save', (
     tester,

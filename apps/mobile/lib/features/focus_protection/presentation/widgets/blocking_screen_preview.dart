@@ -83,7 +83,9 @@ class BlockingScreenPreview extends StatelessWidget {
     return Theme(
       data: theme,
       child: Material(
-        color: theme.scaffoldBackgroundColor,
+        // A preview is its own surface. Glass's transparent scaffold would
+        // otherwise expose the underlying page's text through the sheet.
+        color: theme.colorScheme.surfaceContainerLowest,
         child: LayoutBuilder(
           builder: (context, constraints) => SingleChildScrollView(
             child: ConstrainedBox(

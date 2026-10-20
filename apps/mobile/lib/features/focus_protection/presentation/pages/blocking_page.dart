@@ -30,6 +30,8 @@ import '../widgets/blocking_screen_preview.dart';
 import '../widgets/blocking_custom_editor.dart';
 import '../widgets/blocking_plan_summary.dart';
 import '../widgets/blocking_reorder_handle.dart';
+import '../widgets/blocking_editor_tabs.dart';
+import '../widgets/blocking_target_list.dart';
 
 IconData blockingIcon(String name) => switch (name) {
   'work' => AppIcons.briefcaseOutlined,
@@ -2261,14 +2263,17 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
   late final TextEditingController _name;
   final _domain = TextEditingController();
   final _appScroll = ScrollController();
-  final _appsKey = GlobalKey();
+  final _siteScroll = ScrollController();
+  final _appListKey = GlobalKey<BlockingTargetListState>();
+  final _siteListKey = GlobalKey<BlockingTargetListState>();
   String _icon = 'shield', _search = '';
   String? _error;
   bool _saving = false;
-  bool _focus = true, _always = false, _appsExpanded = true;
+  bool _focus = true, _always = false;
   bool _windowsEnabled = false, _budgetEnabled = false;
-  late final List<Map> _orderedCatalog;
-  String? _firstUnselectedApp;
+  int _section = 0;
+  final _sectionOffsets = [0.0, 0.0, 0.0];
+  late final List<String> _siteOrder;
   final Set<String> _siteChoices = {};
   String _siteCategory = 'Social media';
   int _budget = 0, _until = 0;
@@ -2300,20 +2305,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     _windowsEnabled = _windows.isNotEmpty;
     _budgetEnabled = _budget > 0;
     _siteChoices.addAll(_sites);
-    // Snapshot the opening selection: checking a row must not move it away
-    // from the user's finger. Reopening applies the new selection order.
-    _orderedCatalog = [
-      ...widget.catalog.where((a) => _apps.contains(a['packageName'])),
-      ...widget.catalog.where((a) => !_apps.contains(a['packageName'])),
-    ];
-    if (_orderedCatalog.any((a) => _apps.contains(a['packageName']))) {
-      for (final app in _orderedCatalog) {
-        if (!_apps.contains(app['packageName'])) {
-          _firstUnselectedApp = app['packageName'] as String;
-          break;
-        }
-      }
-    }
+    _siteOrder = {..._sites, ..._socialSites, ..._videoSites}.toList();
     for (final app in widget.catalog) {
       final data = app['icon'] as String? ?? '';
       if (data.isNotEmpty) {
@@ -2329,19 +2321,68 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     _name.dispose();
     _domain.dispose();
     _appScroll.dispose();
+    _siteScroll.dispose();
     super.dispose();
   }
 
-  void _toggleApps({bool reveal = false}) {
+  void _selectSection(int index, ScrollController controller) {
     if (_saving) return;
-    setState(() => _appsExpanded = !_appsExpanded);
-    if (reveal) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _appsKey.currentContext == null) return;
-        Scrollable.ensureVisible(_appsKey.currentContext!);
-      });
+    if (controller.hasClients) _sectionOffsets[_section] = controller.offset;
+    FocusScope.of(context).unfocus();
+    setState(() => _section = index);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _section != index || !controller.hasClients) return;
+      controller.jumpTo(
+        _sectionOffsets[index].clamp(0.0, controller.position.maxScrollExtent),
+      );
+    });
+  }
+
+  Future<void> _chooseIcon() async {
+    final icon = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Plan icon'),
+        content: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final id in _iconNames)
+              IconButton.filledTonal(
+                tooltip: id,
+                isSelected: _icon == id,
+                icon: Icon(blockingIcon(id)),
+                onPressed: () => Navigator.pop(ctx, id),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (mounted && !_saving && icon != null) setState(() => _icon = icon);
+  }
+
+  void _changeApps(VoidCallback change, {Set<String> moved = const {}}) {
+    final list = _appListKey.currentState;
+    if (list == null) {
+      setState(change);
+    } else {
+      list.preserveViewport(() => setState(change), moved: moved);
     }
   }
+
+  static const _socialSites = [
+    'instagram.com',
+    'reddit.com',
+    'x.com',
+    'facebook.com',
+  ];
+  static const _videoSites = ['youtube.com', 'twitch.tv'];
 
   Set<String> _presetApps(bool games) => widget.catalog
       .where(
@@ -2357,7 +2398,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     selected: packages.isNotEmpty && _apps.containsAll(packages),
     onSelected: _saving || packages.isEmpty
         ? null
-        : (_) => setState(() => _apps.addAll(packages)),
+        : (_) => _changeApps(() => _apps.addAll(packages), moved: packages),
   );
 
   Future<void> _finish() async {
@@ -2505,13 +2546,91 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
       setState(() => _error = 'Enter a domain, e.g. instagram.com');
       return;
     }
-    setState(() {
+    void add() => setState(() {
       _sites.add(host);
       _siteChoices.add(host);
+      if (!_siteOrder.contains(host)) _siteOrder.add(host);
       _domain.clear();
       _error = null;
     });
+    final list = _siteListKey.currentState;
+    if (list == null) {
+      add();
+    } else {
+      list.preserveViewport(add, moved: {host});
+    }
   }
+
+  Widget _nameField() => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(top: 4, right: 12),
+        child: IconButton(
+          tooltip: 'Plan icon',
+          onPressed: _saving ? null : _chooseIcon,
+          icon: Icon(blockingIcon(_icon), size: 36),
+        ),
+      ),
+      Expanded(
+        child: TextField(
+          controller: _name,
+          readOnly: _saving,
+          maxLength: 60,
+          decoration: const InputDecoration(labelText: 'Name'),
+        ),
+      ),
+    ],
+  );
+
+  Widget _footerActions(ScrollController controller) => LayoutBuilder(
+    builder: (context, bounds) {
+      final toggle = IconButton(
+        key: const ValueKey('blocking-footer-apps-toggle'),
+        onPressed: () => _selectSection(_section == 1 ? 0 : 1, controller),
+        tooltip: _section == 1 ? 'Show rules' : 'Choose apps',
+        icon: Icon(_section == 1 ? AppIcons.expandLess : AppIcons.expandMore),
+      );
+      final count = Text(
+        '${_apps.length} apps · ${_sites.length} sites',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+      final save = FilledButton(
+        onPressed: _saving ? null : _finish,
+        child: _saving
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Save'),
+      );
+      if (bounds.maxWidth < 340 &&
+          MediaQuery.textScalerOf(context).scale(14) > 20) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                toggle,
+                Expanded(child: count),
+              ],
+            ),
+            const SizedBox(height: 8),
+            save,
+          ],
+        );
+      }
+      return Row(
+        children: [
+          toggle,
+          Expanded(child: count),
+          const SizedBox(width: 8),
+          save,
+        ],
+      );
+    },
+  );
 
   Future<void> _customMinutes(bool budget) async {
     final value = await showDialog<int>(
@@ -2548,351 +2667,380 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
       maxChildSize: .96,
       expand: false,
       builder: (ctx, controller) => SafeArea(
-        child: ExcludeFocus(
-          excluding: _saving,
-          child: AbsorbPointer(
-            absorbing: _saving,
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    key: const ValueKey('blocking-editor-scroll'),
-                    controller: controller,
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.md,
-                      AppSpacing.sm,
-                      AppSpacing.md,
-                      MediaQuery.viewInsetsOf(ctx).bottom + AppSpacing.lg,
-                    ),
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              widget.plan == null ? 'New plan' : 'Edit plan',
-                              style: Theme.of(ctx).textTheme.titleLarge,
-                            ),
+        child: LayoutBuilder(
+          builder: (context, bounds) => SizedBox(
+            height: bounds.maxHeight.clamp(
+              0.0,
+              MediaQuery.sizeOf(ctx).height -
+                  MediaQuery.viewInsetsOf(ctx).bottom -
+                  MediaQuery.paddingOf(ctx).bottom,
+            ),
+            child: ExcludeFocus(
+              excluding: _saving,
+              child: AbsorbPointer(
+                absorbing: _saving,
+                child: Column(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: bounds.maxHeight * .4,
+                      ),
+                      child: SingleChildScrollView(
+                        primary: false,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
                           ),
-                          IconButton(
-                            tooltip: 'Close',
-                            onPressed: _saving
-                                ? null
-                                : () => Navigator.pop(ctx),
-                            icon: const Icon(AppIcons.close),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Center(child: Icon(blockingIcon(_icon), size: 48)),
-                      const SizedBox(height: AppSpacing.sm),
-                      TextField(
-                        controller: _name,
-                        readOnly: _saving,
-                        maxLength: 60,
-                        decoration: const InputDecoration(labelText: 'Name'),
-                      ),
-                      Wrap(
-                        spacing: AppSpacing.sm,
-                        children: [
-                          for (final name in _iconNames)
-                            IconButton(
-                              tooltip: name,
-                              isSelected: _icon == name,
-                              onPressed: () => setState(() => _icon = name),
-                              icon: Icon(blockingIcon(name)),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      AppSurface(
-                        key: const ValueKey('blocking-rules'),
-                        variant: AppSurfaceVariant.subtle,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Rules',
-                              style: Theme.of(ctx).textTheme.titleMedium,
-                            ),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(AppIcons.timerOutlined),
-                              title: const Text('Focus session'),
-                              value: _focus,
-                              onChanged: (v) => setState(() => _focus = v),
-                            ),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(AppIcons.shieldOutlined),
-                              title: const Text('Always'),
-                              value: _always,
-                              onChanged: (v) => setState(() => _always = v),
-                            ),
-                            SwitchListTile(
-                              key: const ValueKey('blocking-windows-toggle'),
-                              contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(AppIcons.schedule),
-                              title: const Text('Time windows'),
-                              value: _windowsEnabled,
-                              onChanged: (v) =>
-                                  setState(() => _windowsEnabled = v),
-                            ),
-                            if (_windowsEnabled) ...[
-                              for (
-                                var index = 0;
-                                index < _windows.length;
-                                index++
-                              )
-                                ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(
-                                    '${_clock(_windows[index].start)}–${_clock(_windows[index].end)}',
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      widget.plan == null
+                                          ? 'New plan'
+                                          : 'Edit plan',
+                                      style: Theme.of(ctx).textTheme.titleLarge,
+                                    ),
                                   ),
-                                  subtitle: Text(
-                                    _windows[index].days
-                                        .map(
-                                          (d) =>
-                                              _BlockingPageState._dayNames[d -
-                                                  1],
-                                        )
-                                        .join(' '),
-                                  ),
-                                  onTap: () => _window(index),
-                                  trailing: IconButton(
-                                    tooltip: 'Remove time',
+                                  IconButton(
+                                    tooltip: 'Close',
+                                    onPressed: _saving
+                                        ? null
+                                        : () => Navigator.pop(ctx),
                                     icon: const Icon(AppIcons.close),
-                                    onPressed: () => setState(
-                                      () => _windows.removeAt(index),
-                                    ),
                                   ),
-                                ),
-                              TextButton.icon(
-                                onPressed: _windows.length < 12
-                                    ? _window
-                                    : null,
-                                icon: const Icon(AppIcons.schedule),
-                                label: const Text('Add time'),
-                              ),
-                            ],
-                            SwitchListTile(
-                              key: const ValueKey('blocking-budget-toggle'),
-                              contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(AppIcons.hourglass),
-                              title: const Text('Shared daily budget'),
-                              value: _budgetEnabled,
-                              onChanged:
-                                  widget.usageGranted ||
-                                      (widget.plan?.budget ?? 0) > 0
-                                  ? (v) => setState(() {
-                                      _budgetEnabled = v;
-                                      if (v && _budget == 0) {
-                                        _budget = widget.usageGranted
-                                            ? 45
-                                            : widget.plan!.budget;
-                                      }
-                                    })
-                                  : null,
-                            ),
-                            if (_budgetEnabled) ...[
-                              DropdownButtonFormField<int>(
-                                key: ValueKey('budget-$_budget'),
-                                initialValue: _budget,
-                                decoration: const InputDecoration(
-                                  labelText: 'Daily budget',
-                                ),
-                                items: [
-                                  for (final minutes
-                                      in ({
-                                            15,
-                                            30,
-                                            45,
-                                            60,
-                                            90,
-                                            120,
-                                            180,
-                                            240,
-                                            _budget,
-                                          }
-                                          .where(
-                                            (v) =>
-                                                widget.usageGranted ||
-                                                v <= (widget.plan?.budget ?? 0),
-                                          )
-                                          .toList()
-                                        ..sort()))
-                                    DropdownMenuItem(
-                                      value: minutes,
-                                      child: Text(
-                                        minutes == 0 ? 'Off' : '${minutes}m',
-                                      ),
-                                    ),
                                 ],
-                                onChanged:
-                                    widget.usageGranted ||
-                                        (widget.plan?.budget ?? 0) > 0
-                                    ? (v) => setState(() => _budget = v!)
-                                    : null,
                               ),
-                              if (widget.usageGranted ||
-                                  (widget.plan?.budget ?? 0) > 0)
-                                TextButton(
-                                  onPressed: () => _customMinutes(true),
-                                  child: const Text('Custom budget'),
-                                ),
-                              if (!widget.usageGranted)
-                                const Text('Enable budgets on Plans first.'),
+                              _nameField(),
+                              BlockingEditorTabs(
+                                labels: [
+                                  'Rules',
+                                  'Apps ${_apps.length}',
+                                  'Websites ${_sites.length}',
+                                ],
+                                selected: _section,
+                                onChanged: _saving
+                                    ? null
+                                    : (index) =>
+                                          _selectSection(index, controller),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
                             ],
-                            const SizedBox(height: AppSpacing.sm),
-                            const Divider(),
-                            Text(
-                              'Block now',
-                              style: Theme.of(ctx).textTheme.titleSmall,
-                            ),
-                            Wrap(
-                              spacing: AppSpacing.xs,
-                              children: [
-                                for (final minutes in [15, 60, 120])
-                                  ActionChip(
-                                    label: Text(
-                                      minutes == 15
-                                          ? '15m'
-                                          : '${minutes ~/ 60}h',
-                                    ),
-                                    onPressed: () => setState(
-                                      () => _until = DateTime.now()
-                                          .add(Duration(minutes: minutes))
-                                          .millisecondsSinceEpoch,
-                                    ),
-                                  ),
-                                if (_until > 0)
-                                  ActionChip(
-                                    label: const Text('Clear timer'),
-                                    onPressed: () => setState(() => _until = 0),
-                                  ),
-                                ActionChip(
-                                  label: const Text('Custom'),
-                                  onPressed: () => _customMinutes(false),
-                                ),
-                              ],
-                            ),
-                            if (_until > DateTime.now().millisecondsSinceEpoch)
-                              Text(
-                                'Until ${TimeOfDay.fromDateTime(DateTime.fromMillisecondsSinceEpoch(_until)).format(ctx)}',
-                              ),
-                          ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      AppSurface(
-                        key: _appsKey,
-                        variant: AppSurfaceVariant.subtle,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('Apps · ${_apps.length}'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
+                    ),
+                    Expanded(
+                      child: ListView(
+                        key: const ValueKey('blocking-editor-scroll'),
+                        controller: controller,
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.md,
+                          AppSpacing.sm,
+                          AppSpacing.md,
+                          AppSpacing.lg,
+                        ),
+                        children: [
+                          if (_section == 0)
+                            AppSurface(
+                              key: const ValueKey('blocking-rules'),
+                              variant: AppSurfaceVariant.subtle,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  if (!_appsExpanded)
-                                    for (final package in _apps.take(4))
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: AppSpacing.xs,
+                                  Text(
+                                    'Rules',
+                                    style: Theme.of(ctx).textTheme.titleMedium,
+                                  ),
+                                  SwitchListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    secondary: const Icon(
+                                      AppIcons.timerOutlined,
+                                    ),
+                                    title: const Text('Focus session'),
+                                    value: _focus,
+                                    onChanged: (v) =>
+                                        setState(() => _focus = v),
+                                  ),
+                                  SwitchListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    secondary: const Icon(
+                                      AppIcons.shieldOutlined,
+                                    ),
+                                    title: const Text('Always'),
+                                    value: _always,
+                                    onChanged: (v) =>
+                                        setState(() => _always = v),
+                                  ),
+                                  SwitchListTile(
+                                    key: const ValueKey(
+                                      'blocking-windows-toggle',
+                                    ),
+                                    contentPadding: EdgeInsets.zero,
+                                    secondary: const Icon(AppIcons.schedule),
+                                    title: const Text('Time windows'),
+                                    value: _windowsEnabled,
+                                    onChanged: (v) =>
+                                        setState(() => _windowsEnabled = v),
+                                  ),
+                                  if (_windowsEnabled) ...[
+                                    for (
+                                      var index = 0;
+                                      index < _windows.length;
+                                      index++
+                                    )
+                                      ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(
+                                          '${_clock(_windows[index].start)}–${_clock(_windows[index].end)}',
                                         ),
-                                        child: Tooltip(
-                                          message: package,
-                                          child: _icons[package] == null
-                                              ? const Icon(
-                                                  AppIcons.devicesOutlined,
-                                                  size: 16,
-                                                )
-                                              : Image.memory(
-                                                  _icons[package]!,
-                                                  width: 16,
-                                                  height: 16,
-                                                ),
+                                        subtitle: Text(
+                                          _windows[index].days
+                                              .map(
+                                                (d) => _BlockingPageState
+                                                    ._dayNames[d - 1],
+                                              )
+                                              .join(' '),
+                                        ),
+                                        onTap: () => _window(index),
+                                        trailing: IconButton(
+                                          tooltip: 'Remove time',
+                                          icon: const Icon(AppIcons.close),
+                                          onPressed: () => setState(
+                                            () => _windows.removeAt(index),
+                                          ),
                                         ),
                                       ),
-                                  Icon(
-                                    _appsExpanded
-                                        ? AppIcons.expandLess
-                                        : AppIcons.expandMore,
+                                    TextButton.icon(
+                                      onPressed: _windows.length < 12
+                                          ? _window
+                                          : null,
+                                      icon: const Icon(AppIcons.schedule),
+                                      label: const Text('Add time'),
+                                    ),
+                                  ],
+                                  SwitchListTile(
+                                    key: const ValueKey(
+                                      'blocking-budget-toggle',
+                                    ),
+                                    contentPadding: EdgeInsets.zero,
+                                    secondary: const Icon(AppIcons.hourglass),
+                                    title: const Text('Shared daily budget'),
+                                    value: _budgetEnabled,
+                                    onChanged:
+                                        widget.usageGranted ||
+                                            (widget.plan?.budget ?? 0) > 0
+                                        ? (v) => setState(() {
+                                            _budgetEnabled = v;
+                                            if (v && _budget == 0) {
+                                              _budget = widget.usageGranted
+                                                  ? 45
+                                                  : widget.plan!.budget;
+                                            }
+                                          })
+                                        : null,
                                   ),
-                                ],
-                              ),
-                              onTap: _toggleApps,
-                            ),
-                            if (_appsExpanded) ...[
-                              TextField(
-                                readOnly: _saving,
-                                decoration: const InputDecoration(
-                                  labelText: 'Search apps',
-                                ),
-                                onChanged: (v) =>
-                                    setState(() => _search = v.toLowerCase()),
-                              ),
-                              Wrap(
-                                spacing: AppSpacing.sm,
-                                children: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        setState(() => _apps.clear()),
-                                    child: const Text('Clear'),
+                                  if (_budgetEnabled) ...[
+                                    DropdownButtonFormField<int>(
+                                      key: ValueKey('budget-$_budget'),
+                                      initialValue: _budget,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Daily budget',
+                                      ),
+                                      items: [
+                                        for (final minutes
+                                            in ({
+                                                  15,
+                                                  30,
+                                                  45,
+                                                  60,
+                                                  90,
+                                                  120,
+                                                  180,
+                                                  240,
+                                                  _budget,
+                                                }
+                                                .where(
+                                                  (v) =>
+                                                      widget.usageGranted ||
+                                                      v <=
+                                                          (widget
+                                                                  .plan
+                                                                  ?.budget ??
+                                                              0),
+                                                )
+                                                .toList()
+                                              ..sort()))
+                                          DropdownMenuItem(
+                                            value: minutes,
+                                            child: Text(
+                                              minutes == 0
+                                                  ? 'Off'
+                                                  : '${minutes}m',
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged:
+                                          widget.usageGranted ||
+                                              (widget.plan?.budget ?? 0) > 0
+                                          ? (v) => setState(() => _budget = v!)
+                                          : null,
+                                    ),
+                                    if (widget.usageGranted ||
+                                        (widget.plan?.budget ?? 0) > 0)
+                                      TextButton(
+                                        onPressed: () => _customMinutes(true),
+                                        child: const Text('Custom budget'),
+                                      ),
+                                    if (!widget.usageGranted)
+                                      const Text(
+                                        'Enable budgets on Plans first.',
+                                      ),
+                                  ],
+                                  const SizedBox(height: AppSpacing.sm),
+                                  const Divider(),
+                                  Text(
+                                    'Block now',
+                                    style: Theme.of(ctx).textTheme.titleSmall,
                                   ),
-                                  _presetChip(
-                                    'Social media',
-                                    _presetApps(false),
-                                  ),
-                                  _presetChip('Games', _presetApps(true)),
-                                ],
-                              ),
-                              ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxHeight:
-                                      (MediaQuery.sizeOf(ctx).height * .35)
-                                          .clamp(128.0, 300.0),
-                                ),
-                                child: Scrollbar(
-                                  controller: _appScroll,
-                                  thumbVisibility: true,
-                                  child: ListView(
-                                    key: const ValueKey('blocking-app-list'),
-                                    controller: _appScroll,
-                                    primary: false,
-                                    shrinkWrap: true,
+                                  Wrap(
+                                    spacing: AppSpacing.xs,
                                     children: [
-                                      for (final app in _orderedCatalog.where(
-                                        (a) =>
-                                            '${a['label']} ${a['packageName']}'
-                                                .toLowerCase()
-                                                .contains(_search),
-                                      )) ...[
-                                        if (_search.isEmpty &&
-                                            app['packageName'] ==
-                                                _firstUnselectedApp)
-                                          const Divider(height: 1),
-                                        CheckboxListTile(
+                                      for (final minutes in [15, 60, 120])
+                                        ActionChip(
+                                          label: Text(
+                                            minutes == 15
+                                                ? '15m'
+                                                : '${minutes ~/ 60}h',
+                                          ),
+                                          onPressed: () => setState(
+                                            () => _until = DateTime.now()
+                                                .add(Duration(minutes: minutes))
+                                                .millisecondsSinceEpoch,
+                                          ),
+                                        ),
+                                      if (_until > 0)
+                                        ActionChip(
+                                          label: const Text('Clear timer'),
+                                          onPressed: () =>
+                                              setState(() => _until = 0),
+                                        ),
+                                      ActionChip(
+                                        label: const Text('Custom'),
+                                        onPressed: () => _customMinutes(false),
+                                      ),
+                                    ],
+                                  ),
+                                  if (_until >
+                                      DateTime.now().millisecondsSinceEpoch)
+                                    Text(
+                                      'Until ${TimeOfDay.fromDateTime(DateTime.fromMillisecondsSinceEpoch(_until)).format(ctx)}',
+                                    ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: AppSpacing.md),
+                          if (_section == 1)
+                            AppSurface(
+                              variant: AppSurfaceVariant.subtle,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    'Apps',
+                                    style: Theme.of(ctx).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  TextField(
+                                    readOnly: _saving,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Search apps',
+                                    ),
+                                    onChanged: (v) {
+                                      setState(() => _search = v.toLowerCase());
+                                      if (_appScroll.hasClients) {
+                                        _appScroll.jumpTo(0);
+                                      }
+                                    },
+                                  ),
+                                  Wrap(
+                                    spacing: AppSpacing.sm,
+                                    children: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            _changeApps(() => _apps.clear()),
+                                        child: const Text('Clear'),
+                                      ),
+                                      _presetChip(
+                                        'Social media',
+                                        _presetApps(false),
+                                      ),
+                                      _presetChip('Games', _presetApps(true)),
+                                    ],
+                                  ),
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxHeight:
+                                          (MediaQuery.sizeOf(ctx).height * .35)
+                                              .clamp(128.0, 300.0),
+                                    ),
+                                    child: BlockingTargetList(
+                                      key: _appListKey,
+                                      ids: widget.catalog
+                                          .where(
+                                            (a) =>
+                                                _apps.contains(
+                                                  a['packageName'],
+                                                ) ||
+                                                '${a['label']} ${a['packageName']}'
+                                                    .toLowerCase()
+                                                    .contains(_search),
+                                          )
+                                          .map(
+                                            (a) => a['packageName'] as String,
+                                          )
+                                          .toSet()
+                                          .toList(),
+                                      selected: _apps,
+                                      controller: _appScroll,
+                                      listKey: const ValueKey(
+                                        'blocking-app-list',
+                                      ),
+                                      onChanged: (id, value) => setState(
+                                        () => value
+                                            ? _apps.add(id)
+                                            : _apps.remove(id),
+                                      ),
+                                      itemBuilder: (id, change) {
+                                        final app = widget.catalog.firstWhere(
+                                          (a) => a['packageName'] == id,
+                                        );
+                                        return CheckboxListTile(
+                                          key: ValueKey('blocking-app-$id'),
                                           contentPadding: EdgeInsets.zero,
                                           title: Tooltip(
-                                            message:
-                                                app['packageName'] as String,
+                                            message: id,
                                             child: Text(app['label'] as String),
                                           ),
-                                          secondary:
-                                              _icons[app['packageName']] == null
+                                          secondary: _icons[id] == null
                                               ? const Icon(
                                                   AppIcons.devicesOutlined,
                                                 )
                                               : Image.memory(
-                                                  _icons[app['packageName']]!,
+                                                  _icons[id]!,
                                                   width: 32,
                                                   height: 32,
+                                                  errorBuilder: (_, _, _) =>
+                                                      const SizedBox.square(
+                                                        dimension: 32,
+                                                        child: Icon(
+                                                          AppIcons
+                                                              .devicesOutlined,
+                                                        ),
+                                                      ),
                                                 ),
-                                          value: _apps.contains(
-                                            app['packageName'],
-                                          ),
+                                          value: _apps.contains(id),
                                           checkboxScaleFactor: 1.25,
                                           activeColor: Theme.of(
                                             ctx,
@@ -2906,185 +3054,172 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                             ).colorScheme.outline,
                                             width: 2,
                                           ),
-                                          onChanged: (v) => setState(
-                                            () => v!
-                                                ? _apps.add(
-                                                    app['packageName']
-                                                        as String,
-                                                  )
-                                                : _apps.remove(
-                                                    app['packageName'],
-                                                  ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      AppSurface(
-                        variant: AppSurfaceVariant.subtle,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Websites · ${_sites.length}',
-                              style: Theme.of(ctx).textTheme.titleMedium,
-                            ),
-                            if (!widget.websiteAllowed)
-                              const Text('Enable websites on Plans first.')
-                            else ...[
-                              TextField(
-                                controller: _domain,
-                                readOnly: _saving,
-                                decoration: InputDecoration(
-                                  labelText: 'Search or add domain',
-                                  suffixIcon: IconButton(
-                                    tooltip: 'Add website',
-                                    onPressed: _addDomain,
-                                    icon: const Icon(AppIcons.add),
-                                  ),
-                                ),
-                                onSubmitted: (_) => _addDomain(),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                              Wrap(
-                                spacing: AppSpacing.sm,
-                                children: [
-                                  for (final category in [
-                                    'Social media',
-                                    'Video',
-                                  ])
-                                    FilterChip(
-                                      label: Text(category),
-                                      selected: _siteCategory == category,
-                                      onSelected: (_) => setState(
-                                        () => _siteCategory = category,
-                                      ),
+                                          onChanged: (value) => change(value!),
+                                        );
+                                      },
                                     ),
+                                  ),
                                 ],
                               ),
-                            ],
-                            const Divider(),
-                            for (final domain
-                                in <String>{
-                                  ...?widget.plan?.sites,
-                                  ..._siteChoices,
-                                  if (widget.websiteAllowed)
-                                    ...(_siteCategory == 'Video'
-                                        ? ['youtube.com', 'twitch.tv']
-                                        : [
-                                            'instagram.com',
-                                            'reddit.com',
-                                            'x.com',
-                                            'facebook.com',
-                                          ]),
-                                }.where(
-                                  (d) =>
-                                      _domain.text.isEmpty ||
-                                      d.contains(_domain.text.toLowerCase()) ||
-                                      _sites.contains(d),
-                                ))
-                              CheckboxListTile(
-                                key: ValueKey('blocking-site-$domain'),
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(domain),
-                                secondary: blockingWebsiteIcon(domain),
-                                value: _sites.contains(domain),
-                                checkboxScaleFactor: 1.25,
-                                onChanged:
-                                    widget.websiteAllowed ||
-                                        (widget.plan?.sites.contains(domain) ??
-                                            false)
-                                    ? (v) => setState(
-                                        () => v!
-                                            ? _sites.add(domain)
-                                            : _sites.remove(domain),
-                                      )
-                                    : null,
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                  ),
-                ),
-                Padding(
-                  key: const ValueKey('blocking-save-footer'),
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.sm,
-                    AppSpacing.md,
-                    MediaQuery.viewInsetsOf(ctx).bottom + AppSpacing.sm,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_error != null)
-                        Semantics(
-                          liveRegion: true,
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.sm,
                             ),
-                            child: Text(
-                              _error!,
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(ctx).colorScheme.error,
+                          const SizedBox(height: AppSpacing.md),
+                          if (_section == 2)
+                            AppSurface(
+                              variant: AppSurfaceVariant.subtle,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    'Websites · ${_sites.length}',
+                                    style: Theme.of(ctx).textTheme.titleMedium,
                                   ),
-                            ),
-                          ),
-                        ),
-                      Row(
-                        children: [
-                          Semantics(
-                            expanded: _appsExpanded,
-                            child: IconButton(
-                              key: const ValueKey(
-                                'blocking-footer-apps-toggle',
-                              ),
-                              onPressed: () => _toggleApps(reveal: true),
-                              tooltip: _appsExpanded
-                                  ? 'Collapse apps'
-                                  : 'Expand apps',
-                              icon: Icon(
-                                _appsExpanded
-                                    ? AppIcons.expandLess
-                                    : AppIcons.expandMore,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              '${_apps.length} apps · ${_sites.length} sites',
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          FilledButton(
-                            onPressed: _saving ? null : _finish,
-                            child: _saving
-                                ? const SizedBox.square(
-                                    dimension: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                                  if (!widget.websiteAllowed)
+                                    const Text(
+                                      'Enable websites on Plans first.',
+                                    )
+                                  else ...[
+                                    TextField(
+                                      controller: _domain,
+                                      readOnly: _saving,
+                                      decoration: InputDecoration(
+                                        labelText: 'Search or add domain',
+                                        suffixIcon: IconButton(
+                                          tooltip: 'Add website',
+                                          onPressed: _addDomain,
+                                          icon: const Icon(AppIcons.add),
+                                        ),
+                                      ),
+                                      onSubmitted: (_) => _addDomain(),
+                                      onChanged: (_) => setState(() {}),
                                     ),
-                                  )
-                                : const Text('Save'),
-                          ),
+                                    Wrap(
+                                      spacing: AppSpacing.sm,
+                                      children: [
+                                        for (final category in [
+                                          'Social media',
+                                          'Video',
+                                        ])
+                                          FilterChip(
+                                            label: Text(category),
+                                            selected: _siteCategory == category,
+                                            onSelected: (_) => setState(
+                                              () => _siteCategory = category,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                  const Divider(),
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxHeight:
+                                          (MediaQuery.sizeOf(ctx).height * .35)
+                                              .clamp(128.0, 300.0),
+                                    ),
+                                    child: BlockingTargetList(
+                                      key: _siteListKey,
+                                      controller: _siteScroll,
+                                      listKey: const ValueKey(
+                                        'blocking-site-list',
+                                      ),
+                                      selected: _sites,
+                                      ids: _siteOrder
+                                          .where(
+                                            (d) =>
+                                                (_sites.contains(d) ||
+                                                    _siteChoices.contains(d) ||
+                                                    widget.websiteAllowed &&
+                                                        (_siteCategory ==
+                                                                    'Video'
+                                                                ? _videoSites
+                                                                : _socialSites)
+                                                            .contains(d)) &&
+                                                (_domain.text.isEmpty ||
+                                                    d.contains(
+                                                      _domain.text
+                                                          .toLowerCase(),
+                                                    ) ||
+                                                    _sites.contains(d)),
+                                          )
+                                          .toList(),
+                                      onChanged: (id, value) => setState(
+                                        () => value
+                                            ? _sites.add(id)
+                                            : _sites.remove(id),
+                                      ),
+                                      itemBuilder: (domain, change) =>
+                                          CheckboxListTile(
+                                            key: ValueKey(
+                                              'blocking-site-$domain',
+                                            ),
+                                            contentPadding: EdgeInsets.zero,
+                                            title: Text(domain),
+                                            secondary: blockingWebsiteIcon(
+                                              domain,
+                                            ),
+                                            value: _sites.contains(domain),
+                                            checkboxScaleFactor: 1.25,
+                                            onChanged:
+                                                widget.websiteAllowed ||
+                                                    (widget.plan?.sites
+                                                            .contains(domain) ??
+                                                        false)
+                                                ? (v) => change(v!)
+                                                : null,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: AppSpacing.md),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                    Padding(
+                      key: const ValueKey('blocking-save-footer'),
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.sm,
+                        AppSpacing.md,
+                        AppSpacing.sm,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_error != null)
+                            Semantics(
+                              liveRegion: true,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.sm,
+                                ),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxHeight: 80,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      _error!,
+                                      style: Theme.of(ctx).textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              ctx,
+                                            ).colorScheme.error,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          _footerActions(controller),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

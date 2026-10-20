@@ -49,6 +49,11 @@ Blocking editor labels are `Rules`, `Time windows`, `Shared daily budget`,
 `Block now` and `Search or add domain`. Detail controls appear only for enabled
 rules; permanent Any rule explanatory copy is omitted. Category suggestions
 are `Social media` and `Video` and do not silently check website targets.
+Editor sections are `Rules`, `Apps` and `Websites` with current selection counts.
+`Plan icon` opens the existing six choices. Customize sections are `Content`,
+`Style` and `Delay`, with `Expand preview` / `Close preview`; field labels,
+limits and saved meanings remain unchanged. The small delay illustration is
+read-only draft feedback, not a real unlock request or elapsed countdown.
 Locked plan taps use `Unlock Discipline to edit.` or `End Focus to edit.` rather
 than an unexpected overview. `Details` is an explicit read-only menu action.
 

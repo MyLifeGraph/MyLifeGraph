@@ -31,6 +31,60 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local Blocking editor sections — 2026-10-20
+
+Implementation verified against base `590ec88d02b7359bbe76b7bf801ae7ac293c7da6`:
+Plan editor Rules/Apps/Websites and Customize Content/Style/Delay reuse the
+existing draft/save/native seams. These local checks introduced no database or
+native policy change. Prior unrelated retention edits and output
+folders remain untouched.
+
+The complete local Blocking suite passes **253 tests** after the icon follow-up. New checks cover stable
+selected-first/original-restoration order and pixel-anchored single/bulk changes
+at 25/250 targets; all four themes at 320px/200% text with keyboard; retained
+drafts, all delay values, icon/appearance choices, unknown appearance keys and
+unchanged combined plan rules. Existing failure/retry, consent revocation,
+pending-write, Discipline/NFC lifecycle and navigation checks also pass. The
+name retains input focus when the keyboard opens. Scoped Flutter analysis of
+the feature and Blocking tests reports no issues. Documentation checks pass.
+
+Six icon follow-up checks additionally verify original native PNG byte identity
+through app selection/reorder, identical website selection/restoration behavior,
+six pinned local brand paths at the unchanged 24px size on all four themes, and
+neutral fallback for unknown/lookalike hosts. Android's catalog continues using
+PackageManager's installed drawable, never a website-logo substitute. Missing
+or undecodable app image data has a safe fallback. No runtime favicon/network
+request is introduced. Website icon before/after is also available locally in
+`.tools/blocking-editor-sections-20261020/icons.html`; its app sample catalog
+explicitly lacks Android icon bytes and is not a native launcher-icon screenshot.
+The final Flutter feature/Blocking-test analysis passes with no issues. A
+redundant direct-Dart diagnostic attempt encountered the known Windows
+performance-witness shutdown filesystem error 1920, not a source diagnostic;
+it does not replace the successful Flutter analysis evidence.
+
+The release preflight reproduced a visual-contract failure from two Material
+Icons in Customize. Both now use matching regular-weight Phosphor aliases in
+AppIcons (palette/expand), without changing labels, geometry or behavior.
+
+Opt-in `blocking_editor_route_catalog_test.dart` renders the real local Flutter
+route with synthetic device state on the Windows target. Its ten new 390x844
+captures and eight original pre-change captures are compared in the ignored
+`.tools/blocking-editor-sections-20261020/index.html`. The gallery checker
+verifies dimensions, all referenced files and unchanged original SHA-256 values;
+selected images are visually inspected. These are not physical Android shots,
+and the labelled desktop preview is not proof of native preview composition or
+real NFC/background behavior. No physical device was used for this task.
+
+The exact-base affected selector selects Full, including pre-existing unrelated
+retention/output paths. It was attempted through installed Git Bash and stops
+at the existing Windows `setsid` prerequisite in the source harness. This is
+not a passing full/Linux/release gate. Logs and screenshot fixtures are retained
+under the local task folder. Those local checks did not publish a GitHub release,
+APK or deployment. Subsequent delivery needs exact-commit CI/signing/live proof.
+The owner subsequently authorized release delivery and explicitly requested
+focused automated checking without a connected phone; physical-device/NFC/OEM
+acceptance therefore remains an acknowledged, unclaimed release limitation.
+
 ### Published RC35 reliability and Streak grace — 2026-10-17
 
 PR [58](https://github.com/MyLifeGraph/MyLifeGraph/pull/58) merged normally after
