@@ -31,6 +31,61 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC36 Blocking editors — 2026-10-20
+
+PR [60](https://github.com/MyLifeGraph/MyLifeGraph/pull/60) merged normally after
+candidate full run `39469824147` and PR run `39469824595` passed. Release Main
+`d0c36c04026fb85be37ef67daebacd3c9a9ff44c` has the same tree as candidate
+`8ac7d3ef87d206da432cc355900ddf543bf539b2`. Exact-Main full run `39471977220`
+passes all seven jobs: **1986 Flutter tests**, Android JVM/Lint, **2031 backend
+passes / 2 skips**, docs/visual, debug web, fresh migrations/pgTAP and **eight
+browser journeys**. Database evidence includes **715 assertions / 36 files**,
+isolated compatibility harnesses and restore/deletion replay. Focused local
+release probes pass 30 tests and a subsequent 32-test icon-vocabulary follow-up.
+
+Tagged signing run `39472014307` passes. Immutable annotated tag
+`v0.1.0-pilot.1-rc.36` names the release Main above; the configured actor's tag
+creation restriction bypass was reported, with no protection/rule changes.
+[RC36](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.36)
+is normal/non-draft/non-prerelease, release id `418724519`, published
+`2026-10-20T18:23:57Z`. Package `com.mylifegraph.app`, versionCode `10000132`,
+APK **153405729 bytes**, asset id `660115576`, SHA-256
+`b736a967b2f640b8427eb383c7bd868f310ab8f1a80fc2b3b4624f4593cdb74e`.
+Independent local `apksigner` verifies v2 signing and the unchanged certificate
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`;
+`aapt` independently confirms package/version identity. Existing Android Studio
+JBR supplies Java for this check. Four-file metadata/checksum validation passes;
+source CycloneDX SHA-256 is
+`ee4ef16df8183d2a6f274bddb75421c98754c08a0d1f877b8cfbed3462d06637`.
+
+The installed VPS helper prepares/promotes the exact tagged source without
+reserve failure and reports Coach ready. Public health/readiness and both
+production web origins independently pass with this exact source. Database
+identity remains **83 migrations**, head
+`20261006135421_coach_operator_sol61_standard.sql`, digest
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+One additional immediate helper check failed at `health_check.py`; two subsequent
+checks passed with `public_api_and_coach_ready: true`. No authenticated end-user
+Coach turn or physical Android/NFC/OEM test is inferred from readiness.
+Vercel app deployment `dpl_G55pTGnPoA2NmQrmcSHmDii2SGwq` is READY for release
+Main. Both public app origins return HTTP 200/CSP and embed the exact Main SHA.
+Website source/configuration, login connections, provider model/reasoning and
+database schema are unchanged. The owner explicitly accepted automated tests
+without an attached phone.
+
+Bounded Vercel auto retention removed exactly two obsolete app deployments
+(`dpl_BSvRQ5imofGBDVBcPariwGyCUQia`, `dpl_57oBby1SLnrSkfTHcN8aVJX6QpfD`),
+preserving live/two trustworthy prior sources and all website deployments.
+Laptop and VM finalizers independently verify the non-draft publication, tag,
+all uploaded asset identities/digests and downloaded SHA-256 bytes. Their fresh
+dry-run/apply removes only the registered RC35 bundle, **153681211 bytes on each
+machine**. Laptop retains oldest RC6/newest RC36; VM oldest RC21/newest RC36.
+Original download/source copies, unknown files and server active/rollback
+versions are not deleted. VM verified source copy remains at
+`/home/codex/code/MyLifeGraph/.tools/rc36-published.F3Dm6THQ`.
+The pre-existing unrelated retention source/docs edits were not published or
+used for cleanup; the laptop runs an isolated copy of the committed tool.
+
 ### Local Blocking editor sections — 2026-10-20
 
 Implementation verified against base `590ec88d02b7359bbe76b7bf801ae7ac293c7da6`:
