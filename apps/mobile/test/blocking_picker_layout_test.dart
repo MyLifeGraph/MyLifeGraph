@@ -94,7 +94,7 @@ void main() {
     (320.0, 2.0, 0.0),
     (320.0, 2.0, 300.0),
   ]) {
-    testWidgets('Save and collapse reachable with 103 apps at $setting', (
+    testWidgets('Save and section switch reachable with 103 apps at $setting', (
       tester,
     ) async {
       await _pumpEditor(
@@ -119,17 +119,22 @@ void main() {
       expect(_toggle.hitTestable(), findsOneWidget);
       await tester.tap(_toggle);
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('blocking-app-list')), findsOneWidget);
+      await tester.tap(_toggle);
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('blocking-app-list')), findsNothing);
       expect(_save.hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('presets reflect full selection, collapse/search preserve it', (
+  testWidgets('presets reflect full selection, sections/search preserve it', (
     tester,
   ) async {
     BlockingPlan? submitted;
     await _pumpEditor(tester, save: (plan) async => submitted = plan);
+    await tester.tap(_toggle);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.widgetWithText(FilterChip, 'Social media').first,
       250,
@@ -157,7 +162,9 @@ void main() {
     expect(tester.widget<FilterChip>(social).selected, isFalse);
     await tester.tap(social);
     await tester.pumpAndSettle();
-    final appsTop = tester.getTopLeft(find.text('Apps · 4'));
+    final appsTop = tester.getTopLeft(
+      find.byKey(const ValueKey('blocking-editor-tab-1')),
+    );
     final footer = tester.getRect(
       find.byKey(const ValueKey('blocking-save-footer')),
     );
@@ -166,14 +173,17 @@ void main() {
       const Offset(0, -500),
     );
     await tester.pumpAndSettle();
-    expect(tester.getTopLeft(find.text('Apps · 4')), appsTop);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('blocking-editor-tab-1'))),
+      appsTop,
+    );
     expect(
       tester.getRect(find.byKey(const ValueKey('blocking-save-footer'))),
       footer,
     );
     await tester.tap(_toggle);
     await tester.pumpAndSettle();
-    expect(find.text('Apps · 4'), findsOneWidget);
+    expect(find.byKey(const ValueKey('blocking-app-list')), findsNothing);
     await tester.tap(_toggle);
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -231,15 +241,15 @@ void main() {
       await _pumpEditor(tester, modal: true);
       await tester.tap(_toggle);
       await tester.pumpAndSettle();
-      await tester.tap(_toggle);
-      await tester.pumpAndSettle();
       expect(
         find.widgetWithText(FilterChip, 'Social media').first.hitTestable(),
         findsOneWidget,
       );
       await tester.tap(find.widgetWithText(FilterChip, 'Social media').first);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Apps · 3'));
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('blocking-editor-tab-1')),
+      );
       await tester.pumpAndSettle();
       await captureCatalog(tester, 'blocking-picker-expanded');
       await tester.tap(_toggle);

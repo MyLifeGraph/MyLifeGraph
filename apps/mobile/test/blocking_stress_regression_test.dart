@@ -427,11 +427,11 @@ void main() {
     tester,
   ) async {
     await _retainedEditor(tester);
-    await tester.scrollUntilVisible(
-      find.textContaining('Websites ·'),
-      200,
-      scrollable: _mainScroll,
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('blocking-editor-tab-2')),
     );
+    await tester.tap(find.byKey(const ValueKey('blocking-editor-tab-2')));
+    await tester.pumpAndSettle();
     await tester.drag(
       find.byKey(const ValueKey('blocking-editor-scroll')),
       const Offset(0, -500),

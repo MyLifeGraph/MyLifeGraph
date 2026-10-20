@@ -172,9 +172,36 @@ Future<void> _openOrder(WidgetTester tester, _OrderGateway gateway) async {
 }
 
 Future<void> _showCustomControl(WidgetTester tester, Finder control) async {
+  if (control.evaluate().isEmpty) {
+    for (final section in [1, 2, 0]) {
+      await tester.ensureVisible(
+        find.byKey(ValueKey('blocking-editor-tab-$section')),
+      );
+      await tester.tap(find.byKey(ValueKey('blocking-editor-tab-$section')));
+      await tester.pumpAndSettle();
+      final position = tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byKey(const ValueKey('blocking-custom-scroll')),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position;
+      position.jumpTo(0);
+      await tester.pumpAndSettle();
+      while (control.evaluate().isEmpty &&
+          position.pixels < position.maxScrollExtent) {
+        position.jumpTo(
+          (position.pixels + 180).clamp(0, position.maxScrollExtent),
+        );
+        await tester.pumpAndSettle();
+      }
+      if (control.evaluate().isNotEmpty) break;
+    }
+  }
   final scroller = find
       .descendant(
-        of: find.byType(BlockingCustomEditor),
+        of: find.byKey(const ValueKey('blocking-custom-scroll')),
         matching: find.byType(Scrollable),
       )
       .first;
@@ -382,6 +409,7 @@ void main() {
       );
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
+      await _showCustomControl(tester, find.byTooltip('sleep'));
       await tester.tap(find.byTooltip('sleep'));
       await tester.pumpAndSettle();
       expect(
@@ -556,6 +584,7 @@ void main() {
           await tester.pumpAndSettle();
           await captureCatalog(tester, 'blocking-editor-${width.toInt()}');
           await _showCustomControl(tester, find.text('More delays'));
+          await _showCustomControl(tester, find.text('Compact'));
           final choices = ['Compact', 'Balanced', 'Spacious']
               .map(
                 (label) =>
@@ -824,6 +853,13 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'My edited plan');
     tester.view.viewInsets = const FakeViewPadding(bottom: 250);
     await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<EditableText>(find.byType(EditableText).first)
+          .focusNode
+          .hasFocus,
+      isTrue,
+    );
     expect(tester.takeException(), isNull);
     tester.view.resetViewInsets();
     await tester.pumpAndSettle();
@@ -983,6 +1019,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Customize'));
       await tester.pumpAndSettle();
       final fields = find.byType(DropdownButtonFormField<String>);
+      await _showCustomControl(tester, find.byTooltip(icon));
       await tester.tap(find.byTooltip(icon));
       await tester.pumpAndSettle();
       await _showCustomControl(tester, fields);

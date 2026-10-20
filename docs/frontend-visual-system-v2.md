@@ -65,10 +65,20 @@ not layout. These follow-ups must retain Dark, Light, Space and Liquid Glass
 palettes; proposal artwork is not evidence of installed-device rendering.
 
 Blocking editor polish preserves the existing four-theme surfaces and app-row
-geometry. Opening selections lead each app list with a fine group divider;
-website rows use compact local marks and trailing checks. Time-window and
-budget toggles reveal details in place; Block now shares Rules with a divider,
+geometry. Current selections lead app and website lists immediately, with a fine group divider;
+website rows use compact local marks and trailing checks.
+The 24px known-site marks use pinned brand paths with a neutral contrast backing;
+unknown domains keep a globe. Installed app icons keep their existing 32px PNG
+slot and package identity when reordered; damaged images use a safe fallback.
+Time-window and budget toggles reveal details in place; Block now shares Rules with a divider,
 not an additional card. The sticky Save footer remains visible.
+The plan editor groups existing controls into Rules / Apps / Websites; its compact
+name/icon header and section strip do not add new rule semantics. Customize uses
+Content / Style / Delay beneath a bounded, framed, expandable preview. Section
+selection uses the existing primary/on-primary palette; Content/Style/Delay icons
+and all surfaces reuse theme-owned tokens. At large text/narrow keyboard sizes,
+the selection count and Save stack, the plan name can scroll, and the full preview
+remains available through Expand preview. No clipping of editable settings.
 
 Wearable metric cards use `AppFeaturePalette` moon/footsteps/heart/pulse accents
 from the approved design, darkened on Light for contrast; surfaces still use the

@@ -48,8 +48,14 @@ adjustments without rounding imported values. The hosted operator Coach accepts
 the explicit `gpt-6.1-sol`/Standard provenance pair while retaining historical
 `gpt-5.5`/Fast replies and the unchanged local-development provider.
 
-The Blocking editor keeps selected apps first on opening without reshuffling rows
-while editing. Website checkboxes use local marks and category suggestions. Time
+The Blocking editor separates Rules / Apps / Websites, retaining its name/icon,
+rule drafts and fixed Save action. Apps and websites move selected targets to
+the top immediately and restore original order on deselection, anchoring the
+visible mid-list rows rather than scrolling the user to the top. Website
+checkboxes use locally bundled brand geometry for known hosts, neutral fallbacks
+for unknown hosts and category suggestions; they make no favicon-service request.
+Apps use their actual installed Android icon bytes, retained by package identity
+while selections reorder. Time
 windows and Shared daily budget expand when enabled; disabled rules are omitted
 on Save but preserved in the draft. Plan drag handles use the 500ms Flutter
 long-press threshold and preference-aware haptics.
@@ -71,8 +77,11 @@ Move up/down actions. Hold the six-dot handle for 500ms; an armed drag
 uses the saved haptic preference. One sliver viewport allows edge auto-scrolling.
 Revision-checked exact-ID ordering is available under Strict/Focus without
 changing any rule definition. Cards show short rule/time summaries and target counts;
-full weekly windows remain in the editor/details. Customize keeps a native draft preview above icon, accent,
-layout, background and delay controls, with Save fixed outside the scroll area.
+full weekly windows remain in the editor/details. Customize separates Content /
+Style / Delay with a compact expandable same-renderer draft preview and Save
+fixed outside the scroll area. All existing icon, accent, layout, background,
+text and delay choices remain available; large-text/keyboard layouts retain the
+preview through Expand preview. Desktop/web preview remains a labelled approximation.
 All themes remain supported. Strict Unblock waits only on the visible foreground
 Strict screen; leaving or restarting resets the pending request. A notification
 shade suspends completion but does not reset it. Unblock offers 15 minutes or
