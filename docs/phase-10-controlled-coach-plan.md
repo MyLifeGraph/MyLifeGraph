@@ -6,6 +6,13 @@ provider controls, phone-data consent and all other page headers are unchanged.
 
 ## Optional phone summaries
 
+The opt-in dialog presents `App time`, `Top apps` and `Blocking attempts` as three
+outline-icon rows. Cloud storage/selected-provider access and prior-reply deletion
+limits remain visible; only the existing optional privacy details are collapsed.
+Speech's on-device catalog shares one glass group with dividers. Unsupported hosts
+show `Requires 64-bit Android`; selection, confirmation, download/cancel/remove,
+progress/error and no-fallback rules are unchanged.
+
 `coach-phone-data-v1` adds authenticated `GET /v1/coach/phone-data` and
 `POST /v1/coach/phone-data`. The Coach header menu opens **Coach data**. Phone
 usage is off by default; `coach-phone-consent-v1` separately discloses cloud
@@ -108,6 +115,11 @@ the frame, including when messages exist. Opening or refreshing loaded history
 positions it at the newest message; typing does not reset the scroll position.
 A small circular down-arrow inside the timeline appears when more than 48px
 remain below the viewport, returns to the latest message, and hides at the bottom.
+Sending follows the actual laid-out end, including reply/composer/viewport size
+changes. Scrolling toward older messages suspends following; completion and its
+automatic history refresh preserve that reading position. The down-arrow resumes
+following and corrects its destination after layout settles, unless interrupted
+by a user scroll. Read-notice acknowledgement still requires its visible marker.
 The empty invitation adds one non-interactive example question. Optional Coach
 information opens in an anchored popover so expanded copy cannot push the fixed panels away.
 At very small remaining heights the composer participates in that same chat

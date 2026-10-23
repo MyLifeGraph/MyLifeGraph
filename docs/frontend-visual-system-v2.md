@@ -1,5 +1,13 @@
 # Frontend Visual System V2
 
+Task planning uses an icon/switch glass row. Habit cadence uses three visible radio
+rows in one glass group and a clock in the duration field. Calendar events use small
+day/month badges with readable date/time labels; large text prioritizes the full
+date text instead of the decorative badge. Coach consent categories have compact
+outline-icon badges and fine separators. Speech models use one shared surface and
+inset dividers, with the existing semantic attention surface on unsupported devices.
+All controls use existing palette/spacing tokens; no domain or consent logic changes.
+
 Check-in-only association fallback preserves the two existing glass panels and
 their header/icon geometry. Amber warning and semantic success check identify
 preliminary/consistent evidence; the existing tap/long-press explanation remains.
@@ -504,10 +512,11 @@ Shared primitives are:
 - `AppIconBadge`;
 - `AppInfoDisclosure` and its section-heading adapter.
 
-Settings uses visible `AppSectionHeader` groups for Profile, Planning and
-learning, Tools and connections, and Account and appearance. These headings
-organize the existing controls without adding another card style or changing
-their authority. Feature panels, auth/recovery regions, Inbox groups, Weekly
+Settings uses shared glass groups with inset dividers for Planning and learning,
+Tools and connections, and Account and appearance; the group names remain in
+semantics rather than repeating large visible headings. Profile remains collapsed.
+Disabled guest rows show locks and one shared synced-account hint. Conditional
+platform, consent and diagnostic entries remain available. Feature panels, auth/recovery regions, Inbox groups, Weekly
 facts, and Insights regions use the appropriate shared surface variant instead
 of route-local borders, radii, and shadows.
 
@@ -531,6 +540,12 @@ unavailable, and destructive meaning uses `AppStatusPill`, `AppStatePanel`, or
 another labelled semantic primitive.
 
 ## Icons
+
+Overview descriptive metrics use small decorative Phosphor icons beside their
+unchanged labels: bolt for Energy, smile for Mood, bed for Sleep duration and
+four-point star for Sleep quality. Stress and Focus activity use matching existing
+vocabulary. Icons use the theme primary color, stay out of screen-reader output,
+and never replace units, median qualifiers, evidence levels or full text.
 
 Today check-in buttons use muted attention/success surfaces and matching
 outlines for pending/saved states. Labels and existing saved-check icons remain;
@@ -791,9 +806,10 @@ borders. Circular press/hover feedback and a two-pixel keyboard focus ring
 identify the active control without adding permanent dividers or a white wash.
 Dark, Light and Space share the rounded island geometry and frameless icons,
 using their own unchanged palette and surface effects. Backdrops and light pools
-are unchanged. Compare's heading spans the card width. Below it, correlation
-values and insufficient-data status sit beside the explanation/action for every
-7/14/30/90-day window on normal phone sizes; large text stacks without clipping.
+are unchanged. Compare uses a short `Relationship` heading and wrapping coefficient/
+strength badge above its unchanged chart. Insufficient-data explanations and the
+longer-period action remain visible. Computable-pair summaries are available in
+Details, with the shared-day count and non-causal qualifier directly visible.
 Fixed commitments use a neutral category accent, not the error palette, in all
 themes; actual conflicts retain their status color and text.
 

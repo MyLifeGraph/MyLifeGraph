@@ -473,12 +473,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
                 AppSpacing.md,
                 AppSpacing.md,
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadii.lg),
-                side: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
+              shape: const Border(),
               collapsedShape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadii.lg),
                 side: BorderSide(
@@ -1119,171 +1114,191 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PreparationSessionPicker(
-          minutes: _sessionMinutes,
-          uniformChoices: _compactExam,
-          onChanged: (minutes) => setState(() {
-            _clearHealthPreview();
-            _sessionMinutes = minutes;
-          }),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _editorPair(
-          context,
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                key: const ValueKey('deadline-daily-cap'),
-                controller: _dailyCapController,
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {
-                  _clearHealthPreview();
-                  _dailyCapWasManuallyEdited = true;
-                }),
-                decoration: const InputDecoration(
-                  labelText: 'Daily limit',
-                  suffixText: 'min',
-                ),
-              ),
-              if (!_compactExam) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  !widget.accountDailyPreparationBudgetKnown
-                      ? 'Your account-wide budget is temporarily unavailable here. Any saved total budget still limits confirmed plans.'
-                      : widget.accountDailyPreparationBudgetMinutes == null
-                      ? 'No total daily limit set in Settings.'
-                      : 'All plans: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} / day.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ],
+        _studySettingsGroup(context, 'Study rhythm', AppIcons.schedule, [
+          _PreparationSessionPicker(
+            minutes: _sessionMinutes,
+            uniformChoices: _compactExam,
+            onChanged: (minutes) => setState(() {
+              _clearHealthPreview();
+              _sessionMinutes = minutes;
+            }),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DropdownButtonFormField<int>(
-                initialValue: _bufferDays,
-                isExpanded: true,
-                itemHeight: null,
-                decoration: InputDecoration(
-                  labelText: _compactExam
-                      ? 'Clear days'
-                      : 'Clear days before deadline',
+        ]),
+        const SizedBox(height: AppSpacing.md),
+        _studySettingsGroup(context, 'Limits', AppIcons.stackedBarChartOutlined, [
+          _editorPair(
+            context,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  key: const ValueKey('deadline-daily-cap'),
+                  controller: _dailyCapController,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {
+                    _clearHealthPreview();
+                    _dailyCapWasManuallyEdited = true;
+                  }),
+                  decoration: InputDecoration(
+                    labelText: _compactExam
+                        ? 'This exam · per day'
+                        : 'Daily limit',
+                    suffixText: 'min',
+                  ),
                 ),
-                items: List.generate(
-                  8,
-                  (days) => DropdownMenuItem(
-                    value: days,
-                    child: Text(
-                      '$days ${days == 1 ? 'clear day' : 'clear days'}',
+                if (!_compactExam) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    !widget.accountDailyPreparationBudgetKnown
+                        ? 'Your account-wide budget is temporarily unavailable here. Any saved total budget still limits confirmed plans.'
+                        : widget.accountDailyPreparationBudgetMinutes == null
+                        ? 'No total daily limit set in Settings.'
+                        : 'All plans: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} / day.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: _bufferDays,
+                  isExpanded: true,
+                  itemHeight: null,
+                  decoration: InputDecoration(
+                    labelText: _compactExam
+                        ? 'Clear days'
+                        : 'Clear days before deadline',
+                  ),
+                  items: List.generate(
+                    8,
+                    (days) => DropdownMenuItem(
+                      value: days,
+                      child: Text(
+                        '$days ${days == 1 ? 'clear day' : 'clear days'}',
+                      ),
                     ),
                   ),
-                ),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _clearHealthPreview();
-                      _bufferDays = value;
-                    });
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (_compactExam) ...[
-          InputDecorator(
-            decoration: const InputDecoration(labelText: 'Total budget'),
-            child: widget.budgetControlBuilder != null
-                ? widget.budgetControlBuilder!(
-                    () => setState(_clearHealthPreview),
-                  )
-                : Text(
-                    !widget.accountDailyPreparationBudgetKnown
-                        ? 'Total budget unavailable'
-                        : widget.accountDailyPreparationBudgetMinutes == null
-                        ? 'All plans · No limit'
-                        : 'All plans · ${_duration(widget.accountDailyPreparationBudgetMinutes!)} / day',
-                  ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        _editorPair(
-          context,
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _pickPlanningStart,
-                icon: const Icon(AppIcons.todayOutlined),
-                label: Text(
-                  'Start · ${DateFormat.yMMMd().format(_planningStart)}',
-                ),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  border: _compactExam
-                      ? Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        )
-                      : null,
-                  borderRadius: BorderRadius.circular(AppRadii.md),
-                ),
-                child: ListTile(
-                  contentPadding: _compactExam
-                      ? const EdgeInsets.symmetric(horizontal: AppSpacing.md)
-                      : EdgeInsets.zero,
-                  leading: const Icon(AppIcons.eventBusyOutlined),
-                  title: const Text('Busy times'),
-                  subtitle: const Text('Planner · no automatic sync'),
-                  trailing: const Icon(AppIcons.openInNewOutlined),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    widget.onOpenPlanner();
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _clearHealthPreview();
+                        _bufferDays = value;
+                      });
+                    }
                   },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          compact: false,
-        ),
-        if (_kind == DeadlinePlanKind.exam) ...[
           const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: _compactExam ? double.infinity : null,
-            child: OutlinedButton.icon(
-              key: const ValueKey('exam-plan-health-preview'),
-              onPressed: _healthPreviewLoading ? null : _checkExamPlanHealth,
-              icon: _healthPreviewLoading
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+          if (_compactExam) ...[
+            InputDecorator(
+              decoration: const InputDecoration(labelText: 'Total budget'),
+              child: widget.budgetControlBuilder != null
+                  ? widget.budgetControlBuilder!(
+                      () => setState(_clearHealthPreview),
                     )
-                  : const Icon(AppIcons.autoGraphOutlined),
-              label: const Text('Check capacity'),
+                  : Text(
+                      !widget.accountDailyPreparationBudgetKnown
+                          ? 'Total budget unavailable'
+                          : widget.accountDailyPreparationBudgetMinutes == null
+                          ? 'All plans · No limit'
+                          : 'All plans · ${_duration(widget.accountDailyPreparationBudgetMinutes!)} / day',
+                    ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          const Text('No changes saved.'),
-          if (_healthPreviewError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              'The capacity check could not be loaded. This transport error is separate from an Availability unknown result.',
-              key: ValueKey('exam-plan-health-preview-error'),
+            const SizedBox(height: AppSpacing.md),
+          ],
+        ]),
+        const SizedBox(height: AppSpacing.md),
+        _studySettingsGroup(
+          context,
+          'Availability',
+          AppIcons.calendarMonthOutlined,
+          [
+            _editorPair(
+              context,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _pickPlanningStart,
+                    icon: const Icon(AppIcons.todayOutlined),
+                    label: Text(
+                      'Start · ${DateFormat.yMMMd().format(_planningStart)}',
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: _compactExam
+                          ? Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
+                            )
+                          : null,
+                      borderRadius: BorderRadius.circular(AppRadii.md),
+                    ),
+                    child: ListTile(
+                      contentPadding: _compactExam
+                          ? const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                            )
+                          : EdgeInsets.zero,
+                      leading: const Icon(AppIcons.eventBusyOutlined),
+                      title: const Text('Busy times'),
+                      subtitle: const Text('Planner · no automatic sync'),
+                      trailing: const Icon(AppIcons.openInNewOutlined),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        widget.onOpenPlanner();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              compact: false,
             ),
+            if (_kind == DeadlinePlanKind.exam) ...[
+              const SizedBox(height: AppSpacing.md),
+              SizedBox(
+                width: _compactExam ? double.infinity : null,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('exam-plan-health-preview'),
+                  onPressed: _healthPreviewLoading
+                      ? null
+                      : _checkExamPlanHealth,
+                  icon: _healthPreviewLoading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(AppIcons.autoGraphOutlined),
+                  label: const Text('Check capacity'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              const Text('No changes saved.'),
+              if (_healthPreviewError != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const Text(
+                  'The capacity check could not be loaded. This transport error is separate from an Availability unknown result.',
+                  key: ValueKey('exam-plan-health-preview-error'),
+                ),
+              ],
+              if (_healthPreview != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _ExamPlanHealthPreviewView(exam: _healthPreview!.exam),
+              ],
+            ],
           ],
-          if (_healthPreview != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ExamPlanHealthPreviewView(exam: _healthPreview!.exam),
-          ],
-        ],
+        ),
         const SizedBox(height: AppSpacing.sm),
         const ExpansionTile(
           key: ValueKey('deadline-planning-details'),
@@ -1301,6 +1316,35 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         if (!_compactExam)
           const Text('Review and confirm to reserve study time.'),
       ],
+    );
+  }
+
+  Widget _studySettingsGroup(
+    BuildContext context,
+    String title,
+    IconData icon,
+    List<Widget> children,
+  ) {
+    if (!_compactExam) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      );
+    }
+    return AppSurface(
+      variant: AppSurfaceVariant.subtle,
+      padding: EdgeInsets.zero,
+      child: ExpansionTile(
+        key: ValueKey('exam-settings-$title'),
+        initiallyExpanded: true,
+        maintainState: true,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Icon(icon),
+        title: Text(title),
+        childrenPadding: const EdgeInsets.all(AppSpacing.md),
+        children: children,
+      ),
     );
   }
 

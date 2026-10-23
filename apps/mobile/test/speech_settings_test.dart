@@ -119,6 +119,8 @@ void main() {
         expect(settings.source, 'whisper-base');
       } else {
         expect(settings.source, 'server');
+        expect(find.text('Requires 64-bit Android'), findsOneWidget);
+        expect(find.text('Download and activation unavailable here.'), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
     });

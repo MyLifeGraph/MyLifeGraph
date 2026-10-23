@@ -75,38 +75,40 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'PERSONAL COACH',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    letterSpacing: 2,
-                                  ),
+                      if (!widget.editing) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'PERSONAL COACH',
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      letterSpacing: 2,
+                                    ),
+                              ),
                             ),
-                          ),
-                          const ExcludeSemantics(
-                            child: AppIconBadge(
-                              icon: AppIcons.autoGraphOutlined,
+                            const ExcludeSemantics(
+                              child: AppIconBadge(
+                                icon: AppIcons.autoGraphOutlined,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          widget.editing
+                              ? 'Review your setup'
+                              : 'Build your day-aware coach',
+                          style: Theme.of(context).textTheme.headlineLarge,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                       Text(
                         widget.editing
-                            ? 'Review your setup'
-                            : 'Build your day-aware coach',
-                        style: Theme.of(context).textTheme.headlineLarge,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        widget.editing
-                            ? 'Update your weekday and energy window, then review setup-owned routines and fixed commitments.'
+                            ? 'Your routine and study preferences.'
                             : 'Start with your weekday and energy. Add optional details now or later.',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: _SetupColors.muted(context),
@@ -138,32 +140,56 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Padding(
-                                      padding: const EdgeInsets.all(AppSpacing.md),
+                                      padding: const EdgeInsets.all(
+                                        AppSpacing.md,
+                                      ),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
                                               const ExcludeSemantics(
-                                                child: AppIconBadge(icon: AppIcons.tuneOutlined),
+                                                child: AppIconBadge(
+                                                  icon: AppIcons.tuneOutlined,
+                                                ),
                                               ),
-                                              const SizedBox(width: AppSpacing.md),
+                                              const SizedBox(
+                                                width: AppSpacing.md,
+                                              ),
                                               Expanded(
                                                 child: Wrap(
                                                   spacing: AppSpacing.sm,
                                                   runSpacing: AppSpacing.xs,
-                                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                                  crossAxisAlignment:
+                                                      WrapCrossAlignment.center,
                                                   children: [
-                                                    Text('Optional setup', style: Theme.of(context).textTheme.titleLarge),
-                                                    const AppStatusPill(label: 'Optional'),
+                                                    Text(
+                                                      'Optional setup',
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleLarge,
+                                                    ),
+                                                    const AppStatusPill(
+                                                      label: 'Optional',
+                                                    ),
                                                   ],
                                                 ),
                                               ),
                                             ],
                                           ),
                                           const SizedBox(height: AppSpacing.xs),
-                                          Text('Choose what helps. You can return in Settings.',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: _SetupColors.muted(context))),
+                                          Text(
+                                            'Choose what helps. You can return in Settings.',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: _SetupColors.muted(
+                                                    context,
+                                                  ),
+                                                ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -172,16 +198,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                       key: const ValueKey('optional-routines'),
                                       icon: AppIcons.calendarTodayOutlined,
                                       title: 'Routines',
-                                      subtitle:
-                                          'Habits you may want to build',
+                                      subtitle: 'Habits you may want to build',
                                       initiallyExpanded:
-                                          widget.editing && draft.routines.isNotEmpty,
+                                          widget.editing &&
+                                          draft.routines.isNotEmpty,
                                       children: [
                                         _RoutineEditors(
                                           routines: draft.routines,
                                           onChanged: (routines) {
                                             _updateDraft(
-                                              draft.copyWith(routines: routines),
+                                              draft.copyWith(
+                                                routines: routines,
+                                              ),
                                             );
                                           },
                                           onInvalidActivation: _showMessage,
@@ -190,10 +218,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                     ),
                                     const Divider(height: 1),
                                     _OptionalSetupSection(
-                                      key: const ValueKey('optional-focus-setup'),
+                                      key: const ValueKey(
+                                        'optional-focus-setup',
+                                      ),
                                       icon: AppIcons.centerFocusStrong,
                                       title: 'Focus setup',
-                                      subtitle: 'Focus, recovery and a start checklist',
+                                      subtitle:
+                                          'Focus, recovery and a start checklist',
                                       initiallyExpanded: false,
                                       children: [
                                         _StudyFocusEditor(
@@ -216,17 +247,23 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                       initiallyExpanded: widget.openStudySetup,
                                       children: [
                                         _StudySemesterEditor(
-                                          planning:
-                                              draft.studySetup?.semesterPlanning,
+                                          planning: draft
+                                              .studySetup
+                                              ?.semesterPlanning,
                                           onChanged: (planning) {
-                                            _updateSemesterPlanning(draft, planning);
+                                            _updateSemesterPlanning(
+                                              draft,
+                                              planning,
+                                            );
                                           },
                                         ),
                                       ],
                                     ),
                                     const Divider(height: 1),
                                     _OptionalSetupSection(
-                                      key: const ValueKey('optional-commitments'),
+                                      key: const ValueKey(
+                                        'optional-commitments',
+                                      ),
                                       icon: AppIcons.assignmentOutlined,
                                       title: 'Fixed commitments',
                                       subtitle:
@@ -338,12 +375,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     IntakeResponseDraft draft,
     StudyFocusRhythmDraft? rhythm,
   ) {
-    final study = (draft.studySetup ??
-            const StudySetupDraft(
-              focusRhythm: null,
-              semesterPlanning: null,
-            ))
-        .copyWith(focusRhythm: rhythm);
+    final study =
+        (draft.studySetup ??
+                const StudySetupDraft(
+                  focusRhythm: null,
+                  semesterPlanning: null,
+                ))
+            .copyWith(focusRhythm: rhythm);
     _updateDraft(draft.copyWith(studySetup: study.isEmpty ? null : study));
   }
 
@@ -351,12 +389,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     IntakeResponseDraft draft,
     StudySemesterPlanningDraft? planning,
   ) {
-    final study = (draft.studySetup ??
-            const StudySetupDraft(
-              focusRhythm: null,
-              semesterPlanning: null,
-            ))
-        .copyWith(semesterPlanning: planning);
+    final study =
+        (draft.studySetup ??
+                const StudySetupDraft(
+                  focusRhythm: null,
+                  semesterPlanning: null,
+                ))
+            .copyWith(semesterPlanning: planning);
     _updateDraft(draft.copyWith(studySetup: study.isEmpty ? null : study));
   }
 

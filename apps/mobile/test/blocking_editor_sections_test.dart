@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/widgets/app_backdrop.dart';
 import 'package:my_life_graph/features/focus_protection/domain/blocking_plan.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/pages/blocking_page.dart';
@@ -110,6 +111,12 @@ void main() {
           onSave: (p) async => saved = p,
         ),
       );
+      for (final (index, icon) in [AppIcons.tuneOutlined, AppIcons.squaresFour, AppIcons.publicOutlined].indexed) {
+        expect(find.descendant(
+          of: find.byKey(ValueKey('blocking-editor-tab-$index')),
+          matching: find.byIcon(icon),
+        ), findsOneWidget);
+      }
       await t.tap(find.byTooltip('Plan icon'));
       await t.pumpAndSettle();
       for (final icon in [

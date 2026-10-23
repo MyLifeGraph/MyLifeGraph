@@ -15,6 +15,46 @@ import 'support/ui_catalog_capture.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 
 void main() {
+  for (final dates in const [
+    (
+      '2026-03-29',
+      '2026-03-30',
+      'All day · Mar 29, 2026\nEnds before Mar 30, 2026',
+    ),
+    (
+      '2028-02-28',
+      '2028-03-01',
+      'All day · Feb 28, 2028 – Feb 29, 2028\nEnds before Mar 1, 2028',
+    ),
+    (
+      '2026-12-31',
+      '2027-01-02',
+      'All day · Dec 31, 2026 – Jan 1, 2027\nEnds before Jan 2, 2027',
+    ),
+  ]) {
+    testWidgets('all-day date components preserve exclusive end ${dates.$1}', (
+      tester,
+    ) async {
+      final row = calendarAllDayEventJson()
+        ..['starts_on'] = dates.$1
+        ..['ends_on'] = dates.$2;
+      final repository = _FakeCalendarRepository(
+        _connectedFeed(includeImport: true),
+        eventRows: [row],
+      );
+      await _pumpPage(tester, repository: repository);
+      expect(find.text(dates.$3), findsOneWidget);
+      await tester.tap(find.text('Company holiday'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('${dates.$1} · All day · ends before ${dates.$2}'),
+        findsOneWidget,
+      );
+      expect(find.text('Europe/Berlin · Work calendar'), findsOneWidget);
+      expect(repository.mutationCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
   if (captureUiCatalog) {
     testWidgets('catalog calendar screenshots', (tester) async {
       await loadCatalogFonts();
@@ -141,10 +181,7 @@ void main() {
     );
     await _pumpPage(tester, repository: repository);
 
-    expect(
-      find.textContaining('No live connection'),
-      findsNothing,
-    );
+    expect(find.textContaining('No live connection'), findsNothing);
     expect(find.textContaining('up to 512 KiB'), findsNothing);
     expect(
       tester.getTopLeft(find.text('Choose .ics file')).dy,
@@ -152,13 +189,12 @@ void main() {
     );
 
     await tester.tap(
-      find.byKey(const ValueKey('calendar-info-control-Original calendar unchanged')),
+      find.byKey(
+        const ValueKey('calendar-info-control-Original calendar unchanged'),
+      ),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.textContaining('No live connection'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('No live connection'), findsOneWidget);
     expect(find.textContaining('up to 512 KiB'), findsOneWidget);
   });
 
@@ -331,8 +367,17 @@ void main() {
     expect(repository.importRequestIds, hasLength(2));
     expect(repository.importRequestIds.toSet(), hasLength(1));
     expect(repository.importTexts, ['BEGIN', 'BEGIN']);
-    expect(find.text('Imported · read-only'), findsOneWidget);
-    expect(find.text('2026-07-13 · 22:30–2026-07-14 01:30'), findsOneWidget);
+    expect(find.text('Read-only · No sync'), findsOneWidget);
+    expect(
+      find.text('Jul 13, 2026 · 22:30–01:30\nEnds Jul 14, 2026'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'All day · Jul 20, 2026 – Jul 21, 2026\nEnds before Jul 22, 2026',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('connection header wraps at 320 pixels and 200 percent text', (
@@ -366,7 +411,7 @@ void main() {
     }
 
     expect(sourceLabelFinder, findsOneWidget);
-    expect(find.text('Imported · read-only'), findsOneWidget);
+    expect(find.text('Read-only · No sync'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

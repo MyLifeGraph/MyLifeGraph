@@ -127,7 +127,14 @@ class _CoachPhoneDataSheetState extends ConsumerState<CoachPhoneDataSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('App time · Top apps · Blocking attempts'),
+              _ConsentCategory(icon: AppIcons.deviceMobile, label: 'App time'),
+              Divider(height: 1),
+              _ConsentCategory(icon: AppIcons.squaresFour, label: 'Top apps'),
+              Divider(height: 1),
+              _ConsentCategory(
+                icon: AppIcons.shieldOutlined,
+                label: 'Blocking attempts',
+              ),
               SizedBox(height: 12),
               Text(
                 'Saved in your cloud account for your selected Coach provider.',
@@ -331,4 +338,24 @@ class _CoachPhoneDataSheetState extends ConsumerState<CoachPhoneDataSheet> {
       ),
     );
   }
+}
+
+class _ConsentCategory extends StatelessWidget {
+  const _ConsentCategory({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      children: [
+        ExcludeSemantics(
+          child: AppIconBadge(icon: icon, tone: AppStatusTone.info),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label)),
+      ],
+    ),
+  );
 }

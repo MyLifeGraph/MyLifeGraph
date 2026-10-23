@@ -527,6 +527,14 @@ and query-shape validation remains route-local.
 
 ## Visual presentation
 
+Imported connected sources combine status as `Read-only · No sync`; empty and
+disconnected states retain their explicit labels. Event rows use a compact date
+badge (omitted for enlarged text) and locale-formatted calendar dates. The display
+formats backend event-local components without converting to device time. All-day
+end remains exclusive and visible; its inclusive last day is calendar arithmetic,
+not a local-time 24-hour subtraction. Expansion retains exact dates/timezone/source,
+location and the same separate planning action. No import/read authority changes.
+
 Calendar surfaces use the shared
 [Frontend Visual System V2](frontend-visual-system-v2.md). This presentation
 migration does not change consent, import identity, disconnect, deletion, or

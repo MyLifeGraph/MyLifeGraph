@@ -255,7 +255,7 @@ void main() {
     await tester.tap(find.text('Setup and commitments'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Review your setup'), findsOneWidget);
+    expect(find.text('Your routine and study preferences.'), findsOneWidget);
     expect(find.text(customWeekday), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -491,10 +491,9 @@ void main() {
       find.text('In-app reminders'),
     );
     expect(find.text('In-app reminders'), findsOneWidget);
-    expect(
-      find.text('In-app banners are available only for a synced account.'),
-      findsOneWidget,
-    );
+    expect(tester.widget<ListTile>(
+      find.widgetWithText(ListTile, 'In-app reminders'),
+    ).enabled, isFalse);
     await _scrollSliverUntilVisible(
       tester,
       find.text('Calendar import (optional)'),
@@ -513,7 +512,7 @@ void main() {
       find.text('Appearance'),
     );
     expect(find.text('Appearance'), findsOneWidget);
-    expect(find.text('Dark · Saved on this device.'), findsOneWidget);
+    expect(find.text('Dark'), findsOneWidget);
     await _scrollSliverUntilVisible(
       tester,
       find.text('Sign out'),
@@ -532,7 +531,7 @@ void main() {
     );
     tester.widget<ListTile>(setupEntry).onTap!.call();
     await tester.pumpAndSettle();
-    expect(find.text('Review your setup'), findsOneWidget);
+    expect(find.text('Your routine and study preferences.'), findsOneWidget);
     expect(find.text('Flexible daily schedule'), findsOneWidget);
     expect(find.text('No optional setup commitments.'), findsNothing);
     expect(find.text('Optional setup'), findsOneWidget);

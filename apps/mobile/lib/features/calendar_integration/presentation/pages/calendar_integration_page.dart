@@ -97,52 +97,65 @@ class CalendarIntegrationPage extends ConsumerWidget {
         ),
         _ConnectionSetupCard(state: state, controller: controller),
       ] else ...[
-        LayoutBuilder(builder: (context, constraints) {
-          final source = _ImportFileCard(state: state, controller: controller);
-          final hasEvents = connection.lastImport != null || state.eventError != null;
-          final events = _ImportedEventsCard(state: state, controller: controller);
-          final details = connection.lastImport == null
-              ? null
-              : _ConnectionStatusCard(connection: connection);
-          if (constraints.maxWidth >= 900 &&
-              MediaQuery.textScalerOf(context).scale(16) < 24 && hasEvents) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final source = _ImportFileCard(
+              state: state,
+              controller: controller,
+            );
+            final hasEvents =
+                connection.lastImport != null || state.eventError != null;
+            final events = _ImportedEventsCard(
+              state: state,
+              controller: controller,
+            );
+            final details = connection.lastImport == null
+                ? null
+                : _ConnectionStatusCard(connection: connection);
+            if (constraints.maxWidth >= 900 &&
+                MediaQuery.textScalerOf(context).scale(16) < 24 &&
+                hasEvents) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        source,
+                        if (details != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          details,
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: events),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: Column(children: [
-                  source,
-                  if (details != null) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    details,
-                  ],
-                ])),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: events),
+                source,
+                if (hasEvents) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  events,
+                ],
+                if (details != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  details,
+                ],
               ],
             );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              source,
-              if (hasEvents) ...[
-                const SizedBox(height: AppSpacing.md),
-                events,
-              ],
-              if (details != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                details,
-              ],
-            ],
-          );
-        }),
+          },
+        ),
       ],
       if (state.operationError != null)
         _OperationErrorCard(state: state, controller: controller),
     ];
   }
 }
-
 
 class _ConnectionSetupCard extends StatelessWidget {
   const _ConnectionSetupCard({required this.state, required this.controller});
@@ -278,10 +291,17 @@ class _ImportFileCard extends StatelessWidget {
             children: [
               const Icon(AppIcons.calendarTodayOutlined),
               const SizedBox(width: AppSpacing.sm),
-              Expanded(child: Text(connection.sourceLabel,
-                  style: Theme.of(context).textTheme.titleMedium)),
-              _SourceControlsMenu(state: state, controller: controller,
-                  connection: connection),
+              Expanded(
+                child: Text(
+                  connection.sourceLabel,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              _SourceControlsMenu(
+                state: state,
+                controller: controller,
+                connection: connection,
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -289,39 +309,48 @@ class _ImportFileCard extends StatelessWidget {
             label: !connection.isConnected
                 ? 'Disconnected'
                 : connection.lastImport == null
-                    ? 'No file imported'
-                    : 'Imported · read-only',
+                ? 'No file imported'
+                : 'Read-only · No sync',
             tone: !connection.isConnected
                 ? AppStatusTone.attention
                 : AppStatusTone.info,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          const Text('File import · No sync'),
+          if (!connection.isConnected || connection.lastImport == null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text('Read-only · No sync'),
+          ],
           if (!connection.isConnected) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text(connection.lastImport == null
-                ? 'Imports off. Remove this empty source to add another.'
-                : 'Imports off. Saved events may be out of date until deleted.'),
+            Text(
+              connection.lastImport == null
+                  ? 'Imports off. Remove this empty source to add another.'
+                  : 'Imports off. Saved events may be out of date until deleted.',
+            ),
           ],
           if (connection.lastImport?.planningStatus ==
               CalendarImportPlanningStatus.profileTimezoneChanged) ...[
             const SizedBox(height: AppSpacing.sm),
-            const Text('Profile timezone changed. Re-import this file before Planner uses it as busy time.'),
+            const Text(
+              'Profile timezone changed. Re-import this file before Planner uses it as busy time.',
+            ),
           ],
           const SizedBox(height: AppSpacing.md),
-          if (connection.isConnected) SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-            onPressed: locked ? null : controller.selectFile,
-            icon: state.operation == CalendarIntegrationOperation.selectingFile
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(AppIcons.downloadOutlined),
-            label: const Text('Choose .ics file'),
+          if (connection.isConnected)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: locked ? null : controller.selectFile,
+                icon:
+                    state.operation ==
+                        CalendarIntegrationOperation.selectingFile
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(AppIcons.downloadOutlined),
+                label: const Text('Choose .ics file'),
+              ),
             ),
-          ),
           if (file != null && connection.isConnected) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(
@@ -374,7 +403,8 @@ class _ImportFileCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           const AppInfoSectionDisclosure(
             heading: 'Original calendar unchanged',
-            description: 'Choose one UTF-8 .ics file, up to 512 KiB. '
+            description:
+                'Choose one UTF-8 .ics file, up to 512 KiB. '
                 'No live connection. Only essential event details are saved.',
             keyPrefix: 'calendar-info',
           ),
@@ -409,10 +439,11 @@ class _ImportedEventsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          if (!connection.isConnected) const AppStatusPill(
-            label: 'Imported · read-only',
-            tone: AppStatusTone.info,
-          ),
+          if (!connection.isConnected)
+            const AppStatusPill(
+              label: 'Imported · read-only',
+              tone: AppStatusTone.info,
+            ),
           const SizedBox(height: AppSpacing.sm),
           if (state.eventError != null) ...[
             const Text(
@@ -471,16 +502,22 @@ class _ImportedEventTile extends StatelessWidget {
       key: ValueKey('calendar-event-${event.id}'),
       tilePadding: EdgeInsets.zero,
       childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      leading: const Icon(AppIcons.calendarTodayOutlined, size: 20),
+      leading: MediaQuery.textScalerOf(context).scale(14) > 21
+          ? null
+          : _EventDateBadge(date: event.displayDate),
       title: Text(event.title, style: Theme.of(context).textTheme.titleMedium),
       subtitle: Text(
-        '${event.displayDate} · ${event.displayTime}',
+        _eventWhenLabel(event),
         style: Theme.of(context).textTheme.bodySmall,
       ),
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text(
+              '${event.displayDate} · ${event.displayTime}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             Text(
               '${event.eventTimezone} · ${event.provenance.sourceLabel}',
               style: Theme.of(context).textTheme.bodySmall,
@@ -519,6 +556,65 @@ class _ImportedEventTile extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+// These are already event-local calendar components from the backend. Do not
+// reinterpret them as instants or convert them to the device timezone.
+DateTime _eventDate(String value) => DateTime.utc(
+  int.parse(value.substring(0, 4)),
+  int.parse(value.substring(5, 7)),
+  int.parse(value.substring(8, 10)),
+);
+
+String _eventWhenLabel(CalendarImportedEvent event) {
+  final start = _eventDate(event.displayDate);
+  final dateLabel = DateFormat.yMMMd().format(start);
+  if (event.kind == CalendarEventKind.allDay) {
+    final exclusiveEnd = _eventDate(event.endsOn!);
+    final lastDay = DateTime.utc(
+      exclusiveEnd.year,
+      exclusiveEnd.month,
+      exclusiveEnd.day - 1,
+    );
+    final range = lastDay == start
+        ? dateLabel
+        : '$dateLabel – ${DateFormat.yMMMd().format(lastDay)}';
+    return 'All day · $range\nEnds before ${DateFormat.yMMMd().format(exclusiveEnd)}';
+  }
+  final end = _eventDate(event.localEndsAt!);
+  final clocks =
+      '${event.localStartsAt!.substring(11, 16)}–${event.localEndsAt!.substring(11, 16)}';
+  return start == end
+      ? '$dateLabel · $clocks'
+      : '$dateLabel · $clocks\nEnds ${DateFormat.yMMMd().format(end)}';
+}
+
+class _EventDateBadge extends StatelessWidget {
+  const _EventDateBadge({required this.date});
+  final String date;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _eventDate(date);
+    return ExcludeSemantics(
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${value.day}', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              DateFormat.MMM().format(value).toUpperCase(),
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

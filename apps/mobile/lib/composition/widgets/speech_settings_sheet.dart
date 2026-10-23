@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_icons.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_surface.dart';
 import '../../features/coach/application/speech_settings.dart';
 import '../../features/coach/domain/speech_models.dart';
 
@@ -155,19 +156,29 @@ class _SpeechSettingsSheetState extends ConsumerState<_SpeechSettingsSheet> {
                 if (!settings.supported)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                    child: Text(
-                      'Download and activation require the 64-bit Android app.',
+                    child: AppStatePanel(
+                      tone: AppStatusTone.attention,
+                      icon: AppIcons.deviceMobile,
+                      title: 'Requires 64-bit Android',
+                      message: 'Download and activation unavailable here.',
                     ),
                   ),
                 Text(
                   'Multilingual · audio stays on this device',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-                for (final model in speechModels)
-                  AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    child: Column(
-                      children: [
+                const SizedBox(height: AppSpacing.sm),
+                AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    children: [
+                      for (final model in speechModels) ...[
+                        if (model != speechModels.first)
+                          const Divider(
+                            height: 1,
+                            indent: AppSpacing.sm,
+                            endIndent: AppSpacing.sm,
+                          ),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
@@ -220,8 +231,9 @@ class _SpeechSettingsSheetState extends ConsumerState<_SpeechSettingsSheet> {
                         if (settings.downloading == model.id)
                           LinearProgressIndicator(value: settings.progress),
                       ],
-                    ),
+                    ],
                   ),
+                ),
               ],
               if (settings.error != null)
                 Text(

@@ -141,7 +141,10 @@ fall back safely. Website glyphs never replace installed-app artwork.
 
 The plan name and six existing icons remain editable in the compact header/icon
 dialog; short/keyboard layouts let the name scroll. Each section retains its
-draft and scroll position. Customize uses Content, Style and Delay sections with
+draft and scroll position. Rules / Apps / Websites use the same icon-and-label
+selector as Customize, with adjustment, app-grid and globe icons respectively;
+counts and selection semantics are unchanged. Customize uses Content, Style and
+Delay sections with
 the same title/message limits, six icons, five accents, three layouts, four
 backgrounds and existing delay values. Its compact same-renderer preview can be
 expanded; on short large-text/keyboard layouts the expand action keeps the full
