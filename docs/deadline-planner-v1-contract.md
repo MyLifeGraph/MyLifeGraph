@@ -596,6 +596,12 @@ backend anti-replay ledgers and export no request fingerprint.
 
 ## Flutter Surface
 
+Compact Exam Study settings groups the existing controls under Study rhythm,
+Limits and Availability, expanded initially with state retained when collapsed.
+The per-plan cap is labelled This exam · per day, distinct from the unchanged
+Total budget control. All validation, draft, capacity, preview and confirmation
+behavior remains unchanged; the footer stays pinned and scrollable fields remain.
+
 Concurrent plan-list reloads share one pending read. Successful writes completed
 during that read overlay only their plan IDs, so its older feed cannot replace a
 newer result and unrelated feed rows remain available. The overlay expires with

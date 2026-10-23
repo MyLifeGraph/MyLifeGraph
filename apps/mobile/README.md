@@ -1,5 +1,14 @@
 # MyLifeGraph Mobile App
 
+Compact Task/Habit editors retain their existing draft/save commands: `Plan time`
+reveals the Task preview inputs, while `Repeat *` exposes all three Habit cadences
+without preselecting one. Calendar import groups read-only/no-sync status and uses
+event-local date badges, readable dates and explicit exclusive all-day ends.
+Coach phone consent shows three icon-labelled categories with cloud/provider and
+deletion disclosures still visible. Speech models share one grouped list; unsupported
+devices have a clear 64-bit Android notice and still cannot download or activate.
+These presentation refinements add no data access, network calls or permissions.
+
 Capture editors keep the reviewed owner/date/branch identity with each in-memory
 draft instead of silently rebasing at Save. Concurrent edits use the existing
 conflict response; calendar reads cannot authorize overwriting newer answers.
@@ -48,7 +57,8 @@ adjustments without rounding imported values. The hosted operator Coach accepts
 the explicit `gpt-6.1-sol`/Standard provenance pair while retaining historical
 `gpt-5.5`/Fast replies and the unchanged local-development provider.
 
-The Blocking editor separates Rules / Apps / Websites, retaining its name/icon,
+The Blocking editor separates Rules / Apps / Websites with adjustment, app-grid
+and globe icons in the existing Customize-style selector, retaining its name/icon,
 rule drafts and fixed Save action. Apps and websites move selected targets to
 the top immediately and restore original order on deselection, anchoring the
 visible mid-list rows rather than scrolling the user to the top. Website
@@ -571,6 +581,10 @@ message. The empty state includes the no-saved notice and short static example.
 The model icon before the microphone opens the existing provider/key controls
 with Coach information in anchored popovers. Errors remain visible above the chat; the
 main page itself does not scroll.
+Sending follows the laid-out timeline end, but scrolling up suspends following:
+incoming replies and their automatic history refresh do not reset that reading
+position. The latest-message arrow resumes following, including size changes
+during its animation; a new user scroll cancels it. Read-marker rules are unchanged.
 At very small remaining heights the composer joins the same chat scroller.
 This does not send a question or alter existing conversations.
 
@@ -1535,8 +1549,16 @@ Student-facing presentation follows
 This changes typography, icons, surfaces, motion, and platform branding only;
 the mobile product flows and data authority described here remain unchanged.
 
-Settings visibly groups its existing rows under Profile, Planning and learning,
-Tools and connections, and Account and appearance. Student-facing auth uses
+Settings groups existing rows into shared surfaces with inset dividers and semantic
+group labels, rather than repeated headings and guest explanations. Profile stays
+collapsed; all conditional platform/account entries remain. Setup editing shortens
+only its introduction, preserving Required setup and Optional setup. Exam Study
+settings groups the same controls into Study rhythm, Limits and Availability.
+Insights Overview keeps full evidence under Method & coverage; Compare uses
+Relationship and puts its complete summary under Details without changing data.
+Overview metric rows retain their complete text beside decorative theme-aware
+icons for Energy, Mood, Sleep duration/quality, Stress and Focus activity.
+Student-facing auth uses
 `Sign in` and `Create account`; routine failures are provider-neutral,
 outcome-first, and never render raw transport or contract exceptions. Shared
 status pills and surfaces own semantic state, while category accents remain

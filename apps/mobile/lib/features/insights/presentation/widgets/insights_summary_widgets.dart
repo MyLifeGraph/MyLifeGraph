@@ -382,7 +382,10 @@ class _OverviewObservationContent extends StatelessWidget {
           for (final bullet in observation.bullets)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(bullet),
+              child: _OverviewMetricLine(
+                text: bullet,
+                isCorrelation: observation.isCorrelation,
+              ),
             ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -394,56 +397,176 @@ class _OverviewObservationContent extends StatelessWidget {
             tilePadding: EdgeInsets.zero,
             childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
             children: [
-              for (final detail in [
-                ...observation.details,
-                ...observation.missingSources,
-                ...additionalDetails,
-              ])
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                    child: Text(
-                      detail,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
+              _ObservationDetailRow(
+                icon: AppIcons.stackedBarChartOutlined,
+                title: 'Based on',
+                value: early || supported
+                    ? '${observation.sourceLabel} · ${observation.observedDays} observed days'
+                    : 'General guidance · not your data',
+              ),
+              if (!supported)
+                _ObservationDetailRow(
+                  icon: AppIcons.infoOutline,
+                  title: 'For more reliable insights',
+                  value: observation.isCorrelation
+                      ? '28 shared days and consistent results in both time halves.'
+                      : early
+                      ? nextEvidence
+                      : heading == 'SLEEP RECOMMENDATION'
+                      ? '7 valid days of sleep check-ins.'
+                      : '7 valid days of check-ins or Focus activity.',
                 ),
-              for (final source in observation.sourceUrls)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    icon: const Icon(AppIcons.openInNew, size: 16),
-                    label: Text(
-                      source.contains('nhlbi')
-                          ? 'Sleep guidance source'
-                          : 'Study guidance source',
+              _ObservationDetailRow(
+                icon: AppIcons.descriptionOutlined,
+                title: 'Interpretation',
+                value: observation.isCorrelation
+                    ? 'Association, not cause.'
+                    : early
+                    ? 'Observations, not a reliable pattern or cause.'
+                    : 'General advice, not a personal finding.',
+              ),
+              const Divider(),
+              ExpansionTile(
+                title: const Text('Method & coverage'),
+                leading: const Icon(AppIcons.infoOutline),
+                tilePadding: EdgeInsets.zero,
+                children: [
+                  for (final detail in [
+                    ...observation.details,
+                    ...observation.missingSources,
+                    ...additionalDetails,
+                  ])
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: Text(
+                          detail,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
                     ),
-                    onPressed: () async {
-                      try {
-                        if (!await launchUrl(
-                          Uri.parse(source),
-                          mode: LaunchMode.externalApplication,
-                        )) {
-                          throw StateError('Launch unavailable');
-                        }
-                      } catch (_) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Could not open source. Try again.'),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ),
+                  for (final source in observation.sourceUrls)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(AppIcons.openInNew, size: 16),
+                        label: Text(
+                          source.contains('nhlbi')
+                              ? 'Sleep guidance source'
+                              : 'Study guidance source',
+                        ),
+                        onPressed: () async {
+                          try {
+                            if (!await launchUrl(
+                              Uri.parse(source),
+                              mode: LaunchMode.externalApplication,
+                            )) {
+                              throw StateError('Launch unavailable');
+                            }
+                          } catch (_) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Could not open source. Try again.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ],
       ),
     );
   }
+}
+
+class _OverviewMetricLine extends StatelessWidget {
+  const _OverviewMetricLine({required this.text, required this.isCorrelation});
+
+  final String text;
+  final bool isCorrelation;
+
+  // Presentation only: retain the complete authoritative summary, including
+  // median/unit qualifiers. Unknown future copy remains readable without an icon.
+  IconData? get icon {
+    if (isCorrelation) return AppIcons.autoGraphOutlined;
+    for (final metric in <String, IconData>{
+      'Energy': AppIcons.boltOutlined,
+      'Mood': AppIcons.moodOutlined,
+      'Stress': AppIcons.selfImprovementOutlined,
+      'Sleep duration': AppIcons.bedOutlined,
+      'Sleep quality': AppIcons.starFourOutlined,
+    }.entries) {
+      if (text.startsWith('${metric.key} ·')) return metric.value;
+    }
+    if (text.contains(' terminal Focus sessions ·')) return AppIcons.timerOutlined;
+    if (text.endsWith('% completed')) return AppIcons.taskAltOutlined;
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metricIcon = icon;
+    if (metricIcon == null) return Text(text);
+    return Row(
+      key: ValueKey('overview-metric-$text'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Icon(
+              metricIcon,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: Text(text)),
+      ],
+    );
+  }
+}
+
+class _ObservationDetailRow extends StatelessWidget {
+  const _ObservationDetailRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppIconBadge(icon: icon),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleSmall),
+              Text(value, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _PersonalStudyPatternCard extends StatelessWidget {

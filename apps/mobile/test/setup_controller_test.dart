@@ -12,8 +12,43 @@ import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/domain/intake_response.dart';
 import 'package:my_life_graph/features/auth/presentation/pages/onboarding_page.dart';
 import 'package:my_life_graph/features/auth/presentation/providers/setup_providers.dart';
+import 'support/ui_catalog_capture.dart';
 
 void main() {
+  testWidgets('editing setup keeps required and optional cards with a compact introduction', (tester) async {
+    await loadCatalogFonts();
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = _FakeSetupGateway(fetched: const IntakeSetupReadState.empty());
+    await tester.pumpWidget(ProviderScope(
+      overrides: [setupControllerProvider.overrideWith((ref) => SetupController(
+        repository: gateway,
+        session: _guestSession(onboardingDone: true),
+        onApplied: (_) {},
+      ))],
+      child: MaterialApp(theme: AppTheme.liquidGlass, debugShowCheckedModeBanner: false,
+        home: const OnboardingPage(editing: true)),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Your routine and study preferences.'), findsOneWidget);
+    expect(find.text('Review your setup'), findsNothing);
+    expect(find.text('Required setup'), findsOneWidget);
+    expect(find.text('Optional setup'), findsOneWidget);
+    if (captureUiCatalog) await captureCatalog(tester, 'setup-editing');
+    for (final label in ['Routines', 'Focus setup', 'Semester planning', 'Fixed commitments']) {
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+  });
   for (final (width, scale) in [(390.0, 1.0), (1280.0, 1.0), (320.0, 2.0)]) {
     testWidgets('Setup reference layout at $width and text scale $scale', (
       tester,

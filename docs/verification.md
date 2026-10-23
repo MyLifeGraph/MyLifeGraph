@@ -31,6 +31,83 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local Coach scroll and Blocking tab icons — 2026-10-23 (unpublished)
+
+Base `e6cdb4369fe13640fe2679a6522646306afbb3e0`. Before the fix, delayed
+completion moved a reader from offset 1634 to 5297 despite scrolling up; resizing
+the viewport during the latest-arrow animation left 150px below the viewport.
+Both are reproduced in `coach_page_test.dart` and pass after the local fix.
+**100 focused Flutter tests pass** across Coach page/controller/app-lifecycle/domain
+and Blocking editor sections/polish/picker/target-list/target-icons. Six scroll
+regressions include long/short replies, reading-position preservation, reply or
+viewport changes during the arrow animation, and gesture interruption. Existing
+explicit refresh, notices, drafts, four themes, narrow/enlarged-text/keyboard
+layouts and target identity/order checks remain covered.
+One opt-in catalog test passes; fresh real Flutter-widget renders with synthetic
+data are in `.tools/ui-catalog/blocking-tab-icons-20261023` (not device captures).
+Docs, visual-contract and whitespace checks pass. The base-bound affected gate
+selects Full but its source prerequisite fails on missing Windows `setsid`;
+the remaining parallel run was stopped. No full/Linux/DB/E2E or installed-phone
+verification, new APK, commit, push or deployment is claimed.
+The Flutter analyzer did not finish; a focused direct-Dart retry crashed in the
+Analysis Server's performance-witness shutdown (Windows filesystem error 1920
+under the local Dart perf directory). Static analysis is therefore not claimed
+green for this follow-up; the compiled widget/domain tests above did complete.
+
+### Local compact UI refinement — 2026-10-23 (unpublished)
+
+The five approved follow-up designs are now locally implemented: Task planning
+switch, visible Habit cadence choices, Calendar status/date presentation, Coach
+phone consent categories and the grouped speech-model catalog. **136 tests** pass
+across `compact_editor_presentation_test`, `planner_page_test`,
+`planner_habit_optional_duration_test`, `calendar_integration_page_test`,
+`calendar_integration_test`, `calendar_preparation_route_test`,
+`coach_phone_data_sheet_test` and `speech_settings_test`. Tests cover all four
+themes at narrow/enlarged text, no default Habit cadence, optional minutes,
+draft retention, Setup-owned definitions, preview/retry authority, exclusive dates
+over DST/leap-day/year boundaries, consent and speech source/download rules.
+Five opt-in catalog scenarios pass and produce fresh production-widget captures
+under `.tools/ui-catalog/more-ui-after-20261023`; before/after gallery:
+`.tools/ui-review-more-20261023/implemented.html`. They are isolated synthetic
+Flutter renders, not generated concepts or physical-device evidence.
+Flutter analyze reports no issues; docs/visual/whitespace checks pass. The affected
+selector again selects the full pipeline and stops at missing Windows `setsid`,
+so no full/Linux/DB/E2E gate is claimed. No commit, push or deployment occurred.
+
+Follow-up metric-icon correction: **84 Insights tests**, including four opt-in
+catalog scenarios, pass after adding decorative metric icons. Narrow 320px/200%
+coverage checks Energy, Mood and both sleep icons across all four themes;
+all original text and values remain. Flutter analyze, docs/visual and diff
+whitespace checks pass. Fresh isolated captures are in
+`.tools/ui-catalog/overview-icons-20261023`; the original five generated UI
+suggestions remain beside their separately labelled implementation captures.
+The full Windows/Linux gate limitation below still applies.
+
+Task base `e6cdb4369fe13640fe2679a6522646306afbb3e0`; local presentation-only
+changes cover Settings grouping, Setup editing introduction, Exam Study settings,
+Overview evidence disclosure and Compare layout. Required/Optional Setup cards,
+data rules, coefficients, persistence and confirmation gates are preserved.
+The six focused Flutter files (`settings_page_test`, `setup_controller_test`,
+`preparation_budget_control_test`, `deadline_plans_page_test`,
+`insights_page_load_state_test`, `widget_test`) pass **226 tests**. Coverage includes
+large text, narrow layouts, all themes, route/account gates, draft values retained
+when groups collapse, capacity/preview flows, evidence and Compare states.
+Flutter analyze reports no issues. Docs consistency, visual contract and
+`git diff --check` pass. Seven opt-in screenshot scenarios also passed.
+
+The affected selector was invoked with the captured base above. Existing unrelated
+untracked artifacts/retention edits selected the full pipeline; on this Windows
+host its local-stack prerequisite stops because `setsid` is unavailable. This is
+not a completed full/Linux/DB/E2E gate. Unrelated work was retained unchanged.
+
+Fresh local-browser Settings, Setup and Compare captures and real Flutter-renderer
+Overview/Exam captures are collected in `.tools/ui-review-20261023/implemented.html`.
+They use guest/demo or isolated synthetic data, not a user's account. Browser
+inspection confirms Setup navigation and Compare disclosure; the Exam and sparse
+Overview captures use the production widgets through their test harnesses.
+No physical Android test, remote mutation, commit, publication or deployment is
+claimed by this local review. Existing published evidence below is separate.
+
 ### Published RC36 Blocking editors — 2026-10-20
 
 PR [60](https://github.com/MyLifeGraph/MyLifeGraph/pull/60) merged normally after

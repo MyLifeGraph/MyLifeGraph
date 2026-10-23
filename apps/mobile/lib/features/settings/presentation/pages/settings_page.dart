@@ -28,6 +28,35 @@ import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../domain/account_settings.dart';
 import '../providers/account_settings_providers.dart';
 
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.label, required this.children});
+
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: label,
+    child: AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var index = 0; index < children.length; index++) ...[
+            if (index > 0)
+              const Divider(
+                height: 1,
+                indent: AppSpacing.md,
+                endIndent: AppSpacing.md,
+              ),
+            children[index],
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
@@ -136,95 +165,78 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ],
           ),
         ),
-        const AppSectionHeader(title: 'Planning and learning'),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
-            leading: const Icon(AppIcons.tuneOutlined),
-            title: const Text('Setup and commitments'),
-            subtitle: const Text(
-              'Routines, study rhythm and fixed commitments.',
-            ),
-            trailing: const Icon(AppIcons.chevronRight),
-            onTap: () => context.push('${AppRoutes.onboarding}?edit=1'),
-          ),
-        ),
-        if (syncedAccount && androidFocusProtection)
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: ListTile(
-              key: const ValueKey('focus-protection-setting-entry'),
-              leading: const Icon(AppIcons.lockOutline),
-              title: const Text('App blocking'),
-              subtitle: const Text('Apps, websites and Focus permissions.'),
+        _SettingsGroup(
+          label: 'Planning and learning',
+          children: [
+            ListTile(
+              leading: const Icon(AppIcons.tuneOutlined),
+              title: const Text('Setup and commitments'),
               trailing: const Icon(AppIcons.chevronRight),
-              onTap: () => context.push(AppRoutes.focusProtection),
+              onTap: () => context.push('${AppRoutes.onboarding}?edit=1'),
             ),
-          ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
-            key: const ValueKey('personal-learning-setting-entry'),
-            enabled: syncedAccount,
-            leading: const Icon(AppIcons.psychologyAltOutlined),
-            title: const Text('Personal learning'),
-            subtitle: Text(
-              syncedAccount
-                  ? 'Focus ratings · Study patterns · Planning'
-                  : 'Available only for a synced account.',
+            if (syncedAccount && androidFocusProtection)
+              ListTile(
+                key: const ValueKey('focus-protection-setting-entry'),
+                leading: const Icon(AppIcons.lockOutline),
+                title: const Text('App blocking'),
+                trailing: const Icon(AppIcons.chevronRight),
+                onTap: () => context.push(AppRoutes.focusProtection),
+              ),
+            ListTile(
+              key: const ValueKey('personal-learning-setting-entry'),
+              enabled: syncedAccount,
+              leading: const Icon(AppIcons.psychologyAltOutlined),
+              title: const Text('Personal learning'),
+              trailing: Icon(
+                syncedAccount ? AppIcons.chevronRight : AppIcons.lockOutline,
+              ),
+              onTap: syncedAccount
+                  ? () => context.push(AppRoutes.personalLearning)
+                  : null,
             ),
-            trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
-            onTap: syncedAccount
-                ? () => context.push(AppRoutes.personalLearning)
-                : null,
-          ),
+            const PreparationBudgetControl(compact: false),
+          ],
         ),
-        const AppCard(
-          padding: EdgeInsets.zero,
-          child: PreparationBudgetControl(compact: false),
-        ),
-        const AppSectionHeader(title: 'Tools and connections'),
         if (syncedAccount) const HealthConnectSettingsEntry(),
         if (syncedAccount) const PushSettingsEntry(),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
-            leading: const Icon(AppIcons.notificationsActiveOutlined),
-            title: const Text('In-app reminders'),
-            subtitle: Text(
-              syncedAccount
-                  ? 'Allow banners while the app is open and choose what may appear.'
-                  : 'In-app banners are available only for a synced account.',
+        _SettingsGroup(
+          label: 'Tools and connections',
+          children: [
+            ListTile(
+              enabled: syncedAccount,
+              leading: const Icon(AppIcons.notificationsActiveOutlined),
+              title: const Text('In-app reminders'),
+              subtitle: syncedAccount
+                  ? const Text('Banners while the app is open')
+                  : null,
+              trailing: Icon(
+                syncedAccount ? AppIcons.chevronRight : AppIcons.lockOutline,
+              ),
+              onTap: syncedAccount
+                  ? () => context.push(AppRoutes.notificationSettings)
+                  : null,
             ),
-            trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
-            onTap: syncedAccount
-                ? () => context.push(AppRoutes.notificationSettings)
-                : null,
-          ),
-        ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
-            leading: const Icon(AppIcons.calendarMonthOutlined),
-            title: const Text('Calendar import (optional)'),
-            subtitle: const Text(
-              'Import a selected .ics file as a read-only local copy.',
+            ListTile(
+              leading: const Icon(AppIcons.calendarMonthOutlined),
+              title: const Text('Calendar import (optional)'),
+              subtitle: const Text('Read-only .ics file · local copy'),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: () => context.push(AppRoutes.calendarIntegration),
             ),
-            trailing: const Icon(AppIcons.chevronRight),
-            onTap: () => context.push(AppRoutes.calendarIntegration),
-          ),
+            ListTile(
+              key: const ValueKey('product-website-setting-entry'),
+              leading: const Icon(AppIcons.publicOutlined),
+              title: const Text('Website'),
+              trailing: const Icon(AppIcons.openInNew),
+              onTap: _openWebsite,
+            ),
+          ],
         ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
-            key: const ValueKey('product-website-setting-entry'),
-            leading: const Icon(AppIcons.publicOutlined),
-            title: const Text('Website'),
-            trailing: const Icon(AppIcons.openInNew),
-            onTap: _openWebsite,
+        if (!syncedAccount)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            child: Text('Locked options need a synced account.'),
           ),
-        ),
-        const AppSectionHeader(title: 'Account and appearance'),
         const AppUpdatesEntry(),
         if (config?.isHostedEnvironment == true)
           AppCard(
@@ -257,98 +269,91 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               onTap: () => context.push(AppRoutes.pilotParticipation),
             ),
           ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              ListTile(
-                enabled: syncedAccount && !_isExporting && !_isDeleting,
-                leading: _isExporting
-                    ? const SizedBox.square(
-                        dimension: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(AppIcons.downloadOutlined),
-                title: const Text('Export data'),
-                subtitle: Text(
-                  syncedAccount
-                      ? 'Save or share a JSON copy of your account data.'
-                      : 'Available only for a synced account.',
-                ),
-                onTap: syncedAccount && !_isExporting && !_isDeleting
-                    ? _exportData
-                    : null,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                enabled: syncedAccount && !_isDeleting && !_isExporting,
-                leading: _isDeleting
-                    ? const SizedBox.square(
-                        dimension: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        AppIcons.deleteForeverOutlined,
-                        color: syncedAccount
-                            ? Theme.of(context).colorScheme.error
-                            : null,
-                      ),
-                title: const Text('Delete account'),
-                subtitle: Text(
-                  syncedAccount
-                      ? 'Permanently delete your account and owned data. Requires a sign-in within the last 15 minutes.'
-                      : 'A local guest has no synced account to delete.',
-                ),
-                onTap: syncedAccount && !_isDeleting && !_isExporting
-                    ? _confirmDeleteAccount
-                    : null,
-              ),
-            ],
-          ),
-        ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
-            key: const ValueKey('appearance-setting-entry'),
-            leading: Icon(_appearanceIcon(themeSelection)),
-            title: const Text('Appearance'),
-            subtitle: Text(
-              '${_appearanceLabel(themeSelection)} · Saved on this device.',
+        _SettingsGroup(
+          label: 'Account and appearance',
+          children: [
+            ListTile(
+              key: const ValueKey('appearance-setting-entry'),
+              leading: Icon(_appearanceIcon(themeSelection)),
+              title: const Text('Appearance'),
+              subtitle: Text(_appearanceLabel(themeSelection)),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: _chooseAppearance,
             ),
-            trailing: const Icon(AppIcons.chevronRight),
-            onTap: _chooseAppearance,
-          ),
-        ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: SwitchListTile.adaptive(
-            key: const ValueKey('haptic-feedback-setting'),
-            title: const Text('Haptic feedback'),
-            subtitle: Text(
-              haptics.hasError
-                  ? 'Could not load setting'
-                  : 'Subtle taps · This device',
+            ListTile(
+              enabled: syncedAccount && !_isExporting && !_isDeleting,
+              leading: _isExporting
+                  ? const SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(AppIcons.downloadOutlined),
+              title: const Text('Export data'),
+              subtitle: syncedAccount
+                  ? const Text('Save or share a JSON copy')
+                  : null,
+              trailing: Icon(
+                syncedAccount ? AppIcons.chevronRight : AppIcons.lockOutline,
+              ),
+              onTap: syncedAccount && !_isExporting && !_isDeleting
+                  ? _exportData
+                  : null,
             ),
-            value: haptics.valueOrNull ?? true,
-            onChanged: _isSavingHaptics || !haptics.hasValue
-                ? null
-                : (enabled) async {
-                    setState(() => _isSavingHaptics = true);
-                    final controller = ref.read(appHapticsProvider.notifier);
-                    final saved = await controller.select(enabled);
-                    if (!mounted || !context.mounted) return;
-                    setState(() => _isSavingHaptics = false);
-                    if (!saved) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Could not save setting. Try again.'),
-                        ),
-                      );
-                    } else if (enabled) {
-                      controller.selection();
-                    }
-                  },
-          ),
+            ListTile(
+              enabled: syncedAccount && !_isDeleting && !_isExporting,
+              leading: _isDeleting
+                  ? const SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      AppIcons.deleteForeverOutlined,
+                      color: syncedAccount
+                          ? Theme.of(context).colorScheme.error
+                          : null,
+                    ),
+              title: const Text('Delete account'),
+              subtitle: syncedAccount
+                  ? const Text(
+                      'Permanent · requires a sign-in within 15 minutes',
+                    )
+                  : null,
+              trailing: Icon(
+                syncedAccount ? AppIcons.chevronRight : AppIcons.lockOutline,
+              ),
+              onTap: syncedAccount && !_isDeleting && !_isExporting
+                  ? _confirmDeleteAccount
+                  : null,
+            ),
+            SwitchListTile.adaptive(
+              key: const ValueKey('haptic-feedback-setting'),
+              title: const Text('Haptic feedback'),
+              subtitle: Text(
+                haptics.hasError
+                    ? 'Could not load setting'
+                    : 'Subtle taps · This device',
+              ),
+              value: haptics.valueOrNull ?? true,
+              onChanged: _isSavingHaptics || !haptics.hasValue
+                  ? null
+                  : (enabled) async {
+                      setState(() => _isSavingHaptics = true);
+                      final controller = ref.read(appHapticsProvider.notifier);
+                      final saved = await controller.select(enabled);
+                      if (!mounted || !context.mounted) return;
+                      setState(() => _isSavingHaptics = false);
+                      if (!saved) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Could not save setting. Try again.'),
+                          ),
+                        );
+                      } else if (enabled) {
+                        controller.selection();
+                      }
+                    },
+            ),
+          ],
         ),
         if (config != null)
           AppCard(

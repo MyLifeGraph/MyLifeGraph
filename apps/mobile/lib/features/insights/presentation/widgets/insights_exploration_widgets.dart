@@ -705,25 +705,19 @@ class _CorrelationCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${metricA.label} vs ${metricB.label}',
+            'Relationship',
             key: const ValueKey('compare-correlation-heading'),
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: AppSpacing.sm),
-          if (!compactHeader) ...[
-            description,
-            const SizedBox(height: AppSpacing.md),
-            badge,
-          ] else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: description),
-                const SizedBox(width: AppSpacing.md),
-                badge,
-              ],
-            ),
-          const SizedBox(height: AppSpacing.lg),
+          badge,
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '${activeResult?.sampleSize ?? values.length} shared days',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (activeResult?.coefficient == null) description,
+          const SizedBox(height: AppSpacing.md),
           SizedBox(
             height: isMobile ? 230 : 320,
             child: CustomPaint(
@@ -760,13 +754,6 @@ class _CorrelationCard extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '${activeResult?.sampleSize ?? values.length} shared days',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
                   '${metricB.label} (${metricB.unit})',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
@@ -782,13 +769,6 @@ class _CorrelationCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  '${activeResult?.sampleSize ?? values.length} shared days',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     '${metricB.label} (${metricB.unit})',
@@ -797,6 +777,19 @@ class _CorrelationCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Association, not cause.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (activeResult?.coefficient != null)
+            ExpansionTile(
+              key: const ValueKey('compare-method-details'),
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Details'),
+              subtitle: const Text('Coverage · Interpretation'),
+              children: [description],
             ),
         ],
       ),
@@ -824,17 +817,18 @@ class _CorrelationBadge extends StatelessWidget {
     final color = _resultColor(context, result, metricA, metricB);
     final badge = Container(
       key: const ValueKey('compare-correlation-badge'),
-      width: compact ? 92 : 112,
       padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.md),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(AppRadii.lg),
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
-      child: Column(
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.xs,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text(label, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.xs),
+          Text(label, style: Theme.of(context).textTheme.titleMedium),
           Text(
             caption,
             textAlign: TextAlign.center,

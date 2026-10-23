@@ -691,6 +691,13 @@ or that imported Calendar data is complete availability.
 
 ## Visual presentation
 
+Task's `Plan time` switch is grouped with an icon and `Preview only`; when off,
+`Off: save without a schedule.` describes the unchanged unscheduled command.
+Habit's `Repeat *` group exposes the existing three mutually exclusive cadences
+as radio rows, with no new default. Weekday and weekly-count inputs, optional/new
+versus required/existing duration, Setup-owned read-only definitions and every
+validation/preview/confirmation rule remain unchanged.
+
 Needs attention groups unplaced saved-plan rows under the matching Exam Health
 item's Details disclosure. Other warnings (including stale/conflict/source
 states) remain visible, with all existing destinations retained. The count is

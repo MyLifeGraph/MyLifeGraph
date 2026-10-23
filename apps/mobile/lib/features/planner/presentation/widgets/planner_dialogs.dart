@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/time/profile_timezone.dart';
 import '../../domain/planner.dart';
 
@@ -14,10 +15,8 @@ class PlannerPlanPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final revision = plan.pendingRevision!;
-    DateTime local(DateTime instant) => profileDateTimeAt(
-          instant: instant,
-          timezoneName: revision.timezone,
-        );
+    DateTime local(DateTime instant) =>
+        profileDateTimeAt(instant: instant, timezoneName: revision.timezone);
     return AlertDialog(
       title: const Text('Review plan preview'),
       content: SizedBox(
@@ -40,9 +39,9 @@ class PlannerPlanPreviewDialog extends StatelessWidget {
                 Text(
                   revision.timingPreference.fellBackToSetup
                       ? 'Learned timing considered · Setup fallback · '
-                          '${revision.timingPreference.evidenceCount} rated sessions'
+                            '${revision.timingPreference.evidenceCount} rated sessions'
                       : 'Learned timing applied · '
-                          '${revision.timingPreference.evidenceCount} rated sessions',
+                            '${revision.timingPreference.evidenceCount} rated sessions',
                   key: const Key('planner-learned-timing-applied'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
@@ -52,8 +51,8 @@ class PlannerPlanPreviewDialog extends StatelessWidget {
                   'Personal pattern unavailable · Setup timing used',
                   key: const Key('planner-learned-timing-fallback'),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
               ],
               const SizedBox(height: AppSpacing.md),
@@ -69,11 +68,11 @@ class PlannerPlanPreviewDialog extends StatelessWidget {
                   subtitle: Text(
                     block.recoveryMinutes > 0
                         ? '${DateFormat.yMMMd().add_Hm().format(local(block.startsAt))} · '
-                            '${block.plannedMinutes} min focus + ${block.recoveryMinutes} min recovery · '
-                            'reserved until ${DateFormat.Hm().format(local(block.reservedEndsAt))}'
-                        : DateFormat.yMMMd()
-                            .add_Hm()
-                            .format(local(block.startsAt)),
+                              '${block.plannedMinutes} min focus + ${block.recoveryMinutes} min recovery · '
+                              'reserved until ${DateFormat.Hm().format(local(block.reservedEndsAt))}'
+                        : DateFormat.yMMMd().add_Hm().format(
+                            local(block.startsAt),
+                          ),
                   ),
                 ),
               for (final slot in revision.habitSlots)
@@ -143,8 +142,9 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
     final initial = widget.initial;
     _title = TextEditingController(text: initial?.title);
     _description = TextEditingController(text: initial?.description);
-    _duration =
-        TextEditingController(text: initial?.estimatedMinutes?.toString());
+    _duration = TextEditingController(
+      text: initial?.estimatedMinutes?.toString(),
+    );
     _session = TextEditingController(
       text: initial?.preferredSessionMinutes?.toString(),
     );
@@ -155,7 +155,8 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
             instant: initial!.deadlineAt!,
             timezoneName: widget.timezone,
           );
-    _schedule = initial?.estimatedMinutes != null ||
+    _schedule =
+        initial?.estimatedMinutes != null ||
         initial?.deadlineAt != null ||
         initial?.preferredSessionMinutes != null;
     _useStudyRhythm = initial?.useStudyRhythm ?? false;
@@ -172,130 +173,147 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title:
-            Text(widget.initial?.targetId == null ? 'Add Task' : 'Plan Task'),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const ValueKey('planner-task-title'),
-                  controller: _title,
-                  maxLength: 160,
-                  decoration: const InputDecoration(labelText: 'Title *', counterText: ''),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                TextField(
-                  key: const ValueKey('planner-task-description'),
-                  controller: _description,
-                  maxLength: 2000,
-                  minLines: 1,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Description (optional)',
-                    counterText: '',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                DropdownButtonFormField<String>(
-                  key: const ValueKey('planner-task-priority'),
-                  initialValue: _priority,
-                  isExpanded: true,
-                  itemHeight: null,
-                  decoration: const InputDecoration(labelText: 'Priority'),
-                  items: const [
-                    DropdownMenuItem(value: 'low', child: Text('Low')),
-                    DropdownMenuItem(value: 'medium', child: Text('Medium')),
-                    DropdownMenuItem(value: 'high', child: Text('High')),
-                    DropdownMenuItem(
-                      value: 'critical',
-                      child: Text('Critical'),
+    title: Text(widget.initial?.targetId == null ? 'Add Task' : 'Plan Task'),
+    content: SizedBox(
+      width: 520,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              key: const ValueKey('planner-task-title'),
+              controller: _title,
+              maxLength: 160,
+              decoration: const InputDecoration(
+                labelText: 'Title *',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              key: const ValueKey('planner-task-description'),
+              controller: _description,
+              maxLength: 2000,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<String>(
+              key: const ValueKey('planner-task-priority'),
+              initialValue: _priority,
+              isExpanded: true,
+              itemHeight: null,
+              decoration: const InputDecoration(labelText: 'Priority'),
+              items: const [
+                DropdownMenuItem(value: 'low', child: Text('Low')),
+                DropdownMenuItem(value: 'medium', child: Text('Medium')),
+                DropdownMenuItem(value: 'high', child: Text('High')),
+                DropdownMenuItem(value: 'critical', child: Text('Critical')),
+              ],
+              onChanged: (value) => setState(() => _priority = value!),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: SwitchListTile(
+                key: const ValueKey('planner-task-schedule'),
+                secondary: const Icon(AppIcons.editCalendarOutlined),
+                value: _schedule,
+                onChanged: (value) => setState(() {
+                  _schedule = value;
+                  if (!value) _useStudyRhythm = false;
+                }),
+                title: const Text('Plan time'),
+                subtitle: const Text('Preview only'),
+              ),
+            ),
+            if (!_schedule) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  const Icon(AppIcons.infoOutline, size: 18),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Off: save without a schedule.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ],
-                  onChanged: (value) => setState(() => _priority = value!),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _schedule,
-                  onChanged: (value) => setState(() {
-                    _schedule = value;
-                    if (!value) _useStudyRhythm = false;
-                  }),
-                  title: const Text('Create a time-block preview'),
-                  subtitle: const Text(
-                    'Add duration, deadline and focus-block length.',
-                  ),
-                ),
-                if (_schedule) ...[
-                  SwitchListTile.adaptive(
-                    key: const ValueKey('planner-task-study-rhythm'),
-                    contentPadding: EdgeInsets.zero,
-                    value: _useStudyRhythm,
-                    onChanged: (value) {
-                      setState(() => _useStudyRhythm = value);
-                    },
-                    title: const Text('Use study rhythm'),
-                    subtitle: const Text(
-                      'Uses the exact Focus length and reserves the full recovery buffer from Settings. Habits never use this rule.',
-                    ),
-                  ),
-                  TextField(
-                    key: const ValueKey('planner-task-duration'),
-                    controller: _duration,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Total duration in minutes *',
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  TextField(
-                    key: const ValueKey('planner-task-session'),
-                    controller: _session,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Preferred session in minutes *',
-                    ),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Exact deadline *'),
-                    subtitle: Text(
-                      _deadline == null
-                          ? 'Not selected'
-                          : DateFormat.yMMMd().add_Hm().format(_deadline!),
-                    ),
-                    trailing: const Icon(AppIcons.editCalendarOutlined),
-                    onTap: _pickDeadline,
                   ),
                 ],
-                if (_error != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _error!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                    ),
+              ),
+            ],
+            if (_schedule) ...[
+              SwitchListTile.adaptive(
+                key: const ValueKey('planner-task-study-rhythm'),
+                contentPadding: EdgeInsets.zero,
+                value: _useStudyRhythm,
+                onChanged: (value) {
+                  setState(() => _useStudyRhythm = value);
+                },
+                title: const Text('Use study rhythm'),
+                subtitle: const Text(
+                  'Uses the exact Focus length and reserves the full recovery buffer from Settings. Habits never use this rule.',
+                ),
+              ),
+              TextField(
+                key: const ValueKey('planner-task-duration'),
+                controller: _duration,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Total duration in minutes *',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                key: const ValueKey('planner-task-session'),
+                controller: _session,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Preferred session in minutes *',
+                ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Exact deadline *'),
+                subtitle: Text(
+                  _deadline == null
+                      ? 'Not selected'
+                      : DateFormat.yMMMd().add_Hm().format(_deadline!),
+                ),
+                trailing: const Icon(AppIcons.editCalendarOutlined),
+                onTap: _pickDeadline,
+              ),
+            ],
+            if (_error != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _error!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('planner-task-preview'),
-            onPressed: _submit,
-            child: Text(_schedule ? 'Preview plan' : 'Save as unscheduled'),
-          ),
-        ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const ValueKey('planner-task-preview'),
+        onPressed: _submit,
+        child: Text(_schedule ? 'Preview plan' : 'Save as unscheduled'),
+      ),
+    ],
+  );
 
   Future<void> _pickDeadline() async {
     final now = profileDateTimeAt(
@@ -335,8 +353,10 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
         _error = null;
       });
     } on ProfileTimezoneException {
-      setState(() => _error =
-          'This time is skipped or repeated by a clock change. Choose another time.');
+      setState(
+        () => _error =
+            'This time is skipped or repeated by a clock change. Choose another time.',
+      );
     }
   }
 
@@ -368,8 +388,9 @@ class _TaskDialogState extends State<PlannerTaskDialog> {
       context,
       PlannerTaskDraft(
         title: title,
-        description:
-            _description.text.trim().isEmpty ? null : _description.text.trim(),
+        description: _description.text.trim().isEmpty
+            ? null
+            : _description.text.trim(),
         priority: _priority,
         estimatedMinutes: duration,
         deadlineAt: _schedule ? _deadline : null,
@@ -480,24 +501,59 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<String>(
-                key: const ValueKey('planner-habit-cadence'),
-                initialValue: _cadence,
-                isExpanded: true,
-                itemHeight: null,
-                decoration: const InputDecoration(labelText: 'How often? *'),
-                items: const [
-                  DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                  DropdownMenuItem(
-                    value: 'weekdays',
-                    child: Text('Selected weekdays'),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: RadioGroup<String>(
+                  key: const ValueKey('planner-habit-cadence'),
+                  groupValue: _cadence,
+                  onChanged: (value) => setState(() => _cadence = value),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        child: Text(
+                          'Repeat *',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                      ),
+                      for (final option in const [
+                        ('daily', 'Daily', AppIcons.repeatOutlined),
+                        (
+                          'weekdays',
+                          'Selected weekdays',
+                          AppIcons.calendarMonthOutlined,
+                        ),
+                        (
+                          'weekly_target',
+                          'Times per week',
+                          AppIcons.centerFocusStrong,
+                        ),
+                      ]) ...[
+                        if (option.$1 != 'daily')
+                          const Divider(
+                            height: 1,
+                            indent: AppSpacing.sm,
+                            endIndent: AppSpacing.sm,
+                          ),
+                        RadioListTile<String>(
+                          key: ValueKey('planner-habit-cadence-${option.$1}'),
+                          value: option.$1,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xs,
+                          ),
+                          title: Row(
+                            children: [
+                              Icon(option.$3, size: 20),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(child: Text(option.$2)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  DropdownMenuItem(
-                    value: 'weekly_target',
-                    child: Text('Times per week'),
-                  ),
-                ],
-                onChanged: (value) => setState(() => _cadence = value),
+                ),
               ),
             ],
             if (!widget.definitionReadOnly && _cadence == 'weekdays') ...[
@@ -534,6 +590,7 @@ class _HabitDialogState extends State<PlannerHabitDialog> {
               keyboardType: TextInputType.number,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
+                prefixIcon: const Icon(AppIcons.schedule),
                 labelText: _durationOptional
                     ? 'Minutes (optional)'
                     : 'Minutes per occurrence *',
@@ -634,34 +691,31 @@ class _ReadOnlyHabitDefinition extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        key: const ValueKey('planner-habit-read-only-definition'),
-        container: true,
-        label: _habitDefinitionSemanticsLabel(
-          title: title,
-          description: description,
-          cadence: cadence,
-        ),
-        readOnly: true,
-        child: ExcludeSemantics(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Title', style: Theme.of(context).textTheme.labelLarge),
-              Text(title),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Description',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              Text(description ?? 'None'),
-              const SizedBox(height: AppSpacing.sm),
-              Text('Cadence', style: Theme.of(context).textTheme.labelLarge),
-              Text(cadence),
-              const SizedBox(height: AppSpacing.sm),
-            ],
-          ),
-        ),
-      );
+    key: const ValueKey('planner-habit-read-only-definition'),
+    container: true,
+    label: _habitDefinitionSemanticsLabel(
+      title: title,
+      description: description,
+      cadence: cadence,
+    ),
+    readOnly: true,
+    child: ExcludeSemantics(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Title', style: Theme.of(context).textTheme.labelLarge),
+          Text(title),
+          const SizedBox(height: AppSpacing.sm),
+          Text('Description', style: Theme.of(context).textTheme.labelLarge),
+          Text(description ?? 'None'),
+          const SizedBox(height: AppSpacing.sm),
+          Text('Cadence', style: Theme.of(context).textTheme.labelLarge),
+          Text(cadence),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ),
+    ),
+  );
 }
 
 String _habitDefinitionSemanticsLabel({
@@ -742,121 +796,121 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Add fixed commitment'),
-        scrollable: true,
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const ValueKey('planner-commitment-title'),
-                  controller: _title,
-                  maxLength: 160,
-                  decoration: const InputDecoration(labelText: 'Title *', counterText: ''),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                TextField(
-                  controller: _location,
-                  maxLength: 300,
-                  decoration:
-                      const InputDecoration(labelText: 'Location (optional)', counterText: ''),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                DropdownButtonFormField<String>(
-                  initialValue: _recurrence,
-                  isExpanded: true,
-                  itemHeight: null,
-                  decoration: const InputDecoration(labelText: 'Repeats *'),
-                  items: const [
-                    DropdownMenuItem(value: 'one_off', child: Text('One time')),
-                    DropdownMenuItem(
-                      value: 'weekly',
-                      child: Text('Every week'),
-                    ),
-                  ],
-                  onChanged: (value) => setState(() => _recurrence = value),
-                ),
-                if (_recurrence == 'one_off') ...[
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Starts *'),
-                    subtitle: Text(
-                      _startsAt == null
-                          ? 'Not selected'
-                          : DateFormat.yMMMd().add_Hm().format(_startsAt!),
-                    ),
-                    onTap: () => _pickOneOff(start: true),
-                    trailing: const Icon(AppIcons.editCalendarOutlined),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Ends *'),
-                    subtitle: Text(
-                      _endsAt == null
-                          ? 'Not selected'
-                          : DateFormat.yMMMd().add_Hm().format(_endsAt!),
-                    ),
-                    onTap: () => _pickOneOff(start: false),
-                    trailing: const Icon(AppIcons.editCalendarOutlined),
-                  ),
-                ],
-                if (_recurrence == 'weekly') ...[
-                  DropdownButtonFormField<int>(
-                    initialValue: _weekday,
-                    isExpanded: true,
-                    itemHeight: null,
-                    decoration: const InputDecoration(labelText: 'Weekday *'),
-                    items: [
-                      for (var day = 1; day <= 7; day++)
-                        DropdownMenuItem(
-                          value: day,
-                          child: Text(_weekdayLabel(day)),
-                        ),
-                    ],
-                    onChanged: (value) => setState(() => _weekday = value),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Starts *'),
-                    subtitle:
-                        Text(_weeklyStart?.format(context) ?? 'Not selected'),
-                    onTap: () => _pickWeekly(start: true),
-                    trailing: const Icon(AppIcons.editCalendarOutlined),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Ends *'),
-                    subtitle:
-                        Text(_weeklyEnd?.format(context) ?? 'Not selected'),
-                    onTap: () => _pickWeekly(start: false),
-                    trailing: const Icon(AppIcons.editCalendarOutlined),
-                  ),
-                ],
-                if (_error != null)
-                  Text(
-                    _error!,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
-              ],
+    title: const Text('Add fixed commitment'),
+    scrollable: true,
+    content: SizedBox(
+      width: 520,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              key: const ValueKey('planner-commitment-title'),
+              controller: _title,
+              maxLength: 160,
+              decoration: const InputDecoration(
+                labelText: 'Title *',
+                counterText: '',
+              ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _location,
+              maxLength: 300,
+              decoration: const InputDecoration(
+                labelText: 'Location (optional)',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<String>(
+              initialValue: _recurrence,
+              isExpanded: true,
+              itemHeight: null,
+              decoration: const InputDecoration(labelText: 'Repeats *'),
+              items: const [
+                DropdownMenuItem(value: 'one_off', child: Text('One time')),
+                DropdownMenuItem(value: 'weekly', child: Text('Every week')),
+              ],
+              onChanged: (value) => setState(() => _recurrence = value),
+            ),
+            if (_recurrence == 'one_off') ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Starts *'),
+                subtitle: Text(
+                  _startsAt == null
+                      ? 'Not selected'
+                      : DateFormat.yMMMd().add_Hm().format(_startsAt!),
+                ),
+                onTap: () => _pickOneOff(start: true),
+                trailing: const Icon(AppIcons.editCalendarOutlined),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ends *'),
+                subtitle: Text(
+                  _endsAt == null
+                      ? 'Not selected'
+                      : DateFormat.yMMMd().add_Hm().format(_endsAt!),
+                ),
+                onTap: () => _pickOneOff(start: false),
+                trailing: const Icon(AppIcons.editCalendarOutlined),
+              ),
+            ],
+            if (_recurrence == 'weekly') ...[
+              DropdownButtonFormField<int>(
+                initialValue: _weekday,
+                isExpanded: true,
+                itemHeight: null,
+                decoration: const InputDecoration(labelText: 'Weekday *'),
+                items: [
+                  for (var day = 1; day <= 7; day++)
+                    DropdownMenuItem(
+                      value: day,
+                      child: Text(_weekdayLabel(day)),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _weekday = value),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Starts *'),
+                subtitle: Text(_weeklyStart?.format(context) ?? 'Not selected'),
+                onTap: () => _pickWeekly(start: true),
+                trailing: const Icon(AppIcons.editCalendarOutlined),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ends *'),
+                subtitle: Text(_weeklyEnd?.format(context) ?? 'Not selected'),
+                onTap: () => _pickWeekly(start: false),
+                trailing: const Icon(AppIcons.editCalendarOutlined),
+              ),
+            ],
+            if (_error != null)
+              Text(
+                _error!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('planner-commitment-review'),
-            onPressed: _submit,
-            child: const Text('Review commitment'),
-          ),
-        ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const ValueKey('planner-commitment-review'),
+        onPressed: _submit,
+        child: const Text('Review commitment'),
+      ),
+    ],
+  );
 
   Future<void> _pickOneOff({required bool start}) async {
     final current = start ? _startsAt : _endsAt;
@@ -900,15 +954,18 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
         _error = null;
       });
     } on ProfileTimezoneException {
-      setState(() => _error =
-          'This time is skipped or repeated by a clock change. Choose another time.');
+      setState(
+        () => _error =
+            'This time is skipped or repeated by a clock change. Choose another time.',
+      );
     }
   }
 
   Future<void> _pickWeekly({required bool start}) async {
     final value = await showTimePicker(
       context: context,
-      initialTime: (start ? _weeklyStart : _weeklyEnd) ??
+      initialTime:
+          (start ? _weeklyStart : _weeklyEnd) ??
           (start
               ? const TimeOfDay(hour: 9, minute: 0)
               : const TimeOfDay(hour: 10, minute: 0)),
@@ -947,8 +1004,9 @@ class _CommitmentDialogState extends State<PlannerCommitmentDialog> {
         startsAt: _recurrence == 'one_off' ? _startsAt : null,
         endsAt: _recurrence == 'one_off' ? _endsAt : null,
         weekday: _recurrence == 'weekly' ? _weekday : null,
-        localStartsAt:
-            _recurrence == 'weekly' ? _timeString(_weeklyStart!) : null,
+        localStartsAt: _recurrence == 'weekly'
+            ? _timeString(_weeklyStart!)
+            : null,
         localEndsAt: _recurrence == 'weekly' ? _timeString(_weeklyEnd!) : null,
       ),
     );

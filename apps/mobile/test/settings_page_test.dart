@@ -5,12 +5,38 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/feedback/app_haptics.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/theme/app_theme_selection_provider.dart';
 import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/features/settings/presentation/pages/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/ui_catalog_capture.dart';
 
 void main() {
+  if (captureUiCatalog) {
+    testWidgets('catalog compact settings', (tester) async {
+      await loadCatalogFonts();
+      SharedPreferences.setMockInitialValues({
+        'auth_guest_active': true,
+        'auth_guest_onboarding_done': true,
+        'auth_guest_name': 'Review Guest',
+        'app_theme_mode': 'liquidGlass',
+      });
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [appConfigProvider.overrideWithValue(_testConfig)],
+        child: const _ThemeAwareSettingsApp(),
+      ));
+      await captureCatalog(tester, 'settings-top');
+      final scrollable = find.byType(Scrollable).first;
+      await _revealText(tester, 'Appearance', scrollable);
+      await captureCatalog(tester, 'settings-account');
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final outcome in ['success', 'unavailable', 'error']) {
     testWidgets('website opens externally: $outcome', (tester) async {
       SharedPreferences.setMockInitialValues({
@@ -106,14 +132,14 @@ void main() {
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
     expect(find.byKey(const ValueKey('global-header-settings')), findsNothing);
-    expect(find.text('Planning and learning'), findsOneWidget);
+    expect(find.bySemanticsLabel('Planning and learning'), findsOneWidget);
     await _revealText(tester, 'Daily preparation budget', pageScrollable);
     expect(
       find.byKey(const ValueKey('daily-preparation-budget-setting')),
       findsOneWidget,
     );
     await _revealText(tester, 'In-app reminders', pageScrollable);
-    expect(find.text('Tools and connections'), findsOneWidget);
+    expect(find.bySemanticsLabel('Tools and connections'), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-inbox-entry')), findsNothing);
     expect(find.text('In-app reminders'), findsOneWidget);
     await _revealText(tester, 'Personal learning', pageScrollable);
@@ -122,26 +148,26 @@ void main() {
     expect(find.text('Calendar import (optional)'), findsOneWidget);
     expect(find.textContaining('Coach'), findsNothing);
     expect(
-      find.text('Import a selected .ics file as a read-only local copy.'),
+      find.text('Read-only .ics file · local copy'),
       findsOneWidget,
     );
     expect(
       find.text(
-        'Routines, study rhythm and fixed commitments.',
+        'Locked options need a synced account.',
         skipOffstage: false,
       ),
       findsOneWidget,
     );
 
     await _revealText(tester, 'Export data', pageScrollable);
-    expect(find.text('Account and appearance'), findsOneWidget);
+    expect(find.bySemanticsLabel('Account and appearance'), findsOneWidget);
     expect(find.text('Export data'), findsOneWidget);
     await _revealText(tester, 'Delete account', pageScrollable);
     expect(find.text('Delete account'), findsOneWidget);
     expect(
       find.descendant(
         of: find.widgetWithText(ListTile, 'Delete account'),
-        matching: find.text('A local guest has no synced account to delete.'),
+        matching: find.byIcon(AppIcons.lockOutline),
       ),
       findsOneWidget,
     );
@@ -151,7 +177,7 @@ void main() {
     expect(find.text('Biometric app lock'), findsNothing);
 
     await _revealText(tester, 'Appearance', pageScrollable);
-    expect(find.text('Dark · Saved on this device.'), findsOneWidget);
+    expect(find.text('Dark'), findsOneWidget);
     await _revealText(tester, 'Haptic feedback', pageScrollable);
     final hapticSwitch = find.byKey(const ValueKey('haptic-feedback-setting'));
     expect(tester.widget<SwitchListTile>(hapticSwitch).value, isTrue);
@@ -175,7 +201,7 @@ void main() {
     expect(find.text('Animated violet and cyan'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('appearance-option-space')));
     await tester.pumpAndSettle();
-    expect(find.text('Space · Saved on this device.'), findsOneWidget);
+    expect(find.text('Space'), findsOneWidget);
     expect(
       Theme.of(
         tester.element(find.byKey(const ValueKey('appearance-setting-entry'))),
@@ -283,7 +309,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('appearance-option-space')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Dark · Saved on this device.'), findsOneWidget);
+      expect(find.text('Dark'), findsOneWidget);
       expect(
         find.text('Could not save the appearance setting. Try again.'),
         findsOneWidget,

@@ -175,6 +175,16 @@ class AppIcons {
     fontPackage: 'phosphor_flutter',
     matchTextDirection: true,
   );
+  static const bedOutlined = IconData(
+    0xe0cc,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
+  static const starFourOutlined = IconData(
+    0xe6a4,
+    fontFamily: 'PhosphorRegular',
+    fontPackage: 'phosphor_flutter',
+  );
   static const boltOutlined = IconData(
     0xe2de,
     fontFamily: 'PhosphorRegular',

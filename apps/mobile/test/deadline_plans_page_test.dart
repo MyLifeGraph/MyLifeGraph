@@ -173,6 +173,15 @@ void main() {
       await _tap(tester, find.byKey(const ValueKey('preparation-session-custom')));
       await tester.enterText(find.byKey(const ValueKey('preparation-session-minutes')), '60');
       await tester.pumpAndSettle();
+      for (final group in ['Study rhythm', 'Limits', 'Availability']) {
+        final tile = find.byKey(ValueKey('exam-settings-$group'));
+        final title = find.descendant(of: tile, matching: find.text(group));
+        await _tap(tester, title);
+        await _tap(tester, title);
+      }
+      expect(tester.state<FormFieldState<String>>(
+        find.byKey(const ValueKey('preparation-session-minutes')),
+      ).value, '60');
       await _tap(tester, find.byKey(const ValueKey('deadline-planning-details')));
       expect(find.textContaining('Daily budget is shared'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -1675,7 +1684,7 @@ void main() {
     expect(find.text('3 / 3'), findsNothing);
     expect(find.textContaining('prior work'), findsNothing);
     expect(
-      find.text('Daily limit'),
+      find.text('This exam · per day'),
       findsOneWidget,
     );
     expect(find.textContaining('Re-import after calendar changes'), findsNothing);

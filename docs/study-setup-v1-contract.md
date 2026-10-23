@@ -74,6 +74,10 @@ per-course states.
 
 ## Onboarding And Guest Boundary
 
+Editing Setup has one compact introduction below the existing page title.
+Required setup and Optional setup cards, their labels, inputs and optional
+accordions are preserved. First-time onboarding and all save semantics are unchanged.
+
 `Focus setup` and `Semester planning` are collapsed optional sections. Enabling
 Focus setup initializes 45 minutes of focus, 10 minutes of recovery, and these
 active suggestions:

@@ -103,6 +103,13 @@ non-effects, save/retry state, and confirmed clear consequence remain visible.
 
 ### Overview guidance and early observations
 
+Presentation-only refinement: Overview Details summarizes source, next evidence
+and non-causal interpretation; nested Method & coverage retains every original
+detail, missing-source count, limitation and external source. Compare uses the
+short Relationship heading and a wrapping result badge. Computable summaries
+are disclosed under Details; insufficient-data reasons and Longer period stay
+visible. No coefficients, ranking, evidence thresholds or source selection change.
+
 Tapping the existing general/early evidence icon opens a theme-owned, scrollable
 explanation dialog. Long press retains the short tooltip. This adds no inline
 copy or layout changes and performs no data read/write; Details remains separate.

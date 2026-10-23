@@ -26,6 +26,83 @@ import 'support/header_actions.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  for (final scenario in ['follow long reply', 'follow short reply', 'preserve reading position', 'arrow during reply']) {
+    testWidgets('chat tail regression: $scenario', (tester) async {
+      final repository = _FakeCoachRepository(block: true, historyTurns: [
+        {'request_id': coachRequestId, 'message': 'Earlier question',
+          'response': coachResponseJson(reply: List.filled(40, 'Earlier answer paragraph.').join('\n\n')),
+          'created_at': '2026-07-26T10:15:01Z'},
+      ]);
+      await _pumpPage(tester, repository);
+      final scroller = find.byKey(const Key('coach-chat-scroll'));
+      final controller = tester.widget<SingleChildScrollView>(scroller).controller!;
+      await tester.enterText(find.byKey(const Key('coach-message-field')), 'New question');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('coach-send-button')));
+      for (var i = 0; i < 12; i++) { await tester.pump(const Duration(milliseconds: 50)); }
+      expect(repository.messages, ['New question']);
+      if (!scenario.startsWith('follow')) {
+        await tester.drag(scroller, const Offset(0, 240));
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      final readingOffset = controller.offset;
+      if (scenario == 'arrow during reply') {
+        await tester.tap(find.byKey(const Key('coach-scroll-to-latest')));
+        await tester.pump(const Duration(milliseconds: 70));
+      }
+      repository.completeReply(scenario == 'follow short reply' ? 'A brief reply.' : List.filled(55, 'New answer paragraph that is longer than the viewport.').join('\n\n'));
+      await tester.pumpAndSettle();
+      if (scenario == 'preserve reading position') {
+        expect(controller.offset, closeTo(readingOffset, 1));
+        expect(find.byKey(const Key('coach-scroll-to-latest')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('coach-scroll-to-latest')));
+        await tester.pumpAndSettle();
+      }
+      expect(controller.position.extentAfter, lessThanOrEqualTo(1));
+      expect(find.byKey(const Key('coach-scroll-to-latest')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('chat tail regression: viewport changes during arrow animation', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await _pumpPage(tester, _FakeCoachRepository(historyTurns: [
+      {'request_id': coachRequestId, 'message': 'Earlier question',
+        'response': coachResponseJson(reply: List.filled(40, 'Earlier answer paragraph.').join('\n\n')),
+        'created_at': '2026-07-26T10:15:01Z'},
+    ]));
+    final scroller = find.byKey(const Key('coach-chat-scroll'));
+    final controller = tester.widget<SingleChildScrollView>(scroller).controller!;
+    await tester.drag(scroller, const Offset(0, 240));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('coach-scroll-to-latest')));
+    await tester.pump(const Duration(milliseconds: 70));
+    tester.view.physicalSize = const Size(800, 650);
+    await tester.pumpAndSettle();
+    expect(controller.position.extentAfter, lessThanOrEqualTo(1));
+  });
+  testWidgets('chat tail regression: dragging interrupts latest animation', (tester) async {
+    await _pumpPage(tester, _FakeCoachRepository(historyTurns: [
+      {'request_id': coachRequestId, 'message': 'Earlier question',
+        'response': coachResponseJson(reply: List.filled(60, 'Earlier answer paragraph.').join('\n\n')),
+        'created_at': '2026-07-26T10:15:01Z'},
+    ]));
+    final scroller = find.byKey(const Key('coach-chat-scroll'));
+    final controller = tester.widget<SingleChildScrollView>(scroller).controller!;
+    await tester.drag(scroller, const Offset(0, 500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('coach-scroll-to-latest')));
+    await tester.pump(const Duration(milliseconds: 70));
+    await tester.drag(scroller, const Offset(0, 240));
+    await tester.pumpAndSettle();
+    expect(controller.position.extentAfter, greaterThan(100));
+    final readingOffset = controller.offset;
+    await tester.pump(const Duration(seconds: 1));
+    expect(controller.offset, closeTo(readingOffset, 1));
+    expect(find.byKey(const Key('coach-scroll-to-latest')), findsOneWidget);
+  });
   testWidgets('mobile pull reloads empty Coach without sending or losing draft', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
@@ -642,6 +719,13 @@ class _FakeCoachRepository implements CoachRepository {
   int capabilityCalls = 0;
   String? _latestRequestId;
   String? _latestMessage;
+
+  void completeReply(String reply) {
+    _blocking.add(CoachCompletedEvent(CoachResponse.fromJson(
+      coachResponseJson(requestId: _latestRequestId!, reply: reply),
+    )));
+    _blocking.close();
+  }
 
   @override
   Future<CoachCapabilities> getCapabilities() async {

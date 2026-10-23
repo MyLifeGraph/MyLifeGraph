@@ -122,6 +122,7 @@ Future<_Auth> _open(WidgetTester tester, _Api api, {double scale = 1}) async {
         apiClientProvider.overrideWithValue(api),
       ],
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         theme: AppTheme.liquidGlass,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
@@ -247,6 +248,10 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.textContaining('cloud account'), findsOneWidget);
       expect(find.textContaining('earlier Coach replies'), findsOneWidget);
+      final dialog = find.byType(AlertDialog);
+      for (final label in ['App time', 'Top apps', 'Blocking attempts']) {
+        expect(find.descendant(of: dialog, matching: find.text(label)), findsOneWidget);
+      }
       await tester.ensureVisible(find.text('Privacy details'));
       await tester.tap(find.text('Privacy details'));
       await tester.pumpAndSettle();

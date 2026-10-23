@@ -82,14 +82,14 @@ class _PreparationBudgetControlState
       enabled: enabled,
       leading: _saving ? icon : const Icon(AppIcons.speedOutlined),
       title: const Text('Daily preparation budget'),
-      subtitle: Text(
-        !synced
-            ? 'Available only for a synced account.'
-            : minutes == null
-            ? 'Not set. Existing per-plan limits still apply.'
-            : '${_formatMinutes(minutes)} total per day across confirmed preparation plans.',
-      ),
-      trailing: enabled ? const Icon(AppIcons.editOutlined) : null,
+      subtitle: !synced
+          ? null
+          : Text(
+              minutes == null
+                  ? 'No total limit · per-plan limits apply'
+                  : '${_formatMinutes(minutes)}/day · all plans',
+            ),
+      trailing: Icon(!synced ? AppIcons.lockOutline : AppIcons.editOutlined),
       onTap: enabled ? _edit : null,
     );
   }
@@ -123,8 +123,10 @@ class _PreparationBudgetControlState
         expectedRevision: profile.preparationBudgetRevision,
       );
       if (!auth.mounted ||
-          container.read(authControllerProvider).valueOrNull?.profile.id != profile.id ||
-          container.read(authControllerProvider).valueOrNull?.isAuthenticated != true) {
+          container.read(authControllerProvider).valueOrNull?.profile.id !=
+              profile.id ||
+          container.read(authControllerProvider).valueOrNull?.isAuthenticated !=
+              true) {
         return;
       }
       auth.updateDailyPreparationBudget(

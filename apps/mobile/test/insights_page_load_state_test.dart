@@ -229,6 +229,17 @@ void main() {
           );
           if (mode == 'checkins') {
             expect(find.text('Energy · 7/10 median'), findsOneWidget);
+            for (final metric in {
+              'Energy · 7/10 median': AppIcons.boltOutlined,
+              'Mood · 8/10 median': AppIcons.moodOutlined,
+              'Sleep duration · 7h 30m median': AppIcons.bedOutlined,
+              'Sleep quality · 8/10 median': AppIcons.starFourOutlined,
+            }.entries) {
+              expect(find.descendant(
+                of: find.byKey(ValueKey('overview-metric-${metric.key}')),
+                matching: find.byIcon(metric.value),
+              ), findsOneWidget);
+            }
           }
           if (mode == 'focus') {
             expect(
@@ -316,6 +327,14 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(detailsTitle);
           await tester.pumpAndSettle();
+          final method = find.descendant(
+            of: find.byKey(const Key('sleep-recommendation-collecting')),
+            matching: find.text('Method & coverage'),
+          );
+          await tester.ensureVisible(method);
+          await tester.pumpAndSettle();
+          await tester.tap(method);
+          await tester.pumpAndSettle();
           expect(
             find.text(
               mode == 'checkins'
@@ -330,6 +349,42 @@ void main() {
     }
   }
   if (captureUiCatalog) {
+    testWidgets('catalog compact Compare', (tester) async {
+      await loadCatalogFonts();
+      tester.view.physicalSize = const Size(390, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          _skillsetSelectionOverride(), _demoSurfaceOverride(),
+          insightsProvider.overrideWith((_) async => const []),
+          skillsetProfileProvider.overrideWith((_) async => _skillsetProfile()),
+          correlationReportProvider.overrideWith((_) async => CorrelationReport(
+            windowDays: 14, metrics: correlationMetrics,
+            points: [for (var i = 0; i < 14; i++) CorrelationDataPoint(
+              date: DateTime(2026, 7, 1 + i),
+              values: {'sleep_hours': 6 + i / 5, 'useful_progress': 2 + i / 5},
+            )],
+            results: const [CorrelationResult(metricAId: 'sleep_hours', metricBId: 'useful_progress',
+              sampleSize: 14, coefficient: 1,
+              summary: 'Example data: longer sleep and higher rated progress appear together. Association does not prove cause.')],
+          )),
+        ],
+        child: MaterialApp(theme: AppTheme.liquidGlass, debugShowCheckedModeBanner: false,
+          builder: (context, child) => AppBackdrop(child: child!),
+          home: const Scaffold(body: InsightsPage())),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Advanced'));
+      await captureCatalog(tester, 'compare');
+      final details = find.byKey(const ValueKey('compare-method-details'));
+      await tester.ensureVisible(details);
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(of: details, matching: find.text('Details')));
+      await captureCatalog(tester, 'compare-details');
+      expect(tester.takeException(), isNull);
+    });
     for (final mode in ['general', 'checkins', 'focus']) {
       testWidgets('catalog overview observations $mode', (tester) async {
         tester.view.physicalSize = const Size(390, 900);
@@ -746,8 +801,7 @@ void main() {
       final badge = tester.getRect(
         find.byKey(const ValueKey('compare-correlation-badge')),
       );
-      expect(badge.width, 92);
-      expect(badge.left, greaterThan(tester.getRect(expand).left));
+      expect(badge.width, lessThanOrEqualTo(360));
       expect(badge.top, lessThan(tester.getRect(expand).top));
       await tester.tap(expand);
       await tester.pumpAndSettle();
@@ -821,22 +875,17 @@ void main() {
           );
           await tester.ensureVisible(badgeFinder);
           final badge = tester.getRect(badgeFinder);
-          final summary = tester.getRect(
-            find.text('These signals moderately move together in this window.'),
-          );
           expect(find.text('0.65'), findsOneWidget);
-          if (scale == 1) {
-            expect(badge.width, 92);
-            expect(badge.left, greaterThan(summary.right));
-            expect(badge.top, closeTo(summary.top, 1));
-            final heading = tester.getRect(
-              find.byKey(const ValueKey('compare-correlation-heading')),
-            );
-            expect(heading.bottom, lessThan(badge.top));
-            expect(heading.width, greaterThan(summary.width));
-          } else {
-            expect(badge.top, greaterThan(summary.bottom));
-          }
+          expect(badge.width, lessThanOrEqualTo(360));
+          expect(find.text('Relationship'), findsOneWidget);
+          final details = find.byKey(const ValueKey('compare-method-details'));
+          await tester.ensureVisible(details);
+          await tester.pumpAndSettle();
+          await tester.tap(find.descendant(of: details, matching: find.text('Details')));
+          await tester.pumpAndSettle();
+          expect(find.text('These signals moderately move together in this window.'), findsOneWidget);
+          await tester.tap(find.descendant(of: details, matching: find.text('Details')));
+          await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
         }
       },
@@ -2251,6 +2300,13 @@ void main() {
       final scrollOffsetBefore = scrollable.position.pixels;
       expect(scrollOffsetBefore, greaterThan(0));
       expect(find.text('Trend overlay'), findsOneWidget);
+      final methodTile = find.byKey(const ValueKey('compare-method-details'));
+      await tester.ensureVisible(methodTile);
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(of: methodTile, matching: find.text('Details')));
+      await tester.pumpAndSettle();
+      scrollable.position.jumpTo(scrollOffsetBefore);
+      await tester.pumpAndSettle();
       expect(find.text('Fourteen-day chart data.'), findsOneWidget);
 
       var visibleSummary = 'Fourteen-day chart data.';

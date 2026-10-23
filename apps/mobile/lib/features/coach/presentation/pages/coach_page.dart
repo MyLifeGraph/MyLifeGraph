@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -42,6 +43,10 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   bool _readCheckScheduled = false;
   bool _historyPositioned = false;
   bool _noticeVisible = true;
+  bool _followLatest = true;
+  bool _tailCheckScheduled = false;
+  bool _tailAnimating = false;
+  bool _sendingFromPage = false;
   Animation<double>? _routeAnimation;
   Animation<double>? _coverAnimation;
   final _showScrollToLatest = ValueNotifier<bool>(false);
@@ -82,6 +87,74 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     }
   }
 
+  void _scheduleTailCheck() {
+    if (_tailCheckScheduled) return;
+    _tailCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tailCheckScheduled = false;
+      if (!mounted || !_chatScrollController.hasClients) return;
+      if (_followLatest && !_tailAnimating && _noticeVisible &&
+          ModalRoute.of(context)?.isCurrent != false) {
+        final position = _chatScrollController.position;
+        if ((position.maxScrollExtent - position.pixels).abs() > 0.5) {
+          _chatScrollController.jumpTo(position.maxScrollExtent);
+        }
+      }
+      _updateScrollToLatest();
+      _scheduleReadCheck();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  Future<void> _scrollToLatest() async {
+    if (!_chatScrollController.hasClients) return;
+    _followLatest = true;
+    _tailAnimating = true;
+    try {
+      final duration = context.motionTokens.emphasisFor(context);
+      if (duration == Duration.zero) {
+        _chatScrollController.jumpTo(_chatScrollController.position.maxScrollExtent);
+      } else {
+        await _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: duration,
+          curve: context.motionTokens.curve,
+        );
+      }
+    } finally {
+      _tailAnimating = false;
+      // Layout may change the end during the animation. A user gesture cancels
+      // following, including this final correction.
+      if (mounted) _scheduleTailCheck();
+    }
+  }
+
+  Widget _observeChatScroll(Widget child) =>
+      NotificationListener<ScrollMetricsNotification>(
+        onNotification: (notification) {
+          if (notification.depth == 0) _scheduleTailCheck();
+          return false;
+        },
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.depth != 0) return false;
+            if (notification is ScrollStartNotification &&
+                notification.dragDetails != null) {
+              _followLatest = false;
+            }
+            if (notification is UserScrollNotification) {
+              if (notification.direction == ScrollDirection.forward) {
+                _followLatest = false;
+              } else if (notification.metrics.extentAfter <= 1) {
+                _followLatest = true;
+              }
+            }
+            return false;
+          },
+          child: child,
+        ),
+      );
+
   Widget _withScrollToLatest(Widget scroll) => Stack(
     children: [
       Positioned.fill(child: scroll),
@@ -99,11 +172,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                     shape: const CircleBorder(),
                     side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                   ),
-                  onPressed: () => _chatScrollController.animateTo(
-                    _chatScrollController.position.maxScrollExtent,
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                  ),
+                  onPressed: _scrollToLatest,
                   icon: const Icon(AppIcons.arrowDownward, size: 20),
                 )
               : const SizedBox.shrink(),
@@ -130,7 +199,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     ref.listen(coachControllerProvider, (_, next) {
       // A fast history refresh can finish between two frames. Observe the
       // transition itself so its loading frame need not have been rendered.
-      if (next.isLoading) _historyPositioned = false;
+      if (next.isLoading && !_sendingFromPage) _historyPositioned = false;
     });
     ref.listen(coachTurnNoticeProvider, (_, __) => _scheduleReadCheck());
     _syncDraft(state.isSending ? '' : state.draft);
@@ -230,7 +299,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
             final refreshable = RefreshIndicator(
               key: const ValueKey('coach-pull-refresh'),
               onRefresh: () => ref.read(coachControllerProvider.notifier).load(),
-              child: scroll,
+              child: _observeChatScroll(scroll),
             );
             // At very small heights keep all controls reachable in this same
             // chat viewport rather than adding another page/composer scroller.
@@ -248,9 +317,10 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       ),
       children: const [],
     );
-    if (state.isLoading) _historyPositioned = false;
+    if (state.isLoading && !_sendingFromPage) _historyPositioned = false;
     if (!_historyPositioned && !state.isLoading && state.historyError == null) {
       _historyPositioned = true;
+      _followLatest = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && history.isNotEmpty && _chatScrollController.hasClients) {
           _chatScrollController.jumpTo(_chatScrollController.position.maxScrollExtent);
@@ -275,24 +345,17 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   }
 
   Future<void> _send() async {
-    final sending = ref.read(coachControllerProvider.notifier).send();
-    _revealMessage(_pendingMessageKey);
-    final sent = await sending;
-    if (sent && mounted) _revealMessage(_latestResponseKey);
-  }
-
-  void _revealMessage(GlobalKey key) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final target = key.currentContext;
-      if (target == null) return;
-      Scrollable.ensureVisible(
-        target,
-        alignment: 0.08,
-        duration: context.motionTokens.emphasisFor(context),
-        curve: context.motionTokens.curve,
-      );
-    });
+    _followLatest = true;
+    _sendingFromPage = true;
+    try {
+      final sending = ref.read(coachControllerProvider.notifier).send();
+      _scheduleTailCheck();
+      await sending;
+    } finally {
+      // Completion refreshes history too, but is not an explicit user reload.
+      _sendingFromPage = false;
+      if (mounted) _scheduleTailCheck();
+    }
   }
 
   void _syncDraft(String draft) {

@@ -1,5 +1,14 @@
 # UI Language And Copy Contract
 
+Task scheduling is labelled `Plan time` / `Preview only`, with
+`Off: save without a schedule.` when disabled. Habit cadence is `Repeat *`, retaining
+`Daily`, `Selected weekdays` and `Times per week` and no implicit choice.
+Calendar status groups `Read-only · No sync`; exact all-day exclusivity remains
+explicit as `Ends before …`. Speech says `Requires 64-bit Android` and
+`Download and activation unavailable here.` only on unsupported hosts. Coach
+phone categories use concise icon rows without removing cloud/provider or deletion
+disclosures. These copy changes do not imply new capability or consent.
+
 Check-in-only correlation fallback uses `Early patterns` (amber) and
 `Consistent observations` (green), with `Check-in associations · not causes.`
 in Top Patterns. Evidence names shared days and the two-half consistency gate.
@@ -883,6 +892,16 @@ as the visible label. Copy changes are incomplete until affected widget and
 browser selectors are updated.
 
 ## Compact refinement labels
+
+Setup editing uses `Your routine and study preferences.` below the existing
+page title; Required setup and Optional setup retain their cards and fields.
+Settings removes repeated guest-only explanations in favor of locks and
+`Locked options need a synced account.` Destructive consequences remain explicit.
+Exam Study settings groups existing inputs under `Study rhythm`, `Limits`, and
+`Availability`; `This exam · per day` distinguishes the per-plan cap from Total
+budget across all plans. Overview Details summarizes `Based on`, `For more
+reliable insights`, and `Interpretation`, with all original evidence and sources
+under `Method & coverage`. These labels change no evidence or planning rule.
 
 Keep the always-open header icon-only with existing tooltips; overflow scrolls. Daily
 budget summaries use `All day · Xm Ys left`; local countdowns identify app and plan.

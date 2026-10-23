@@ -1836,9 +1836,7 @@ void main() {
 
     await _pumpPlanner(tester, backend: backend);
     await _openPlannerHabit(tester, 'Walk');
-    await tester.tap(find.byKey(const ValueKey('planner-habit-cadence')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Daily').last);
+    await tester.tap(find.byKey(const ValueKey('planner-habit-cadence-daily')));
     await tester.enterText(
       find.byKey(const ValueKey('planner-habit-duration')),
       '25',
@@ -1888,10 +1886,10 @@ void main() {
     );
     expect(
       tester
-          .widget<DropdownButtonFormField<String>>(
+          .widget<RadioGroup<String>>(
             find.byKey(const ValueKey('planner-habit-cadence')),
           )
-          .initialValue,
+          .groupValue,
       'weekdays',
     );
     expect(
@@ -2094,10 +2092,10 @@ void main() {
     );
     expect(
       tester
-          .widget<DropdownButtonFormField<String>>(
+          .widget<RadioGroup<String>>(
             find.byKey(const ValueKey('planner-habit-cadence')),
           )
-          .initialValue,
+          .groupValue,
       'weekdays',
     );
     await tester.tap(find.byKey(const ValueKey('planner-habit-preview')));
@@ -2612,10 +2610,10 @@ void main() {
       '15',
     );
     tester
-        .widget<DropdownButtonFormField<String>>(
+        .widget<RadioGroup<String>>(
           find.byKey(const ValueKey('planner-habit-cadence')),
         )
-        .onChanged!
+        .onChanged
         .call('daily');
     await tester.pump();
     _invokeFilledButton(tester, 'planner-habit-preview');
@@ -3170,10 +3168,10 @@ Future<void> _exerciseAmbiguousCreateReconciliation(
       '25',
     );
     tester
-        .widget<DropdownButtonFormField<String>>(
+        .widget<RadioGroup<String>>(
           find.byKey(const ValueKey('planner-habit-cadence')),
         )
-        .onChanged!
+        .onChanged
         .call('daily');
     await tester.pump();
   }

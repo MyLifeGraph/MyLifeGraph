@@ -2714,6 +2714,11 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                               ),
                               _nameField(),
                               BlockingEditorTabs(
+                                icons: const [
+                                  AppIcons.tuneOutlined,
+                                  AppIcons.squaresFour,
+                                  AppIcons.publicOutlined,
+                                ],
                                 labels: [
                                   'Rules',
                                   'Apps ${_apps.length}',
