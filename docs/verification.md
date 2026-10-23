@@ -31,6 +31,40 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC37 UI refinements and Coach scrolling — 2026-10-23
+
+PR [62](https://github.com/MyLifeGraph/MyLifeGraph/pull/62) merged to
+`7701dbdad093fd115582806fcc0f719ebdfcca04`, with the same tree as candidate
+`d2f5c0a8c5645a981bdf9bb353d875430d77ac5e`. Full Linux run `40021031752`
+passes all seven jobs, including **2008 Flutter tests**, clean analysis,
+Android JVM/Lint, backend, fresh migrations/pgTAP and full browser E2E.
+The first candidate exposed two stale Settings-copy assertions and a comment
+matched by the copy guard; these were corrected without changing product behavior.
+The twelve focused account/copy tests also pass locally.
+
+Signed tag run `40023022424` passes. Release `v0.1.0-pilot.1-rc.37`, id
+`422309456`, is published non-draft/non-prerelease. VersionCode `10000134`,
+package `com.mylifegraph.app`, APK 153684485 bytes, SHA-256
+`ebe550e57c42f89500bd0854dbf9ab012f900cbd918f595a1bbfd9896425f0d4`.
+Local apksigner independently verifies v2 and the unchanged certificate
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+All four uploaded asset sizes/digests are matched before publication; downloaded
+bytes and tag identity are independently reverified by the retention finalizers.
+
+VPS promotion/check passes with API and Coach ready on the exact RC37 SHA.
+Readiness retains 83 migrations and digest
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+Vercel deployment `dpl_Eaut2QvY3hd2QFqFVWbVqwDfmMzk` is READY; both existing
+public app origins expose the exact Main source and CSP. Bounded retention
+removes three obsolete app deployments, preserving live/two rollback sources.
+Laptop and VM finalizers each remove 153780584 bytes of registered RC36 copies,
+retaining oldest/newest RC37 and protecting originals/runtime versions. The VM
+verified source remains `.tools/rc37-published.QiVJyDVp` in its existing checkout.
+Pre-existing retention source edits/media remain uncommitted and unpublished.
+No hardware NFC/OEM or authenticated end-user Coach turn is inferred from CI or
+service readiness. This entry records the published application release;
+documentation-only follow-ups do not change its APK or deployed source identity.
+
 ### Local Coach scroll and Blocking tab icons — 2026-10-23 (unpublished)
 
 Base `e6cdb4369fe13640fe2679a6522646306afbb3e0`. Before the fix, delayed
