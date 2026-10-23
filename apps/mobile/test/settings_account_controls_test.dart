@@ -98,7 +98,7 @@ void main() {
       expect(find.text('In-app reminders'), findsOneWidget);
       expect(
         find.text(
-          'Allow banners while the app is open and choose what may appear.',
+          'Banners while the app is open',
         ),
         findsOneWidget,
       );
@@ -370,7 +370,7 @@ void main() {
 
     expect(accountRepository.preparationBudgetCalls, [120]);
     expect(
-      find.text('2h total per day across confirmed preparation plans.'),
+      find.text('2h/day · all plans'),
       findsOneWidget,
     );
 
@@ -387,7 +387,7 @@ void main() {
 
     expect(accountRepository.preparationBudgetCalls, [120, null]);
     expect(
-      find.text('Not set. Existing per-plan limits still apply.'),
+      find.text('No total limit · per-plan limits apply'),
       findsOneWidget,
     );
   });

@@ -560,7 +560,7 @@ class _ImportedEventTile extends StatelessWidget {
   }
 }
 
-// These are already event-local calendar components from the backend. Do not
+// These are already event-local calendar components from the API. Do not
 // reinterpret them as instants or convert them to the device timezone.
 DateTime _eventDate(String value) => DateTime.utc(
   int.parse(value.substring(0, 4)),
