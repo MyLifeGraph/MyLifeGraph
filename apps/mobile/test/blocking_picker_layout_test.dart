@@ -25,6 +25,7 @@ Future<void> _pumpEditor(
   double keyboard = 0,
   bool modal = false,
   Future<void> Function(BlockingPlan)? save,
+  Future<List<Map>> Function()? loadCatalog,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = Size(width, 844);
@@ -42,6 +43,7 @@ Future<void> _pumpEditor(
     usageGranted: true,
     websiteAllowed: true,
     onSave: save,
+    loadCatalog: loadCatalog,
   );
   await tester.pumpWidget(
     MaterialApp(
@@ -89,6 +91,64 @@ Finder get _outer => find
     .first;
 
 void main() {
+  testWidgets('a new downward pull at the top dismisses without saving', (tester) async {
+    var saves = 0;
+    await _pumpEditor(tester, modal: true, save: (_) async => saves++);
+    await tester.drag(find.byKey(const ValueKey('blocking-editor-scroll')), const Offset(0, 220));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsNothing);
+    expect(saves, 0);
+  });
+  testWidgets('catalog failure can retry without losing current selections or draft', (tester) async {
+    var reads = 0;
+    await _pumpEditor(tester, loadCatalog: () async {
+      if (++reads == 1) throw StateError('Unavailable');
+      return _catalog;
+    });
+    await tester.enterText(find.widgetWithText(TextField, 'Study'), 'Kept');
+    await tester.tap(find.byKey(const ValueKey('blocking-editor-tab-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load apps. Try again.'), findsOneWidget);
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load apps. Try again.'), findsNothing);
+    expect(find.widgetWithText(TextField, 'Kept'), findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('blocking-app-example.app99'))).value, isTrue);
+  });
+  testWidgets('scrolled app list blocks dismissal until a fresh pull from its top', (tester) async {
+    await _pumpEditor(tester, modal: true);
+    await tester.tap(find.byKey(const ValueKey('blocking-editor-tab-1')));
+    await tester.pumpAndSettle();
+    final apps = find.byKey(const ValueKey('blocking-app-list'));
+    final position = tester.state<ScrollableState>(find.descendant(of: apps, matching: find.byType(Scrollable)).first).position;
+    position.jumpTo(120);
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const ValueKey('blocking-editor-scroll')), const Offset(0, 250));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsOneWidget);
+    position.jumpTo(120);
+    await tester.pumpAndSettle();
+    await tester.drag(apps, const Offset(0, 800));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsOneWidget);
+    expect(position.pixels, closeTo(position.minScrollExtent, 1));
+    await tester.drag(apps, const Offset(0, 220));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsNothing);
+  });
+  testWidgets('returning from a scrolled section cannot dismiss the editor', (tester) async {
+    await _pumpEditor(tester, width: 320, scale: 2, modal: true);
+    final position = tester.state<ScrollableState>(_outer).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    position.jumpTo(position.maxScrollExtent.clamp(0, 120));
+    await tester.pumpAndSettle();
+    final height = tester.getSize(find.byKey(const ValueKey('blocking-editor-scroll'))).height;
+    await tester.drag(find.byKey(const ValueKey('blocking-editor-scroll')), const Offset(0, 1000));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsOneWidget);
+    expect(tester.getSize(find.byKey(const ValueKey('blocking-editor-scroll'))).height, closeTo(height, 1));
+    expect(_save.hitTestable(), findsOneWidget);
+  });
   for (final setting in [
     (390.0, 1.0, 0.0),
     (320.0, 2.0, 0.0),

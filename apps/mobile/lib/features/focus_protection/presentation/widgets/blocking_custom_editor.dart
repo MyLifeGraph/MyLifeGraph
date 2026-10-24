@@ -6,6 +6,8 @@ import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_surface.dart';
 import 'blocking_screen_preview.dart';
 import 'blocking_editor_tabs.dart';
+import 'blocking_editor_dismiss_guard.dart';
+import '../../../../core/navigation/root_tab_pager.dart';
 
 class BlockingCustomEditor extends StatefulWidget {
   const BlockingCustomEditor({
@@ -41,8 +43,9 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
   late int _wait = widget.custom['waitSeconds'] as int? ?? 0;
   bool _saving = false;
   int _section = 0;
-  final _scroll = ScrollController();
-  final _offsets = [0.0, 0.0, 0.0];
+  final _scrolls = List.generate(3, (_) => ScrollController());
+  ScrollController get _scroll => _scrolls[_section];
+  bool _moving = false;
   String? _error;
   Map<String, Object> get _draft => {
     ...widget.custom,
@@ -58,20 +61,14 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
   void dispose() {
     _title.dispose();
     _message.dispose();
-    _scroll.dispose();
+    for (final scroll in _scrolls) { scroll.dispose(); }
     super.dispose();
   }
 
   void _selectSection(int index) {
-    if (_scroll.hasClients) _offsets[_section] = _scroll.offset;
+    if (_saving) return;
     FocusScope.of(context).unfocus();
     setState(() => _section = index);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _section != index || !_scroll.hasClients) return;
-      _scroll.jumpTo(
-        _offsets[index].clamp(0.0, _scroll.position.maxScrollExtent),
-      );
-    });
   }
 
   Widget _preview() => BlockingScreenPreview(
@@ -109,7 +106,10 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_saving,
-    child: SafeArea(
+    child: BlockingEditorDismissGuard(
+      enabled: !_saving && !_moving,
+      atTop: () => !_scroll.hasClients || _scroll.position.pixels <= _scroll.position.minScrollExtent + .5,
+      child: SafeArea(
       child: LayoutBuilder(
         builder: (context, bounds) => Padding(
           padding: EdgeInsets.only(
@@ -198,12 +198,20 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
                 Expanded(
                   child: AbsorbPointer(
                     absorbing: _saving,
-                    child: ListView(
+                    child: RootTabPager(
+                      index: _section,
+                      count: 3,
+                      enabled: !_saving,
+                      onSettled: _selectSection,
+                      onMovementChanged: (moving) => setState(() => _moving = moving),
+                      pageBuilder: (context, index) => BlockingEditorSection(
+                        visible: _moving || index == _section,
+                        child: ListView(
                       key: const ValueKey('blocking-custom-scroll'),
-                      controller: _scroll,
+                      controller: _scrolls[index],
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
-                        if (_section == 1) ...[
+                        if (index == 1) ...[
                           Text(
                             'Icon',
                             style: Theme.of(context).textTheme.labelLarge,
@@ -240,7 +248,7 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
                           ),
                           const SizedBox(height: 12),
                         ],
-                        if (_section == 0) ...[
+                        if (index == 0) ...[
                           TextField(
                             controller: _title,
                             readOnly: _saving,
@@ -261,7 +269,7 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
                             ),
                           ),
                         ],
-                        if (_section == 1) ...[
+                        if (index == 1) ...[
                           Text(
                             'Accent',
                             style: Theme.of(context).textTheme.labelLarge,
@@ -415,7 +423,7 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
                           ),
                           const SizedBox(height: 12),
                         ],
-                        if (_section == 2) ...[
+                        if (index == 2) ...[
                           Text(
                             'Return delay',
                             style: Theme.of(context).textTheme.labelLarge,
@@ -497,6 +505,8 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
                         ],
                       ],
                     ),
+                    ),
+                    ),
                   ),
                 ),
                 AppSurface(
@@ -538,6 +548,7 @@ class _BlockingCustomEditorState extends State<BlockingCustomEditor> {
           ),
         ),
       ),
+    ),
     ),
   );
 }

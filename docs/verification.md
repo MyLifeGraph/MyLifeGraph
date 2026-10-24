@@ -31,6 +31,49 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local editor section swipes and Customize pull-dismiss — 2026-10-24 (unpublished)
+
+The pending local Blocking fix now also covers Rules/Apps/Websites and Customize
+Content/Style/Delay swipes. Both use the unchanged root pager rather than a second
+gesture implementation; existing focus, directional, nested-scroll and reduced
+motion behavior remain its authority. Kept-alive sections retain independent
+scroll positions and drafts. A shared editor-only pull guard also covers Customize;
+moving into a list and reversing in the same gesture cannot dismiss it.
+
+**87 focused tests pass** across Blocking page/picker/stress/sections/polish,
+target identity/order and root pager. One additional focused text-editing regression
+passes. After the final reversal guard, all **20 editor-section/picker tests** pass
+again. Coverage includes bidirectional swipes, tab selection, far-section return,
+top-only dismissal, four themes/large text/keyboard, pending Save and original
+enforcement/revision guards. Before implementation both editor swipe tests failed
+because only tab taps changed sections. No core pager/native/schema change.
+The existing Windows full/analyzer limitation below remains; these are local
+Flutter-widget results, not installed-device or release evidence.
+
+### Local Blocking editor opening and pull-dismiss — 2026-10-24 (unpublished)
+
+Base `263fe702cef6970a012f81512bd52a2d49c4d1fc`. A delayed catalog reproduced
+the opening stall: no editor after 300ms before the fix. The same fixture now
+opens while enumeration is pending and retains edits on completion. Apps loads
+asynchronously after consent; failure/retry, close with a late failure and the
+original save-revision rejection remain covered. No Android native change.
+The original automatic dismissal report was not reproduced in the first fixture;
+the requested top-only gesture policy is now explicitly tested. A gesture that
+starts mid-list cannot dismiss even after reaching the top, while a fresh top-edge
+pull can dismiss without saving. The sheet retains 92% height rather than resizing
+with content drags. Save still blocks Back/scrim/drag and freezes input.
+
+**71 focused Flutter tests pass** across Blocking page, picker layout, stress,
+editor sections/polish, target ordering and actual-icon identity. One additional
+opt-in capture test passes; inspected real Flutter-widget renders with synthetic
+data are under `.tools/ui-catalog/blocking-editor-smooth-20261024`. Docs, visual
+contract and whitespace checks pass. The base-bound affected selector chooses
+Full due to the dirty checkout's other retained paths, then encounters missing
+Windows `setsid`; its remaining parallel run was stopped. No full/Linux/DB/E2E,
+physical Android, commit, publication or deployment is claimed for these changes.
+The local Flutter analyzer produced no completed result and was stopped; static
+analysis is not claimed green for this local follow-up.
+
 ### Published RC37 UI refinements and Coach scrolling — 2026-10-23
 
 PR [62](https://github.com/MyLifeGraph/MyLifeGraph/pull/62) merged to

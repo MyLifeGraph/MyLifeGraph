@@ -60,7 +60,16 @@ the explicit `gpt-6.1-sol`/Standard provenance pair while retaining historical
 The Blocking editor separates Rules / Apps / Websites with adjustment, app-grid
 and globe icons in the existing Customize-style selector, retaining its name/icon,
 rule drafts and fixed Save action. Apps and websites move selected targets to
-the top immediately and restore original order on deselection, anchoring the
+the top immediately and restore original order on deselection. After catalog
+consent, opening the editor no longer waits for installed-app names/icons; Apps
+loads with retry while the draft remains editable. Its 92%-height sheet scrolls
+normally; dismissing by pull requires a new downward gesture starting at the top
+of both section and active target list, and remains disabled during Save.
+Both editor tab sets also use the existing root-page swipe mechanics in their
+content area. Section selection and independent scroll positions remain in sync;
+focused text editing and horizontal controls keep their gestures. Customize uses
+the same top-only pull-to-close rule, including Save protection.
+Selection reordering anchors
 visible mid-list rows rather than scrolling the user to the top. Website
 checkboxes use locally bundled brand geometry for known hosts, neutral fallbacks
 for unknown hosts and category suggestions; they make no favicon-service request.
