@@ -31,6 +31,45 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC38 Blocking editor gestures and opening — 2026-10-25
+
+PR [64](https://github.com/MyLifeGraph/MyLifeGraph/pull/64) merged to
+`d129cb1d63955218fb221a502ae93cd5ae2a724b`, with the same tree as tested
+candidate `1d84043be04f4dcdc3cc8c9d30f127414975711e`. Full Linux run
+`40137069269` passes all seven jobs, including **2020 Flutter tests**, clean
+analysis, Android JVM/Lint, backend, fresh migration/pgTAP and full browser E2E.
+PR run `40137069641` also passes. The final local rerun passes **88 focused
+Flutter tests**; docs (19 tests), visual-contract and whitespace checks pass.
+These completed Linux checks supersede the local analyzer/prerequisite gaps
+recorded in the historical unpublished entries below.
+
+Signed tag run `40138086850` passes. Release `v0.1.0-pilot.1-rc.38`, id
+`423016093`, is non-draft/non-prerelease. VersionCode `10000136`, package
+`com.mylifegraph.app`, APK 153618949 bytes, SHA-256
+`8ef5ffa6092a3b586047add0a19860a1af0b51ba81451757483ef388d4cb7d13`.
+Local apksigner independently verifies v2 and the unchanged certificate
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+All four uploaded asset sizes/digests are matched before publication; laptop
+and VM finalizers independently verify downloaded bytes and resolved tag identity.
+
+VPS promotion/check passes with API and Coach ready on the exact RC38 SHA.
+Cloud readiness retains 83 migrations and digest
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+Vercel deployment `dpl_Hohwd3ucxAn2oyhRpEFbusAhjEpF` is READY; both existing
+public app origins expose the exact Main source and CSP. Bounded Vercel retention
+removes five obsolete app deployments, preserving live/two rollback sources;
+the separate website has no removal candidates. Laptop and VM finalizers each
+remove 154059340 bytes of registered RC37 copies, keeping oldest/newest RC38.
+Original downloads and active/rollback server versions remain protected. These
+removed-byte counts are not a net free-space measurement. The VM verified source
+remains `.tools/rc38-published.Fc2QrDUQ` in its existing checkout.
+
+Pre-existing retention source/docs edits and local media remain unpublished.
+No physical Android/OEM/NFC acceptance or authenticated end-user Coach turn is
+inferred from CI or readiness. The signed release contains no native, schema,
+provider, dependency or signing-identity changes. Documentation-only follow-ups
+do not change its APK or deployed source identity.
+
 ### Local editor section swipes and Customize pull-dismiss — 2026-10-24 (unpublished)
 
 The pending local Blocking fix now also covers Rules/Apps/Websites and Customize
