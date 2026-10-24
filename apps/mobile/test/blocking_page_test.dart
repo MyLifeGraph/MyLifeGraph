@@ -185,6 +185,35 @@ Future<void> _attemptDetailSave(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('plan editor opens before a delayed catalog and retains draft', (tester) async {
+    final gateway = _RevisionGateway()..pendingCatalog = Completer<List<Map>>();
+    await _openDetail(tester, gateway, openEditor: false);
+    final card = find.ancestor(of: find.text('Study'), matching: find.byType(InkWell)).first;
+    await tester.tap(card);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(BlockingPlanEditor), findsOneWidget);
+    final name = find.widgetWithText(TextField, 'Study');
+    await tester.enterText(name, 'My draft');
+    gateway.pendingCatalog!.complete(const [{'packageName': 'example.app', 'label': 'Example'}]);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'My draft'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('closing while catalog loads ignores its late result', (tester) async {
+    final gateway = _RevisionGateway()..pendingCatalog = Completer<List<Map>>();
+    await _openDetail(tester, gateway, openEditor: false);
+    await tester.tap(find.ancestor(of: find.text('Study'), matching: find.byType(InkWell)).first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    gateway.pendingCatalog!.completeError(StateError('Late failure'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BlockingPlanEditor), findsNothing);
+    expect(gateway.saves, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('blocking swipe previews and selects adjacent tabs like root', (
     tester,
   ) async {
@@ -400,7 +429,7 @@ void main() {
       await tester.ensureVisible(card);
       await tester.tap(card);
       await tester.pumpAndSettle();
-      expect(find.byType(BlockingPlanEditor), findsNothing);
+      expect(find.byType(BlockingPlanEditor), findsOneWidget);
       const current = BlockingPlan(
         id: 'one',
         name: 'Changed during catalog',

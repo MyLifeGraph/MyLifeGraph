@@ -31,6 +31,7 @@ import '../widgets/blocking_custom_editor.dart';
 import '../widgets/blocking_plan_summary.dart';
 import '../widgets/blocking_reorder_handle.dart';
 import '../widgets/blocking_editor_tabs.dart';
+import '../widgets/blocking_editor_dismiss_guard.dart';
 import '../widgets/blocking_target_list.dart';
 
 IconData blockingIcon(String name) => switch (name) {
@@ -496,14 +497,14 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
     }
   }
 
-  Future<List<Map>?> _catalog() async {
+  Future<bool> _ensureCatalogConsent() async {
     final configuration = _legacy!.configuration;
     if (!configuration.hasConsent(focusProtectionAppCatalogConsent)) {
       if (!await _disclose(
         'Choose apps',
         'Read installed launchable app names and icons. The list stays on this device.',
       )) {
-        return null;
+        return false;
       }
       try {
         final value = await ref
@@ -520,15 +521,10 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         if (mounted) setState(() => _legacy = value);
       } catch (e) {
         if (mounted) setState(() => _error = _message(e));
-        return null;
+        return false;
       }
     }
-    try {
-      return await _gateway.catalog();
-    } catch (e) {
-      if (mounted) setState(() => _error = _message(e));
-      return null;
-    }
+    return true;
   }
 
   void _tapPlan(BlockingPlan plan) {
@@ -567,16 +563,17 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         }
         plan = current.single;
       }
-      final catalog = await _catalog();
-      if (catalog == null || !mounted || _configurationLocked) return;
+      if (!await _ensureCatalogConsent() || !mounted || _configurationLocked) return;
       await showModalBottomSheet<BlockingPlan>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
         enableDrag: false,
+        showDragHandle: false,
         builder: (ctx) => BlockingPlanEditor(
           plan: plan,
-          catalog: catalog,
+          catalog: const [],
+          loadCatalog: _gateway.catalog,
           usageGranted: editorBase.usageGranted,
           websiteAllowed: editorBase.websiteConsent,
           quick: quick,
@@ -2106,6 +2103,7 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
       isScrollControlled: true,
       useSafeArea: true,
       enableDrag: false,
+      showDragHandle: false,
       builder: (_) => BlockingCustomEditor(
         custom: s.custom,
         iconBuilder: blockingIcon,
@@ -2249,9 +2247,11 @@ class BlockingPlanEditor extends StatefulWidget {
     this.plan,
     this.quick = false,
     this.onSave,
+    this.loadCatalog,
     super.key,
   });
   final List<Map> catalog;
+  final Future<List<Map>> Function()? loadCatalog;
   final bool usageGranted, websiteAllowed, quick;
   final BlockingPlan? plan;
   final Future<void> Function(BlockingPlan)? onSave;
@@ -2264,6 +2264,9 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
   final _domain = TextEditingController();
   final _appScroll = ScrollController();
   final _siteScroll = ScrollController();
+  final _sectionScrolls = List.generate(3, (_) => ScrollController());
+  ScrollController get _sectionScroll => _sectionScrolls[_section];
+  bool _sectionMoving = false;
   final _appListKey = GlobalKey<BlockingTargetListState>();
   final _siteListKey = GlobalKey<BlockingTargetListState>();
   String _icon = 'shield', _search = '';
@@ -2272,7 +2275,6 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
   bool _focus = true, _always = false;
   bool _windowsEnabled = false, _budgetEnabled = false;
   int _section = 0;
-  final _sectionOffsets = [0.0, 0.0, 0.0];
   late final List<String> _siteOrder;
   final Set<String> _siteChoices = {};
   String _siteCategory = 'Social media';
@@ -2280,6 +2282,9 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
   Set<String> _apps = {}, _sites = {};
   List<BlockingWindow> _windows = [];
   final Map<String, Uint8List> _icons = {};
+  late List<Map> _catalog;
+  bool _catalogLoading = false;
+  String? _catalogError;
   @override
   void initState() {
     super.initState();
@@ -2306,7 +2311,19 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     _budgetEnabled = _budget > 0;
     _siteChoices.addAll(_sites);
     _siteOrder = {..._sites, ..._socialSites, ..._videoSites}.toList();
-    for (final app in widget.catalog) {
+    _catalog = widget.catalog;
+    _decodeCatalogIcons();
+    if (widget.loadCatalog != null) {
+      _catalogLoading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadCatalog());
+      });
+    }
+  }
+
+  void _decodeCatalogIcons() {
+    _icons.clear();
+    for (final app in _catalog) {
       final data = app['icon'] as String? ?? '';
       if (data.isNotEmpty) {
         try {
@@ -2316,26 +2333,46 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     }
   }
 
+  Future<void> _loadCatalog() async {
+    setState(() {
+      _catalogLoading = true;
+      _catalogError = null;
+    });
+    try {
+      final catalog = await widget.loadCatalog!();
+      if (!mounted) return;
+      setState(() {
+        _catalog = catalog;
+        _decodeCatalogIcons();
+        _catalogLoading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _catalogLoading = false;
+          _catalogError = 'Could not load apps. Try again.';
+        });
+      }
+    }
+  }
+
+  bool _atTop(ScrollController controller) =>
+      !controller.hasClients || controller.position.pixels <= controller.position.minScrollExtent + .5;
+
   @override
   void dispose() {
     _name.dispose();
     _domain.dispose();
     _appScroll.dispose();
     _siteScroll.dispose();
+    for (final controller in _sectionScrolls) { controller.dispose(); }
     super.dispose();
   }
 
-  void _selectSection(int index, ScrollController controller) {
+  void _selectSection(int index) {
     if (_saving) return;
-    if (controller.hasClients) _sectionOffsets[_section] = controller.offset;
     FocusScope.of(context).unfocus();
     setState(() => _section = index);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _section != index || !controller.hasClients) return;
-      controller.jumpTo(
-        _sectionOffsets[index].clamp(0.0, controller.position.maxScrollExtent),
-      );
-    });
   }
 
   Future<void> _chooseIcon() async {
@@ -2384,7 +2421,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
   ];
   static const _videoSites = ['youtube.com', 'twitch.tv'];
 
-  Set<String> _presetApps(bool games) => widget.catalog
+  Set<String> _presetApps(bool games) => _catalog
       .where(
         (app) => games
             ? app['category'] == 'Games'
@@ -2583,11 +2620,11 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
     ],
   );
 
-  Widget _footerActions(ScrollController controller) => LayoutBuilder(
+  Widget _footerActions() => LayoutBuilder(
     builder: (context, bounds) {
       final toggle = IconButton(
         key: const ValueKey('blocking-footer-apps-toggle'),
-        onPressed: () => _selectSection(_section == 1 ? 0 : 1, controller),
+        onPressed: () => _selectSection(_section == 1 ? 0 : 1),
         tooltip: _section == 1 ? 'Show rules' : 'Choose apps',
         icon: Icon(_section == 1 ? AppIcons.expandLess : AppIcons.expandMore),
       );
@@ -2661,12 +2698,15 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_saving,
-    child: DraggableScrollableSheet(
-      initialChildSize: .92,
-      minChildSize: .6,
-      maxChildSize: .96,
-      expand: false,
-      builder: (ctx, controller) => SafeArea(
+    child: FractionallySizedBox(
+      heightFactor: .92,
+      child: Builder(builder: (ctx) {
+        return BlockingEditorDismissGuard(
+          enabled: !_saving && !_sectionMoving,
+          atTop: () => _atTop(_sectionScroll) &&
+              (_section != 1 || _atTop(_appScroll)) &&
+              (_section != 2 || _atTop(_siteScroll)),
+        child: SafeArea(
         child: LayoutBuilder(
           builder: (context, bounds) => SizedBox(
             height: bounds.maxHeight.clamp(
@@ -2728,7 +2768,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                 onChanged: _saving
                                     ? null
                                     : (index) =>
-                                          _selectSection(index, controller),
+                                          _selectSection(index),
                               ),
                               const SizedBox(height: AppSpacing.sm),
                             ],
@@ -2737,9 +2777,17 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                       ),
                     ),
                     Expanded(
-                      child: ListView(
+                      child: RootTabPager(
+                        index: _section,
+                        count: 3,
+                        enabled: !_saving,
+                        onSettled: _selectSection,
+                        onMovementChanged: (moving) => setState(() => _sectionMoving = moving),
+                        pageBuilder: (context, index) => BlockingEditorSection(
+                          visible: _sectionMoving || index == _section,
+                          child: ListView(
                         key: const ValueKey('blocking-editor-scroll'),
-                        controller: controller,
+                        controller: _sectionScrolls[index],
                         padding: EdgeInsets.fromLTRB(
                           AppSpacing.md,
                           AppSpacing.sm,
@@ -2747,7 +2795,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                           AppSpacing.lg,
                         ),
                         children: [
-                          if (_section == 0)
+                          if (index == 0)
                             AppSurface(
                               key: const ValueKey('blocking-rules'),
                               variant: AppSurfaceVariant.subtle,
@@ -2946,7 +2994,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                               ),
                             ),
                           const SizedBox(height: AppSpacing.md),
-                          if (_section == 1)
+                          if (index == 1)
                             AppSurface(
                               variant: AppSurfaceVariant.subtle,
                               child: Column(
@@ -2956,6 +3004,13 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                     'Apps',
                                     style: Theme.of(ctx).textTheme.titleMedium,
                                   ),
+                                  if (_catalogLoading)
+                                    const LinearProgressIndicator(key: ValueKey('blocking-catalog-loading')),
+                                  if (_catalogError != null)
+                                    Row(children: [
+                                      Expanded(child: Text(_catalogError!)),
+                                      TextButton(onPressed: _saving ? null : _loadCatalog, child: const Text('Retry')),
+                                    ]),
                                   const SizedBox(height: AppSpacing.sm),
                                   TextField(
                                     readOnly: _saving,
@@ -2992,7 +3047,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                     ),
                                     child: BlockingTargetList(
                                       key: _appListKey,
-                                      ids: widget.catalog
+                                      ids: _catalog
                                           .where(
                                             (a) =>
                                                 _apps.contains(
@@ -3018,7 +3073,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                             : _apps.remove(id),
                                       ),
                                       itemBuilder: (id, change) {
-                                        final app = widget.catalog.firstWhere(
+                                        final app = _catalog.firstWhere(
                                           (a) => a['packageName'] == id,
                                         );
                                         return CheckboxListTile(
@@ -3068,7 +3123,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                               ),
                             ),
                           const SizedBox(height: AppSpacing.md),
-                          if (_section == 2)
+                          if (index == 2)
                             AppSurface(
                               variant: AppSurfaceVariant.subtle,
                               child: Column(
@@ -3180,6 +3235,8 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                           const SizedBox(height: AppSpacing.md),
                         ],
                       ),
+                      ),
+                      ),
                     ),
                     Padding(
                       key: const ValueKey('blocking-save-footer'),
@@ -3218,7 +3275,7 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
                                 ),
                               ),
                             ),
-                          _footerActions(controller),
+                          _footerActions(),
                         ],
                       ),
                     ),
@@ -3229,6 +3286,8 @@ class _BlockingPlanEditorState extends State<BlockingPlanEditor> {
           ),
         ),
       ),
+    );
+    }),
     ),
   );
   String _clock(int m) =>

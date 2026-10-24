@@ -84,6 +84,23 @@ stale revisions. Editors keep their opening revision. Cancel writes nothing.
 Opening Edit from a retained detail resolves its ID against the current status
 snapshot; removed IDs cannot be recreated. The resolved definition and revision
 remain paired while the catalog loads and throughout saving.
+After catalog consent, the editor opens without awaiting installed-app enumeration.
+Its existing Rules/name/site draft stays usable while Apps loads asynchronously;
+failure exposes Retry inside Apps and does not erase selected package IDs or drafts.
+Late catalog success/failure after closing is ignored. The editor retains its
+opening native revision and all persistence/Strict/Focus guards.
+The modal uses a fixed 92% height and ordinary section/target scrolling. A deliberate
+100px downward pull may dismiss only when the gesture starts with both the active
+target list and section at their top. Returning to the top during the same gesture
+cannot dismiss it; saving disables dismissal. Close/Back retain existing semantics.
+Plan Rules/Apps/Websites and Customize Content/Style/Delay support horizontal
+content swipes through the existing root pager: finger-follow, settlement,
+directional order, reduced-motion policy and focused-text/nested-scroll ownership
+are reused. Section tabs stay selected in sync; kept-alive sections retain their
+independent scroll positions and unsaved inputs. Neither an offscreen section nor
+a horizontal/diagonal movement can trigger the vertical pull-to-close action.
+Customize shares the same top-start-only dismissal guard and save protection;
+its actual blocking overlay and expanded native preview keep their own behavior.
 Save sheets remain open on failure and cannot be dragged away during persistence.
 Revoked website/usage access stops enforcement/observation, not plan management:
 unchanged retained targets and budgets can be saved, reduced, paused or deleted;

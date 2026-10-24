@@ -35,6 +35,7 @@ Future<void> _open(
   ThemeData? theme,
   bool large = false,
   bool keyboard = false,
+  bool animations = false,
 }) async {
   t.view.devicePixelRatio = 1;
   t.view.physicalSize = Size(large ? 320 : 390, 844);
@@ -47,7 +48,7 @@ Future<void> _open(
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(large ? 2 : 1),
-          disableAnimations: true,
+          disableAnimations: !animations,
           viewInsets: EdgeInsets.only(bottom: keyboard ? 300 : 0),
         ),
         child: AppBackdrop(child: Scaffold(body: child!)),
@@ -59,6 +60,8 @@ Future<void> _open(
               context: context,
               isScrollControlled: true,
               useSafeArea: true,
+              enableDrag: false,
+              showDragHandle: false,
               builder: (_) => editor,
             ),
             child: const Text('Open'),
@@ -97,6 +100,88 @@ Future<void> _show(WidgetTester t, Finder f) async {
 }
 
 void main() {
+  testWidgets('Customize horizontal text editing does not change sections', (t) async {
+    await _open(t, BlockingCustomEditor(custom: const {}, iconBuilder: blockingIcon,
+      onSave: (_) async => true, error: () => null), animations: true);
+    final title = find.widgetWithText(TextField, 'Title');
+    await t.enterText(title, 'Keep this title');
+    await t.pumpAndSettle();
+    final rect = t.getRect(find.byKey(const ValueKey('blocking-custom-scroll')));
+    await t.dragFrom(Offset(rect.left + 4, rect.top + 24), const Offset(-280, 0));
+    await t.pumpAndSettle();
+    expect(find.ancestor(of: find.byKey(const ValueKey('blocking-editor-tab-0')),
+      matching: find.byWidgetPredicate((w) => w is Semantics && w.properties.selected == true)), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Keep this title'), findsOneWidget);
+  });
+  testWidgets('Customize top-only dismissal preserves scrolling and never saves', (t) async {
+    var saves = 0;
+    await _open(t, BlockingCustomEditor(custom: const {}, iconBuilder: blockingIcon,
+      onSave: (_) async { saves++; return true; }, error: () => null), large: true, keyboard: true);
+    await _tab(t, 1);
+    final list = find.byKey(const ValueKey('blocking-custom-scroll'));
+    final controller = t.widget<ListView>(list).controller!;
+    final rect = t.getRect(list);
+    final gesture = await t.startGesture(Offset(rect.left + 4, rect.center.dy));
+    await gesture.moveBy(const Offset(0, -120));
+    await t.pump();
+    await gesture.moveBy(const Offset(0, 500));
+    await t.pump();
+    await gesture.up();
+    await t.pumpAndSettle();
+    expect(find.byType(BlockingCustomEditor), findsOneWidget);
+    controller.jumpTo(120);
+    await t.pumpAndSettle();
+    await t.drag(list, const Offset(0, 1000));
+    await t.pumpAndSettle();
+    expect(find.byType(BlockingCustomEditor), findsOneWidget);
+    expect(controller.position.pixels, closeTo(0, 1));
+    await t.drag(list, const Offset(0, 220));
+    await t.pumpAndSettle();
+    expect(find.byType(BlockingCustomEditor), findsNothing);
+    expect(saves, 0);
+  });
+  for (final custom in [false, true]) {
+    testWidgets('editor sections retain independent scroll offsets; custom=$custom', (t) async {
+      await _open(t, custom
+        ? BlockingCustomEditor(custom: const {}, iconBuilder: blockingIcon,
+            onSave: (_) async => true, error: () => null)
+        : const BlockingPlanEditor(plan: _plan, catalog: _catalog,
+            usageGranted: true, websiteAllowed: true), large: true, keyboard: true);
+      await _tab(t, custom ? 1 : 0);
+      final list = find.byKey(ValueKey(custom ? 'blocking-custom-scroll' : 'blocking-editor-scroll'));
+      final controller = t.widget<ListView>(list).controller!;
+      controller.jumpTo(100);
+      await t.pumpAndSettle();
+      final offset = controller.offset;
+      await _tab(t, 2);
+      await _tab(t, custom ? 1 : 0);
+      expect(t.widget<ListView>(list).controller!.offset, closeTo(offset, 1));
+      expect(t.takeException(), isNull);
+    });
+  }
+  for (final customize in [false, true]) {
+    testWidgets('editor sections swipe in both directions; customize=$customize', (t) async {
+      await _open(t, customize
+          ? BlockingCustomEditor(custom: const {}, iconBuilder: blockingIcon,
+              onSave: (_) async => true, error: () => null)
+          : const BlockingPlanEditor(plan: _plan, catalog: _catalog,
+              usageGranted: true, websiteAllowed: true), animations: true);
+      final area = find.byKey(ValueKey(customize ? 'blocking-custom-scroll' : 'blocking-editor-scroll'));
+      var rect = t.getRect(area);
+      await t.dragFrom(Offset(rect.left + 4, rect.top + 24), const Offset(-280, 0));
+      await t.pumpAndSettle();
+      final selected = find.ancestor(
+        of: find.byKey(const ValueKey('blocking-editor-tab-1')),
+        matching: find.byWidgetPredicate((w) => w is Semantics && w.properties.selected == true));
+      expect(selected, findsOneWidget);
+      rect = t.getRect(area);
+      await t.dragFrom(Offset(rect.right - 4, rect.top + 24), const Offset(280, 0));
+      await t.pumpAndSettle();
+      expect(find.ancestor(of: find.byKey(const ValueKey('blocking-editor-tab-0')),
+        matching: find.byWidgetPredicate((w) => w is Semantics && w.properties.selected == true)), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+  }
   testWidgets(
     'plan sections retain all rule values, icon and current selections',
     (t) async {

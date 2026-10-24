@@ -2,6 +2,27 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_radii.dart';
 
+/// Keep each editor section's scroll positions and focused controls alive while
+/// neighbouring pages slide. Settled offscreen sections are not hit-testable.
+class BlockingEditorSection extends StatefulWidget {
+  const BlockingEditorSection({required this.visible, required this.child, super.key});
+  final bool visible;
+  final Widget child;
+  @override
+  State<BlockingEditorSection> createState() => _BlockingEditorSectionState();
+}
+
+class _BlockingEditorSectionState extends State<BlockingEditorSection>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Offstage(offstage: !widget.visible, child: widget.child);
+  }
+}
+
 /// Compact, theme-owned sections. Large text can scroll rather than truncate.
 class BlockingEditorTabs extends StatelessWidget {
   const BlockingEditorTabs({

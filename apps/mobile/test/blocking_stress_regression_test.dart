@@ -274,10 +274,11 @@ void main() {
     (tester) async {
       final gateway = _Gateway(delayCatalog: true);
       await _pumpPage(tester, gateway);
+      final add = tester.widget<TextButton>(find.widgetWithText(TextButton, 'Add')).onPressed!;
       for (var i = 0; i < 10; i++) {
-        await tester.tap(find.widgetWithText(TextButton, 'Add'));
-        await tester.pump();
+        add();
       }
+      await tester.pump();
       expect(gateway.catalogs.length, 1);
       gateway.catalogs.single.complete([]);
       await tester.pumpAndSettle();
