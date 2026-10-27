@@ -61,8 +61,11 @@ countdown, compact theme-owned amber warning only when Stay on screen is enabled
 and an oval outlined Stay focused action. Controls use equal widths, minimum
 48px height and 12px gaps. Graphite/glass materials and all four palettes stay
 unchanged across Plans, Discipline, Insights and Customize. AppSurface's optional
-statusOutline uses semantic success green for native blocking, subdued primary
-text for native daily-budget tracking and the normal border for scheduled plans.
+statusOutline uses semantic danger red for native blocking, success green for
+native daily-budget tracking with allowance remaining and the normal border for
+scheduled, expired or paused plans. The existing plan icon and status pill use
+the same semantic accent. Effective blocking takes precedence when a separate
+OR rule is active while budget remains; no geometry or status vocabulary changes.
 Focus/selected/warning/danger states retain precedence; status text supplements
 color. Move up/down are removed from the visual menu, but remain accessibility
 actions on the reorder handle alongside drag/drop.

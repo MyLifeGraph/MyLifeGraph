@@ -1,5 +1,11 @@
 # MyLifeGraph Mobile App
 
+Blocking plan status uses existing semantic colors: native daily-budget Tracking
+with remaining allowance is green; effective Active blocking is red, including
+weekly or other OR rules while budget remains. Scheduled/Paused/Expired stay
+neutral. Rim, icon and pill agree without layout, label, permission or enforcement
+changes; remaining minutes alone never fabricate working tracking.
+
 Compact Task/Habit editors retain their existing draft/save commands: `Plan time`
 reveals the Task preview inputs, while `Repeat *` exposes all three Habit cadences
 without preselecting one. Calendar import groups read-only/no-sync status and uses

@@ -31,6 +31,67 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local Blocking status colors and experience-based audit — 2026-10-27 (unpublished)
+
+Task base `309d66be7ffecb9f0b32b46c41b67f0022b1680c`. The approved change
+uses existing semantic success for native budget Tracking and danger for native
+Active blocking, with Active taking precedence over a simultaneous remaining
+budget. Rim/icon/pill agree; layout, labels, enforcement, permissions, native
+production source and stored/channel formats are unchanged.
+
+The initial approved-color UX suite passes **26 tests**. A complete local
+Flutter run, launched before the new channel regression file was added, passes
+**2014 tests** and fails **six unchanged component-reference goldens** on Windows.
+Those failures are in `visual_system_v2_test.dart`, which imports unchanged core
+widgets/themes rather than Blocking. Expected images were not rewritten. The new
+production MethodChannel/render suite subsequently passes **14 tests**, including
+four themes, enlarged text, budget threshold, mixed OR precedence, denied access,
+paused plans, transient failure recovery and obsolete delayed replies. The final
+focused rerun also passes all **14**, including rim/icon/pill color agreement.
+The fresh base-bound affected run completes its Flutter branch with **2028 passed
+and the same six golden failures**, plus clean analysis. Its source branch fails
+on missing Windows `setsid`; its backend branch cannot find `python3`. Therefore
+the Full chain stops before DB/web/E2E and is explicitly **not green**.
+
+App-module JVM verification passes **137 tests**, including a seeded independent
+foreground-interval oracle over 300 chronological traces and a circular-week
+oracle over 500 schedules. App Debug Lint passes. Studio Java25 initially fails
+the pinned Gradle setup; a checksum-verified temporary official Java21 runs these
+checks and the current guest/mock debug APK build. No project dependency upgrade.
+The completed standalone Flutter analyzer reports no issues; documentation
+consistency (19 tests), visual guard and whitespace checks pass. A pixel comparison
+of actual before/after Glass captures finds no changed pixels outside the three
+recolored status cards, and no changed name/rule/time/count pixels inside those
+cards. The inspected Light and 200% text renders retain existing layout behavior.
+Broad affected verification is separately recorded above, not inferred from
+these focused results.
+
+Actual native status was inspected on the isolated, headless, read-only QA Pixel
+API37.1 emulator with no snapshot load/save. With actual Usage Access and bound
+Accessibility, Games returns Tracking with measured foreground usage. Master-off
+preserves historical usage but returns neither Active nor Tracking; denied usage
+returns unavailable/no Tracking. Restoring access returns Tracking; an exhausted
+one-minute QA allowance returns Active. The native matrix is independently
+asserted in `.tools/blocking-status-20261026/verify-native-matrix.mjs`.
+The real Android budget notification remains present through shade expansion and
+collapse, then clears on Home. The emulator was stopped after the tests.
+
+No incorrect Scheduled state under verified native tracking was reproduced.
+Master-off with retained historical usage is a reproduced explanation for that
+appearance, not proof of the user's Samsung state. No newly confirmed product
+bug is claimed. Initial missing service binding in the instrumentation harness
+and an invalid enlarged-text height assertion are test setup/expectation issues,
+not product bugs. No physical Samsung/NFC or authenticated Blocking acceptance is
+claimed; guest Setup/navigation was local and the normal synced-account gate held.
+Real before/after widget captures and inspected Light/large-text variants are in
+`.tools/blocking-status-20261026/implemented.html`; no generated mockup is used
+as implementation evidence. See the [audit](audits/2026-10-27-testing-from-experience.md)
+and [experience catalog](testing/experience-catalog.md) for scope and timing.
+The requested experience window lasted 34m57s (00:22:12–00:57:09 Europe/Berlin),
+excluding initial implementation/preflight and final bookkeeping.
+Everything remains local; no commit, push, PR, release or deployment was requested
+for this follow-up. Pre-existing retention edits and media remain untouched.
+
 ### Published RC38 Blocking editor gestures and opening — 2026-10-25
 
 PR [64](https://github.com/MyLifeGraph/MyLifeGraph/pull/64) merged to
