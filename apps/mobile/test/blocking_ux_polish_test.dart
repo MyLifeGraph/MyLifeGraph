@@ -191,7 +191,7 @@ Future<void> _open(
 
 void main() {
   testWidgets(
-    'native budget tracking gets a neutral rim and no visual move menu',
+    'native budget tracking gets a success rim and no visual move menu',
     (tester) async {
       await _open(tester, gateway: _TrackingGateway());
       expect(find.text('Tracking'), findsOneWidget);
@@ -200,7 +200,16 @@ void main() {
             .ancestor(of: find.text('Games'), matching: find.byType(AppSurface))
             .first,
       );
-      expect(surface.statusOutline, isNotNull);
+      expect(
+        surface.statusOutline,
+        Theme.of(
+          tester.element(find.text('Games')),
+        ).extension<AppVisualTokens>()!.success,
+      );
+      expect(
+        tester.widget<AppStatusPill>(find.byType(AppStatusPill).first).tone,
+        AppStatusTone.success,
+      );
       expect(surface.selected, isFalse);
       await tester.tap(find.byTooltip('Plan options'));
       await tester.pumpAndSettle();
@@ -334,7 +343,7 @@ void main() {
         active.statusOutline,
         Theme.of(
           tester.element(find.text('Study')),
-        ).extension<AppVisualTokens>()!.success,
+        ).extension<AppVisualTokens>()!.danger,
       );
       expect(active.selected, isFalse);
       await tester.scrollUntilVisible(

@@ -950,17 +950,18 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
         final timing = _timingLabel(plan, s.usageGranted);
         final editable = !_configurationLocked && !_busy && !_editorOpen;
         final palette = Theme.of(context).colorScheme;
+        final statusColor = plan.active
+            ? context.visualTokens.danger
+            : plan.tracking
+            ? context.visualTokens.success
+            : null;
         return Padding(
           key: ValueKey(plan.id),
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: AppSurface(
             variant: AppSurfaceVariant.interactive,
             radius: AppRadii.lg,
-            statusOutline: plan.active
-                ? context.visualTokens.success
-                : plan.tracking
-                ? context.visualTokens.textPrimary.withValues(alpha: .55)
-                : null,
+            statusOutline: statusColor,
             onTap: () => _tapPlan(plan),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -968,19 +969,14 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color:
-                        (plan.active
-                                ? context.visualTokens.success
-                                : palette.onSurfaceVariant)
-                            .withValues(alpha: .12),
+                    color: (statusColor ?? palette.onSurfaceVariant)
+                        .withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(AppRadii.md),
                   ),
                   child: Icon(
                     blockingIcon(plan.icon),
                     size: 28,
-                    color: plan.active
-                        ? context.visualTokens.success
-                        : palette.onSurfaceVariant,
+                    color: statusColor ?? palette.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -993,6 +989,8 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
                             ? AppIcons.shieldOutlined
                             : AppIcons.schedule,
                         tone: plan.active
+                            ? AppStatusTone.danger
+                            : plan.tracking
                             ? AppStatusTone.success
                             : AppStatusTone.neutral,
                         label: plan.paused

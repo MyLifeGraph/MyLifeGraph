@@ -56,10 +56,14 @@ The embedded Android preview accepts taps, while vertical drags belong to the
 containing page rather than its native inner scroller. Its Customize action is
 above the tall preview so editing remains reachable on short screens. The actual
 blocking overlay retains its native scrolling and return authority unchanged.
-The native effective `active` flag controls the accent rim, icon and summary;
-an explicit shield/status pill supplements color. Paused, expired and scheduled
-cards remain neutral. Neither a saved rule nor an enabled plan alone claims
-protection: native master, Accessibility and effective-target gates still apply.
+The native effective `active` flag uses the semantic danger-red accent on the
+rim, icon and status pill: targets are currently blocked. Native `tracking`
+uses semantic success green when a daily allowance remains. Effective blocking
+takes precedence over tracking when an independent OR rule is active. An explicit
+shield/status pill supplements color. Paused, expired and scheduled cards remain
+neutral. Neither remaining minutes, a saved rule nor an enabled plan alone claims
+working protection: native master, Accessibility, usage and effective-target
+gates still apply. Presentation does not synthesize either native status flag.
 
 `blocking-plans-v2` is a device-channel contract, not FastAPI/Supabase. It has
 explicit registry coverage because its named constants are Kotlin/Dart, not
