@@ -31,6 +31,51 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC39 Blocking status colors — 2026-10-27
+
+PR [66](https://github.com/MyLifeGraph/MyLifeGraph/pull/66) merged to
+`0cafd3b7b8934326fc24d20370da21464851765b`, with the same tree as tested
+candidate `d5b923c799bd1d7e3dda07e2e5569c02b1fe6806`. Full Linux manual run
+`40510578954` passes all seven jobs, including **2034 Flutter tests**, clean
+analysis, Android JVM/Lint, backend, fresh migrations/pgTAP and full browser E2E.
+PR run `40510595335` also passes. These Linux checks supersede the Windows
+golden/prerequisite failures in the local audit below; its hardware limits remain.
+
+Signed tag workflow `40512972423` passes. Release
+[`v0.1.0-pilot.1-rc.39`](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.39),
+id `425518935`, is published, non-draft/non-prerelease. Package
+`com.mylifegraph.app`, versionCode `10000138`, APK **153618949 bytes**, SHA-256
+`730495600e039360ce92b205b94401c73fd4c41f28755a47198a4bf1efb000dd`.
+Uploaded asset identities/digests and downloaded APK bytes were checked.
+Independent apksigner verification passes with unchanged certificate SHA-256
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`;
+aapt confirms package/version identity.
+
+VPS promotion and its initial complete project check pass. Public health and
+readiness subsequently still report RC39/Main SHA, migration count **83**, head
+`20261006135421_coach_operator_sol61_standard.sql`, inventory digest
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+API, Coach executor/socket and Caddy are active. Vercel production deployment
+`dpl_6ZatqDSHJ6kHyyZ16h1eD6kvqs8F` is READY; both existing app origins serve
+the RC39 Main identity in main.dart.js and retain CSP. No schema, model,
+dependency, signing identity or native production source changes.
+
+Post-publication local finalization verifies GitHub publication/tag/assets before
+cleanup. Laptop and development VM each remove **153993804 bytes** of registered
+RC38 outputs; oldest/newest published copies remain. The publishing VPS registers
+RC39 and removes **0 bytes**. Originals, active/rollback releases and unrelated
+retention edits are untouched. Vercel's bounded cleanup removes two obsolete
+deployments while protecting live/rollback/current preview outputs.
+
+Final host-capacity caveat: after finalization, free disk is **16046370816 bytes**,
+below the unchanged **16106127360-byte (15 GiB)** build reserve by **59756544
+bytes**. The repeated project check stops in its host preflight (`env`); that
+preflight explicitly rejects this capacity. Public health/readiness remain good,
+but the final complete host check is therefore **not green**. No check was
+weakened and no protected files were deleted to mask the shortfall. Space must be
+recovered safely before another server preparation/full host check. No physical
+Samsung/NFC acceptance or authenticated live Coach conversation is claimed.
+
 ### Local Blocking status colors and experience-based audit — 2026-10-27 (unpublished)
 
 Task base `309d66be7ffecb9f0b32b46c41b67f0022b1680c`. The approved change
