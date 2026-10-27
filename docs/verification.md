@@ -67,14 +67,35 @@ RC39 and removes **0 bytes**. Originals, active/rollback releases and unrelated
 retention edits are untouched. Vercel's bounded cleanup removes two obsolete
 deployments while protecting live/rollback/current preview outputs.
 
-Final host-capacity caveat: after finalization, free disk is **16046370816 bytes**,
+Initial host-capacity caveat: after finalization, free disk was **16046370816 bytes**,
 below the unchanged **16106127360-byte (15 GiB)** build reserve by **59756544
-bytes**. The repeated project check stops in its host preflight (`env`); that
-preflight explicitly rejects this capacity. Public health/readiness remain good,
-but the final complete host check is therefore **not green**. No check was
-weakened and no protected files were deleted to mask the shortfall. Space must be
-recovered safely before another server preparation/full host check. No physical
-Samsung/NFC acceptance or authenticated live Coach conversation is claimed.
+bytes**. The repeated project check stopped in its host preflight (`env`); that
+preflight explicitly rejects this capacity. Public health/readiness remained good,
+but that complete host check was **not green**. No check was weakened and no
+protected files were deleted to mask the shortfall. This initial capacity
+limitation is resolved by the explicitly authorized cleanup below.
+No physical Samsung/NFC acceptance or authenticated live Coach conversation is claimed.
+
+Subsequent authorized VPS cleanup on 2026-10-27 previews and revalidates exactly
+the four signed download files in each of
+`/home/mylifegraph-matthias/mylifegraph-rc22-signed.cRL7dN/signed` and
+`/home/mylifegraph-matthias/mylifegraph-rc23-signed.BeY8Ui/signed`. Existing
+publication-proof code verifies tag/source identity, uploaded digests and streamed
+downloaded SHA-256 for every file before individual deletion. Local inode/size/
+mtime and publication identities are freshly checked against the preview.
+The oldest local published output RC11 is additionally registered and verified
+beside newest RC39 in the managed store. Removed **305297642 bytes**, copied
+**150087378 bytes**, net file reduction **155210264 bytes**. RC11/RC39 originals,
+RC37/RC38 downloads, repositories, runtime/rollback releases, signing, backups
+and user data remain untouched. Exact preview/result records are retained on the
+VPS and locally under `.tools/vps-capacity-*-20261027.json`.
+
+After cleanup, free disk is **16201306112 bytes**, above the unchanged 15-GiB
+reserve. The complete installed `mylifegraph-project check` returns
+`state: passed, public_api_and_coach_ready: true`; API, Coach/socket and Caddy
+remain active with unchanged process identities. Public health/readiness retain
+RC39 and the same migration inventory. No service restart, new deployment,
+application behavior change, or lowered safety threshold was needed.
 
 ### Local Blocking status colors and experience-based audit — 2026-10-27 (unpublished)
 
