@@ -256,6 +256,9 @@ jobs:
               docker tag ghcr.io/supabase/postgres:17.6.1.113 public.ecr.aws/supabase/postgres:17.6.1.113
           }
 
+      - name: Fetch the pinned CLI runtime image through authenticated Docker
+        run: docker pull ghcr.io/supabase/postgres:17.6.1.136
+
       - name: Apply the fresh migration chain and run all pgTAP assertions
         run: npm run verify:db
 
@@ -318,6 +321,9 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           python -m pip install --require-hashes -r services/ai_service/requirements-dev.txt
+
+      - name: Fetch the pinned CLI runtime image through authenticated Docker
+        run: docker pull ghcr.io/supabase/postgres:17.6.1.136
 
       - name: Run the full serial browser regression on a fresh database
         env:

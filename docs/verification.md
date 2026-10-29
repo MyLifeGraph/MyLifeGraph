@@ -42,6 +42,11 @@ ephemeral GitHub job token and job-local `packages: read` permission. Docker
 credentials stay on the disposable runner and are not cached or uploaded.
 No image tag, CLI version, schema, database assertion or release gate changes.
 A fresh exact-SHA full CI run must verify this correction before Main/release.
+The authenticated CLI-start attempt still fails pulling its existing
+`ghcr.io/supabase/postgres:17.6.1.136` runtime image. Both jobs now explicitly
+preload that same image through the authenticated Docker client before starting
+Supabase; the original PostgreSQL compatibility-image matrix remains in place.
+This is not yet pass evidence and does not authorize skipping either gate.
 
 Authorized VPS capacity preparation removes exactly eight original RC37/RC38
 download files after fresh size/hash checks against published assets:
