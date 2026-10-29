@@ -31,6 +31,146 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### RC40 publication candidate — 2026-10-29
+
+PR 69 publishes the local experience fixes. Candidate `b66e845` passed complete
+Linux Flutter, analysis, Android JVM/lint, backend, web build and docs/visual
+checks. Full runs `40938542906` and `40938545029` encountered repeated public
+registry rate limits before database/browser assertions; those gates are not
+waived. The database and browser jobs now authenticate GHCR downloads with the
+ephemeral GitHub job token and job-local `packages: read` permission. Docker
+credentials stay on the disposable runner and are not cached or uploaded.
+No image tag, CLI version, schema, database assertion or release gate changes.
+A fresh exact-SHA full CI run must verify this correction before Main/release.
+The authenticated CLI-start attempt still fails pulling its existing
+`ghcr.io/supabase/postgres:17.6.1.136` runtime image. Both jobs now explicitly
+preload that same image through the authenticated Docker client before starting
+Supabase; the original PostgreSQL compatibility-image matrix remains in place.
+This is not yet pass evidence and does not authorize skipping either gate.
+
+Authorized VPS capacity preparation removes exactly eight original RC37/RC38
+download files after fresh size/hash checks against published assets:
+`/home/mylifegraph-matthias/mylifegraph-rc37-signed.0J93mwEz` and
+`/home/mylifegraph-matthias/mylifegraph-rc38-signed.elkmdUss`.
+Removed bytes: **308053144**; active/rollback installations and RC39 are retained.
+The explicit eight-file user approval is separate from automatic retention.
+
+### Local experience continuation — 2026-10-29 18:37
+
+Base `8805ab6867f84fbfedeb5cc246c4a8bf89751efd`, same local working tree;
+no commit, push, release or deployment. Existing unrelated release-retention
+edits remain untouched. This continuation adds one confirmed native defect:
+Chrome's English unfocused address-bar security annotation caused a configured
+host to be rejected by strict URI parsing. Actual Android failure and a red JVM
+regression precede the narrow address-bar-only fix. Domain-entry validation,
+rule authority and other browser adapters are preserved.
+
+Evidence in `.tools/experience-20261029-1837/`:
+
+- Full Flutter suite after final Dart behavior changes: **2036 passed, 6 failed**
+  in 6m29s (`flutter-full.log`). The same six pre-existing Windows component
+  goldens have exactly unchanged pixel-difference counts. This is not a green
+  full gate. Subsequent production changes are Kotlin only.
+- Two seeded picker-sequence tests pass (fixed/variable heights, fifty steps
+  each); two new Coach keyboard/late-reply cases pass. These are included in the
+  full Flutter count above, not additional full-suite passes.
+- Final `dart analyze --fatal-infos` passes (`analyze-final.log`). Its isolated
+  process-local LOCALAPPDATA avoids the preceding Windows analyzer-cache failure.
+- Native JVM after the complete browser fix: **141 tests, 20 suites, zero failures**.
+  Android lint initially fails only on two generated local SDK property escapes;
+  the corrected local configuration passes. `native-complete.log` records the
+  successful combined JVM, lint and debug build. No lint baseline or diagnostic
+  is suppressed.
+- Planner/Deadline fake-repository group **109 passed**; terminal Focus, Weekly
+  Review and shared Today-read context group **26 passed**. No database changes.
+- Fresh debug builds run on the isolated read-only/no-snapshot Android 17/API 37
+  emulator. Five-case status matrix, thirty-two shade/Home/sleep/wake cycles,
+  permission/rebind recovery and three timed foreground intervals pass. The
+  twenty-second intervals measure 19.843, 19.914 and 20.024 seconds.
+- Actual reboot recovery passes without opening MyLifeGraph; the timer appears
+  14.77 seconds after launching the target. Recovery is not instantaneous.
+  Ten app Return/Home cycles pass with detection taking up to 4.702 seconds.
+  Explicit notification dismissal is invoked through its native delete Intent.
+
+Installed-browser recheck passes three denied-tab/Return/reopen cycles, an
+allowed-host visit and three app Return cycles, with plan and Discipline state
+unchanged (`browser-neutral-complete.log`). Chrome's annotated neutral address
+is recognized as completed without waiting for the old timeout. Documentation
+consistency passes after the audit updates (`docs-closeout.log`); the visual
+contract and `git diff --check` also pass. The affected selector dry-run uses the
+captured base and selects `verify:full` because this checkout includes unrelated
+retention edits and old untracked artifacts. It is not a passed full gate.
+
+Actual Android UI also verifies selected-target viewport anchoring and site
+deselection order, editor/Customize section swipes, reverse-scroll retention,
+Save/reopen, keyboard Save and cancelled-title restoration, native preview and
+the configured delayed block overlay. A Home press with one second remaining
+retains the overlay; ready Return
+exits safely. Three-plan handle drag changes only order, with identical per-plan
+payload hashes through refresh and edit cancellation. Discipline's default
+three-minute background permanent unlock completes before app reopening;
+optional thirty-second stay-on-screen mode preserves shade countdown, resets on
+tab leave, supports Stay focused cancellation and prevents policy edits while
+locked. Selected temporary unlock completes automatically and survives sleep/wake
+with its persisted deadline unchanged. Full fifteen-minute device expiry is not
+claimed. Evidence: `ui-journey.jsonl`, `discipline-native-proof.jsonl`, and the
+named native screenshots/proofs in the same ignored run directory.
+
+The emulator-only direct BlockingPage entry is an ignored test fixture with
+production widgets/native gateways and synthetic local plans; it bypasses the
+account navigation entry and proves neither Auth nor real backend integration.
+Its debug APK is a test artifact, not a distribution candidate; a later release
+must rebuild the normal production entry using the standard signed workflow.
+Physical NFC, Samsung/OEM power management, live providers and production state
+remain unverified. See the [continuation audit](audits/2026-10-29-1837-testing-from-experience.md).
+The isolated emulator is stopped; final execution/shutdown verification completed
+at 20:09:13 CET, before the requested 20:10 cutoff. All changes remain local.
+
+### Local experience-based regression run — 2026-10-29
+
+Base `8805ab6867f84fbfedeb5cc246c4a8bf89751efd`, uncommitted local fixes only.
+Two reproduced picker defects are fixed: stale bottom anchoring space after a
+short search, and rapid taps choosing an already-moving row as scroll anchor.
+No native/backend behavior, persistence, schema or provider configuration changed.
+Existing unrelated release-retention edits remain separate and untouched.
+
+Current evidence in `.tools/experience-20261029/`:
+
+- Initial full Flutter run: **2028 passed, 6 failed**, before the new fixes.
+  Failures are the existing Windows dark/light/space mobile/desktop component
+  reference goldens. References were not regenerated to hide the differences.
+- Final focused list/editor/icon regressions: **20 passed**, after both fixes;
+  includes 25/250 targets, short search, two real WidgetTester taps before layout,
+  and custom website insertion while preserving the reading anchor.
+- Adjacent correlation/calendar/Coach tests: **56 passed**, including four new
+  seeded source-order tests (160 permutations across short/long, Focus/no-Focus
+  fixtures); stored evidence/ranking must not depend on input arrival order.
+- Fresh Android JVM execution: **137 tests, 19 suites, zero failures**;
+  `:app:testDebugUnitTest --rerun :app:assembleDebug` succeeded. Earlier Android
+  lint also succeeded. The local debug APK is not a signed release or installed
+  device acceptance, and predates the second Flutter picker fix.
+- Selected Python streak/Today/learning/sleep tests: **86 passed** with fake
+  repositories; one pytest cache permission warning. No database was changed.
+- Opt-in widget render capture: **1 passed**, eight actual synthetic-fixture
+  editor/Customize images; not screenshots from an installed user's device.
+- Final full Flutter run after both fixes: **2032 passed, 6 failed** in 16m49s;
+  the same six pre-existing component goldens, with unchanged difference counts.
+  No new functional test failure. Log: `flutter-final.log`.
+- Visual contract, documentation and `git diff --check` passed. Dart formatting
+  passes for all three changed Dart files.
+  `dart analyze --fatal-infos` exits 4: the analysis server fails during shutdown
+  deleting its own local `AppData/Local/Dart/perf/21588` file (Windows error 1920).
+  This is incomplete analysis, not an application diagnostic or a passed gate.
+
+The affected-selector dry-run used the captured base above and selected
+`verify:full` because the checkout also contains unrelated retention changes and
+untracked artifacts. It is selection evidence, not a passed full gate. No database
+or browser integration gate is claimed for this local widget change. The isolated
+read-only emulator did not finish boot and was stopped cleanly. Physical NFC,
+Samsung startup/battery behavior, real notification shade, provider turns and
+production state remain unverified by this run. Dated execution detail:
+[run audit](audits/2026-10-29-testing-from-experience.md).
+
 ### Published RC39 Blocking status colors — 2026-10-27
 
 PR [66](https://github.com/MyLifeGraph/MyLifeGraph/pull/66) merged to

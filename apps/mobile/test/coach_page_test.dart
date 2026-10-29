@@ -26,6 +26,78 @@ import 'support/header_actions.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  for (final readingOlder in [false, true]) {
+    testWidgets(
+      'keyboard and late reply preserve chosen chat position: $readingOlder',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetViewInsets);
+        final repository = _FakeCoachRepository(
+          block: true,
+          historyTurns: [
+            {
+              'request_id': coachRequestId,
+              'message': 'Earlier question',
+              'response': coachResponseJson(
+                reply: List.filled(
+                  40,
+                  'Earlier answer paragraph.',
+                ).join('\n\n'),
+              ),
+              'created_at': '2026-07-26T10:15:01Z',
+            },
+          ],
+        );
+        await _pumpPage(tester, repository);
+        final scroller = find.byKey(const Key('coach-chat-scroll'));
+        final controller = tester
+            .widget<SingleChildScrollView>(scroller)
+            .controller!;
+        await tester.enterText(
+          find.byKey(const Key('coach-message-field')),
+          'Question while keyboard is open',
+        );
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('coach-send-button')));
+        for (var i = 0; i < 12; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(repository.messages, ['Question while keyboard is open']);
+        if (readingOlder) {
+          await tester.drag(scroller, const Offset(0, 220));
+          await tester.pump(const Duration(milliseconds: 500));
+        }
+        final readingOffset = controller.offset;
+        repository.completeReply(
+          List.filled(55, 'A new paragraph in the late reply.').join('\n\n'),
+        );
+        await tester.pumpAndSettle();
+        if (readingOlder) {
+          expect(controller.offset, closeTo(readingOffset, 1));
+          expect(
+            find.byKey(const Key('coach-scroll-to-latest')),
+            findsOneWidget,
+          );
+        } else {
+          expect(controller.position.extentAfter, lessThanOrEqualTo(1));
+        }
+        tester.view.viewInsets = FakeViewPadding.zero;
+        await tester.pumpAndSettle();
+        if (readingOlder) {
+          expect(controller.offset, closeTo(readingOffset, 1));
+          await tester.tap(find.byKey(const Key('coach-scroll-to-latest')));
+          await tester.pumpAndSettle();
+        }
+        expect(controller.position.extentAfter, lessThanOrEqualTo(1));
+        expect(find.byKey(const Key('coach-scroll-to-latest')), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final scenario in ['follow long reply', 'follow short reply', 'preserve reading position', 'arrow during reply']) {
     testWidgets('chat tail regression: $scenario', (tester) async {
       final repository = _FakeCoachRepository(block: true, historyTurns: [

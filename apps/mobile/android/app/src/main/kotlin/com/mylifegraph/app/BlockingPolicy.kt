@@ -24,6 +24,24 @@ object BlockingDomains {
         host == domain || host.endsWith(".$domain")
 }
 
+/** Only called for the known browser address-bar nodes, never page content. */
+object BlockingBrowserAddress {
+    private fun address(packageName: String, value: String): String {
+        // Chrome's unfocused URL bar can expose the accessibility security
+        // annotation as part of its text. Do not loosen saved-domain parsing or
+        // guess hosts from arbitrary whitespace, search terms or page content.
+        val text = value.trim()
+        if (packageName != "com.android.chrome") return text
+        return text.removeSuffix(". Connection is not secure")
+    }
+
+    fun host(packageName: String, value: String): String? =
+        BlockingDomains.host(address(packageName, value))
+
+    fun isNeutral(packageName: String, value: String): Boolean =
+        address(packageName, value) == "about:blank"
+}
+
 /** Shared rule logic is pure so native tests exercise the same enforcement decision. */
 object BlockingRulePolicy {
     fun hasEffectiveTargets(apps: Int, sites: Int, websiteConsent: Boolean): Boolean =

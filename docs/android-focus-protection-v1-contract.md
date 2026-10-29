@@ -147,7 +147,9 @@ selected targets first immediately after every selection, preserving the origina
 catalog/domain order inside both groups. Deselecting returns a target to that
 order. Apps and websites share visible-row anchoring: a mid-list selection or
 additive preset moves targets, not the user's viewport. Near the new end, bounded
-trailing space preserves the anchor instead of pulling it upwards. Explicit
+trailing space preserves the anchor instead of pulling it upwards. Temporary
+anchor space is discarded when search/category result IDs change. Rapid selections
+before a layout frame exclude all moving rows from the viewport anchor. Explicit
 search/category changes may change the visible result set. App row sizes and
 picker bounds are unchanged; selected targets remain visible through filtering.
 Websites use checkbox rows, local bundled marks for known hosts and a globe fallback;
@@ -482,6 +484,11 @@ Brave, Firefox and Samsung Internet. These require installed-device verification
 and may change with browser updates. Hidden bars, focused editable searches and
 other browsers are not promised support. Page contents/messages/clicks and
 arbitrary node text are never inspected or uploaded.
+
+Chrome's observed English `Connection is not secure` suffix in its unfocused
+allowlisted URL bar is removed before host validation and neutralization.
+This narrow adapter does not relax saved-domain validation, parse search text,
+or inspect page content. Other browser/localized annotations remain unverified.
 
 Whole-browser app rules take precedence over domain handling. Matching domains
 open non-exported `LocalBlockPageActivity`: an offline WebView document with

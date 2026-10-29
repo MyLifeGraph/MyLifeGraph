@@ -225,12 +225,20 @@ jobs:
 
   database:
     name: Fresh migrations and pgTAP
+    permissions:
+      contents: read
+      packages: read
     needs: changes
     if: needs.changes.outputs.db == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+
+      - name: Authenticate container downloads with the ephemeral read token
+        env:
+          GHCR_READ_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
       - uses: supabase/setup-cli@v2
         with:
@@ -248,11 +256,17 @@ jobs:
               docker tag ghcr.io/supabase/postgres:17.6.1.113 public.ecr.aws/supabase/postgres:17.6.1.113
           }
 
+      - name: Fetch the pinned CLI runtime image through authenticated Docker
+        run: docker pull ghcr.io/supabase/postgres:17.6.1.136
+
       - name: Apply the fresh migration chain and run all pgTAP assertions
         run: npm run verify:db
 
   full-e2e:
     name: Full browser E2E
+    permissions:
+      contents: read
+      packages: read
     needs: changes
     if: needs.changes.outputs.full_e2e == 'true'
     runs-on: ubuntu-latest
@@ -261,6 +275,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Authenticate container downloads with the ephemeral read token
+        env:
+          GHCR_READ_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
       - uses: actions/setup-node@v4
         with:
@@ -302,6 +321,9 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           python -m pip install --require-hashes -r services/ai_service/requirements-dev.txt
+
+      - name: Fetch the pinned CLI runtime image through authenticated Docker
+        run: docker pull ghcr.io/supabase/postgres:17.6.1.136
 
       - name: Run the full serial browser regression on a fresh database
         env:
