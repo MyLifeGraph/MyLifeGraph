@@ -30,8 +30,8 @@ object BrowserAddressBars {
             }
             val action = pending.next(now, root.packageName?.toString(), root.windowId, true,
                 node.isVisibleToUser, node.isEditable, node.isFocused,
-                BlockingDomains.host(node.text?.toString().orEmpty()),
-                node.text?.toString()?.trim() == NEUTRAL_URL, canSubmit,
+                BlockingBrowserAddress.host(pending.packageName, node.text?.toString().orEmpty()),
+                BlockingBrowserAddress.isNeutral(pending.packageName, node.text?.toString().orEmpty()), canSubmit,
                 node.text.isNullOrBlank() || Build.VERSION.SDK_INT >= 26 &&
                     node.hintText != null && node.text?.toString() == node.hintText?.toString())
             val accepted = when (action) {
@@ -56,7 +56,7 @@ object BrowserAddressBars {
                 for (node in nodes) {
                     // Never treat a search/query currently being typed as a visited website.
                     if (!node.isVisibleToUser || node.isFocused && node.isEditable) continue
-                    BlockingDomains.host(node.text?.toString().orEmpty())?.let { return it }
+                    BlockingBrowserAddress.host(packageName, node.text?.toString().orEmpty())?.let { return it }
                 }
             } finally { nodes.forEach { it.recycle() } }
         }

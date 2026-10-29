@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Stable partition of the original order, with viewport anchoring on selection.
@@ -31,11 +32,23 @@ class BlockingTargetList extends StatefulWidget {
 class BlockingTargetListState extends State<BlockingTargetList> {
   final _viewport = GlobalKey();
   final _rows = <String, GlobalKey>{};
+  final _pendingMoved = <String>{};
   int _change = 0;
   double _bottomSlack = 0;
 
+  @override
+  void didUpdateWidget(covariant BlockingTargetList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.ids, widget.ids)) {
+      // Anchoring space belongs to this result set. Search/category changes
+      // must not retain empty scrollable space from an earlier partition.
+      _bottomSlack = 0;
+    }
+  }
+
   /// Also used by additive presets/Clear: the same anchor policy as row taps.
   void preserveViewport(VoidCallback change, {Set<String> moved = const {}}) {
+    _pendingMoved.addAll(moved);
     String? anchor;
     double? before;
     final viewport = _viewport.currentContext?.findRenderObject();
@@ -45,7 +58,7 @@ class BlockingTargetListState extends State<BlockingTargetList> {
       final top = viewport.localToGlobal(Offset.zero).dy;
       final bottom = top + viewport.size.height;
       for (final id in widget.orderedIds) {
-        if (moved.contains(id)) continue;
+        if (_pendingMoved.contains(id)) continue;
         final row = _rows[id]?.currentContext?.findRenderObject();
         if (row is! RenderBox || !row.attached) continue;
         final y = row.localToGlobal(Offset.zero).dy;
@@ -58,14 +71,15 @@ class BlockingTargetListState extends State<BlockingTargetList> {
     }
     final generation = ++_change;
     change();
-    if (anchor == null || before == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || generation != _change || !widget.controller.hasClients) {
         return;
       }
+      _pendingMoved.clear();
+      if (anchor == null || before == null) return;
       final row = _rows[anchor]?.currentContext?.findRenderObject();
       if (row is! RenderBox || !row.attached) return;
-      final delta = row.localToGlobal(Offset.zero).dy - before!;
+      final delta = row.localToGlobal(Offset.zero).dy - before;
       final position = widget.controller.position;
       final desired = position.pixels + delta;
       if (desired > position.maxScrollExtent + .1) {

@@ -10,6 +10,7 @@ void main() {
       final controller = ScrollController();
       addTearDown(controller.dispose);
       final ids = List.generate(count, (i) => 'target-$i');
+      var visibleIds = ids;
       final selected = <String>{};
       final list = GlobalKey<BlockingTargetListState>();
       late StateSetter updateList;
@@ -25,7 +26,7 @@ void main() {
                     updateList = update;
                     return BlockingTargetList(
                       key: list,
-                      ids: ids,
+                      ids: visibleIds,
                       selected: selected,
                       controller: controller,
                       listKey: const ValueKey('targets'),
@@ -89,6 +90,43 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.getTopLeft(anchor).dy, closeTo(bulkBefore, .5));
+      expect(tester.takeException(), isNull);
+      // A new search is a new result set, not another selection movement.
+      // Temporary anchoring space must not leave short results scrollable.
+      updateList(() => visibleIds = ids.take(5).toList());
+      await tester.pumpAndSettle();
+      expect(controller.position.maxScrollExtent, 0);
+      expect(controller.offset, 0);
+      updateList(() => visibleIds = ids);
+      await tester.pumpAndSettle();
+      controller.jumpTo(560);
+      await tester.pumpAndSettle();
+      final rapidBefore = tester.getTopLeft(anchor).dy;
+      // Two selections before layout must preserve the last valid anchor.
+      for (final id in ['target-12', 'target-13']) {
+        await tester.tap(find.byKey(ValueKey(id)));
+      }
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(anchor).dy, closeTo(rapidBefore, .5));
+      expect(selected, {'target-12', 'target-13'});
+      // Adding a custom website changes the result set and must still anchor.
+      final addBefore = tester.getTopLeft(anchor).dy;
+      list.currentState!.preserveViewport(
+        () => updateList(() {
+          visibleIds = [...ids, 'new.example'];
+          selected.add('new.example');
+        }),
+        moved: {'new.example'},
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(anchor).dy, closeTo(addBefore, .5));
+      expect(
+        tester
+            .widget<BlockingTargetList>(find.byType(BlockingTargetList))
+            .orderedIds
+            .take(3),
+        ['target-12', 'target-13', 'new.example'],
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

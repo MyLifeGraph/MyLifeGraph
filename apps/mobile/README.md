@@ -6,6 +6,11 @@ weekly or other OR rules while budget remains. Scheduled/Paused/Expired stay
 neutral. Rim, icon and pill agree without layout, label, permission or enforcement
 changes; remaining minutes alone never fabricate working tracking.
 
+App and website pickers keep the reader's viewport through rapid selections and
+new website additions. Temporary anchoring space does not survive a changed search
+result set; short filtered lists do not retain empty scrollable tails. Selection,
+icons, saved targets and native rule authority remain unchanged.
+
 Compact Task/Habit editors retain their existing draft/save commands: `Plan time`
 reveals the Task preview inputs, while `Repeat *` exposes all three Habit cadences
 without preselecting one. Calendar import groups read-only/no-sync status and uses
@@ -24,6 +29,8 @@ recovered app immediately on that check, without changing permission gates.
 
 Android website blocking attempts bounded, address-bar-only `about:blank`
 navigation of the denied current tab before the existing offline block screen.
+The observed English Chrome security annotation is excluded from host parsing;
+saved-domain validation and focused-search guards remain unchanged.
 Package/window changes and unsupported actions stop that operation; whole-browser
 rules keep priority. App Return goes through Home before opening MyLifeGraph and
 does not release Strict, a Focus lease or any blocking rule. See Focus Protection
