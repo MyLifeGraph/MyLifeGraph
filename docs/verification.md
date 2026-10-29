@@ -31,6 +31,71 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC40 experience fixes — 2026-10-29
+
+PR [69](https://github.com/MyLifeGraph/MyLifeGraph/pull/69) merged to
+`3f69b3124bed5b5e1b9053a0de8340b76ebe531c`, with exactly the tested candidate
+`7c13417081b237eb82b590734916ca26b35a5794` tree. Full Linux manual CI
+[`40941764818`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/40941764818)
+passes all seven gates: **2042 Flutter tests**, clean analysis, Android JVM/lint,
+**2031 backend tests passed / 2 skipped**, fresh migrations/pgTAP and **8 browser
+E2E tests**. PR run `40941777919` also passes. No golden references were changed;
+the earlier six Windows differences do not reproduce on canonical Linux.
+
+Signed tag workflow `40944250754` passes. Release
+[`v0.1.0-pilot.1-rc.40`](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.40),
+id `428344492`, was published at **2026-10-29 20:15:53 UTC**, non-draft,
+non-prerelease, and is verified as GitHub Latest. APK package
+`com.mylifegraph.app`, versionCode **10000141**, **153618949 bytes**, SHA-256
+`c86a54807671a1831b5b6435a2933c8b66a000f3676b4885bc5bb42d613b8eb1`.
+Independent local apksigner verification passes, retaining certificate SHA-256
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`;
+aapt confirms package/version. The temporary test JDK was incomplete; this
+verification used the existing complete Android Studio runtime. This is not a
+dependency change. The SBOM SHA-256 is
+`609ea2631643f65f35e3cd63a263bcf5702fffccc292b4c5049233c9bb4a439e`.
+
+The slow laptop upload was stopped before any asset appeared in its unpublished
+draft. The VPS then downloaded the same successful official Actions artifact,
+matched the independently checked APK/SBOM bytes, uploaded all four assets,
+verified their uploaded identities/digests, and published the existing draft.
+The ignored emulator entry/APK was never used for distribution.
+
+VPS preparation, immutable analysis image, promotion and complete project check
+pass for RC40/Main SHA. Public health/readiness confirm that identity, migration
+count **83**, head `20261006135421_coach_operator_sol61_standard.sql`, and digest
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+Coach capability is ready; no authenticated live conversation is claimed.
+No schema, provider configuration, signing identity or dependency changed.
+
+Vercel production `dpl_8x5VhaMurUsvMKP5QeT8Kyt5R4zm` is READY. Both existing app
+origins return HTTP 200, retain CSP and serve `main-3f69b3124bed5b5e1b9053a0de8340b76ebe531c`
+in main.dart.js. An automatic same-source build and a manually started duplicate
+overlapped. Cancelling the duplicate left Vercel's project target pointing at the
+cancelled output while the actual public aliases worked. Retention stopped safely;
+promotion of the current live output returned 409. A fresh same-source production
+deployment completed READY and restored a consistent target. The subsequent
+bounded cleanup succeeded: **four obsolete deployments removed**, live/current
+outputs and two trustworthy rollback sources retained; the separate website
+project retained its insufficient-history outputs. No safety gate was relaxed.
+
+Post-publication finalization on laptop, development VM and the publishing VPS
+verifies the non-draft release, annotated tag, uploaded assets and actual
+downloaded SHA-256 bytes before removal. Each primary store removes **153993804
+bytes** of registered RC39 output, retaining oldest/newest and protected copies.
+These are removed registered bytes, not a claim of net disk gain after new
+release copies/builds. Original downloads, other repositories and historical
+foreign stores remain protected. The separate explicitly approved eight-file
+legacy deletion below removes **308053144 bytes**. After all VPS finalization,
+the complete project check still passes and disk availability is **16209965056
+bytes**, above the unchanged **16106127360-byte** build reserve.
+
+Evidence: `.tools/release-20261029/`, including signed artifact, apksigner,
+database/backend/browser logs, live proof and all three finalization logs.
+Physical Samsung/OEM behavior and NFC acceptance remain separate device checks.
+This follow-up records delivery only; it requires no new APK or application
+rollout. The preceding candidate failure notes remain historical context.
+
 ### RC40 publication candidate — 2026-10-29
 
 PR 69 publishes the local experience fixes. Candidate `b66e845` passed complete
