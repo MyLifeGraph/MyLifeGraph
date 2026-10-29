@@ -225,12 +225,20 @@ jobs:
 
   database:
     name: Fresh migrations and pgTAP
+    permissions:
+      contents: read
+      packages: read
     needs: changes
     if: needs.changes.outputs.db == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+
+      - name: Authenticate container downloads with the ephemeral read token
+        env:
+          GHCR_READ_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
       - uses: supabase/setup-cli@v2
         with:
@@ -253,6 +261,9 @@ jobs:
 
   full-e2e:
     name: Full browser E2E
+    permissions:
+      contents: read
+      packages: read
     needs: changes
     if: needs.changes.outputs.full_e2e == 'true'
     runs-on: ubuntu-latest
@@ -261,6 +272,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Authenticate container downloads with the ephemeral read token
+        env:
+          GHCR_READ_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
       - uses: actions/setup-node@v4
         with:

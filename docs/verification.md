@@ -31,6 +31,25 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### RC40 publication candidate — 2026-10-29
+
+PR 69 publishes the local experience fixes. Candidate `b66e845` passed complete
+Linux Flutter, analysis, Android JVM/lint, backend, web build and docs/visual
+checks. Full runs `40938542906` and `40938545029` encountered repeated public
+registry rate limits before database/browser assertions; those gates are not
+waived. The database and browser jobs now authenticate GHCR downloads with the
+ephemeral GitHub job token and job-local `packages: read` permission. Docker
+credentials stay on the disposable runner and are not cached or uploaded.
+No image tag, CLI version, schema, database assertion or release gate changes.
+A fresh exact-SHA full CI run must verify this correction before Main/release.
+
+Authorized VPS capacity preparation removes exactly eight original RC37/RC38
+download files after fresh size/hash checks against published assets:
+`/home/mylifegraph-matthias/mylifegraph-rc37-signed.0J93mwEz` and
+`/home/mylifegraph-matthias/mylifegraph-rc38-signed.elkmdUss`.
+Removed bytes: **308053144**; active/rollback installations and RC39 are retained.
+The explicit eight-file user approval is separate from automatic retention.
+
 ### Local experience continuation — 2026-10-29 18:37
 
 Base `8805ab6867f84fbfedeb5cc246c4a8bf89751efd`, same local working tree;
