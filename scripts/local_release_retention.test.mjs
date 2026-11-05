@@ -8,7 +8,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { GitHubPublicationProof, LocalReleaseStore, REPOSITORY, cli } from './local_release_retention.mjs';
+import { assetDownloadTimeoutMs, GitHubPublicationProof, LocalReleaseStore, REPOSITORY, cli } from './local_release_retention.mjs';
+import { setImmediate as flush } from 'node:timers/promises';
 
 const SHA = 'a'.repeat(40);
 const CERT = '9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691';
@@ -16,6 +17,77 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const encoded = value => JSON.stringify(value, null, 2) + '\n';
 const tagFor = n => `v0.1.0-pilot.1-rc.${n}`;
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+function fakeDeadlines(t) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.mock.method(AbortSignal, 'timeout', ms => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException('Deadline expired', 'TimeoutError')), ms);
+    return controller.signal;
+  });
+}
+
+test('asset deadlines are size-aware, finite and reject invalid sizes', () => {
+  assert.equal(assetDownloadTimeoutMs(1), 120000);
+  assert.equal(assetDownloadTimeoutMs(32 * 1024 * 1024), 158000);
+  assert.equal(assetDownloadTimeoutMs(152929380), 600000);
+  assert.equal(assetDownloadTimeoutMs(Number.MAX_SAFE_INTEGER), 600000);
+  for (const size of [0, -1, NaN, Infinity, 1.5, '100', Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => assetDownloadTimeoutMs(size), /Invalid expected/);
+  }
+});
+
+test('a slow bounded stream beyond two minutes is fully hashed', async t => {
+  fakeDeadlines(t);
+  const body = Buffer.alloc(32 * 1024 * 1024, 7);
+  const proof = new GitHubPublicationProof({ fetchImpl: async (_url, options) => {
+    const stream = new ReadableStream({ start(controller) {
+      const timer = setTimeout(() => { controller.enqueue(body); controller.close(); }, 130000);
+      options.signal.addEventListener('abort', () => {
+        clearTimeout(timer); controller.error(options.signal.reason);
+      }, { once: true });
+    }});
+    return new Response(stream);
+  }});
+  const pending = proof.downloadIdentity('https://github.com/public.apk', body.length);
+  await flush(); t.mock.timers.tick(130000);
+  assert.deepEqual(await pending, { size: body.length, sha256: digest(body) });
+});
+
+test('response headers still time out after thirty seconds', async t => {
+  fakeDeadlines(t);
+  const proof = new GitHubPublicationProof({ fetchImpl: async (_url, options) =>
+    new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })) });
+  const pending = proof.downloadIdentity('https://github.com/public.apk', 152929380);
+  const rejected = assert.rejects(pending, { name: 'TimeoutError' });
+  t.mock.timers.tick(30000); await rejected;
+});
+
+test('stalled body stops at the finite asset deadline', async t => {
+  fakeDeadlines(t);
+  const proof = new GitHubPublicationProof({ fetchImpl: async (_url, options) =>
+    new Response(new ReadableStream({ start(controller) {
+      options.signal.addEventListener('abort', () => controller.error(options.signal.reason), { once: true });
+    }})) });
+  const pending = proof.downloadIdentity('https://github.com/public.apk', 152929380);
+  const rejected = assert.rejects(pending, { name: 'TimeoutError' });
+  await flush(); t.mock.timers.tick(600000); await rejected;
+});
+
+test('redirects and body share one deadline, not five renewed budgets', async t => {
+  fakeDeadlines(t); let calls = 0;
+  const proof = new GitHubPublicationProof({ fetchImpl: async (_url, options) => {
+    if (++calls < 5) return new Promise(resolve => setTimeout(() => resolve(
+      new Response('', { status: 302, headers: { location: 'https://github.com/next' } })), 20000));
+    return new Response(new ReadableStream({ start(controller) {
+      options.signal.addEventListener('abort', () => controller.error(options.signal.reason), { once: true });
+    }}));
+  }});
+  const pending = proof.downloadIdentity('https://github.com/public.apk', 1);
+  const rejected = assert.rejects(pending, { name: 'TimeoutError' });
+  for (let i = 0; i < 4; i++) { t.mock.timers.tick(20000); await flush(); }
+  assert.equal(calls, 5); t.mock.timers.tick(40000); await rejected;
+});
 
 function environment(t) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'mylifegraph-retention-test-'));
@@ -98,6 +170,15 @@ test('publication time, not tag or filesystem time, determines the two edges', a
   const plan = await e.store.plan();
   assert.deepEqual(plan.keep.map(x => x.tag), [tagFor(9), tagFor(1)]);
   assert.equal(plan.remove[0].record.tag, tagFor(3));
+});
+
+test('download timeout on fresh apply preserves every release file and releases lock', async t => {
+  const e = environment(t), bundles = [await e.stage(1), await e.stage(2), await e.stage(3)];
+  const preview = await e.store.plan();
+  e.store.proof.fetchImpl = async () => { throw new DOMException('Deadline expired', 'TimeoutError'); };
+  await assert.rejects(e.store.locked(() => e.store.apply(preview.confirmation)), { name: 'TimeoutError' });
+  for (const bundle of bundles) assert(fs.existsSync(bundle.apk));
+  assert(!fs.existsSync(path.join(e.store.root, 'operation.lock')));
 });
 
 test('zero, one and two published releases are never removed', async t => {

@@ -116,6 +116,15 @@ ancestors, conflicting candidates, malformed receipts and partial bundles stop
 cleanup. Network/API errors, draft releases, hash or source mismatch never
 authorize deletion. Unknown files/bundles are preserved without adoption.
 
+GitHub API calls keep their 30-second limit; asset response headers are also
+bounded to 30 seconds.
+Each asset has one finite, size-aware download deadline shared across redirects
+and the streamed body: expected size at 256 KiB/s plus 30 seconds, with a
+two-minute floor and ten-minute ceiling. This accommodates slower VM links
+without introducing an unbounded wait or configuration bypass. An expired
+deadline fails closed, releases the command's lock and preserves release files;
+retry must perform fresh publication and downloaded-byte proof.
+
 Deletion uses only individually validated allowlisted files, never recursive
 removal. Receipts and directories remain as audit evidence. If a filesystem
 failure interrupts deletion, the remaining files and receipt are retained;

@@ -31,6 +31,69 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC41 and bounded release-download correction — 2026-11-05
+
+PR [71](https://github.com/MyLifeGraph/MyLifeGraph/pull/71) merged to
+`87a278711c663c8b59a71338dcf8e156ca80072f`, with the exact tested tree of
+`14cf724b56dbede54963864649afbb2da72989a4`. Full Linux manual CI
+[`42101138480`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/42101138480)
+passes all seven gates; PR run `42101141846` also passes. All Flutter tests and
+reference goldens, complete Android JVM/lint (including dependency-owned tests),
+web build, source/docs, fresh migrations/pgTAP and **8 browser E2E** pass. Backend:
+**2031 passed / 2 skipped**. The six Windows golden and twelve dependency-test
+failures from the local audit do not reproduce on canonical Linux. No reference
+image, assertion or tolerance was relaxed.
+
+Signed tag workflow `42103362560` passes. Release
+[`v0.1.0-pilot.1-rc.41`](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.41),
+id `435695658`, published **2026-11-05 20:38:55 UTC**, is non-draft,
+non-prerelease and verified GitHub Latest. APK package `com.mylifegraph.app`,
+versionCode **10000143**, **153684485 bytes**, SHA-256
+`22baf838dcccbb3ea55ff431affaa171317d885b32ba9bb6e7425074696f30b7`.
+Independent laptop apksigner/aapt checks pass and retain certificate SHA-256
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+SBOM SHA-256: `6d4f98efd7d454bea0b0074219d80f8ef1c3f7a6e328a02744af640a71d158b1`.
+The first download wrapper incorrectly assumed a sequential RC versionCode;
+the repository's first-parent identity derives **143** and the wrapper was
+corrected. No artifact or versioning rule changed.
+
+VPS immutable preparation, unchanged analysis-image verification, atomic promotion
+and full project check pass. Public health/readiness return the RC41 SHA/tag and
+the unchanged **83** migrations, head
+`20261006135421_coach_operator_sol61_standard.sql`, digest
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+Coach capability is ready; no authenticated live Coach turn is claimed. No schema,
+provider, authentication, permission or native Blocking policy changed.
+Vercel `dpl_CYHQMYi2cgEn22iAXcUdL2y9hEJt` is READY; both public app origins return
+HTTP 200, retain CSP and serve the RC41 source. The automatic deployment was reused.
+
+Four specifically approved RC40 original download copies were reverified against
+fresh GitHub asset identities, then removed: **153993804 bytes**. Runtime and
+rollback installations were not touched. VPS bounded finalization independently
+verifies publication/tag/upload/download SHA-256 and removes **153993804 bytes**
+of managed RC40 output. The final VPS project check passes with **16258428928
+bytes** available, above the unchanged **16106127360-byte** reserve. Laptop
+finalization passes with zero removals because its RC40 copy is pinned; oldest,
+newest and protected copies remain. Vercel bounded cleanup removes two obsolete
+app deployments while preserving current/live and rollback sources; the separate
+website retains its insufficient-history outputs.
+
+VM finalization with the reviewed standalone tool also passes fresh publication/tag/upload/download proof and removes **153993804 bytes** of managed RC40 output. The new helper fingerprint is `5416d29515ba94c15ef418e13a51342c9a1fbb6b330c2f56976020b5facf791c`; older helpers and VM checkout changes remain intact.
+
+Actual VM finalization with the old tool fails at its fixed two-minute asset
+deadline. A deterministic controlled 130-second stream reproduces this; the
+already prepared local correction was reviewed and is included in the separate
+workflow follow-up. All **36 retention tests pass**: API/header limits remain
+30 seconds; each asset uses one size-aware **2–10 minute** deadline across
+redirects/body. Fresh downloaded-byte proof, bounded size/origins, pins, locks
+and fail-closed cleanup remain enforced. Earlier helper copies and the dirty VM
+checkout remain untouched. This tooling-only follow-up needs no new APK.
+
+Evidence: ignored `.tools/release-20261105/`. Physical Samsung/NFC, OEM background
+behavior and preserved whole-day device usage across reboot remain separate
+acceptance gaps. Focus foreground refresh is included in the signed APK; cold
+starts still require a canonical read.
+
 ### RC41 publication preparation — 2026-11-05
 
 The user authorizes publication of the local Focus foreground, confirmation and
