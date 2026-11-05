@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/features/focus/application/focus_protection_reconciler.dart';
 import 'package:my_life_graph/features/focus/application/focus_recovery_store.dart';
@@ -7,6 +9,134 @@ import 'package:my_life_graph/features/focus_protection/application/focus_protec
 import 'package:my_life_graph/features/focus_protection/domain/focus_protection.dart';
 
 void main() {
+  for (final remove in [false, true]) {
+    test(
+      'delayed reflection read cannot undo a confirmed ${remove ? 'delete' : 'save'}',
+      () async {
+        final terminal = _terminalSession(
+          id: 'rated-focus',
+          status: FocusSessionStatus.completed,
+        );
+        final other = _terminalSession(
+          id: 'other-focus',
+          status: FocusSessionStatus.completed,
+        );
+        final source = _FocusPortFake(recent: [terminal, other]);
+        final controller = _controller(source: source);
+        addTearDown(controller.dispose);
+        await controller.load();
+        final existing = await controller.saveReflection(
+          session: terminal,
+          draft: FocusReflectionDraft(
+            focusQuality: 2,
+            usefulProgress: 2,
+            obstacles: const [],
+          ),
+        );
+        source.pendingReflections = Completer<Map<String, FocusReflection>>();
+        source.reflectionReadStarted = Completer<void>();
+        final reload = controller.load();
+        await source.reflectionReadStarted!.future;
+        FocusReflection? updated;
+        if (remove) {
+          await controller.deleteReflection(
+            session: terminal,
+            reflection: existing,
+          );
+        } else {
+          updated = await controller.saveReflection(
+            session: terminal,
+            existing: existing,
+            draft: FocusReflectionDraft(
+              focusQuality: 5,
+              usefulProgress: 4,
+              obstacles: const [],
+            ),
+          );
+        }
+        // The pre-mutation snapshot arrives after the successful mutation.
+        final otherRating = await source.saveReflection(
+          session: other,
+          draft: FocusReflectionDraft(
+            focusQuality: 3,
+            usefulProgress: 4,
+            obstacles: const [],
+          ),
+        );
+        source.pendingReflections!.complete({
+          terminal.id: existing,
+          other.id: otherRating,
+        });
+        await reload;
+        expect(
+          controller.state.reflections[terminal.id],
+          remove ? isNull : same(updated),
+        );
+        expect(controller.state.reflections[other.id], same(otherRating));
+        expect(controller.state.isLoading, isFalse);
+        expect(controller.state.reflectionDataAvailable, isTrue);
+        // A later fresh server read remains authoritative, including other-device
+        // updates. The in-flight guard must not permanently pin local ratings.
+        source.pendingReflections = null;
+        source.reflections[terminal.id] = existing;
+        await controller.load();
+        expect(controller.state.reflections[terminal.id], same(existing));
+      },
+    );
+  }
+
+  test(
+    'failed reflection refresh retains a concurrent confirmed rating without claiming complete data',
+    () async {
+      final terminal = _terminalSession(
+        id: 'rated-focus',
+        status: FocusSessionStatus.completed,
+      );
+      final source = _FocusPortFake(recent: [terminal]);
+      final controller = _controller(source: source);
+      addTearDown(controller.dispose);
+      await controller.load();
+      source.pendingReflections = Completer<Map<String, FocusReflection>>();
+      source.reflectionReadStarted = Completer<void>();
+      final reload = controller.load();
+      await source.reflectionReadStarted!.future;
+      final saved = await controller.saveReflection(
+        session: terminal,
+        draft: FocusReflectionDraft(
+          focusQuality: 5,
+          usefulProgress: 4,
+          obstacles: const [],
+        ),
+      );
+      source.pendingReflections!.completeError(StateError('offline'));
+      await reload;
+      expect(controller.state.reflections[terminal.id], same(saved));
+      expect(controller.state.reflectionDataAvailable, isFalse);
+      expect(controller.state.isLoading, isFalse);
+    },
+  );
+
+  test(
+    'reload updates the retained timer before its delayed read completes',
+    () async {
+      var now = DateTime.utc(2026, 8, 2, 9, 32);
+      final active = _activeSession();
+      final source = _FocusPortFake(active: active);
+      final controller = _controller(source: source, now: () => now);
+      addTearDown(controller.dispose);
+      await controller.load();
+      now = now.add(const Duration(minutes: 4, seconds: 17));
+      source.pendingActiveRead = Completer<FocusSession?>();
+      final reload = controller.load();
+      expect(controller.state.active, same(active));
+      expect(controller.state.clockNow, now);
+      expect(controller.state.isLoading, isTrue);
+      source.pendingActiveRead!.complete(null);
+      await reload;
+      expect(controller.state.active, isNull);
+      expect(controller.state.isLoading, isFalse);
+    },
+  );
   test('load retry restores recovery and tick expires it explicitly', () async {
     final now = DateTime.utc(2026, 8, 2, 10);
     final terminal = _terminalSession(
@@ -437,9 +567,13 @@ class _FocusPortFake implements FocusSessionLifecyclePort {
   int _scheduledContextIndex = 0;
   FocusSession? terminal;
   final reflections = <String, FocusReflection>{};
+  Completer<FocusSession?>? pendingActiveRead;
+  Completer<Map<String, FocusReflection>>? pendingReflections;
+  Completer<void>? reflectionReadStarted;
 
   @override
   Future<FocusSession?> fetchActiveSession() async {
+    if (pendingActiveRead != null) return pendingActiveRead!.future;
     if (failActiveReads > 0) {
       failActiveReads -= 1;
       throw StateError('read failed');
@@ -477,6 +611,10 @@ class _FocusPortFake implements FocusSessionLifecyclePort {
   Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
     Iterable<FocusSession> sessions,
   ) async {
+    if (pendingReflections != null) {
+      reflectionReadStarted!.complete();
+      return pendingReflections!.future;
+    }
     return Map.unmodifiable(reflections);
   }
 

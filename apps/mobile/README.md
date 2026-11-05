@@ -1,5 +1,14 @@
 # MyLifeGraph Mobile App
 
+An already loaded active Focus session retains its timer on foreground
+refresh, with the clock corrected immediately after suspension. The canonical
+read still runs; completion/protection actions wait for it, and read errors use
+the existing Retry surface. Cold starts still load authoritative session data.
+Abandon and emergency-release confirmations stay bound to the session that
+opened them; a replaced/ended session or unfinished/failed refresh requires a
+fresh review. An older in-flight history read cannot undo a confirmed reflection
+save or deletion; subsequent fresh reads remain authoritative.
+
 Blocking plan status uses existing semantic colors: native daily-budget Tracking
 with remaining allowance is green; effective Active blocking is red, including
 weekly or other OR rules while budget remains. Scheduled/Paused/Expired stay

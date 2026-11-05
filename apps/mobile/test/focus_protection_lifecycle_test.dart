@@ -15,6 +15,103 @@ import 'package:my_life_graph/features/focus_protection/domain/focus_protection.
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  for (final action in ['abandon', 'release']) {
+    for (final refresh in [
+      'replacement',
+      'pending',
+      'ended',
+      'error',
+      'same',
+    ]) {
+      testWidgets('$action confirmation stays bound across $refresh resume', (
+        tester,
+      ) async {
+        final events = <String>[];
+        final source = _LifecycleFocusSource(
+          events: events,
+          initiallyActive: true,
+        );
+        final gateway = _LifecycleGateway(events: events);
+        await _pumpFocus(
+          tester,
+          source: source,
+          gateway: gateway,
+          events: events,
+        );
+        final opener = action == 'abandon'
+            ? find.text('Abandon')
+            : find.byKey(const ValueKey('focus-protection-emergency-release'));
+        await tester.ensureVisible(opener);
+        await tester.pumpAndSettle();
+        await tester.tap(opener);
+        await tester.pumpAndSettle();
+        if (action == 'release') await tester.pump(const Duration(seconds: 5));
+
+        final delayed = Completer<FocusSession?>();
+        if (refresh == 'pending' || refresh == 'error') {
+          source.delayNextActiveFetch(delayed);
+        }
+        if (refresh == 'replacement' || refresh == 'pending') {
+          source.active = _LifecycleFocusSource._newSession(
+            'different-session',
+          );
+        } else if (refresh == 'ended') {
+          source.active = null;
+        }
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        // Deliberately do not wait for a pending server response.
+        await tester.pump();
+        if (refresh == 'error') delayed.completeError(StateError('offline'));
+        if (refresh != 'pending') await tester.pumpAndSettle();
+        await tester.tap(
+          action == 'abandon'
+              ? find.widgetWithText(FilledButton, 'Abandon session')
+              : find.byKey(
+                  const ValueKey('confirm-focus-protection-emergency-release'),
+                ),
+        );
+        await tester.pump();
+        if (refresh == 'same') {
+          await tester.pumpAndSettle();
+          if (action == 'abandon') {
+            expect(events, contains('abandon'));
+            expect(source.active, isNull);
+          } else {
+            expect(gateway.emergencySessionIds, ['existing-session']);
+            expect(source.active?.id, 'existing-session');
+          }
+          expect(tester.takeException(), isNull);
+          return;
+        }
+        expect(events, isNot(contains('abandon')));
+        expect(gateway.emergencySessionIds, isEmpty);
+        if (refresh == 'pending') delayed.complete(source.active);
+        await tester.pumpAndSettle();
+        if (refresh == 'ended') {
+          expect(find.text('Focus active'), findsNothing);
+        } else if (refresh == 'error') {
+          expect(source.active?.id, 'existing-session');
+          expect(find.text('Could not load focus sessions.'), findsOneWidget);
+        } else {
+          expect(source.active?.id, 'different-session');
+          expect(find.text('Focus active'), findsOneWidget);
+          expect(
+            tester
+                .widget<FilledButton>(
+                  find.widgetWithText(FilledButton, 'Finish focus session'),
+                )
+                .onPressed,
+            isNotNull,
+          );
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   testWidgets('confirmed start activates protection before projection refresh',
       (tester) async {
     final events = <String>[];

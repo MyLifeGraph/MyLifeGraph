@@ -174,6 +174,21 @@ timezone never triggers that fallback.
 
 ### Focus Sessions
 
+When returning to an already loaded active Focus screen, retain the timer
+while revalidating the session. Recompute the visible countdown from its
+saved absolute start and the current clock before awaiting reads. Finish, abandon
+and protection actions remain disabled during that read. Canonical completion
+removes the active view; a failed read retains the existing explicit error/retry
+surface. Initial/cold loads still require authoritative data; this adds no
+persistent session cache or offline mutation authority.
+
+Abandon and emergency-release dialogs bind the opening session ID. After the
+confirmation await, the page requires the same active ID and a successful idle
+refresh, with no session/protection mutation in progress. A stale confirmation
+does not act on a replacement session or invalidate a pending refresh; the user
+reviews the current state before trying again. A successful same-session refresh
+does not invalidate an otherwise valid confirmation.
+
 Planned-origin, active start/end and recovery-end clock labels use the current
 profile IANA zone (device-local only for guest/no-account sessions). Invalid
 zones show unavailable times, never a guessed offset. Timer arithmetic and
