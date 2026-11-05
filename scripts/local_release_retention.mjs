@@ -116,6 +116,13 @@ export async function readBundle(directory, tag, sha) {
   return files;
 }
 
+export function assetDownloadTimeoutMs(expectedSize) {
+  if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) fail('Invalid expected asset size');
+  // Allow slow 256 KiB/s links, but never an unlimited download or redirect budget.
+  return Math.min(600_000, Math.max(120_000,
+    Math.ceil(expectedSize / (256 * 1024)) * 1000 + 30_000));
+}
+
 export class GitHubPublicationProof {
   constructor({ fetchImpl = fetch, token = process.env.GITHUB_TOKEN } = {}) {
     this.fetchImpl = fetchImpl;
@@ -160,28 +167,43 @@ export class GitHubPublicationProof {
 
   async downloadIdentity(url, expectedSize) {
     const allowed = new Set(['github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com']);
+    const deadline = AbortSignal.timeout(assetDownloadTimeoutMs(expectedSize));
     for (let redirect = 0; redirect < 5; redirect++) {
       const parsed = new URL(url);
       if (parsed.protocol !== 'https:' || !allowed.has(parsed.hostname) || parsed.username ||
           parsed.password || parsed.port) fail('Unexpected asset download origin');
       // Never forward API credentials to an asset download or redirect.
-      const response = await this.fetchImpl(url, { redirect: 'manual', signal: AbortSignal.timeout(120_000) });
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        const location = response.headers.get('location');
-        if (!location) fail('Invalid asset redirect');
-        await response.body?.cancel();
-        url = new URL(location, url).href;
-        continue;
+      const request = new AbortController();
+      const abort = () => request.abort(deadline.reason);
+      deadline.addEventListener('abort', abort, { once: true });
+      if (deadline.aborted) abort();
+      const headerTimer = setTimeout(() => request.abort(
+        new DOMException('Asset response headers timed out', 'TimeoutError')), 30_000);
+      headerTimer.unref?.();
+      try {
+        request.signal.throwIfAborted();
+        const response = await this.fetchImpl(url, { redirect: 'manual', signal: request.signal });
+        clearTimeout(headerTimer);
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          const location = response.headers.get('location');
+          if (!location) fail('Invalid asset redirect');
+          await response.body?.cancel();
+          url = new URL(location, url).href;
+          continue;
+        }
+        if (!response.ok || !response.body) fail('Asset download verification failed: HTTP ' + response.status);
+        const digest = createHash('sha256');
+        let size = 0;
+        for await (const chunk of response.body) {
+          size += chunk.length;
+          if (size > expectedSize) fail('Downloaded asset exceeds its published size');
+          digest.update(chunk);
+        }
+        return { size, sha256: digest.digest('hex') };
+      } finally {
+        clearTimeout(headerTimer);
+        deadline.removeEventListener('abort', abort);
       }
-      if (!response.ok || !response.body) fail('Asset download verification failed: HTTP ' + response.status);
-      const digest = createHash('sha256');
-      let size = 0;
-      for await (const chunk of response.body) {
-        size += chunk.length;
-        if (size > expectedSize) fail('Downloaded asset exceeds its published size');
-        digest.update(chunk);
-      }
-      return { size, sha256: digest.digest('hex') };
     }
     fail('Too many asset redirects');
   }

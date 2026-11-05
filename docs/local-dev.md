@@ -1306,6 +1306,9 @@ and downloaded SHA-256 proof before keeping only oldest/newest per supported
 platform/variant, plus protected outputs. Held Actions uploads are not
 publication. Originals, unknown/unpublished files, signing, backups and all
 active/rollback services remain protected; never prune broad build trees.
+Slow links use the runbook's finite size-aware asset deadline (2–10 minutes);
+API/response-header timeouts are 30 seconds. Timeout means no cleanup, not
+permission to skip fresh downloaded SHA-256 proof.
 
 ### Build-cache controls
 
