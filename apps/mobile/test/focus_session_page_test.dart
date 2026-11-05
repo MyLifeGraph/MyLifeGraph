@@ -16,6 +16,54 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  for (final outcome in ['active', 'ended', 'error']) {
+    testWidgets('resume keeps the timer visible until sync resolves: $outcome',
+        (tester) async {
+      final source = _DelayedResumeFocusSource();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          profileLocalDateSourceProvider.overrideWithValue(
+            const SessionProfileLocalDateSource(session: null),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: FocusSessionPage())),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('focus-countdown')), findsOneWidget);
+
+      source.pending = Completer<FocusSession?>();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('focus-countdown')), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(tester.widget<FilledButton>(find.widgetWithText(
+        FilledButton, 'Finish focus session')).onPressed, isNull);
+      expect(tester.widget<TextButton>(find.widgetWithText(
+        TextButton, 'Abandon')).onPressed, isNull);
+
+      if (outcome == 'error') {
+        source.pending!.completeError(StateError('offline'));
+      } else {
+        source.pending!.complete(outcome == 'active'
+            ? await _ActiveFocusSource().fetchActiveSession() : null);
+      }
+      await tester.pumpAndSettle();
+      if (outcome == 'active') {
+        expect(find.byKey(const ValueKey('focus-countdown')), findsOneWidget);
+        expect(tester.widget<FilledButton>(find.widgetWithText(
+          FilledButton, 'Finish focus session')).onPressed, isNotNull);
+      } else {
+        expect(find.byKey(const ValueKey('focus-countdown')), findsNothing);
+        expect(find.text(outcome == 'ended'
+            ? 'Start a focus block' : 'Could not load focus sessions.'),
+            findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final sample in [('Europe/Berlin', '10:30'), ('UTC', '08:30'), ('Asia/Kathmandu', '14:15')]) {
     testWidgets('active Focus displays the profile clock ${sample.$1}', (tester) async {
       await tester.pumpWidget(ProviderScope(overrides: [
@@ -1275,6 +1323,14 @@ class _FailOnceFocusSource extends FocusSessionSupabaseDataSource {
 
   @override
   Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
+}
+
+class _DelayedResumeFocusSource extends _ActiveFocusSource {
+  Completer<FocusSession?>? pending;
+
+  @override
+  Future<FocusSession?> fetchActiveSession() =>
+      pending?.future ?? super.fetchActiveSession();
 }
 
 class _ActiveFocusSource extends FocusSessionSupabaseDataSource {

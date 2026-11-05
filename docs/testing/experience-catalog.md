@@ -1,7 +1,7 @@
 # MyLifeGraph experience-based regression catalog
 
-Project: MyLifeGraph Flutter. Updated 2026-10-29.
-Current run: [2026-10-29 18:37 continuation](../audits/2026-10-29-1837-testing-from-experience.md).
+Project: MyLifeGraph Flutter. Updated 2026-11-05.
+Current run: [2026-11-05 Focus and reliability audit](../audits/2026-11-05-testing-from-experience.md).
 
 This catalog records mechanisms, not a count of current bugs. Historical evidence
 comes from the existing regression tests, owning contracts, dated verification
@@ -36,7 +36,27 @@ The external examples in the skill are test ideas, not evidence about this app.
 
 ## Transfer limits
 
-### Current continuation evidence — 2026-10-29 18:37
+### Current transfer evidence — 2026-11-05
+
+All twenty categories have current automated regression coverage. EXP-004/005/013
+transfers to Focus confirmations left open across background/resume: stale
+dialogs can target a replacement active session or invalidate a pending read.
+Bind confirmation to its opening ID and a successful idle revalidation; a valid
+same-session refresh remains allowed. EXP-004/006 independently transfers to
+Focus reflection save/delete: a delayed older history read can undo confirmed
+visible state. Merge only newer local per-session mutations, then accept future
+fresh canonical reads. Both groups have red/green regressions; no other confirmed
+new app bug is claimed. See the audit for counterexamples and exact boundaries.
+
+Native usage/notification tests add real emulator shade, Home, screen-lock,
+rebind and measured intervals. Slow reboot/System UI recovery and missing
+pre-reboot Android usage events limit the reboot claim; available post-boot
+events agree with the app. Physical Samsung and NFC remain unverified. Expanded
+Insights source/window perturbations pass without changing correlation logic.
+The category table's older dates identify original regression evidence;
+this current run and Verification own the new execution results.
+
+### Earlier continuation evidence — 2026-10-29 18:37
 
 The Android emulator now boots with a host GPU in a read-only/no-snapshot copy.
 EXP-016–018 were expanded to actual notification-shade/Home/sleep/wake events,

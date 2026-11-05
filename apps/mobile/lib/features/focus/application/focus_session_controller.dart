@@ -412,6 +412,8 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
 
   Timer? _ticker;
   int _loadGeneration = 0;
+  int _reflectionRevision = 0;
+  final Map<String, int> _reflectionChanges = {};
   bool _initialTargetApplied = false;
   bool _initialDurationApplied = false;
   bool _initialReflectionOpened = false;
@@ -432,7 +434,13 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       );
       return const FocusLoadResult();
     }
-    state = state.copyWith(loadError: null, isLoading: true);
+    // Resume can follow a suspended ticker. Update the retained countdown before
+    // awaiting any network/native reads; its start instant stays canonical.
+    state = state.copyWith(
+      loadError: null,
+      isLoading: true,
+      clockNow: _clock(),
+    );
     try {
       final active = await source.fetchActiveSession();
       if (!isCurrent()) return const FocusLoadResult();
@@ -486,6 +494,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       );
       if (!isCurrent()) return const FocusLoadResult();
       Map<String, FocusReflection> reflections = const {};
+      final reflectionRevision = _reflectionRevision;
       var reflectionPromptEnabled = false;
       var reflectionDataAvailable = true;
       try {
@@ -563,10 +572,23 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
           ? await _restoreRecoveryCountdown(recent)
           : null;
       if (!isCurrent()) return const FocusLoadResult();
+      // A rating dialog can remain open during a foreground refresh. Preserve
+      // confirmed writes newer than this read, including deletion tombstones,
+      // while still accepting refreshed ratings for all other sessions.
+      final currentReflections = {...reflections};
+      for (final change in _reflectionChanges.entries) {
+        if (change.value <= reflectionRevision) continue;
+        final saved = state.reflections[change.key];
+        if (saved == null) {
+          currentReflections.remove(change.key);
+        } else {
+          currentReflections[change.key] = saved;
+        }
+      }
       state = state.copyWith(
         active: active,
         recent: recent,
-        reflections: reflections,
+        reflections: currentReflections,
         reflectionPromptEnabled: reflectionPromptEnabled,
         reflectionDataAvailable: reflectionDataAvailable,
         targets: targets,
@@ -796,6 +818,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       existing: existing,
     );
     if (mounted) {
+      _reflectionChanges[session.id] = ++_reflectionRevision;
       state = state.copyWith(
         reflections: {...state.reflections, session.id: saved},
         reflectionDataAvailable: true,
@@ -815,6 +838,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
     }
     await source.deleteReflection(reflection);
     if (mounted) {
+      _reflectionChanges[session.id] = ++_reflectionRevision;
       state = state.copyWith(
         reflections: {...state.reflections}..remove(session.id),
       );

@@ -115,7 +115,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         ),
       ],
       children: [
-        if (state.isLoading)
+        if (state.isLoading && state.active == null)
           const AppCard(
             child: Center(
               child: Padding(
@@ -131,7 +131,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             session: state.active!,
             target: state.targetFor(state.active!),
             now: state.clockNow,
-            isSaving: state.isSaving,
+            isSaving: state.isSaving || state.isLoading,
             onFinish: _finish,
             onAbandon: _abandon,
           ),
@@ -139,7 +139,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             _ActiveFocusProtectionCard(
               status: state.protectionStatus!,
               sessionId: state.active!.id,
-              isBusy: state.isChangingProtection,
+              isBusy: state.isChangingProtection || state.isLoading,
               onEmergencyRelease: _emergencyRelease,
             ),
         ] else if (state.recoveryEndsAt?.isAfter(state.clockNow) == true)
@@ -396,7 +396,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true ||
+        !mounted ||
+        !_canConfirmActiveSession(state.active!.id)) {
+      return;
+    }
     final result = await _controller.abandon(
       onCommitted: (abandoned, protectionConfirmed) async {
         if (!mounted) return;
@@ -427,7 +431,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
           builder: (_) => const _EmergencyReleaseDialog(),
         ) ??
         false;
-    if (!confirmed || !mounted) return;
+    if (!confirmed || !mounted || !_canConfirmActiveSession(state.active!.id)) {
+      return;
+    }
     final result = await _controller.emergencyRelease();
     if (!mounted || !result.accepted) return;
     _showMessage(
@@ -435,6 +441,19 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
           ? 'Device protection released. This Focus session remains active and will not be protected again.'
           : 'Could not release Android protection. Try again.',
     );
+  }
+
+  bool _canConfirmActiveSession(String sessionId) {
+    final current = ref.read(focusSessionControllerProvider(_launch));
+    if (current.active?.id != sessionId ||
+        current.isLoading ||
+        current.loadError != null ||
+        current.isSaving ||
+        current.isChangingProtection) {
+      _showMessage('Focus changed or is refreshing. Review it and try again.');
+      return false;
+    }
+    return true;
   }
 
   Future<void> _maybePromptForReflection(FocusSession session) async {
@@ -1197,13 +1216,19 @@ String _focusStartBlockingText(String? reason) {
   };
 }
 
-String _focusClock(WidgetRef ref, DateTime instant, {bool includeDate = false}) {
+String _focusClock(
+  WidgetRef ref,
+  DateTime instant, {
+  bool includeDate = false,
+}) {
   final zone = ref.watch(profileLocalDateSourceProvider).timezoneName;
   try {
     final local = zone == null
         ? instant.toUtc().toLocal()
         : profileDateTimeAt(instant: instant, timezoneName: zone);
-    return (includeDate ? DateFormat.MMMd().add_Hm() : DateFormat.Hm()).format(local);
+    return (includeDate ? DateFormat.MMMd().add_Hm() : DateFormat.Hm()).format(
+      local,
+    );
   } on ProfileTimezoneException {
     return 'Time unavailable';
   }

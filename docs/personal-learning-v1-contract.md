@@ -58,6 +58,13 @@ Focus history. Obstacles are offered only for an abandoned session or when
 either rating is low. Active sessions, expired-but-unfinished timers, and
 unstarted Planner blocks cannot be rated.
 
+A Focus history refresh cannot replace a locally confirmed reflection save or
+deletion with an older in-flight response. The controller merges only session
+IDs changed after that read began, retaining other refreshed rows. A failed read
+still reports unavailable coverage; a subsequent fresh successful read remains
+authoritative, including changes from another device. No persistent cache,
+database write, wire version, or learning calculation changes.
+
 `today-week-agenda-v1` shows actual Focus-session lifecycle facts but does not
 read reflection rows or derive a rating/`fullyRated` status. Saving, editing,
 deleting, or clearing a reflection therefore does not invalidate Full week.

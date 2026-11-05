@@ -31,6 +31,71 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### RC41 publication preparation — 2026-11-05
+
+The user authorizes publication of the local Focus foreground, confirmation and
+reflection fixes. Remote protected Main is independently confirmed at
+`c583d65f9183e8673dc45f00b3f60db100c90c16`; latest public release is RC40.
+Existing unrelated retention edits and media remain outside the candidate.
+Canonical Linux checks must establish the final candidate's result; Windows
+golden/dependency-test findings below are not waived or silently hidden.
+No new schema, native enforcement or provider configuration is proposed.
+
+### Local 40-minute experience audit — 2026-11-05
+
+Base `c583d65f9183e8673dc45f00b3f60db100c90c16`; local working tree with
+pre-existing Focus foreground-refresh and unrelated retention edits. The audit
+adds two independently reproduced Focus bug groups: stale Abandon/emergency
+confirmation after resume, and delayed history reads overwriting confirmed
+reflection save/delete. Thirteen new permanent cases cover their negative and
+positive variants. See the [run report](audits/2026-11-05-testing-from-experience.md)
+and [experience catalog](testing/experience-catalog.md).
+
+- Focus page/controller/domain/reflection/lifecycle selection: **107 passed**.
+- Final complete Flutter run: **2053 passed / 6 failed**. Failures are the existing
+  dark/light/space mobile/desktop component reference goldens on Windows; inspected
+  images show no new task layout change. References/tolerances remain unchanged.
+- Additional ignored Insights probe: **64 passed**, covering 320 seeded variants
+  of sparse/invalid/duplicate observations, windows and sparse Focus availability.
+- Fresh Java-21 `:app:testDebugUnitTest --rerun-tasks` (excluding unchanged Flutter
+  compilation) executes **141 tests, zero failures/errors**. App debug lint also
+  passes. The broader dependency-owned suite fails twelve DataStore rename tests
+  in `shared_preferences_android`; this is not a clean whole-Gradle-suite claim.
+- Selected fake-repository backend Focus/learning/pattern/Today/streak/sleep tests:
+  **110 passed**. No database or live provider calls.
+- Flutter analysis: **no issues**. Documentation consistency **19 passed** and
+  visual-source policy **1 passed**; diff hygiene passes. Captured-base affected **dry-run** selects
+  Full because of unrelated retention/media paths; no full release gate claimed.
+
+Actual isolated emulator Blocking checks pass three 20-second usage measurements,
+32 shade/Home/revisit cycles (16 with sleep/wake), permission revoke/restore,
+service rebind and explicit-dismissal behavior. The old QA debug APK has unchanged
+Blocking/native code; it does not prove this task's new Focus Dart fixes. The
+reboot harness times out at 100 seconds, then boot eventually completes and the
+service is already running before opening MyLifeGraph. A later visual capture
+confirms the countdown after System UI recovers from an ANR. Android's own history
+has lost earlier QA events after that emulator reboot; the remaining 70.501-second
+source agrees with native `usedMs`. Whole-day reboot preservation and physical
+Samsung/NFC acceptance remain unverified. No claim of immediate startup.
+
+Evidence: ignored `.tools/experience-20261105/`. No commit, push, PR, new signed
+APK, production deployment or schema change. Final editor gesture acceptance is
+inconclusive because the emulator UI tree disappears intermittently; no crash
+is logged. The test window ran 18:30:16–19:10:17 UTC (40 minutes 1 second);
+the isolated emulator was stopped. Closing records are in the linked run report.
+
+### Local Focus foreground refresh — 2026-11-04
+
+Task base `c583d65f9183e8673dc45f00b3f60db100c90c16`. Three delayed-resume
+widget regressions reproduce the disappearing countdown before the fix. After
+the fix, the Focus page/controller/domain suites pass **79 tests**, including
+retained timer/action locking while a read is pending, canonical removal of an
+ended session, explicit error handling and an injected-clock suspension jump.
+Docs checks and diff hygiene pass. Affected dry-run selects Full because the
+checkout also contains pre-existing unrelated retention edits and untracked
+media; no Full-gate pass is claimed for this local change. No physical Samsung,
+cold-process restoration, new APK or remote publication is claimed.
+
 ### Published RC40 experience fixes — 2026-10-29
 
 PR [69](https://github.com/MyLifeGraph/MyLifeGraph/pull/69) merged to

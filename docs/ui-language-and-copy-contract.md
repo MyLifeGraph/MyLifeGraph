@@ -1,5 +1,9 @@
 # UI Language And Copy Contract
 
+A Focus confirmation invalidated by session replacement or pending/failed refresh
+says `Focus changed or is refreshing. Review it and try again.` It must not imply
+that an abandoned session or emergency release was committed.
+
 Task scheduling is labelled `Plan time` / `Preview only`, with
 `Off: save without a schedule.` when disabled. Habit cadence is `Repeat *`, retaining
 `Daily`, `Selected weekdays` and `Times per week` and no implicit choice.
