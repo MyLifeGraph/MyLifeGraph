@@ -9,6 +9,49 @@ Cancel writes nothing; native revision and Strict/Focus edit locks still apply.
 
 Status: implemented repository boundary, 2026-08-01.
 
+## Phone Lock (additive device-local mode)
+
+Plans has a separate Phone lock entry below Block now. Focus setup has an optional,
+initially off entry immediately before Start. Both open the same theme-owned 92%
+sheet; ordinary scrolling never dismisses it. Focus setup returns a reviewed draft
+without activating Android. Only a successful canonical Focus start activates the
+chosen lock; Timer uses that session's actual start plus planned duration. A failed
+native activation reports that Focus is running without Phone lock and offers a
+same-session retry, never another Focus start. Existing Focus records, plan OR rules,
+Discipline, analysis and cloud contracts are unchanged.
+
+Phone lock uses private `mylifegraph_phone_lock_v1` preferences and additive methods
+on the existing `blocking-plans-v2` channel. Timer and NFC are explicit alternatives;
+there is no automatic NFC selection. The native renderer is shared by its
+Accessibility overlay and non-exported control Activity and uses the saved appearance
+theme. Ordinary apps and Home are blocked unless explicitly allowed. System UI,
+Settings, permission controllers, keyboards, MyLifeGraph's native control flow,
+phone/default dialer, resolved call UI and alarms stay available. MainActivity
+redirects to the native control screen while active. The Phone / Emergency action
+opens the system dialer without placing any call. Starting requires an available
+dialer, enabled app protection and Accessibility. This is consumer self-control,
+not a device-owner/kiosk, uninstall-proof or OEM-survival guarantee.
+
+All saved chip identities are snapshotted natively at NFC activation. A saved backup
+can unlock; subsequent chip enrollment/replacement does not replace the running
+lock's accepted identities. Android Reader Mode skips NDEF and retains contact
+ownership until removal. A cancelled, wrong or stale-session scan cannot unlock.
+Recovery is disclosed in the start review: a saved backup or an explicit 15-minute
+background wait. Repeated recovery requests cannot restart/shorten that deadline.
+There is no immediate recovery/replacement bypass. Physical RF and OEM behavior
+require separate device acceptance.
+
+Phone lock remains independent from Finish/Abandon, Discipline release and ordinary
+Blocking emergency release. Same-request retries never extend or resurrect it.
+Timers/recovery use elapsed time during a boot, then rebase bounded remaining wall
+time after reboot. Expiry, reads, service ticks and an inexact Android alarm reconcile
+the same persisted deadline. Expiry is automatic and does not finish a Focus record.
+Screen-off hides the overlay; a foreground event after unlocking restores the lock.
+Phone/system exits remain reachable, including when a scan or recovery is pending.
+
+Normal Focus countdown notifications are separately described in
+[Notification Delivery](notification-delivery-v1-contract.md#local-android-focus-timer).
+
 ## Named Blocking Plans V2
 
 The current Android surface is **App blocking**, reached from the header shield

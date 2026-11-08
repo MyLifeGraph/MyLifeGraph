@@ -74,6 +74,28 @@ class BlockingBridge(private val activity: FlutterActivity) {
     fun handle(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
+                "focusTimerSync" -> { FocusTimerNotifications.setSession(activity,call.arguments as Map<*,*>); result.success(null) }
+                "focusTimerClear" -> { FocusTimerNotifications.clear(activity,call.argument<String>("sessionId")); result.success(null) }
+                "focusTimerTakeOpen" -> result.success(FocusTimerNotifications.takeOpen(activity))
+                "focusTimerPermission" -> {
+                    FocusTimerNotifications.requestPermission(activity)
+                    PhoneLockActivity.askPendingTimerPermission()
+                    result.success(null)
+                }
+                "phoneLockStatus" -> result.success(PhoneLockStore(activity).status())
+                "phoneLockStart" -> {
+                    check(screenUnlocked() && activity.hasWindowFocus()) { "Keep the app open to start Phone lock." }
+                    result.success(PhoneLockStore(activity).start(call.arguments as Map<*, *>))
+                    runCatching { PhoneLockExpiryReceiver.reconcile(activity) }
+                    FocusBlockAccessibilityService.refreshOverlayIfRunning(activity)
+                    runCatching { PhoneLockActivity.open(activity) }
+                }
+                "phoneLockControl" -> {
+                    check(PhoneLockStore(activity).active()) { "Phone lock has ended." }
+                    PhoneLockActivity.open(activity, call.argument<Boolean>("scan") == true)
+                    result.success(null)
+                }
+                "phoneLockPhone" -> { PhoneLockSafety.openPhone(activity); result.success(null) }
                 "status" -> result.success(plans.status())
                 "phoneStatus" -> result.success(CoachPhoneUsage(activity).status())
                 "phonePermission" -> { activity.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); result.success(null) }

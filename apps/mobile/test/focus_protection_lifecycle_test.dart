@@ -365,6 +365,12 @@ Future<void> _pumpFocus(
     ),
   );
   await tester.pumpAndSettle();
+  // Native setup now includes the optional Phone lock row; reveal Start in the
+  // small default test viewport just as a user scrolls before activating it.
+  if (find.text('Start focus session').evaluate().isNotEmpty) {
+    await tester.ensureVisible(find.text('Start focus session'));
+    await tester.pumpAndSettle();
+  }
 }
 
 const _realConfig = AppConfig(

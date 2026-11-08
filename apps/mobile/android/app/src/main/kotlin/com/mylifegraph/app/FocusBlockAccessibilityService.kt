@@ -27,6 +27,11 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var overlay: View? = null
     private var blockScreen: BlockingScreenView? = null
+    private var phoneScreen: PhoneLockScreenView? = null
+    private val phoneStore by lazy { PhoneLockStore(applicationContext) }
+    private var phoneEssential: Set<String> = emptySet()
+    private var phoneEssentialAt = -30_000L
+    private var phoneSystemUi = false
     private val returnDelay = BlockReturnDelay()
     private val returnNavigation = BlockingReturnNavigation()
     private var homePackages: Set<String> = emptySet()
@@ -83,6 +88,8 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         }
         if (FocusProtectionDecision.ignoreOverlayWindow(foregroundPackage,
                 transientWindow(event.windowId))) return
+        if (foregroundPackage == "com.android.systemui") phoneSystemUi = true
+        else if (foregroundPackage != packageName) phoneSystemUi = false
         // Our overlay emits window events too. Keep the underlying package;
         // real entry into MyLifeGraph is reported by MainActivity.onResume.
         if (!FocusProtectionDecision.ignoreForegroundEvent(
@@ -143,6 +150,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun refreshOverlay() {
+        if (refreshPhoneOverlay()) return
         updateBrowserSubscription()
         if (returnNavigation.source != null) {
             val destination = returnNavigation.destination(lastForegroundPackage, packageName, homePackages,
@@ -305,10 +313,11 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         returnDelay.exitViaHome(SystemClock.elapsedRealtime(), {
             // Put the denied app behind Home before removing its blocking screen.
             returnNavigationAt = SystemClock.uptimeMillis()
-            performGlobalAction(GLOBAL_ACTION_HOME) || runCatching {
+            val homeAccepted = performGlobalAction(GLOBAL_ACTION_HOME) || runCatching {
                 startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }.isSuccess
+            homeAccepted
         }, {
             // No lease, Strict setting or rule is released by this navigation.
             lastForegroundObservedAt = System.currentTimeMillis()
@@ -331,6 +340,10 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun updateRemainingTime() {
+        if (phoneScreen != null) {
+            if (!refreshPhoneOverlay()) refreshOverlay()
+            return
+        }
         val elapsed = SystemClock.elapsedRealtime()
         blockScreen?.updateReturn(returnDelay.remaining(elapsed), returnDelay.durationMs)
         // Paint progress smoothly without polling package/rule authority at 10Hz.
@@ -371,7 +384,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         override fun run() {
             if (overlay == null) return
             updateRemainingTime()
-            if (overlay != null) handler.postDelayed(this, 100L)
+            if (overlay != null) handler.postDelayed(this, if (phoneScreen != null) 1000L else 100L)
         }
     }
 
@@ -395,10 +408,11 @@ class FocusBlockAccessibilityService : AccessibilityService() {
                 lastMeterAt = elapsed
                 checkBrowser()
             }
-            if (FocusProtectionDecision.refreshAfterForegroundCheck(manager.blockingMode(), foregroundRecovered)) {
+            if (phoneScreen != null || phoneStore.active() ||
+                FocusProtectionDecision.refreshAfterForegroundCheck(manager.blockingMode(), foregroundRecovered)) {
                 refreshOverlay()
             }
-            handler.postDelayed(this, if (::plans.isInitialized && plans.migrated()) 1000L
+            handler.postDelayed(this, if (phoneStore.active() || (::plans.isInitialized && plans.migrated())) 1000L
                 else 60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
@@ -435,6 +449,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
     }
     @Suppress("DEPRECATION")
     private fun checkBrowser() {
+        if (phoneBlocked(lastForegroundPackage)) { currentHost = null; budgetHost = null; return }
         if (!::plans.isInitialized) return
         if (neutralBrowser != null) { advanceNeutralBrowser(); return }
         if (!plans.websiteObservationEnabled()) { currentHost = null; budgetHost = null; return }
@@ -526,6 +541,48 @@ class FocusBlockAccessibilityService : AccessibilityService() {
         blockScreen?.dispose()
         overlay = null
         blockScreen = null
+        phoneScreen = null
+    }
+
+    private fun phoneBlocked(pkg: String?): Boolean {
+        val value = phoneStore.current()
+        if (!value.optBoolean("active")) return false
+        val config = FocusProtectionStore(applicationContext).readConfiguration()
+        if (!config.enabled || !config.blockSelectedApps) return false
+        val now = SystemClock.elapsedRealtime()
+        if (now - phoneEssentialAt >= 30_000) {
+            phoneEssential = PhoneLockSafety.essential(this); phoneEssentialAt = now
+        }
+        // Always accept the currently selected default dialer, even if it just changed.
+        if (pkg == getSystemService(android.telecom.TelecomManager::class.java).defaultDialerPackage) return false
+        return PhoneLockPolicy.blocks(pkg, phoneEssential,
+            BlockingPlans.strings(value.optJSONArray("allowedApps") ?: org.json.JSONArray()).toSet())
+    }
+
+    private fun refreshPhoneOverlay(): Boolean {
+        val unlocked = getSystemService(android.os.PowerManager::class.java).isInteractive &&
+            !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
+        if (!unlocked || phoneSystemUi || !phoneBlocked(lastForegroundPackage)) {
+            if (phoneScreen != null) hideOverlay()
+            return false
+        }
+        if (phoneScreen == null) {
+            hideOverlay(); cancelNeutralBrowser(); returnNavigation.clear()
+            val root = PhoneLockScreenView(this, plans.custom()) { action ->
+                if (action == "phone") PhoneLockSafety.openPhone(this)
+                else PhoneLockActivity.open(this, action == "scan")
+            }
+            val params = WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply {
+                gravity = Gravity.TOP or Gravity.START; title = "MyLifeGraph Phone lock"
+            }
+            runCatching { windowManager.addView(root,params) }.onSuccess {
+                overlay=root; phoneScreen=root; scheduleRemainingTick()
+            }
+        }
+        phoneScreen?.update(phoneStore.status())
+        return phoneScreen != null
     }
 
     companion object {
@@ -534,6 +591,7 @@ class FocusBlockAccessibilityService : AccessibilityService() {
 
         fun onAppResumed(context: Context) {
             runningService?.get()?.let { service ->
+                service.phoneSystemUi = false
                 service.lastForegroundPackage = context.packageName
                 service.lastForegroundObservedAt = System.currentTimeMillis()
                 service.budgetForegroundPackage = context.packageName

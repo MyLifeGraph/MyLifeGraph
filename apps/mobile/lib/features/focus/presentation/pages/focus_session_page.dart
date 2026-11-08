@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:my_life_graph/core/constants/app_radii.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
@@ -14,9 +15,14 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/api_failure.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../application/focus_session_controller.dart';
+import '../../application/focus_timer_gateway.dart';
 import '../../domain/focus_session.dart';
 import '../../../focus_protection/domain/focus_protection.dart';
+import '../../../focus_protection/domain/phone_lock.dart';
+import '../../../focus_protection/application/phone_lock_gateway.dart';
+import '../../../focus_protection/application/focus_protection_gateway.dart';
 import '../widgets/focus_reflection_sheet.dart';
 import '../widgets/focus_time_sheet.dart';
 
@@ -51,6 +57,9 @@ class FocusSessionPage extends ConsumerStatefulWidget {
 
 class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     with WidgetsBindingObserver {
+  PhoneLockOptions? _phoneLockOptions;
+  bool _startingPhoneFocus = false;
+  String? _phoneLockError, _pendingPhoneSessionId;
   FocusSessionLaunch get _launch => FocusSessionLaunch(
     initialTargetKind: widget.initialTargetKind,
     initialTargetId: widget.initialTargetId,
@@ -142,6 +151,29 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
               isBusy: state.isChangingProtection || state.isLoading,
               onEmergencyRelease: _emergencyRelease,
             ),
+          if (ref.watch(focusProtectionPlatformSupportedProvider))
+            AppCard(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(AppIcons.deviceMobile),
+                    title: const Text('Phone lock'),
+                    subtitle: const Text('Review device lock'),
+                    trailing: const Icon(AppIcons.chevronRight),
+                    onTap: () => context.push(AppRoutes.phoneLock),
+                  ),
+                  if (_phoneLockError != null) ...[
+                    Text(_phoneLockError!),
+                    TextButton(
+                      onPressed: _startingPhoneFocus || state.isLoading
+                          ? null
+                          : _retryPhoneLock,
+                      child: const Text('Retry Phone lock'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
         ] else if (state.recoveryEndsAt?.isAfter(state.clockNow) == true)
           _RecoveryCard(
             endsAt: state.recoveryEndsAt!,
@@ -163,7 +195,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             targets: state.targets,
             selectedTargetValue: state.selectedTargetValue,
             isSaving: state.isSaving,
-            startEnabled: state.canStart,
+            startEnabled: state.canStart && !_startingPhoneFocus,
             scheduledContext: state.scheduledContext,
             inlineError:
                 state.startConflictMessage ??
@@ -176,6 +208,27 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             onCustomDuration: _chooseCustomDuration,
             onTargetChanged: _controller.selectTarget,
             onStart: _start,
+            phoneLockControl:
+                !ref.watch(focusProtectionPlatformSupportedProvider)
+                ? null
+                : AppSurface(
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(AppIcons.deviceMobile),
+                      title: const Text('Phone lock'),
+                      subtitle: Text(
+                        _phoneLockOptions == null
+                            ? 'Off'
+                            : _phoneLockOptions!.mode == 'nfc'
+                            ? 'NFC chip'
+                            : '${state.plannedMinutes} min · Session timer',
+                      ),
+                      trailing: const Icon(AppIcons.chevronRight),
+                      onTap: state.isSaving || _startingPhoneFocus
+                          ? null
+                          : () => _configurePhoneLock(state.plannedMinutes),
+                    ),
+                  ),
           ),
         ],
         if (!state.isLoading && state.loadError == null)
@@ -258,31 +311,135 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
 
   Future<void> _start() async {
     final state = ref.read(focusSessionControllerProvider(_launch));
-    if (state.isSaving || !state.canStart) return;
-    final prepared = await _confirmPreparation();
-    if (prepared != true || !mounted) return;
-    final result = await _controller.start();
-    if (!mounted) return;
-    switch (result.outcome) {
-      case FocusStartOutcome.started:
-        _showMessage('Focus session started.');
-        break;
-      case FocusStartOutcome.failed:
-        final conflictMessage = _focusStartErrorText(result.error!);
-        final current = ref.read(focusSessionControllerProvider(_launch));
-        if (current.scheduledContext != null && conflictMessage != null) {
-          _controller.setStartConflictMessage(conflictMessage);
-        } else {
-          _showMessage(
-            result.error is FocusCommandException
-                ? (result.error! as FocusCommandException).message
-                : 'Could not start focus session.',
-          );
+    if (state.isSaving || !state.canStart || _startingPhoneFocus) return;
+    setState(() => _startingPhoneFocus = true);
+    var didStart = false;
+    try {
+      if (_phoneLockOptions != null) {
+        try {
+          final phone = await ref.read(phoneLockGatewayProvider).status();
+          if (!phone.ready ||
+              phone.active ||
+              (_phoneLockOptions!.mode == 'nfc' &&
+                  (!phone.nfcAvailable || !phone.nfcEnrolled))) {
+            if (mounted) {
+              _showMessage(
+                'Review Phone lock permissions, chips and any active lock before starting.',
+              );
+            }
+            return;
+          }
+        } catch (e) {
+          if (mounted) _showMessage(phoneLockError(e));
+          return;
         }
-        break;
-      case FocusStartOutcome.ignored:
-      case FocusStartOutcome.anotherSessionActive:
-        break;
+      }
+      final prepared = await _confirmPreparation();
+      if (prepared != true || !mounted) return;
+      final result = await _controller.start();
+      if (!mounted) return;
+      switch (result.outcome) {
+        case FocusStartOutcome.started:
+          didStart = true;
+          if (_phoneLockOptions != null) {
+            _pendingPhoneSessionId = ref
+                .read(focusSessionControllerProvider(_launch))
+                .active
+                ?.id;
+            await _activatePhoneLock();
+            if (!mounted) return;
+          }
+          _showMessage(
+            _phoneLockError == null
+                ? 'Focus session started.'
+                : 'Focus started, but Phone lock did not start. Review it below.',
+          );
+          break;
+        case FocusStartOutcome.failed:
+          final conflictMessage = _focusStartErrorText(result.error!);
+          final current = ref.read(focusSessionControllerProvider(_launch));
+          if (current.scheduledContext != null && conflictMessage != null) {
+            _controller.setStartConflictMessage(conflictMessage);
+          } else {
+            _showMessage(
+              result.error is FocusCommandException
+                  ? (result.error! as FocusCommandException).message
+                  : 'Could not start focus session.',
+            );
+          }
+          break;
+        case FocusStartOutcome.ignored:
+        case FocusStartOutcome.anotherSessionActive:
+          break;
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _startingPhoneFocus = false);
+        if (didStart) {
+          unawaited(ref.read(focusTimerGatewayProvider).requestPermission());
+        }
+      }
+    }
+  }
+
+  Future<void> _configurePhoneLock(int minutes) async {
+    final result = await context.push<Object?>(
+      AppRoutes.phoneLock,
+      extra: PhoneLockLaunch(
+        focusMinutes: minutes,
+        options: _phoneLockOptions?.copyWith(minutes: minutes),
+      ),
+    );
+    if (!mounted) return;
+    if (result is PhoneLockOptions) setState(() => _phoneLockOptions = result);
+    if (result == false) setState(() => _phoneLockOptions = null);
+  }
+
+  Future<void> _activatePhoneLock() async {
+    final active = ref.read(focusSessionControllerProvider(_launch)).active;
+    final options = _phoneLockOptions;
+    if (active == null ||
+        active.id != _pendingPhoneSessionId ||
+        options == null) {
+      return;
+    }
+    try {
+      final phone = await ref
+          .read(phoneLockGatewayProvider)
+          .start(
+            options.copyWith(minutes: active.plannedMinutes),
+            'focus-${active.id}',
+            focusEndsAt: active.startedAt.add(
+              Duration(minutes: active.plannedMinutes),
+            ),
+          );
+      if (!phone.active) {
+        throw const FormatException('Phone lock did not start.');
+      }
+      if (mounted) {
+        setState(() {
+          _phoneLockError = null;
+          _phoneLockOptions = null;
+          _pendingPhoneSessionId = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _phoneLockError =
+              'Focus is running; Phone lock did not start. ${phoneLockError(e)}',
+        );
+      }
+    }
+  }
+
+  Future<void> _retryPhoneLock() async {
+    if (_startingPhoneFocus) return;
+    setState(() => _startingPhoneFocus = true);
+    try {
+      await _activatePhoneLock();
+    } finally {
+      if (mounted) setState(() => _startingPhoneFocus = false);
     }
   }
 
@@ -555,6 +712,7 @@ class _StartFocusCard extends ConsumerWidget {
     required this.onCustomDuration,
     required this.onTargetChanged,
     required this.onStart,
+    this.phoneLockControl,
   });
 
   final int plannedMinutes;
@@ -570,6 +728,7 @@ class _StartFocusCard extends ConsumerWidget {
   final VoidCallback onCustomDuration;
   final ValueChanged<String?> onTargetChanged;
   final VoidCallback onStart;
+  final Widget? phoneLockControl;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -777,6 +936,10 @@ class _StartFocusCard extends ConsumerWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
+              if (phoneLockControl != null) ...[
+                phoneLockControl!,
+                const SizedBox(height: AppSpacing.md),
+              ],
               Align(
                 alignment: isMobile ? Alignment.center : Alignment.centerRight,
                 child: SizedBox(

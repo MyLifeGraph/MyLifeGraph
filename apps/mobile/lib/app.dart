@@ -11,6 +11,7 @@ import 'core/widgets/hosted_environment_banner.dart';
 import 'core/config/app_config.dart';
 import 'composition/widgets/health_connect_sync_host.dart';
 import 'composition/widgets/push_sync_host.dart';
+import 'composition/widgets/focus_timer_host.dart';
 
 class PersonalOptimizationApp extends ConsumerWidget {
   const PersonalOptimizationApp({super.key});
@@ -35,7 +36,11 @@ class PersonalOptimizationApp extends ConsumerWidget {
               environment: config.environment,
               child: HealthConnectSyncHost(
                 child: OfflineStatusBanner(
-                  child: PushSyncHost(child: child ?? const SizedBox.shrink()),
+                  child: FocusTimerHost(
+                    child: PushSyncHost(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
+                  ),
                 ),
               ),
             ),

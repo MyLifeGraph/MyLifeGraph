@@ -5,6 +5,7 @@ import '../core/network/api_client.dart';
 import '../core/supabase/supabase_providers.dart';
 import '../core/utils/client_uuid.dart';
 import '../features/focus/application/focus_protection_reconciler.dart';
+import '../features/focus/application/focus_timer_gateway.dart';
 import '../features/focus/application/focus_recovery_store.dart';
 import '../features/focus/application/focus_session_controller.dart';
 import '../features/focus/data/focus_session_supabase_data_source.dart';
@@ -49,6 +50,7 @@ final focusSessionControllerProvider = StateNotifierProvider.autoDispose
       source: ref.watch(focusSessionPageDataSourceProvider),
       studySource: ref.watch(focusStudySettingsDataSourceProvider),
       protection: FocusProtectionReconciler(
+        timer: ref.watch(focusTimerGatewayProvider),
         gateway: ref.watch(focusProtectionGatewayProvider),
         platformSupported: ref.watch(focusProtectionPlatformSupportedProvider),
       ),

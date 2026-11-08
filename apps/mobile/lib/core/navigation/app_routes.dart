@@ -11,6 +11,7 @@ class AppRoutes {
   static const settings = '/settings';
   static const notificationSettings = '/settings/notifications';
   static const focusProtection = '/settings/focus-protection';
+  static const phoneLock = '/settings/focus-protection/phone-lock';
   static const personalLearning = '/settings/personal-learning';
   static const calendarIntegration = '/settings/integrations/calendar';
   static const preparationPlans = '/preparation-plans';

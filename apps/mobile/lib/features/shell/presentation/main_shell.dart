@@ -149,7 +149,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       allowPrompt: swipeIndex >= 0,
       child: LayoutBuilder(
       builder: (context, constraints) {
-        if (currentPath == AppRoutes.focusProtection) {
+        if (currentPath == AppRoutes.focusProtection || currentPath == AppRoutes.phoneLock) {
           // The device tool owns its four-tab navigation; do not stack bars.
           // Its modal editors own keyboard insets. Resizing the covered page
           // as well can overflow its fixed header at large accessibility text.

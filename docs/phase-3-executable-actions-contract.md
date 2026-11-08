@@ -289,6 +289,20 @@ unexpired. There is no recovery row or completion fact, and recovery contributes
 to neither Focus/Task/Deadline progress nor any preparation budget. The exact
 extension is in `docs/study-setup-v1-contract.md`.
 
+### Optional Android Phone lock and timer display
+
+Android additionally offers an initially-off Phone lock draft at Focus start.
+It is activated only after the canonical start succeeds; native failure leaves
+the recorded Focus session intact and reports a retryable protection failure.
+Timer uses the recorded start plus planned duration, while explicitly selected
+NFC remains locked until saved-chip proof or its disclosed recovery. Finish,
+Abandon, protection emergency release and reflection writes do not implicitly
+release Phone lock. Its independent native authority is documented in
+[Focus Protection](android-focus-protection-v1-contract.md#phone-lock-additive-device-local-mode).
+Normal Android Focus timer status/end notifications are display-only, independent
+of selected-app protection; neither expiry nor a notification tap completes a
+session or alters measured time. Native reminder failure does not undo Focus.
+
 ## Executable Action Target V1
 
 The stable, ranking-independent command envelope is:

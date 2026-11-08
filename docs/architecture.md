@@ -1,5 +1,15 @@
 # Architecture
 
+Phone lock and Focus timer notifications are additive Android-local mechanisms.
+Phone lock has independent private persisted authority, separate from synced Focus,
+named plan OR rules and Discipline. Focus setup passes only a reviewed draft; its
+canonical start precedes native activation. Local notification reconciliation uses
+the recorded session ID/start/duration without creating any cloud fact. Native
+expiry/recovery and notification taps cannot complete Focus or write analysis data.
+No Supabase migration, FastAPI route, provider, push registration or credential
+boundary changes. See [Focus Protection](android-focus-protection-v1-contract.md)
+and [Notification Delivery](notification-delivery-v1-contract.md).
+
 Check-in-only Insights correlations are an additive Flutter display projection
 of existing consent-gated Skillset points, selected only with no rated-Focus
 correlation points. Any rated-Focus evidence retains the prior calculation path.

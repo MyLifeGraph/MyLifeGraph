@@ -19,6 +19,8 @@ import '../../features/focus/domain/focus_session.dart';
 import '../../features/focus/presentation/pages/focus_session_page.dart';
 import '../../features/focus_protection/application/focus_protection_gateway.dart';
 import '../../features/focus_protection/presentation/pages/blocking_page.dart';
+import '../../features/focus_protection/presentation/pages/phone_lock_page.dart';
+import '../../features/focus_protection/domain/phone_lock.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/learning/presentation/pages/personal_learning_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
@@ -46,6 +48,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.settings,
   AppRoutes.notificationSettings,
   AppRoutes.focusProtection,
+  AppRoutes.phoneLock,
   AppRoutes.personalLearning,
   AppRoutes.calendarIntegration,
   AppRoutes.preparationPlans,
@@ -239,6 +242,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const BlockingPage(),
           ),
           GoRoute(
+            path: AppRoutes.phoneLock,
+            redirect: (context, state) =>
+                ref.read(focusProtectionPlatformSupportedProvider) &&
+                    ref
+                        .read(appSurfaceCapabilitiesProvider)
+                        .canUseDeviceFocusProtection
+                ? null
+                : AppRoutes.settings,
+            pageBuilder: (context, state) => PhoneLockRoutePage(
+              key: state.pageKey,
+              launch: state.extra is PhoneLockLaunch
+                  ? state.extra as PhoneLockLaunch
+                  : null,
+            ),
+          ),
+          GoRoute(
             path: AppRoutes.personalLearning,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
@@ -385,10 +404,18 @@ Page<void> _rootTabPage(BuildContext context, Ref ref, GoRouterState state) {
   // GoRouter gives imperative pushes a distinct page identity. Preserve those
   // push/back surfaces; only the four declarative root locations share a pager.
   if (state.pageKey.value != state.fullPath) {
-    return MaterialPage<void>(key: state.pageKey, child: pageFor(state.uri.path));
+    return MaterialPage<void>(
+      key: state.pageKey,
+      child: pageFor(state.uri.path),
+    );
   }
-  final paths = [AppRoutes.dashboard, AppRoutes.insights, AppRoutes.planner,
-    if (ref.read(appSurfaceCapabilitiesProvider).canShowCoachSurface) AppRoutes.coach];
+  final paths = [
+    AppRoutes.dashboard,
+    AppRoutes.insights,
+    AppRoutes.planner,
+    if (ref.read(appSurfaceCapabilitiesProvider).canShowCoachSurface)
+      AppRoutes.coach,
+  ];
   return MaterialPage<void>(
     key: const ValueKey('root-tabs'),
     child: RootTabPager(

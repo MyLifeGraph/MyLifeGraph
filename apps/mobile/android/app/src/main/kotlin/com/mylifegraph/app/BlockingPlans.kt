@@ -435,6 +435,8 @@ class BlockingPlans(private val context: Context) {
             .remove("unlock_boot").remove("unlock_mode").remove("nfc_verified").remove("nfc_boot"))
         return status()
     }
+    // Never sent across the Flutter channel. A running Phone lock snapshots these identities.
+    internal fun phoneLockNfcHashes(): List<String> = nfcTags().map { it.hash }
     private fun nfcTags(): List<BlockingNfcTag> {
         if (!prefs.contains("nfc_tags")) return prefs.getString("nfc_hash", null)
             ?.let { listOf(BlockingNfcTag("legacy", "Main chip", it)) } ?: emptyList()

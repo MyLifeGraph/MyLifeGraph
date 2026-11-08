@@ -68,6 +68,10 @@
         </activity>
         <activity android:name=".LocalBlockPageActivity" android:exported="false"
             android:theme="@style/NormalTheme" android:excludeFromRecents="true" />
+        <activity android:name=".PhoneLockActivity" android:exported="false"
+            android:theme="@style/NormalTheme" android:excludeFromRecents="true" />
+        <receiver android:name=".PhoneLockExpiryReceiver" android:exported="false" />
+        <receiver android:name=".FocusTimerReceiver" android:exported="false" />
         <service
             android:name=".FocusBlockAccessibilityService"
             android:exported="true"
@@ -120,6 +124,13 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.telecom.InCallService" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
