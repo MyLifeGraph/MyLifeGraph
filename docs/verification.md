@@ -31,6 +31,66 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC42: Phone Lock and Focus reminders — 2026-11-08
+
+PR [73](https://github.com/MyLifeGraph/MyLifeGraph/pull/73) merged to
+`c26a67532da1c5eaf2aa874a41c47235c64d6216`, with the exact tested tree of
+`116d0c48f062afd323578b06b38bcd5c592c084f`. Full Linux manual CI
+[`42432397047`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/42432397047)
+passes all seven gates; PR run `42432400073` also passes. **2074 Flutter tests**,
+all reference goldens, Android JVM/lint, source/docs/visual, web build, fresh
+migrations/pgTAP and **8 browser E2E** pass. Backend: **2031 passed / 2 skipped**.
+No reference image, assertion or tolerance was relaxed.
+
+The final actual-emulator journey passes Phone Lock timer/Home/sleep/wake,
+dialer access, synthetic saved-chip proof, rejected replacement proof, recovery,
+notification shade retention, delayed-alarm expiry and stale-session isolation.
+Before the last correction, two exact cases fail: a batched OS alarm leaves the
+Focus end reminder late, and requesting notification permission after Phone Lock
+takes focus leaves the request pending. Both pass on the corrected APK. A second
+real emulator reboot restores lock and countdown before opening MyLifeGraph;
+the unchanged five-minute timers then naturally release Phone Lock and post the
+Focus end reminder without opening the app. The task-owned emulator is stopped.
+
+Signed tag workflow `42433615480` passes. Release
+[`v0.1.0-pilot.1-rc.42`](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.42),
+id `437959181`, published **2026-11-08 01:28:57 UTC**, is non-draft,
+non-prerelease and independently verified as GitHub Latest. APK package
+`com.mylifegraph.app`, versionCode **10000145**, **153881261 bytes**, SHA-256
+`2aeee72f08641d49025cea39010591d483e28d4e9e677de9f7e6f2bb3100741a`.
+Independent laptop apksigner/aapt checks pass, retaining certificate SHA-256
+`9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+SBOM SHA-256: `b7927e123e9dfd577d9cec0141e5ecfabde94843b4fe8af2dc57df18cebbbdf5`.
+
+VPS immutable preparation, unchanged analysis-image verification, atomic promotion
+and the complete project check pass. Public health/readiness return RC42 and the
+unchanged **83** migrations, head `20261006135421_coach_operator_sol61_standard.sql`,
+digest `4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+Coach capability is ready; no authenticated live Coach turn is claimed. Vercel
+`dpl_6dEgM5vHqnA79bTnijPE1nEAY5DH` is READY on the existing production project.
+Both established public app origins return HTTP 200, retain CSP and serve the
+RC42 source. The matching automatic deployment was reused. A separate blocked
+GitHub deployment status in the other account scope is not the live project.
+No schema, provider, Google login, domain or Auth configuration changed.
+
+Laptop, VM and VPS finalization each independently verify publication, tag,
+four uploaded identities and freshly downloaded SHA-256 before their bound
+dry-run/apply. Each removes **154059340 bytes** of managed RC41 output and
+registers **154256116 bytes** of RC42 output: this is retention replacement,
+not a claim of net freed space. Oldest/newest, pins, original downloads, dirty
+VM checkout, signing material and active/rollback server installations remain
+protected. VPS downloads use RAM; final project check passes with **16120942592
+bytes** available, above the unchanged **16106127360-byte** reserve. Vercel
+bounded cleanup removes two obsolete app deployments while preserving live,
+rollback and other protections; the separate website retains its protected
+insufficient-history outputs.
+
+Evidence: ignored `.tools/phone-lock-implementation-20261108/`. Actual local
+screenshots are in its `index.html` gallery. Physical Samsung/NFC RF acceptance,
+real emergency calls and Doze/OEM delivery remain separate gaps. Phone Lock is
+consumer app protection; no device-owner kiosk or unconditional delivery claim
+is made. This documentation-only follow-up does not require another APK.
+
 ### Local Phone Lock and Focus countdown candidate — 2026-11-08
 
 Task base `f9a83295ea499a5303efd95461e01ed21f2194e0`. This additive candidate
