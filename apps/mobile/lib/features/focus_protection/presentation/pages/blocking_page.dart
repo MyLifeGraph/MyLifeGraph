@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:go_router/go_router.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -912,6 +913,19 @@ class _BlockingPageState extends ConsumerState<BlockingPage>
             child: const Text('Start'),
           ),
         ],
+      ),
+    ),
+    const SizedBox(height: AppSpacing.md),
+    AppSurface(
+      variant: AppSurfaceVariant.subtle,
+      radius: AppRadii.lg,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(AppIcons.deviceMobile),
+        title: const Text('Phone lock'),
+        subtitle: const Text('Timer or NFC'),
+        trailing: const Icon(AppIcons.chevronRight),
+        onTap: _busy || _editorOpen ? null : () => context.push(AppRoutes.phoneLock),
       ),
     ),
     const SizedBox(height: AppSpacing.md),

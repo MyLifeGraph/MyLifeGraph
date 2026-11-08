@@ -1,5 +1,14 @@
 # UI Language And Copy Contract
 
+Phone Lock uses `Phone lock`, `Timer or NFC`, `Choose how to unlock`, `Review lock`,
+`Ready to lock?`, `Use with Focus`, `Phone / Emergency` and `Recovery options`.
+Its start review explicitly discloses a saved backup or 15-minute background
+recovery for NFC and retained phone/system access. It does not claim an Android
+kiosk or guaranteed protection without permissions. Focus-native activation failure
+says the Focus session is running but Phone lock did not start. Focus notifications
+say `Focus session` / `Focus timer finished` and `Open your session to finish or
+reflect.` Expiry is not described as a completed session.
+
 A Focus confirmation invalidated by session replacement or pending/failed refresh
 says `Focus changed or is refreshing. Review it and try again.` It must not imply
 that an abandoned session or emergency release was committed.

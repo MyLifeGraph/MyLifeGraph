@@ -113,6 +113,11 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun saveConfiguration(arguments: Map<*, *>): Map<String, Any?> {
+        if (PhoneLockStore(context).active()) {
+            check(arguments["enabled"] == true && arguments["blockSelectedApps"] == true) {
+                "Phone lock is active. Protection must stay enabled until it ends."
+            }
+        }
         check(!BlockingPlans(context).locked()) { "Unlock Discipline mode first." }
         val existingLease = store.readLease()
         check(existingLease?.isActive(System.currentTimeMillis()) != true) {
@@ -389,6 +394,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     fun releaseAppBlocking() {
+        check(!PhoneLockStore(context).active()) { "Phone lock remains active until its timer or NFC release." }
         BlockingEditPolicy.requireEmergencyAllowed(blockingPlans.strict().optBoolean("enabled"))
         if (blockingMode() == "focus") {
             activeLease()?.let { emergencyRelease(it.sessionId) }

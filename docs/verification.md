@@ -31,6 +31,43 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local Phone Lock and Focus countdown candidate — 2026-11-08
+
+Task base `f9a83295ea499a5303efd95461e01ed21f2194e0`. This additive candidate
+introduces independently persisted Android Phone Lock and device-local normal
+Focus countdown/end notifications. It does not change schema, canonical Focus
+completion, Discipline rules, provider configuration or existing plan data.
+
+Local Flutter analysis is clean. The combined Phone Lock/gateway/Focus/lifecycle
+selection passes **64 tests**; the expanded native-decoder status selection
+passes **14 tests**. Existing lifecycle/status fixtures now scroll to their
+real controls before acting; their behavior assertions are retained. Android
+`:app:assembleDebug :app:testDebugUnitTest :app:lintDebug` passes with the
+installed Java 21 toolchain. Docs checks pass **19 tests**, and the visual-source
+policy passes. The captured-base affected dry-run selects Full. The Windows
+source gate stops because `setsid` is unavailable; no Full-gate pass is claimed.
+The complete local Flutter run finishes **2068 passed / 6 failed**. All six
+failures are unchanged Windows dark/light/space mobile/desktop component-reference
+goldens, also recorded for the preceding release. No reference or tolerance is
+changed. The canonical Linux candidate run must still prove these tests and the
+Full release gate before promotion; historical Linux success is not a waiver.
+
+An isolated Pixel 10 Pro Android emulator runs the actual debug APK, SHA-256
+`518787af40134ad87460a37626a00e54e0668eb100eb1739090a0236992e6a06`.
+Repeated native instrumentation passes timer expiry, Home/sleep/wake relock,
+actual dialer opening, rejected replacement-chip proof, non-resetting recovery,
+and unchanged existing plans. It also passes ongoing Focus notification,
+shade collapse retention, one-time end reminder, dismissed-alert deduplication,
+and stale-session clear isolation. Focus expiry does not unlock an NFC lock.
+The NFC proof is synthetic; no RF chip scan, physical Samsung behavior, real
+emergency call, Doze deadline guarantee or actual reboot acceptance is claimed.
+
+Actual unchanged Android screenshots and Flutter-renderer captures are in the
+ignored `.tools/phone-lock-implementation-20261108/` gallery and
+`.tools/ui-catalog/phone-lock-implemented-20261108/`. Instrumentation remains an
+ignored emulator/debug-only harness and is not part of the production APK.
+This paragraph records local evidence only, not publication or production state.
+
 ### Published RC41 and bounded release-download correction — 2026-11-05
 
 PR [71](https://github.com/MyLifeGraph/MyLifeGraph/pull/71) merged to

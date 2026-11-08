@@ -13,6 +13,8 @@ class FocusLeaseExpiryReceiver : BroadcastReceiver() {
 class FocusProtectionBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+            runCatching { PhoneLockExpiryReceiver.reconcile(context) }
+            runCatching { FocusTimerNotifications.sync(context) }
             FocusProtectionManager(context.applicationContext).rescheduleAfterBoot()
             BlockingTimerNotifications.sync(context)
         }

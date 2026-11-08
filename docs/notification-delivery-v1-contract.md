@@ -80,6 +80,31 @@ be recorded separately in `verification.md` before claiming live completion.
 
 ## Existing foreground V1 contract
 
+### Local Android Focus timer
+
+A successful canonical Focus start/reconciliation updates a separate device-local
+timer, including with app-blocking switched off. A silent ongoing Android countdown
+uses the OS chronometer, original app artwork and its own Focus countdown channel.
+Expiry replaces it once with Focus timer finished in a separate end-reminder channel.
+Finish/Abandon clears only the matching session; stale terminal responses cannot
+clear a newer timer. Repeated reads cannot extend the deadline or repeat a dismissed
+end reminder. Tap carries only the retained session ID to the existing owner-checked
+Focus route. Lockscreen public copy is generic, without task labels or account data.
+
+Android notification permission is requested once after an explicit start. It
+does not enable FCM, Inbox generation or cloud reminder consent. Denial leaves Focus
+and Phone lock unchanged. The display persists while leaving the app; closing the
+notification shade is not a cancellation. Android/OEM policy can still hide or
+dismiss notifications. Native persisted elapsed/wall deadlines, boot reconciliation
+and an inexact idle-capable alarm provide the background path. Doze, force-stop,
+revoked permission or OEM restrictions can delay/prevent the end alert; no exact-alarm,
+foreground-service, battery exemption or unconditional delivery claim is added.
+
+Timer expiry and notification actions never finish/abandon a Focus session, create
+learning data, change a plan, or release an NFC Phone lock. The local timer cannot
+substitute for a canonical Focus read or authorize a server write. It is independent
+of the existing Inbox/Cloud push lifecycle and adds no schema or backend route.
+
 Android blocking-plan countdowns are separate device-local status UI, not FCM
 reminders or Inbox rows. They use their own silent channel and notification tags;
 OS permission never enables account push consent. See

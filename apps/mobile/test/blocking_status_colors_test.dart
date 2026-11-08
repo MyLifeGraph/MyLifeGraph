@@ -150,6 +150,19 @@ void main() {
         tester,
       ) async {
         await _open(tester, theme: theme, scale: scale);
+        // The optional Phone lock entry adds content above the lazily built
+        // plans. Exercise the real scroll path before inspecting the card.
+        await tester.scrollUntilVisible(
+          find.text('Games'),
+          160,
+          scrollable: find
+              .descendant(
+                of: find.byType(CustomScrollView),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
         final tokens = Theme.of(
           tester.element(find.text('Games')),
         ).extension<AppVisualTokens>()!;
@@ -157,8 +170,10 @@ void main() {
         expect(find.text('Scheduled'), findsNothing);
         expect(find.text('All day · 44m 19s left'), findsOneWidget);
         expect(_card(tester).statusOutline, tokens.success);
-        expect(tester.widget<Icon>(find.byIcon(blockingIcon('games'))).color,
-          tokens.success);
+        expect(
+          tester.widget<Icon>(find.byIcon(blockingIcon('games'))).color,
+          tokens.success,
+        );
         expect(
           tester.widget<AppStatusPill>(find.byType(AppStatusPill).first).tone,
           AppStatusTone.success,
@@ -171,8 +186,10 @@ void main() {
         expect(find.text('Active'), findsOneWidget);
         expect(find.text('All day · 0m 0s left'), findsOneWidget);
         expect(_card(tester).statusOutline, tokens.danger);
-        expect(tester.widget<Icon>(find.byIcon(blockingIcon('games'))).color,
-          tokens.danger);
+        expect(
+          tester.widget<Icon>(find.byIcon(blockingIcon('games'))).color,
+          tokens.danger,
+        );
         expect(
           tester.widget<AppStatusPill>(find.byType(AppStatusPill).first).tone,
           AppStatusTone.danger,

@@ -1,6 +1,7 @@
 import '../../focus_protection/application/focus_protection_gateway.dart';
 import '../../focus_protection/domain/focus_protection.dart';
 import '../domain/focus_session.dart';
+import 'focus_timer_gateway.dart';
 
 class FocusProtectionDeactivation {
   const FocusProtectionDeactivation({
@@ -20,19 +21,28 @@ class FocusProtectionReconciler {
   const FocusProtectionReconciler({
     required FocusProtectionGateway gateway,
     required bool platformSupported,
-  })  : _gateway = gateway,
-        _platformSupported = platformSupported;
+    FocusTimerGateway timer = const FocusTimerGateway.disabled(),
+  }) : _gateway = gateway,
+       _timer = timer,
+       _platformSupported = platformSupported;
 
   final FocusProtectionGateway _gateway;
   final bool _platformSupported;
+  final FocusTimerGateway _timer;
 
   Future<FocusProtectionStatus?> reconcile({
     required FocusSession? canonicalSession,
     FocusProtectionStatus? lastKnownStatus,
     bool Function()? shouldContinue,
   }) async {
-    if (!_platformSupported) return null;
     bool canContinue() => shouldContinue?.call() ?? true;
+    if (!canContinue()) return null;
+    try {
+      await _timer.reconcile(canonicalSession);
+    } catch (_) {
+      /* Optional local display only. */
+    }
+    if (!canContinue() || !_platformSupported) return null;
     var lastKnownConfiguration = lastKnownStatus?.configuration;
     try {
       var status = await _gateway.readStatus();
@@ -65,19 +75,20 @@ class FocusProtectionReconciler {
     required String sessionId,
     FocusProtectionStatus? lastKnownStatus,
   }) async {
+    try {
+      await _timer.clear(sessionId);
+    } catch (_) {
+      /* Does not undo a durable terminal write. */
+    }
     if (!_platformSupported) {
-      return const FocusProtectionDeactivation(
-        status: null,
-        confirmed: true,
-      );
+      return const FocusProtectionDeactivation(status: null, confirmed: true);
     }
     try {
       final status = await _gateway.deactivateLease(sessionId);
       return FocusProtectionDeactivation(
         status: status,
-        confirmed: !status.warnings.contains(
-              FocusProtectionWarning.nativeFailure,
-            ) &&
+        confirmed:
+            !status.warnings.contains(FocusProtectionWarning.nativeFailure) &&
             status.lease?.sessionId != sessionId,
       );
     } catch (_) {

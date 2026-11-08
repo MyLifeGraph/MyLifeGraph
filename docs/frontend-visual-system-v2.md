@@ -1,5 +1,14 @@
 # Frontend Visual System V2
 
+Phone lock adds only the Plans row below Block now and the optional Focus row above
+Start. Both reuse existing surfaces, line icons, spacing and a theme-owned modal
+sheet with ordinary scrolling and guarded dismissal. Timer/NFC choices use leading
+icons and trailing radio state; Review is a full-width pill. The compact review
+groups unlock, recovery and allowed-app facts with separators. Native timer/NFC
+surfaces share a restrained ring, central clock/status, separate Phone / Emergency
+action and recovery, using existing native appearance themes. Android owns Focus
+notification layout; existing app artwork/status mark remain unchanged.
+
 Task planning uses an icon/switch glass row. Habit cadence uses three visible radio
 rows in one glass group and a clock in the duration field. Calendar events use small
 day/month badges with readable date/time labels; large text prioritizes the full

@@ -14,6 +14,7 @@ class MainActivity : FlutterActivity() {
         healthConnectBridge?.onPermissionResult(requestCode)
         pushBridge?.onPermissionResult(requestCode)
         blockingBridge?.permissionResult(requestCode)
+        if (requestCode == FocusTimerNotifications.PERMISSION_REQUEST) runCatching { FocusTimerNotifications.sync(this) }
     }
 
     override fun onDestroy() {
@@ -31,6 +32,10 @@ class MainActivity : FlutterActivity() {
         BlockingTimerNotifications.sync(applicationContext)
         FocusBlockAccessibilityService.onAppResumed(applicationContext)
         PushBridge.captureIntent(this, intent)
+        FocusTimerNotifications.captureIntent(this, intent)
+        runCatching { FocusTimerNotifications.sync(this) }
+        if (PhoneLockStore(this).active()) PhoneLockActivity.open(this)
+        else FocusTimerNotifications.askPending(this)
     }
 
     override fun onPause() {
@@ -57,6 +62,7 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         PushBridge.captureIntent(this, intent)
+        FocusTimerNotifications.captureIntent(this, intent)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

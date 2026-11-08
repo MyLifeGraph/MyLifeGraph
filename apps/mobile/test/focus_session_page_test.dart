@@ -15,7 +15,147 @@ import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/widgets/app_backdrop.dart';
+import 'package:my_life_graph/features/focus_protection/application/focus_protection_gateway.dart';
+import 'support/ui_catalog_capture.dart';
+import 'package:go_router/go_router.dart';
+import 'package:my_life_graph/core/navigation/app_routes.dart';
+import 'package:my_life_graph/features/focus_protection/application/phone_lock_gateway.dart';
+import 'package:my_life_graph/features/focus_protection/domain/phone_lock.dart';
+
 void main() {
+  for (final failOnce in [false, true]) {
+    testWidgets(
+      'Phone lock follows canonical Focus start and retries independently: $failOnce',
+      (tester) async {
+        final source = _PhoneFocusSource();
+        final phone = _FocusPhoneDevice()..failOnce = failOnce;
+        final router = GoRouter(
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (_, _) => const Scaffold(
+                body: FocusSessionPage(initialPlannedMinutes: 45),
+              ),
+            ),
+            GoRoute(
+              path: AppRoutes.phoneLock,
+              builder: (context, _) => Scaffold(
+                body: TextButton(
+                  onPressed: () => Navigator.pop(context, PhoneLockOptions()),
+                  child: const Text('Use test options'),
+                ),
+              ),
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              appConfigProvider.overrideWithValue(_realConfig),
+              focusProtectionPlatformSupportedProvider.overrideWithValue(true),
+              focusProtectionGatewayProvider.overrideWithValue(
+                UnsupportedFocusProtectionGateway(),
+              ),
+              phoneLockGatewayProvider.overrideWithValue(phone),
+              snapshotRefreshServiceProvider.overrideWithValue(
+                _CountingSnapshotRefresh(),
+              ),
+              focusSessionPageDataSourceProvider.overrideWithValue(source),
+              profileLocalDateSourceProvider.overrideWithValue(
+                const SessionProfileLocalDateSource(session: null),
+              ),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Phone lock'),
+          140,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text('Phone lock'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Use test options'));
+        await tester.pumpAndSettle();
+        expect(phone.starts, 0);
+        await tester.ensureVisible(find.text('Start focus session'));
+        await tester.tap(find.text('Start focus session'));
+        await tester.pumpAndSettle();
+        expect(source.startCalls, 1);
+        expect(phone.starts, 1);
+        expect(phone.requestId, 'focus-${source.active!.id}');
+        expect(
+          phone.endsAt,
+          source.active!.startedAt.add(const Duration(minutes: 45)),
+        );
+        if (failOnce) {
+          expect(
+            find.textContaining('Focus is running; Phone lock did not start.'),
+            findsOneWidget,
+          );
+          await tester.scrollUntilVisible(
+            find.text('Retry Phone lock'),
+            140,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.tap(find.text('Retry Phone lock'));
+          await tester.pumpAndSettle();
+          expect(source.startCalls, 1);
+          expect(phone.starts, 2);
+          expect(
+            find.textContaining('Focus is running; Phone lock did not start.'),
+            findsNothing,
+          );
+        }
+      },
+    );
+  }
+  if (captureUiCatalog) {
+    testWidgets('current Focus setup with Phone lock visual catalog', (
+      tester,
+    ) async {
+      await loadCatalogFonts();
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final source = _StudyFocusSource();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appConfigProvider.overrideWithValue(_realConfig),
+            focusProtectionPlatformSupportedProvider.overrideWithValue(true),
+            focusProtectionGatewayProvider.overrideWithValue(
+              UnsupportedFocusProtectionGateway(),
+            ),
+            focusSessionPageDataSourceProvider.overrideWithValue(source),
+            profileLocalDateSourceProvider.overrideWithValue(
+              const SessionProfileLocalDateSource(session: null),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.liquidGlass,
+            builder: (context, child) => AppBackdrop(child: child!),
+            home: const Scaffold(
+              body: FocusSessionPage(initialPlannedMinutes: 45),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Start focus session'),
+        160,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await captureCatalog(tester, 'focus-phone-lock-entry');
+    });
+  }
   for (final outcome in ['active', 'ended', 'error']) {
     testWidgets('resume keeps the timer visible until sync resolves: $outcome',
         (tester) async {
@@ -1913,5 +2053,45 @@ class _TerminalPromptFocusSource extends FocusSessionSupabaseDataSource {
   @override
   Future<void> deleteReflection(FocusReflection reflection) async {
     _reflection = null;
+  }
+}
+
+class _PhoneFocusSource extends _StudyFocusSource {
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
+}
+
+class _FocusPhoneDevice extends PhoneLockGateway {
+  int starts = 0;
+  bool failOnce = false;
+  String? requestId;
+  DateTime? endsAt;
+  @override
+  Future<PhoneLockStatus> status() async => const PhoneLockStatus(
+    active: false,
+    id: '',
+    mode: 'timer',
+    ready: true,
+    nfcAvailable: true,
+    nfcEnrolled: true,
+  );
+  @override
+  Future<PhoneLockStatus> start(
+    PhoneLockOptions options,
+    String requestId, {
+    DateTime? focusEndsAt,
+  }) async {
+    starts++;
+    this.requestId = requestId;
+    endsAt = focusEndsAt;
+    if (failOnce && starts == 1) throw StateError('Native save failed');
+    return PhoneLockStatus(
+      active: true,
+      id: requestId,
+      mode: options.mode,
+      ready: true,
+      nfcAvailable: true,
+      nfcEnrolled: true,
+    );
   }
 }

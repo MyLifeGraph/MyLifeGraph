@@ -1,5 +1,21 @@
 # MyLifeGraph Mobile App
 
+Android Phone lock is a separate Plans entry below Block now, also an optional,
+initially-off Focus start row. The shared `/settings/focus-protection/phone-lock`
+sheet reviews Timer/NFC and allowed apps. Focus returns a draft there and activates
+it only after canonical start; retrying failed device activation does not start a
+second Focus session. During a running Phone lock, native control/overlay surfaces
+retain Phone / Emergency, allowed apps and disclosed NFC recovery. Home/ordinary
+apps are covered, essential system/dialer functions remain available, and the
+consumer Android/OEM limits still apply. Existing plans/Discipline/Focus records
+retain separate authority. See [native contract](../../docs/android-focus-protection-v1-contract.md#phone-lock-additive-device-local-mode).
+
+Normal Android Focus sessions also have a device-local ongoing countdown and a
+one-time timer-ended reminder, independently of app-blocking. Permission denial
+does not stop Focus; notification tap opens the existing session route and expiry
+never completes a record. Background delivery has the Android limits documented in
+[Notification Delivery](../../docs/notification-delivery-v1-contract.md#local-android-focus-timer).
+
 An already loaded active Focus session retains its timer on foreground
 refresh, with the clock corrected immediately after suspension. The canonical
 read still runs; completion/protection actions wait for it, and read errors use
