@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 
@@ -20,6 +22,9 @@ object FocusTimerNotifications {
     private const val OPEN="mylifegraph_focus_timer_open"
     const val PERMISSION_REQUEST=9110
     private var published=""
+    private val handler=Handler(Looper.getMainLooper())
+    private var deadline:Runnable?=null
+    private fun cancelDeadline() { deadline?.let(handler::removeCallbacks); deadline=null }
     private fun prefs(c:Context)=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
     private fun boot(c:Context)=Settings.Global.getInt(c.contentResolver,Settings.Global.BOOT_COUNT,-1)
     @Synchronized fun setSession(c:Context,args:Map<*,*>) {
@@ -42,6 +47,7 @@ object FocusTimerNotifications {
     @Synchronized fun clear(c:Context,expected:String?) {
         val p=prefs(c)
         if(expected!=null && p.getString("id",null)!=expected) return
+        cancelDeadline()
         check(p.edit().remove("id").remove("open").remove("end").remove("start").remove("elapsedEnd").remove("notified").commit())
         c.getSystemService(NotificationManager::class.java).cancel(TAG,ID)
         c.getSystemService(AlarmManager::class.java).cancel(alarm(c))
@@ -59,10 +65,11 @@ object FocusTimerNotifications {
     fun askPending(activity:Activity) {
         val p=prefs(activity)
         if(Build.VERSION.SDK_INT<33 || !p.getBoolean("pendingPermission",false) ||
-            activity.isFinishing || activity.isDestroyed || !activity.hasWindowFocus()) return
+            activity.isFinishing || activity.isDestroyed) return
         if(activity is MainActivity && PhoneLockStore(activity).active()) {
             PhoneLockActivity.askPendingTimerPermission(); return
         }
+        if(!activity.hasWindowFocus()) return
         p.edit().putBoolean("pendingPermission",false).putBoolean("asked",true).apply()
         if(!permissionAllowed(activity)) activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),PERMISSION_REQUEST)
     }
@@ -72,6 +79,14 @@ object FocusTimerNotifications {
         val remaining=PhoneLockPolicy.remaining(end,p.getLong("elapsedEnd",0),duration,p.getInt("boot",-2),boot(c),System.currentTimeMillis(),SystemClock.elapsedRealtime())
         if(remaining>0 && p.getInt("boot",-2)!=boot(c)) {
             check(p.edit().putInt("boot",boot(c)).putLong("elapsedEnd",SystemClock.elapsedRealtime()+remaining).commit())
+        }
+        // Android may batch the inexact alarm even while this process is alive.
+        // Keep one local deadline too; no wake lock or foreground service.
+        cancelDeadline()
+        if(remaining>0) {
+            val application=c.applicationContext
+            deadline=Runnable { runCatching { sync(application) } }
+            handler.postDelayed(deadline!!,remaining)
         }
         val alarmManager=c.getSystemService(AlarmManager::class.java)
         if(remaining>0) alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,SystemClock.elapsedRealtime()+remaining,alarm(c))

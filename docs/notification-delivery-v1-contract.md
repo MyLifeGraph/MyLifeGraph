@@ -96,7 +96,11 @@ does not enable FCM, Inbox generation or cloud reminder consent. Denial leaves F
 and Phone lock unchanged. The display persists while leaving the app; closing the
 notification shade is not a cancellation. Android/OEM policy can still hide or
 dismiss notifications. Native persisted elapsed/wall deadlines, boot reconciliation
-and an inexact idle-capable alarm provide the background path. Doze, force-stop,
+and an inexact idle-capable alarm provide the background path. A single cancellable
+application-context deadline also delivers expiry while the process is running;
+the alarm remains the process-death fallback. Permission requests are deferred to
+the focused Activity, including when Phone Lock replaces the Flutter Activity.
+Doze, force-stop,
 revoked permission or OEM restrictions can delay/prevent the end alert; no exact-alarm,
 foreground-service, battery exemption or unconditional delivery claim is added.
 

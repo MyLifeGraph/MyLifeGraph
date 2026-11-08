@@ -56,6 +56,7 @@ class MainActivity : FlutterActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         blockingBridge?.windowFocusChanged(hasFocus)
+        if (hasFocus) FocusTimerNotifications.askPending(this)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {

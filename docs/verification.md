@@ -53,14 +53,31 @@ changed. The canonical Linux candidate run must still prove these tests and the
 Full release gate before promotion; historical Linux success is not a waiver.
 
 An isolated Pixel 10 Pro Android emulator runs the actual debug APK, SHA-256
-`518787af40134ad87460a37626a00e54e0668eb100eb1739090a0236992e6a06`.
+`a998f0b659a381449a0cf5063c0ab54051b5d56b834690982a447ec9ce75a8ab`.
 Repeated native instrumentation passes timer expiry, Home/sleep/wake relock,
 actual dialer opening, rejected replacement-chip proof, non-resetting recovery,
 and unchanged existing plans. It also passes ongoing Focus notification,
 shade collapse retention, one-time end reminder, dismissed-alert deduplication,
 and stale-session clear isolation. Focus expiry does not unlock an NFC lock.
 The NFC proof is synthetic; no RF chip scan, physical Samsung behavior, real
-emergency call, Doze deadline guarantee or actual reboot acceptance is claimed.
+emergency call or Doze deadline guarantee is claimed.
+
+An actual emulator reboot completes and restores both the lock and Focus
+notification before opening MyLifeGraph, with the elapsed deadline correctly
+rebased and Phone/Emergency visible. The natural expiry test then exposes a
+delayed inexact Android alarm: Phone Lock ends correctly but the end reminder
+does not appear within the observation window. A deterministic delayed-alarm
+case reproduces the missing reminder on the previous APK. A separate real
+Activity test reproduces a pending permission request becoming stuck after
+Phone Lock takes window focus. The candidate adds one cancellable local deadline
+alongside the unchanged alarm fallback and forwards pending permission UI to the
+focused Activity; this does not add exact-alarm, wake-lock or service permissions.
+The same delayed-alarm regression and complete native journey now pass on the
+corrected APK. The identical Activity/permission reproduction also passes
+(`pendingPermissionStuck=false`, `permissionPromptOnPhoneLock=true`). The
+observer waits for asynchronous Android notification posting before inspecting
+it and separately verifies that a stale clear retains the newer stored ID.
+Fresh Linux acceptance is still required for this final native correction.
 
 Actual unchanged Android screenshots and Flutter-renderer captures are in the
 ignored `.tools/phone-lock-implementation-20261108/` gallery and
