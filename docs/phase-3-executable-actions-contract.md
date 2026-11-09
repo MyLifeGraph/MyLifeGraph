@@ -291,6 +291,12 @@ extension is in `docs/study-setup-v1-contract.md`.
 
 ### Optional Android Phone lock and timer display
 
+Focus setup uses a compact header/card and read-only pull-to-refresh in place of
+the header refresh icon. The repeated finish/linkage explanation is omitted from
+the composer; lifecycle, independent task completion, linkage and recovery are
+unchanged. Phone lock prerequisite setup returns to the same reviewed draft and
+rechecks readiness; it never creates a Focus session itself.
+
 Android additionally offers an initially-off Phone lock draft at Focus start.
 It is activated only after the canonical start succeeds; native failure leaves
 the recorded Focus session intact and reports a retryable protection failure.

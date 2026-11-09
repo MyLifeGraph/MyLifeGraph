@@ -713,6 +713,12 @@ says `Early evidence`.
 
 ## Plain-language Rules
 
+Phone lock prerequisite copy names the next concrete step: `Permissions & limits`
+opens the existing setup; `Check again` rechecks missing Phone-app availability.
+Ready devices keep `Review lock` / `Use with Focus` and their explicit confirmation.
+Focus's compact composer omits the repeated finish/linkage explanation without
+changing its independent completion semantics or implying automatic task completion.
+
 Mobile Auth uses a larger MyLifeGraph heading and `Make room for a better day.`
 Email fields are directly visible, with existing recovery/resend actions;
 Google and the mode-appropriate guest option remain available.

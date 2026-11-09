@@ -11,6 +11,15 @@ Status: implemented repository boundary, 2026-08-01.
 
 ## Phone Lock (additive device-local mode)
 
+Inactive setup must not dead-end on a disabled review button: missing protection
+or Accessibility offers the existing Permissions & limits page, and returning
+rechecks native readiness without discarding the draft. Pull-to-refresh also
+rechecks inactive status. Optional additive native `protectionEnabled`,
+`accessibilityEnabled` and `phoneAvailable` diagnostics identify the missing step;
+older hosts keep the generic setup hint. Only native `ready` authorizes review,
+and native start rechecks every existing safety gate. Missing NFC/chip proof still
+cannot start a lock. Neither configuration nor permissions are enabled silently.
+
 Plans has a separate Phone lock entry below Block now. Focus setup has an optional,
 initially off entry immediately before Start. Both open the same theme-owned 92%
 sheet; ordinary scrolling never dismisses it. Focus setup returns a reviewed draft

@@ -1,5 +1,13 @@
 # MyLifeGraph Mobile App
 
+Focus uses a compact header/start card and pull-to-refresh instead of a header
+refresh action. Duration, optional linkage, recovery and canonical start/finish
+behavior remain unchanged. Phone lock setup exposes an actionable
+`Permissions & limits` button when native readiness is missing; returning from
+that setup, foreground resume and pull-to-refresh recheck readiness while keeping
+the Timer/NFC/allowed-app draft. A Phone-app prerequisite has its own short hint.
+Ready devices retain the existing review/confirmation flow in both entry paths.
+
 Android Phone lock is a separate Plans entry below Block now, also an optional,
 initially-off Focus start row. The shared `/settings/focus-protection/phone-lock`
 sheet reviews Timer/NFC and allowed apps. Focus returns a draft there and activates

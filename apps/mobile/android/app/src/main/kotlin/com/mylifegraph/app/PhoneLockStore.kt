@@ -44,6 +44,7 @@ class PhoneLockStore(private val context: Context) {
             .any { it.resolveInfo.serviceInfo.name == FocusBlockAccessibilityService::class.java.name &&
                 it.resolveInfo.serviceInfo.packageName == context.packageName }
         val tags = BlockingPlans(context).phoneLockNfcHashes()
+        val phoneAvailable = PhoneLockSafety.phoneAvailable(context)
         return mapOf("contractVersion" to BlockingPlans.CONTRACT_VERSION,
             "active" to value.optBoolean("active"), "id" to value.optString("id"),
             "mode" to value.optString("mode", "timer"),
@@ -52,7 +53,10 @@ class PhoneLockStore(private val context: Context) {
             "recoveryStarted" to value.has("recoveryWall"),
             "recoveryRemainingMs" to (if (value.optBoolean("active") && value.has("recoveryWall")) remaining(value, "recovery") else 0L),
             "allowedApps" to BlockingPlans.strings(value.optJSONArray("allowedApps") ?: JSONArray()).toList(),
-            "ready" to (config.enabled && config.blockSelectedApps && service && PhoneLockSafety.phoneAvailable(context)),
+            "ready" to (config.enabled && config.blockSelectedApps && service && phoneAvailable),
+            "protectionEnabled" to (config.enabled && config.blockSelectedApps),
+            "accessibilityEnabled" to service,
+            "phoneAvailable" to phoneAvailable,
             "nfcEnrolled" to tags.isNotEmpty(),
             "nfcAvailable" to (android.nfc.NfcAdapter.getDefaultAdapter(context)?.isEnabled == true))
     }

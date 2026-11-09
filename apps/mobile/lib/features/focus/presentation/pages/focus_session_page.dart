@@ -114,15 +114,13 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     final state = ref.watch(focusSessionControllerProvider(_launch));
     return AppPage(
       title: 'Focus session',
-      subtitle: 'A timed Focus session linked to an optional action',
+      compactHeader: true,
       backFallback: AppRoutes.quickAction,
-      actions: [
-        IconButton(
-          tooltip: 'Refresh focus sessions',
-          onPressed: state.isLoading || state.isSaving ? null : _load,
-          icon: const Icon(AppIcons.refresh),
-        ),
-      ],
+      onRefresh: () async {
+        if (!state.isLoading && !state.isSaving && !_startingPhoneFocus) {
+          await _load();
+        }
+      },
       children: [
         if (state.isLoading && state.active == null)
           const AppCard(
@@ -212,8 +210,10 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
                 !ref.watch(focusProtectionPlatformSupportedProvider)
                 ? null
                 : AppSurface(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
+                      dense: true,
                       leading: const Icon(AppIcons.deviceMobile),
                       title: const Text('Phone lock'),
                       subtitle: Text(
@@ -763,11 +763,6 @@ class _StartFocusCard extends ConsumerWidget {
                 'Start a focus block',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'Finishing records focused time. It never completes a linked '
-                'task or habit automatically.',
-              ),
               if (scheduledContext != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -793,7 +788,7 @@ class _StartFocusCard extends ConsumerWidget {
                 ),
               ],
               if (durations.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.md),
                 if (isMobile)
                   _MobileDurationGrid(
                     presets: const [25, 45, 50, 90]
@@ -862,7 +857,7 @@ class _StartFocusCard extends ConsumerWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<String?>(
                 key: ValueKey('focus-target-selector-$visibleSelectedTarget'),
                 initialValue: visibleSelectedTarget,
@@ -935,7 +930,7 @@ class _StartFocusCard extends ConsumerWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               if (phoneLockControl != null) ...[
                 phoneLockControl!,
                 const SizedBox(height: AppSpacing.md),

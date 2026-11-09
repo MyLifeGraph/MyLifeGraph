@@ -31,6 +31,36 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Local Phone Lock readiness / compact Focus — 2026-11-09
+
+Local task based on `6838c27494e9abf44c77431ed7a7fabc1891e9b5`, not a
+publication or installed-Samsung claim. Three new regressions fail before the
+fix: both manual/Focus missing-readiness setup journeys have no actionable setup
+button, and inactive Phone lock has no pull-refresh. After the fix, **73 targeted
+Flutter tests pass** across Phone Lock, Focus page/lifecycle and the Focus timer
+gateway. Coverage includes returning from permissions without losing the draft,
+native prerequisite hints, missing NFC blocking, narrow/large-text setup in all
+four themes, canonical start/retry and foreground timer retention. Optional native
+diagnostics are additive; older status payloads retain the generic setup hint.
+
+Android Kotlin compilation and **147 JVM tests** pass with zero failures/errors.
+Fresh Android debug Lint passes after correcting two pre-existing SDK-path
+escaping errors only in ignored `android/local.properties`; no tracked build
+configuration or dependency changes. Targeted Dart analysis reports no issues;
+docs (19 tests), visual contract and `git diff --check` pass.
+
+Actual Flutter renderer captures with synthetic data pass and are visually
+inspected in ignored `.tools/phone-lock-refine-20261109/index.html`. They are not
+generated mockups or physical-device evidence. The Focus start controls fit at
+390×844 from the page top. Native enforcement and canonical Focus semantics are
+unchanged. No production, Auth, schema or provider changes are made.
+
+The mandatory affected command uses the recorded task base. Pre-existing unknown
+untracked `output/`, `tmp/` and failure artifacts select the full gate; Windows
+source startup tests cannot proceed because `setsid` is unavailable. The blocked
+local test runner was interrupted; this is not a full CI pass. The existing
+untracked artifacts are preserved. Evidence logs are in the same ignored folder.
+
 ### Published RC42: Phone Lock and Focus reminders — 2026-11-08
 
 PR [73](https://github.com/MyLifeGraph/MyLifeGraph/pull/73) merged to

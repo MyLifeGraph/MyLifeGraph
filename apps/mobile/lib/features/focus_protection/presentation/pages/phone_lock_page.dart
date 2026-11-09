@@ -12,6 +12,7 @@ import '../../application/focus_protection_gateway.dart';
 import '../../domain/focus_protection.dart';
 import '../../domain/phone_lock.dart';
 import '../widgets/strict_status_ring.dart';
+import 'focus_protection_settings_page.dart';
 
 class PhoneLockRoutePage extends Page<Object?> {
   const PhoneLockRoutePage({super.key, this.launch});
@@ -205,6 +206,37 @@ class _PhoneLockPageState extends ConsumerState<PhoneLockPage>
     }
   }
 
+  Future<void> _permissions() async {
+    if (_busy || _reading) return;
+    setState(() => _busy = true);
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) =>
+              const FocusProtectionSettingsPage(permissionsOnly: true),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        await _load();
+      }
+    }
+  }
+
+  String _setupMessage(PhoneLockStatus status) {
+    if (status.protectionEnabled == false) {
+      return 'Turn on Enable protection and Block selected apps.';
+    }
+    if (status.accessibilityEnabled == false) {
+      return 'Enable MyLifeGraph in Android Accessibility.';
+    }
+    if (status.phoneAvailable == false) {
+      return 'Set up a Phone app in Android settings, then check again.';
+    }
+    return 'Enable app protection and Accessibility first.';
+  }
+
   Future<void> _apps() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -306,12 +338,18 @@ class _PhoneLockPageState extends ConsumerState<PhoneLockPage>
   Widget build(BuildContext context) {
     final status = _status;
     final active = status?.active == true;
+    final needsPhone =
+        status?.phoneAvailable == false &&
+        status?.protectionEnabled != false &&
+        status?.accessibilityEnabled != false;
     return PopScope(
       canPop: !_busy,
       child: AppPage(
         key: ValueKey('phone-lock-$active'),
         title: 'Phone lock',
         subtitle: active ? null : 'Choose how to unlock.',
+        compactHeader: true,
+        onRefresh: _load,
         children: [
           if (_error != null)
             AppSurface(
@@ -445,10 +483,7 @@ class _PhoneLockPageState extends ConsumerState<PhoneLockPage>
                 onTap: _busy ? null : _apps,
               ),
             ),
-            if (!status.ready)
-              const Text(
-                'Enable app protection and Accessibility in Permissions & limits first.',
-              ),
+            if (!status.ready) Text(_setupMessage(status)),
             if (_options.mode == 'nfc' &&
                 (!status.nfcAvailable || !status.nfcEnrolled))
               const Text(
@@ -461,15 +496,24 @@ class _PhoneLockPageState extends ConsumerState<PhoneLockPage>
                   minimumSize: const Size(0, 50),
                   shape: const StadiumBorder(),
                 ),
-                onPressed:
-                    _busy ||
-                        !status.ready ||
-                        (_options.mode == 'nfc' &&
-                            (!status.nfcAvailable || !status.nfcEnrolled))
+                onPressed: _busy || _reading
+                    ? null
+                    : !status.ready
+                    ? needsPhone
+                          ? _load
+                          : _permissions
+                    : (_options.mode == 'nfc' &&
+                          (!status.nfcAvailable || !status.nfcEnrolled))
                     ? null
                     : _review,
                 child: Text(
-                  widget.launch == null ? 'Review lock' : 'Use with Focus',
+                  !status.ready
+                      ? needsPhone
+                            ? 'Check again'
+                            : 'Permissions & limits'
+                      : widget.launch == null
+                      ? 'Review lock'
+                      : 'Use with Focus',
                 ),
               ),
             ),
