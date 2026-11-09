@@ -31,6 +31,71 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC43: Phone Lock setup and compact Focus — 2026-11-09
+
+PR [75](https://github.com/MyLifeGraph/MyLifeGraph/pull/75) merged normally to
+`bca944023bb3efe986bad79d9a9c43b77281f87d` at **13:12:45 UTC**, with exactly the
+tested tree of `1b9a884581ac3299b66cc6f64ac75dbb26e72337`. Required checks and
+administrator enforcement remain enabled. PR run `42621314132` passes; full
+manual CI [`42621310950`](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/42621310950)
+passes all seven gates, including fresh migrations/pgTAP and **8 browser E2E**.
+**2083 Flutter tests**, all reference goldens, Android JVM/lint, source/docs/visual
+and web build pass; backend **2031 passed / 2 skipped**. No assertion, golden,
+threshold, security gate or dependency was relaxed. Local targeted verification
+separately passes 73 Flutter and 147 Android JVM tests.
+
+The additive native readiness diagnostics retain the same start authorization.
+Manual and Focus setup lead to existing permission setup when required, reread
+readiness on return/pull-refresh and preserve the draft. Focus uses its compact
+header/row and pull-refresh; duration, linkage, canonical start/finish, recovery,
+NFC and phone/emergency enforcement remain unchanged. Actual renderer captures
+are in ignored `.tools/phone-lock-refine-20261109/index.html`.
+
+Official signed workflow `42623574505` passes. Release
+[`v0.1.0-pilot.1-rc.43`](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.43),
+id `439151564`, published **2026-11-09 13:23:29 UTC**, is independently confirmed
+non-draft, non-prerelease and GitHub Latest. Package `com.mylifegraph.app`,
+versionCode **10000147**, APK **153881261 bytes**, SHA-256
+`3c7200167705825a5c782641581ead9cea5a76c8f557357bf4309d928b7c33af`.
+Independent laptop apksigner/aapt verification passes with unchanged signing
+certificate `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+SBOM SHA-256: `386de880f4697f991c39efdf2e5313f5710616a8bd8c104d9943f596c9abade0`.
+All four uploaded asset sizes/digests match before publication.
+
+VPS immutable preparation, unchanged analysis-image verification, atomic RC43
+promotion and complete project check pass, including Coach capability. Public
+health/readiness return RC43/source `bca9440`, the unchanged **83** migrations,
+head `20261006135421_coach_operator_sol61_standard.sql` and digest
+`4595456825638dea105d8ded53313d929c694efe23273e58d81c018f10ec32c4`.
+The matching automatic Vercel deployment `dpl_DRfVPohBdyuzrazboikFEpUSkXLS` is
+READY; public checks at **13:25 UTC** confirm both established app origins return
+HTTP 200, retain CSP and serve that exact Main source. Initial bounded Vercel
+cleanup removes two obsolete app deployments while retaining live, rollback,
+active-preview, domain and recent-output protections in both allowlisted
+projects. The closing documentation-only Main merge uses the same product code;
+its automatic web build and repeated bounded cleanup are checked separately in
+the delivery logs. No duplicate production deployment was created. No schema,
+Auth, Google, domain, provider or configuration changes were made.
+
+With separate exact owner approval, four original RC39 download copies are
+freshly matched to published GitHub SHA-256/asset identities, then individually
+removed: **153993804 logical bytes**, observed free-space increase **154005504
+bytes**. No other original was removed. Laptop, VM and VPS publication finalizers
+each verify the tag, non-draft release, uploaded identities and freshly downloaded
+hashes before bound cleanup. Each registers **154256116 bytes** of RC43 and removes
+the same size of managed RC42 output; this is replacement, not net space savings.
+Oldest/newest, pins, original downloads, dirty VM checkout, user data, signing
+material and active/rollback installations remain protected. VPS verification
+downloads use RAM. Final project check passes with **16149307392 bytes** available,
+above the unchanged **16106127360-byte** reserve. A wrapper-only CRLF error in the
+last disk-display command was corrected by a fresh successful read-only check;
+retention and runtime checks had already completed successfully.
+
+Evidence: ignored `.tools/phone-lock-release-20261109/`, including publication,
+three-host finalization, protected cleanup and public live proofs. Physical
+Samsung/NFC RF, Doze/OEM and authenticated real Coach-turn acceptance remain
+separate gaps; this release does not claim those tests.
+
 ### Local Phone Lock readiness / compact Focus — 2026-11-09
 
 Local task based on `6838c27494e9abf44c77431ed7a7fabc1891e9b5`, not a
