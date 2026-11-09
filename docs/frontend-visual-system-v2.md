@@ -1,5 +1,12 @@
 # Frontend Visual System V2
 
+Focus uses the existing compact header, medium spacing and a dense Phone lock row
+above Start, retaining a full touch target and theme-owned material. Redundant
+header/composer prose and the refresh icon are removed; pull-to-refresh uses the
+existing theme indicator. Inactive Phone lock setup keeps its layout and replaces
+the disabled review dead end with an enabled Permissions & limits action and one
+short prerequisite hint. The phone-availability case offers Check again.
+
 Phone lock adds only the Plans row below Block now and the optional Focus row above
 Start. Both reuse existing surfaces, line icons, spacing and a theme-owned modal
 sheet with ordinary scrolling and guarded dismissal. Timer/NFC choices use leading

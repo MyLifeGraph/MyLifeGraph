@@ -148,6 +148,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await captureCatalog(tester, 'focus-phone-lock-top');
       await tester.scrollUntilVisible(
         find.text('Start focus session'),
         160,
@@ -416,7 +417,9 @@ void main() {
       'task:task-1',
     );
 
-    await tester.tap(find.byTooltip('Refresh focus sessions'));
+    expect(find.byTooltip('Refresh focus sessions'), findsNothing);
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 350));
+    await tester.pump();
     await tester.pumpAndSettle();
 
     expect(source.targetLoads, 2);
@@ -1279,7 +1282,7 @@ void main() {
           AppLifecycleState.resumed,
         );
       } else {
-        await tester.tap(find.byTooltip('Refresh focus sessions'));
+        await tester.widget<RefreshIndicator>(find.byType(RefreshIndicator)).onRefresh();
       }
       await tester.pumpAndSettle();
 

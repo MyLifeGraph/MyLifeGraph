@@ -41,6 +41,9 @@ class PhoneLockStatus {
     required this.ready,
     required this.nfcAvailable,
     required this.nfcEnrolled,
+    this.protectionEnabled,
+    this.accessibilityEnabled,
+    this.phoneAvailable,
     this.remainingMs = 0,
     this.durationMs = 0,
     this.recoveryStarted = false,
@@ -62,6 +65,9 @@ class PhoneLockStatus {
       ready: map['ready'] as bool,
       nfcAvailable: map['nfcAvailable'] == true,
       nfcEnrolled: map['nfcEnrolled'] == true,
+      protectionEnabled: map['protectionEnabled'] as bool?,
+      accessibilityEnabled: map['accessibilityEnabled'] as bool?,
+      phoneAvailable: map['phoneAvailable'] as bool?,
       remainingMs: map['remainingMs'] as int,
       durationMs: map['durationMs'] as int? ?? 0,
       recoveryStarted: map['recoveryStarted'] == true,
@@ -72,6 +78,8 @@ class PhoneLockStatus {
     );
   }
   final bool active, ready, nfcAvailable, nfcEnrolled, recoveryStarted;
+  // Optional diagnostics for older native hosts; only `ready` authorizes review.
+  final bool? protectionEnabled, accessibilityEnabled, phoneAvailable;
   final String id, mode;
   final int remainingMs, durationMs, recoveryRemainingMs;
   final Set<String> allowedApps;

@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/core/widgets/app_backdrop.dart';
 import 'package:my_life_graph/features/focus_protection/application/phone_lock_gateway.dart';
+import 'package:my_life_graph/features/focus_protection/application/focus_protection_gateway.dart';
+import 'package:my_life_graph/features/focus_protection/presentation/pages/focus_protection_settings_page.dart';
 import 'package:my_life_graph/features/focus_protection/domain/phone_lock.dart';
 import 'package:my_life_graph/features/focus_protection/presentation/pages/phone_lock_page.dart';
 import 'support/ui_catalog_capture.dart';
@@ -12,6 +14,7 @@ import 'support/ui_catalog_capture.dart';
 class Device extends PhoneLockGateway {
   int writes = 0, controls = 0;
   bool ready = true, nfc = true, fail = false;
+  bool? protection, accessibility, phoneAvailable;
   Completer<void>? controlGate;
   PhoneLockOptions? saved;
   PhoneLockStatus value = const PhoneLockStatus(
@@ -32,6 +35,9 @@ class Device extends PhoneLockGateway {
           ready: ready,
           nfcAvailable: nfc,
           nfcEnrolled: nfc,
+          protectionEnabled: protection,
+          accessibilityEnabled: accessibility,
+          phoneAvailable: phoneAvailable,
         );
   @override
   Future<PhoneLockStatus> start(
@@ -69,6 +75,7 @@ Future<void> open(
   PhoneLockLaunch? launch,
   double width = 390,
   double scale = 1,
+  ThemeData? theme,
 }) async {
   t.view.devicePixelRatio = 1;
   t.view.physicalSize = Size(width, 844);
@@ -76,10 +83,15 @@ Future<void> open(
   addTearDown(t.view.resetDevicePixelRatio);
   await t.pumpWidget(
     ProviderScope(
-      overrides: [phoneLockGatewayProvider.overrideWithValue(device)],
+      overrides: [
+        phoneLockGatewayProvider.overrideWithValue(device),
+        focusProtectionGatewayProvider.overrideWithValue(
+          UnsupportedFocusProtectionGateway(),
+        ),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.liquidGlass,
+        theme: theme ?? AppTheme.liquidGlass,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(scale),
@@ -102,6 +114,63 @@ Future<void> tap(WidgetTester t, String value) async {
 }
 
 void main() {
+  for (final linked in [false, true]) {
+    testWidgets(
+      'unready ${linked ? 'Focus' : 'manual'} lock opens setup and rechecks on return',
+      (t) async {
+        final d = Device()..ready = false;
+        await open(
+          t,
+          d,
+          launch: linked ? const PhoneLockLaunch(focusMinutes: 50) : null,
+        );
+        await tap(t, 'Permissions & limits');
+        expect(find.byType(FocusProtectionSettingsPage), findsOneWidget);
+        expect(d.writes, 0);
+        d.ready = true;
+        Navigator.of(t.element(find.byType(FocusProtectionSettingsPage))).pop();
+        await t.pumpAndSettle();
+        final label = linked ? 'Use with Focus' : 'Review lock';
+        expect(
+          t
+              .widget<FilledButton>(find.widgetWithText(FilledButton, label))
+              .onPressed,
+          isNotNull,
+        );
+        await tap(t, label);
+        expect(find.text('Ready to lock?'), findsOneWidget);
+        expect(d.writes, 0);
+      },
+    );
+  }
+  testWidgets(
+    'pull refresh rechecks inactive readiness without losing the draft',
+    (t) async {
+      final d = Device()..ready = false;
+      await open(t, d);
+      await tap(t, '60 min');
+      d.ready = true;
+      await t
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh();
+      await t.pumpAndSettle();
+      expect(
+        t
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '60 min'))
+            .selected,
+        isTrue,
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Review lock'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      expect(d.writes, 0);
+    },
+  );
   testWidgets(
     'Focus sheet returns reviewed options without starting a device lock',
     (t) async {
@@ -150,6 +219,24 @@ void main() {
       mode: 'nfc',
     ).arguments('test', focusEndsAt: DateTime.utc(2026));
     expect(args.containsKey('endsAtEpochMs'), isFalse);
+    final legacy = <String, Object>{
+      'active': false,
+      'ready': false,
+      'id': '',
+      'mode': 'timer',
+      'remainingMs': 0,
+    };
+    expect(PhoneLockStatus.fromMap(legacy).protectionEnabled, isNull);
+    final diagnostics = PhoneLockStatus.fromMap({
+      ...legacy,
+      'protectionEnabled': true,
+      'accessibilityEnabled': false,
+      'phoneAvailable': true,
+    });
+    expect(diagnostics.ready, isFalse);
+    expect(diagnostics.protectionEnabled, isTrue);
+    expect(diagnostics.accessibilityEnabled, isFalse);
+    expect(diagnostics.phoneAvailable, isTrue);
   });
   testWidgets('cancel review writes nothing and retains selections', (t) async {
     final d = Device();
@@ -187,9 +274,25 @@ void main() {
     expect(find.text('Review lock'), findsOneWidget);
     expect(d.writes, 1);
   });
-  testWidgets('missing permission prevents starting', (t) async {
+  testWidgets('missing permission offers setup without starting', (t) async {
     final d = Device()..ready = false;
     await open(t, d);
+    expect(
+      t
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Permissions & limits'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(d.writes, 0);
+  });
+  testWidgets('NFC without a saved chip cannot review or start a lock', (
+    t,
+  ) async {
+    final d = Device()..nfc = false;
+    await open(t, d);
+    await tap(t, 'NFC chip');
     expect(
       t
           .widget<FilledButton>(
@@ -198,8 +301,41 @@ void main() {
           .onPressed,
       isNull,
     );
+    expect(find.textContaining('Enable NFC and save a chip'), findsOneWidget);
     expect(d.writes, 0);
   });
+  testWidgets(
+    'native prerequisite diagnostics identify the actual missing step',
+    (t) async {
+      final d = Device()..ready = false;
+      d.protection = false;
+      await open(t, d);
+      expect(
+        find.text('Turn on Enable protection and Block selected apps.'),
+        findsOneWidget,
+      );
+      d.protection = true;
+      d.accessibility = false;
+      await t
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh();
+      await t.pumpAndSettle();
+      expect(
+        find.text('Enable MyLifeGraph in Android Accessibility.'),
+        findsOneWidget,
+      );
+      d.accessibility = true;
+      d.phoneAvailable = false;
+      await t
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh();
+      await t.pumpAndSettle();
+      expect(find.textContaining('Set up a Phone app'), findsOneWidget);
+      await tap(t, 'Check again');
+      expect(d.writes, 0);
+      expect(find.text('Ready to lock?'), findsNothing);
+    },
+  );
   testWidgets('Focus setup selects duration without starting native lock', (
     t,
   ) async {
@@ -220,6 +356,41 @@ void main() {
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     });
+  }
+  for (final entry in {
+    'dark': AppTheme.dark,
+    'light': AppTheme.light,
+    'space': AppTheme.space,
+    'glass': AppTheme.liquidGlass,
+  }.entries) {
+    testWidgets(
+      'missing setup remains actionable in ${entry.key} at 320px and large text',
+      (t) async {
+        await open(
+          t,
+          Device()
+            ..ready = false
+            ..protection = false,
+          width: 320,
+          scale: 1.7,
+          theme: entry.value,
+        );
+        await t.scrollUntilVisible(
+          find.text('Permissions & limits'),
+          160,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(
+          t
+              .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Permissions & limits'),
+              )
+              .onPressed,
+          isNotNull,
+        );
+        expect(t.takeException(), isNull);
+      },
+    );
   }
   testWidgets('active scan is single flight and keeps phone action', (t) async {
     final d = Device()
@@ -268,6 +439,17 @@ void main() {
       await open(t, d);
       await captureCatalog(t, 'phone-lock-active');
       await t.pumpWidget(const SizedBox());
+    });
+    testWidgets('phone lock missing setup render catalog', (t) async {
+      await loadCatalogFonts();
+      await open(
+        t,
+        Device()
+          ..ready = false
+          ..protection = false,
+      );
+      await t.ensureVisible(find.text('Permissions & limits'));
+      await captureCatalog(t, 'phone-lock-needs-setup');
     });
   }
 }
