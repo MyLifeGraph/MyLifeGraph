@@ -1,6 +1,6 @@
 # Android Focus Protection V1 Contract
 
-## Local open-end Focus extension
+## Open-end Focus extension
 
 For canonical `focus-open-end-v1` only, the new activateOpenEndLease bridge starts
 an explicit unbounded Focus lease with no deadline. Finite activateLease retains

@@ -7,6 +7,18 @@ results belong in [Verification](verification.md#current-verified-baseline).
 
 ## Current delivery boundary
 
+The No limit Focus and optional Streak reminder release is recorded in current
+[Verification](verification.md#current-verified-baseline). Manual Focus offers
+an elapsed stopwatch with existing Finish/Abandon and device-local ongoing
+notification; timed/scheduled sessions and Phone Lock emergency paths remain.
+Notification-shade resume keeps active-session controls available. Coach/Insights
+preserve measured time when planned duration is absent. The optional default-off
+Streak preference adds ten/five-hour catch-up reminders with quiet hours, timely
+Capture evidence, independent caps and fresh pre-send checks. Updated database,
+API and clients are coordinated; old clients reject null-duration rows. Physical
+Samsung/NFC/FCM acceptance remains separate from automated and live-readiness tests.
+
+
 Private-source/public-distribution discussion is recorded in
 [the deferred repository plan](private-source-public-distribution-plan.md).
 Consult it when repository privacy, Vercel costs or release separation comes up

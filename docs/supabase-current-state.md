@@ -8,7 +8,7 @@ migration is recorded in [Verification](verification.md#current-verified-baselin
 including the post-apply function identity and permission checks. Inspect live
 history before future rollout; repository inventory alone is not live evidence.
 
-The latest local candidate migration is `20261114163504_streak_push_reminders.sql`.
+The latest repository migration is `20261114163504_streak_push_reminders.sql`.
 It adds default-off `streak` Push settings, two receipt kinds and service-only
 `get_streak_push_candidates_v1(uuid,text,bigint)`. Private invoker helpers resolve
 the existing streak deadline, timely receipt pairs, due windows, locked reservations
@@ -18,9 +18,10 @@ remain; Streak has an independent rolling two-attempt cap. Old settings saves
 preserve the extension; GET supplies false as a migration-backed capability.
 No Capture row, receipt, streak credit, RLS or client grant changes. See
 [Notification Delivery](notification-delivery-v1-contract.md) for evidence rules
-and migration/API/APK rollout. No normal local or hosted application is claimed.
+and migration/API/APK rollout. Current hosted observations are recorded in
+[Verification](verification.md#current-verified-baseline), not inferred from this inventory.
 
-The preceding local candidate migration is `20261109152918_focus_open_end_v1.sql`.
+The preceding repository migration is `20261109152918_focus_open_end_v1.sql`.
 It introduces `focus-open-end-v1`: nullable `focus_sessions.planned_minutes` only
 with the explicit metadata version, a backend-only invoker guard and service-only
 `start_focus_open_end_v1`. Existing owner/request locks, owned targets, RLS, grants,
@@ -29,8 +30,8 @@ The V2 serializer additionally identifies open-end rows; timed payloads remain
 unchanged. No history is rewritten. Updated clients/backend are required before
 creating these rows; old clients reject null duration rather than fabricate one.
 The repository now has 85 migration files; this inventory does not claim live
-application. Only physically isolated RAM-database verification is authorized for
-this task; no normal local or hosted database has been migrated.
+application. The release-time Cloud attestation and exact function-body checks
+are recorded in Verification; the normal local database was not reset or migrated.
 
 The previous repository migration is `20261006135421_coach_operator_sol61_standard.sql`.
 It adds the explicit operator `gpt-6.1-sol`/Standard pair while preserving legacy
@@ -1509,8 +1510,9 @@ Older remote databases may contain CamelCase app tables:
 
 ## Migration State
 
-`20261109152918_focus_open_end_v1.sql` is the undeployed local open-end Focus
-candidate described above. See the Focus contract for transport and compatibility.
+`20261109152918_focus_open_end_v1.sql` adds the versioned open-end Focus seam
+described above. See the Focus contract for transport and compatibility, and
+Verification for the recorded hosted installation.
 
 `20260514183000_initial_schema.sql` creates:
 

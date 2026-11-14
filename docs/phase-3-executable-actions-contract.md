@@ -1,6 +1,6 @@
 # Phase 3 Executable Actions Contract
 
-## Local candidate: No limit Focus (`focus-open-end-v1`)
+## No limit Focus (`focus-open-end-v1`)
 
 Manual Focus additionally offers No limit: a stopwatch without a planned end,
 finished or abandoned explicitly. The equal duration grid is 25/45/50 minutes,
@@ -17,7 +17,8 @@ malformed or unavailable capability never falls back to a direct database write.
 Existing terminal/correction endpoints return the explicit open-end response
 for these rows; timed V2 payloads remain identical. No limit rows require updated
 clients: older clients fail parsing rather than inventing a deadline. Migration,
-backend and updated clients must roll out together; this candidate is local only.
+backend and updated clients must roll out together. Actual delivery evidence
+belongs in [Verification](verification.md#current-verified-baseline).
 
 The additive migration permits planned_minutes NULL only with the open-end
 metadata version and forbids direct authenticated creation/update of those rows.

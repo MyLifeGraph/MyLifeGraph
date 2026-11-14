@@ -11,7 +11,7 @@ no new HTTP route, external scheduler, client privilege or provider is introduce
 An updated migration/API/APK and explicit opt-in are required. Local tests do not
 establish hosted state or physical delivery. See the Notification Delivery owner.
 
-## Local Focus stopwatch extension
+## Focus stopwatch extension
 
 `focus-open-end-v1` is an explicit manual-only extension. Canonical Focus has
 nullable planned_minutes only for that metadata contract; server-owned start,
@@ -24,7 +24,8 @@ end reservations. Coach and learning retain actual time and optional ratings whi
 planned-duration evidence stays absent. Device protection uses an explicit
 unbounded lease; Phone Lock remains independent and emergency access remains.
 Android's optional chronometer counts up locally and cannot finish canonical Focus.
-This is an undeployed local candidate; source is not live-state evidence.
+Actual migration/client/runtime delivery belongs in the current Verification
+baseline; source alone remains insufficient evidence of live state.
 
 
 Phone lock and Focus timer notifications are additive Android-local mechanisms.
