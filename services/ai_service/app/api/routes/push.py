@@ -96,6 +96,13 @@ async def command_push(
     ):
         raise HTTPException(503, "Android push is not activated on this server.")
     try:
+        if command.streak is not None:
+            current = await get_supabase_client(request).rpc(
+                "get_push_state_v1", params={"p_user_id": principal.user_id},
+            )
+            settings = current.get("settings") if isinstance(current, dict) else None
+            if not isinstance(settings, dict) or type(settings.get("streak")) is not bool:
+                raise HTTPException(503, "Streak reminders need an updated server.")
         return _state(
             await get_supabase_client(request).rpc(
                 "apply_push_command_v1",

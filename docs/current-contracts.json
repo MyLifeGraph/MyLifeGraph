@@ -540,6 +540,28 @@
     },
     {
       "coverage": "shared_named",
+      "key": "focusOpenEnd",
+      "version": "focus-open-end-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/focus/domain/focus_session.dart",
+          "symbol": "focusOpenEndVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/focus.py",
+          "symbol": "FOCUS_OPEN_END_VERSION"
+        }
+      ],
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/phase-3-executable-actions-contract.md",
+        "docs/supabase-current-state.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
       "key": "focusReflection",
       "version": "focus-reflection-v1",
       "sources": [

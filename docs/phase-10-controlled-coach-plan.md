@@ -1,5 +1,16 @@
 # Phase 10 Free Read-Only Coach Data Agent
 
+## No limit Focus evidence compatibility
+
+For the local `focus-open-end-v1` extension, Focus context options and selected
+Focus evidence permit null planned_minutes only for an explicitly versioned
+canonical row. They still expose measured actual minutes, status and optional
+ratings. The existing general context already preserves optional planned time.
+No provider, consent, budget, model, tool or prompt authority changes. Timed
+context values remain unchanged. This is a coordinated client/backend migration
+extension, not evidence of live deployment.
+
+
 Coach's always-open header restores the existing 44px More actions / First actions
 control when icons overflow. This is presentation-only; action identities,
 provider controls, phone-data consent and all other page headers are unchanged.

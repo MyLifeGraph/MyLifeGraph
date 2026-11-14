@@ -75,6 +75,7 @@ class Api extends ApiClient {
       enabled: body['enabled'] as bool? ?? true,
       revision: (current['settings']['revision'] as int) + 1,
     );
+    if (body.containsKey('streak')) current['settings']['streak'] = body['streak'];
     if (body['command'] == 'register') {
       current['device_id'] = body['device_id'];
       current['registration_id'] = body['registration_id'];
@@ -84,6 +85,18 @@ class Api extends ApiClient {
 }
 
 void main() {
+  test('streak is optional, explicitly typed and preserved without enabling master', () {
+    final old = PushSettingsState.parse(cloud());
+    expect(old.settings.containsKey('streak'), isFalse);
+    final state = cloud();
+    state['settings']['streak'] = false;
+    expect(PushSettingsState.parse(state).settings['streak'], isFalse);
+    state['settings']['streak'] = true;
+    expect(PushSettingsState.parse(state).enabled, isFalse);
+    state['settings']['streak'] = 'true';
+    expect(() => PushSettingsState.parse(state), throwsFormatException);
+  });
+
   test('check-in push extension is optional but must be complete', () {
     expect(PushSettingsState.parse(cloud()).settings.containsKey('morning'), isFalse);
     final state = cloud();

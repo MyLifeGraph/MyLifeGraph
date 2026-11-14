@@ -1,5 +1,20 @@
 # Android Focus Protection V1 Contract
 
+## Local open-end Focus extension
+
+For canonical `focus-open-end-v1` only, the new activateOpenEndLease bridge starts
+an explicit unbounded Focus lease with no deadline. Finite activateLease retains
+its arguments. A persisted open-ended flag distinguishes absence from finite
+expiry: no expiry alarm, no immediate end=0 overlay dismissal, same-session
+reconciliation and emergency-release suppression remain enforced. Finish/Abandon
+clear only the matching lease. Missing native capability is reported as partial
+protection rather than silently fabricating a timed lease. Phone Lock's independent
+Timer/NFC and always-available emergency/Phone paths are unchanged. An open-end
+Focus launch leaves its independently selected Phone Lock duration editable.
+See the Focus owner for coordinated client/backend/migration compatibility.
+Physical Samsung shade/notification/background behavior is not proven by JVM tests.
+
+
 Customize adds bounded `accent` (`theme`, `mint`, `blue`, `violet`, `rose`) and
 `layout` (`compact`, `balanced`, `spacious`) fields to the existing custom map.
 Missing fields retain theme/balanced defaults. Its native draft preview uses the

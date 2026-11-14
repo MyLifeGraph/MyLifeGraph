@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../composition/push_providers.dart';
 import '../../../../core/platform/push_platform.dart';
+import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 
@@ -34,6 +35,7 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
           'sleep',
           'deadlines',
           'patterns',
+          if (cloud.settings['streak'] is bool) 'streak',
           if (cloud.settings.containsKey('morning')) ...[
             'morning',
             'evening',
@@ -105,6 +107,7 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
                   'sleep': 'Before bedtime',
                   'deadlines': "Today's deadlines",
                   'patterns': 'Important patterns',
+                  if (draft.containsKey('streak')) 'streak': 'Streak reminders',
                   if (draft.containsKey('morning')) ...{
                     'morning': 'Morning check-in',
                     'evening': 'Evening check-in',
@@ -125,6 +128,9 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
                           ),
                       ],
                     ),
+                    subtitle: entry.key == 'streak'
+                        ? const Text('10 h and 5 h before catch-up closes.')
+                        : null,
                     value: draft[entry.key] == true,
                     onChanged: editable
                         ? (value) => setState(() {
@@ -133,24 +139,51 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> {
                           })
                         : null,
                   ),
-                Row(
-                  children: [
-                    const Expanded(child: Text('Quiet hours')),
-                    TextButton(
-                      onPressed: editable
-                          ? () => _pickTime('quiet_start')
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact =
+                        constraints.maxWidth <
+                        260 * MediaQuery.textScalerOf(context).scale(14) / 14;
+                    Widget clock(String key) => TextButton(
+                      style: compact
+                          ? TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                              ),
+                            )
                           : null,
-                      child: Text(draft['quiet_start'] as String),
-                    ),
-                    const Text('–'),
-                    TextButton(
-                      onPressed: editable ? () => _pickTime('quiet_end') : null,
-                      child: Text(draft['quiet_end'] as String),
-                    ),
-                  ],
+                      onPressed: editable ? () => _pickTime(key) : null,
+                      child: Text(draft[key] as String),
+                    );
+                    final clocks = [
+                      clock('quiet_start'),
+                      const Text('–'),
+                      clock('quiet_end'),
+                    ];
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Quiet hours'),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: clocks,
+                          ),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        const Expanded(child: Text('Quiet hours')),
+                        ...clocks,
+                      ],
+                    );
+                  },
                 ),
                 Text(
-                  draft.containsKey('morning')
+                  draft.containsKey('streak')
+                      ? 'Per 24 h: 2 streak, 2 check-in, 2 other reminders. Patterns: once per 30 days.'
+                      : draft.containsKey('morning')
                       ? 'Up to 2 check-in reminders plus 2 other reminders per 24 hours. Patterns once per 30 days. Saved check-ins are skipped.'
                       : 'Up to 2 reminders per 24 hours. Patterns once per 30 days.',
                 ),

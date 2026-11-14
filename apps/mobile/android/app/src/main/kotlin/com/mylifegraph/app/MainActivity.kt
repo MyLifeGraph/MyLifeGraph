@@ -112,6 +112,7 @@ class MainActivity : FlutterActivity() {
                         manager.openNotificationPolicySettings()
                         result.success(null)
                     }
+                    "activateOpenEndLease" -> result.success(manager.activateLease(requireArguments(call.arguments), openEnded = true))
                     "activateLease" -> result.success(
                         manager.activateLease(requireArguments(call.arguments)),
                     )

@@ -1,5 +1,40 @@
 # Phase 3 Executable Actions Contract
 
+## Local candidate: No limit Focus (`focus-open-end-v1`)
+
+Manual Focus additionally offers No limit: a stopwatch without a planned end,
+finished or abandoned explicitly. The equal duration grid is 25/45/50 minutes,
+then 90/No limit/Custom; scheduled starts keep their existing fixed reservation,
+remaining-duration validation and V2 transport. No arbitrary long countdown is
+used. Start target, preparation confirmation, measured whole minutes, recovery,
+ratings, canonical retry identity and Finish/Abandon authority are retained.
+
+Authenticated `GET /v1/focus/open-end/capabilities` and
+`POST /v1/focus/open-end/start` opt in to `focus-open-end-v1`. The manual start
+body has null planned_minutes and the existing request/recovery/target/label
+fields. The backend derives the owner from the bearer principal. A missing,
+malformed or unavailable capability never falls back to a direct database write.
+Existing terminal/correction endpoints return the explicit open-end response
+for these rows; timed V2 payloads remain identical. No limit rows require updated
+clients: older clients fail parsing rather than inventing a deadline. Migration,
+backend and updated clients must roll out together; this candidate is local only.
+
+The additive migration permits planned_minutes NULL only with the open-end
+metadata version and forbids direct authenticated creation/update of those rows.
+The service-only start retains owner/request advisory locks, owned target checks,
+one-active-session uniqueness, exact fingerprint replay and terminal immutability.
+No applied migration or historical row changes. Open-ended sessions do not invent
+future Planner reservations. Today continues showing measured intervals. Coach
+and learning retain measured time/ratings; planned duration is absent, never zero.
+Mixed-day planned-duration correlations omit days with an unplanned session;
+other observed metrics and timed-only inputs retain their original semantics.
+
+On inactive→resumed (e.g. notification shade), Focus ticks locally without a
+network read or disabling actions. A genuine paused/hidden→resumed transition
+still refreshes canonical state with existing mutation/session guards. This does
+not claim behavior on every OEM; physical Samsung acceptance remains separate.
+
+
 Planner's new-Habit dialog may omit minutes and use this boundary's existing
 manual Habit creation command. Cadence and title validation, owner identity,
 stable creation UUID and ambiguous-response retry remain unchanged. There is no

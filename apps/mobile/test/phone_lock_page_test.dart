@@ -114,6 +114,17 @@ Future<void> tap(WidgetTester t, String value) async {
 }
 
 void main() {
+  testWidgets('open-end Focus retains an independently configurable Phone Lock timer', (t) async {
+    final device = Device();
+    await open(t, device, launch: PhoneLockLaunch(focusMinutes: null, options: PhoneLockOptions(minutes: 50)));
+    expect(t.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '50 min')).selected, isTrue);
+    await tap(t, '60 min');
+    await tap(t, 'Use with Focus');
+    expect(find.text('Ready to lock?'), findsOneWidget);
+    expect(device.writes, 0);
+    expect(find.textContaining('Focus session timer'), findsNothing);
+  });
+
   for (final linked in [false, true]) {
     testWidgets(
       'unready ${linked ? 'Focus' : 'manual'} lock opens setup and rechecks on return',

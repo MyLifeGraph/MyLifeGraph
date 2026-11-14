@@ -24,6 +24,8 @@ class PushMessagingService : FirebaseMessagingService() {
             "pattern" -> "A useful pattern is ready" to "Review a consistent study-time observation in Insights."
             "morning" -> "Morning check-in" to "Take a moment to record your sleep and energy."
             "evening" -> "Evening check-in" to "Take a moment to reflect on your day."
+            "streak_10h" -> "Check-in reminder" to "About 10 hours left to catch up on missed check-ins. Open Today to finish."
+            "streak_5h" -> "Check-in reminder" to "About 5 hours left to catch up on missed check-ins. Open Today to finish."
             else -> return
         }
         val id = try { java.util.UUID.fromString(data["attempt_id"]).toString() } catch (_: Exception) { return }

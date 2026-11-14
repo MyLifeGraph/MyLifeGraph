@@ -71,7 +71,7 @@ class PushBridge(private val activity: Activity) {
                 "takeRoute" -> {
                     val route = prefs.getString("route", null)
                     prefs.edit().remove("route").apply()
-                    result.success(if (route in setOf("/planner", "/insights")) route else null)
+                    result.success(if (PushReceipt.allowsDestination(route)) route else null)
                 }
                 "openSettings" -> {
                     val intent = if (Build.VERSION.SDK_INT >= 26) {
@@ -141,7 +141,7 @@ class PushBridge(private val activity: Activity) {
         }
         fun captureIntent(context: Context, intent: Intent?) {
             val route = intent?.getStringExtra("mylifegraph_push_route") ?: return
-            if (route in setOf("/planner", "/insights", "/morning-calibration", "/quick-mood-check-in")) preferences(context).edit().putString("route", route).apply()
+            if (PushReceipt.allowsDestination(route)) preferences(context).edit().putString("route", route).apply()
             intent.removeExtra("mylifegraph_push_route")
         }
     }

@@ -432,7 +432,7 @@ class CoachFocusContextOption(BaseModel):
     focus_session_id: UUID = Field(strict=False)
     status: Literal["completed", "abandoned"]
     local_started_at: datetime = Field(strict=False)
-    planned_minutes: int = Field(ge=5, le=240)
+    planned_minutes: int | None = Field(ge=5, le=240)
     actual_minutes: int = Field(ge=0, le=90 * 24 * 60)
     has_reflection: bool
 

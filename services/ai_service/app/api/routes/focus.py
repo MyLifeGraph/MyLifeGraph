@@ -8,7 +8,9 @@ from app.api.deps.services import get_focus_service
 from app.api.problems.focus import FOCUS_ERRORS, focus_problem
 from app.models.focus import (
     FocusCapabilitiesResponse,
-    FocusSessionResponse,
+    FocusSessionResult,
+    FocusOpenEndCapabilitiesResponse,
+    OpenEndFocusStartRequest,
     FocusStartContextResponse,
     FocusStartRequest,
     FocusTimeCorrectionRequest,
@@ -19,13 +21,32 @@ from app.services.focus_service import FocusService
 router = APIRouter(prefix="/focus", tags=["focus"])
 
 
-@router.post("/sessions/{session_id}/correct-time", response_model=FocusSessionResponse)
+@router.get("/open-end/capabilities", response_model=FocusOpenEndCapabilitiesResponse)
+async def get_focus_open_end_capabilities(
+    _principal: Principal = Depends(get_current_principal),
+) -> FocusOpenEndCapabilitiesResponse:
+    return FocusOpenEndCapabilitiesResponse()
+
+
+@router.post("/open-end/start", response_model=FocusSessionResult)
+async def start_focus_open_end(
+    request: OpenEndFocusStartRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: FocusService = Depends(get_focus_service),
+) -> FocusSessionResult:
+    try:
+        return await service.start_open_end(user_id=principal.user_id, request=request)
+    except FOCUS_ERRORS as exc:
+        raise focus_problem(exc) from exc
+
+
+@router.post("/sessions/{session_id}/correct-time", response_model=FocusSessionResult)
 async def correct_focus_time(
     session_id: UUID,
     request: FocusTimeCorrectionRequest,
     principal: Principal = Depends(get_current_principal),
     service: FocusService = Depends(get_focus_service),
-) -> FocusSessionResponse:
+) -> FocusSessionResult:
     try:
         return await service.correct_time(user_id=principal.user_id, session_id=session_id, request=request)
     except FOCUS_ERRORS as exc:
@@ -65,27 +86,27 @@ async def get_focus_start_context(
 
 @router.post(
     "/sessions/start",
-    response_model=FocusSessionResponse,
+    response_model=FocusSessionResult,
     response_model_exclude_none=False,
 )
 async def start_focus_session(
     request: FocusStartRequest,
     principal: Principal = Depends(get_current_principal),
     service: FocusService = Depends(get_focus_service),
-) -> FocusSessionResponse:
+) -> FocusSessionResult:
     return await _start(service, user_id=principal.user_id, request=request)
 
 
 @router.post(
     "/sessions/{session_id}/finish",
-    response_model=FocusSessionResponse,
+    response_model=FocusSessionResult,
     response_model_exclude_none=False,
 )
 async def finish_focus_session(
     session_id: UUID,
     principal: Principal = Depends(get_current_principal),
     service: FocusService = Depends(get_focus_service),
-) -> FocusSessionResponse:
+) -> FocusSessionResult:
     return await _finish(
         service,
         user_id=principal.user_id,
@@ -96,14 +117,14 @@ async def finish_focus_session(
 
 @router.post(
     "/sessions/{session_id}/abandon",
-    response_model=FocusSessionResponse,
+    response_model=FocusSessionResult,
     response_model_exclude_none=False,
 )
 async def abandon_focus_session(
     session_id: UUID,
     principal: Principal = Depends(get_current_principal),
     service: FocusService = Depends(get_focus_service),
-) -> FocusSessionResponse:
+) -> FocusSessionResult:
     return await _finish(
         service,
         user_id=principal.user_id,
@@ -117,7 +138,7 @@ async def _start(
     *,
     user_id: str,
     request: FocusStartRequest,
-) -> FocusSessionResponse:
+) -> FocusSessionResult:
     try:
         return await service.start(user_id=user_id, request=request)
     except FOCUS_ERRORS as exc:
@@ -130,7 +151,7 @@ async def _finish(
     user_id: str,
     session_id: UUID,
     terminal_status: str,
-) -> FocusSessionResponse:
+) -> FocusSessionResult:
     try:
         return await service.finish(
             user_id=user_id,

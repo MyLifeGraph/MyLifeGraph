@@ -83,7 +83,7 @@ class _Session:
     status: str
     started_at: datetime
     ended_at: datetime
-    planned_minutes: int
+    planned_minutes: int | None
     actual_minutes: int
     local_started_at: datetime
     local_date: date
@@ -546,7 +546,11 @@ def _sessions(
             or status not in {"completed", "abandoned"}
             or started_at is None
             or ended_at is None
-            or planned is None
+            or (planned is None and not (
+                row.get("planned_minutes") is None
+                and isinstance(row.get("metadata"), dict)
+                and row["metadata"].get("contract_version") == "focus-open-end-v1"
+            ))
             or actual is None
             or started_at < starts_at
             or started_at >= ends_at

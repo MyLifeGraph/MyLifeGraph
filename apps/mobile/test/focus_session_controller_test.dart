@@ -9,6 +9,26 @@ import 'package:my_life_graph/features/focus_protection/application/focus_protec
 import 'package:my_life_graph/features/focus_protection/domain/focus_protection.dart';
 
 void main() {
+  for (final lostResponse in [false, true]) {
+    test('No limit preserves canonical identity through start/reload/finish, lost response $lostResponse', () async {
+      final source = _FocusPortFake(loseNextStartResponse: lostResponse);
+      final controller = _controller(source: source);
+      addTearDown(controller.dispose);
+      await controller.load(); controller.selectOpenEnd();
+      expect(controller.state.canStart, isTrue);
+      await controller.start();
+      expect(controller.state.active!.isOpenEnded, isTrue);
+      expect(controller.state.active!.id, _requestId);
+      await controller.load();
+      expect(controller.state.active!.isOpenEnded, isTrue);
+      await controller.finish(onCommitted: (_, __) async {});
+      expect(controller.state.active, isNull);
+      expect(source.terminal!.actualMinutes, 25);
+      expect(source.terminal!.isOpenEnded, isTrue);
+      expect(controller.state.openEnded, isFalse);
+    });
+  }
+
   for (final remove in [false, true]) {
     test(
       'delayed reflection read cannot undo a confirmed ${remove ? 'delete' : 'save'}',

@@ -87,8 +87,9 @@ class FocusProtectionStore(context: Context) {
             KEY_LEASE_STATE,
             LocalFocusLease.STATE_ACTIVE,
         ) ?: LocalFocusLease.STATE_ACTIVE
-        if (sessionId.isBlank() || startedAt <= 0L || endsAt <= startedAt) return null
-        return LocalFocusLease(sessionId, startedAt, endsAt, state)
+        val openEnded = preferences.getBoolean("lease_open_ended", false)
+        if (sessionId.isBlank() || startedAt <= 0L || (if (openEnded) endsAt != 0L else endsAt <= startedAt)) return null
+        return LocalFocusLease(sessionId, startedAt, endsAt, state, openEnded)
     }
 
     // Independent-mode emergency release never touches the Focus lease or its DND rule.
@@ -99,6 +100,7 @@ class FocusProtectionStore(context: Context) {
             .putString(KEY_LEASE_SESSION_ID, lease.sessionId)
             .putLong(KEY_LEASE_STARTED_AT, lease.startedAtEpochMs)
             .putLong(KEY_LEASE_ENDS_AT, lease.endsAtEpochMs)
+            .putBoolean("lease_open_ended", lease.openEnded)
             .putString(KEY_LEASE_STATE, lease.state)
             .commit()
 
@@ -107,6 +109,7 @@ class FocusProtectionStore(context: Context) {
             .putString(KEY_LEASE_SESSION_ID, lease.sessionId)
             .putLong(KEY_LEASE_STARTED_AT, lease.startedAtEpochMs)
             .putLong(KEY_LEASE_ENDS_AT, lease.endsAtEpochMs)
+            .putBoolean("lease_open_ended", lease.openEnded)
             .putString(KEY_LEASE_STATE, LocalFocusLease.STATE_EMERGENCY_RELEASED)
             .putString(KEY_SUPPRESSED_SESSION_ID, lease.sessionId)
             .commit()
@@ -116,6 +119,7 @@ class FocusProtectionStore(context: Context) {
             .remove(KEY_LEASE_SESSION_ID)
             .remove(KEY_LEASE_STARTED_AT)
             .remove(KEY_LEASE_ENDS_AT)
+            .remove("lease_open_ended")
             .remove(KEY_LEASE_STATE)
             .commit()
 
@@ -124,6 +128,7 @@ class FocusProtectionStore(context: Context) {
             .remove(KEY_LEASE_SESSION_ID)
             .remove(KEY_LEASE_STARTED_AT)
             .remove(KEY_LEASE_ENDS_AT)
+            .remove("lease_open_ended")
             .remove(KEY_LEASE_STATE)
         if (suppressedSessionId() == sessionId) {
             editor.remove(KEY_SUPPRESSED_SESSION_ID)

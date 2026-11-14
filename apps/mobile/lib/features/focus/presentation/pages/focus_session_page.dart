@@ -57,6 +57,7 @@ class FocusSessionPage extends ConsumerStatefulWidget {
 
 class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     with WidgetsBindingObserver {
+  bool _wasBackgrounded = false;
   PhoneLockOptions? _phoneLockOptions;
   bool _startingPhoneFocus = false;
   String? _phoneLockError, _pendingPhoneSessionId;
@@ -103,9 +104,15 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        !ref.read(focusSessionControllerProvider(_launch)).isSaving) {
-      unawaited(_load());
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _wasBackgrounded = true;
+    } else if (state == AppLifecycleState.resumed) {
+      _controller.tick();
+      final revalidate = _wasBackgrounded;
+      _wasBackgrounded = false;
+      if (revalidate && !ref.read(focusSessionControllerProvider(_launch)).isSaving) {
+        unawaited(_load());
+      }
     }
   }
 
@@ -187,6 +194,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
               onContinue: _controller.continueWithoutSavedStudySetup,
             ),
           _StartFocusCard(
+            openEnded: state.openEnded,
+            onOpenEnd: _controller.selectOpenEnd,
             plannedMinutes: state.plannedMinutes,
             recoveryMinutes: state.recoveryMinutes,
             suggestion: FocusPreferenceSuggestion.fromSessions(state.recent),
@@ -221,12 +230,14 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
                             ? 'Off'
                             : _phoneLockOptions!.mode == 'nfc'
                             ? 'NFC chip'
+                            : state.openEnded
+                            ? '${_phoneLockOptions!.minutes} min · Separate timer'
                             : '${state.plannedMinutes} min · Session timer',
                       ),
                       trailing: const Icon(AppIcons.chevronRight),
                       onTap: state.isSaving || _startingPhoneFocus
                           ? null
-                          : () => _configurePhoneLock(state.plannedMinutes),
+                          : () => _configurePhoneLock(state.openEnded ? null : state.plannedMinutes),
                     ),
                   ),
           ),
@@ -382,7 +393,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     }
   }
 
-  Future<void> _configurePhoneLock(int minutes) async {
+  Future<void> _configurePhoneLock(int? minutes) async {
     final result = await context.push<Object?>(
       AppRoutes.phoneLock,
       extra: PhoneLockLaunch(
@@ -407,10 +418,10 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
       final phone = await ref
           .read(phoneLockGatewayProvider)
           .start(
-            options.copyWith(minutes: active.plannedMinutes),
+            active.plannedMinutes == null ? options : options.copyWith(minutes: active.plannedMinutes),
             'focus-${active.id}',
-            focusEndsAt: active.startedAt.add(
-              Duration(minutes: active.plannedMinutes),
+            focusEndsAt: active.plannedMinutes == null ? null : active.startedAt.add(
+              Duration(minutes: active.plannedMinutes!),
             ),
           );
       if (!phone.active) {
@@ -700,6 +711,8 @@ class _FocusLoadErrorCard extends StatelessWidget {
 class _StartFocusCard extends ConsumerWidget {
   const _StartFocusCard({
     required this.plannedMinutes,
+    this.openEnded = false,
+    this.onOpenEnd,
     required this.recoveryMinutes,
     required this.suggestion,
     required this.targets,
@@ -716,6 +729,8 @@ class _StartFocusCard extends ConsumerWidget {
   });
 
   final int plannedMinutes;
+  final bool openEnded;
+  final VoidCallback? onOpenEnd;
   final int recoveryMinutes;
   final FocusPreferenceSuggestion? suggestion;
   final List<FocusTargetOption> targets;
@@ -750,7 +765,7 @@ class _StartFocusCard extends ConsumerWidget {
     final canStartNow =
         startEnabled &&
         inlineError == null &&
-        hasSelectedDuration &&
+        (openEnded || hasSelectedDuration) &&
         selectedTargetExists;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -779,18 +794,21 @@ class _StartFocusCard extends ConsumerWidget {
                     'This session starts now. Its actual timestamps are used for progress and reflection.',
                   ),
               ],
-              if (recoveryMinutes > 0 && hasSelectedDuration) ...[
+              if (openEnded || hasSelectedDuration) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  '$plannedMinutes min focus + $recoveryMinutes min recovery',
+                  openEnded ? 'No time limit' :
+                    '$plannedMinutes min focus${recoveryMinutes > 0 ? ' + $recoveryMinutes min recovery' : ''}',
                   key: const ValueKey('focus-rhythm-summary'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ],
               if (durations.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                if (isMobile)
+                if (isMobile || scheduledContext == null)
                   _MobileDurationGrid(
+                    openEnded: openEnded,
+                    onOpenEnd: scheduledContext == null ? onOpenEnd : null,
                     presets: const [25, 45, 50, 90]
                         .where((minutes) => minutes >= 5 && minutes <= maximum)
                         .toList(),
@@ -966,6 +984,8 @@ class _MobileDurationGrid extends StatelessWidget {
     required this.isSaving,
     required this.onDurationChanged,
     required this.onCustomDuration,
+    this.openEnded = false,
+    this.onOpenEnd,
   });
 
   final List<int> presets;
@@ -973,38 +993,58 @@ class _MobileDurationGrid extends StatelessWidget {
   final bool isSaving;
   final ValueChanged<int> onDurationChanged;
   final VoidCallback onCustomDuration;
+  final bool openEnded;
+  final VoidCallback? onOpenEnd;
 
   @override
   Widget build(BuildContext context) {
-    final presetSelected = presets.contains(plannedMinutes);
-    return Wrap(
+    final presetSelected = !openEnded && presets.contains(plannedMinutes);
+    return LayoutBuilder(builder: (context, constraints) {
+      final minWidth = 78 * MediaQuery.textScalerOf(context).scale(14) / 14;
+      final columns = ((constraints.maxWidth + AppSpacing.sm) / (minWidth + AppSpacing.sm)).floor().clamp(1, 3);
+      final width = (constraints.maxWidth - (columns - 1) * AppSpacing.sm) / columns;
+      final colors = Theme.of(context).colorScheme;
+      Widget choice(Widget child) => ChipTheme(
+        data: ChipTheme.of(context).copyWith(
+          selectedColor: colors.primary,
+          secondaryLabelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(color: colors.onPrimary),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        ),
+        child: SizedBox(width: width, child: child),
+      );
+      return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
       children: [
         for (final minutes in presets)
-          ChoiceChip(
+          choice(ChoiceChip(
+            key: ValueKey('focus-duration-$minutes'),
             showCheckmark: false,
             selected: presetSelected && plannedMinutes == minutes,
-            label: Text('$minutes min'),
+            label: Center(child: Text('$minutes min')),
             onSelected: isSaving
                 ? null
                 : (selected) {
                     if (selected) onDurationChanged(minutes);
                   },
-          ),
-        ChoiceChip(
+          )),
+        if (onOpenEnd != null)
+          choice(ChoiceChip(
+            key: const ValueKey('focus-duration-open-end'),
+            showCheckmark: false,
+            selected: openEnded,
+            label: const Center(child: Text('No limit')),
+            onSelected: isSaving ? null : (_) => onOpenEnd!(),
+          )),
+        choice(ChoiceChip(
           showCheckmark: false,
-          selected: !presetSelected,
-          avatar: Icon(
-            AppIcons.tune,
-            size: 18,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          label: const Text('Custom'),
+          selected: !openEnded && !presetSelected,
+          label: const Center(child: Text('Custom')),
           onSelected: isSaving ? null : (_) => onCustomDuration(),
-        ),
+        )),
       ],
     );
+    });
   }
 }
 
@@ -1079,24 +1119,24 @@ class _ActiveFocusCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final plannedEnd = session.startedAt.add(
-      Duration(minutes: session.plannedMinutes),
+    final plannedEnd = session.plannedMinutes == null ? null : session.startedAt.add(
+      Duration(minutes: session.plannedMinutes!),
     );
     final elapsed = now.isAfter(session.startedAt)
         ? now.difference(session.startedAt)
         : Duration.zero;
-    final remaining = plannedEnd.isAfter(now)
+    final remaining = plannedEnd != null && plannedEnd.isAfter(now)
         ? plannedEnd.difference(now)
         : Duration.zero;
-    final plannedDuration = Duration(minutes: session.plannedMinutes);
-    final progress = elapsed.inMilliseconds / plannedDuration.inMilliseconds;
-    final reachedPlan = !plannedEnd.isAfter(now);
+    final progress = session.plannedMinutes == null ? 0.0 :
+        elapsed.inMilliseconds / Duration(minutes: session.plannedMinutes!).inMilliseconds;
+    final reachedPlan = plannedEnd != null && !plannedEnd.isAfter(now);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
+          LayoutBuilder(builder: (context, constraints) {
+            final heading = <Widget>[
               Icon(
                 AppIcons.timerOutlined,
                 color: Theme.of(context).colorScheme.primary,
@@ -1108,25 +1148,41 @@ class _ActiveFocusCard extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-            ],
-          ),
+            ];
+            const badge = Chip(
+              label: Text('No limit'),
+              visualDensity: VisualDensity.compact,
+            );
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            if (session.isOpenEnded && constraints.maxWidth < 240 * scale) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: heading),
+                  const SizedBox(height: AppSpacing.sm),
+                  const Align(alignment: Alignment.centerRight, child: badge),
+                ],
+              );
+            }
+            return Row(children: [...heading, if (session.isOpenEnded) badge]);
+          }),
           const SizedBox(height: AppSpacing.md),
           Text(_focusBlockDisplayLabel(session.label ?? target?.title)),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Started ${_focusClock(ref, session.startedAt)} · '
-            '${session.plannedMinutes} planned minutes'
+            '${session.isOpenEnded ? 'No limit' : '${session.plannedMinutes} planned minutes'}'
             '${session.recoveryMinutes > 0 ? ' · ${session.recoveryMinutes} min recovery after completion' : ''}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
           Semantics(
             liveRegion: reachedPlan,
-            label: reachedPlan
+            label: session.isOpenEnded ? '${_focusTimerText(elapsed)} focused' : reachedPlan
                 ? 'Planned focus time reached'
                 : '${_focusTimerText(remaining)} remaining',
             child: Text(
-              reachedPlan
+              session.isOpenEnded ? _focusTimerText(elapsed) : reachedPlan
                   ? '+${_focusTimerText(now.difference(plannedEnd))}'
                   : _focusTimerText(remaining),
               key: const ValueKey('focus-countdown'),
@@ -1137,13 +1193,13 @@ class _ActiveFocusCard extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            reachedPlan
+            session.isOpenEnded ? 'Time focused' : reachedPlan
                 ? 'Planned time reached'
-                : 'Ends at ${_focusClock(ref, plannedEnd)}',
+                : 'Ends at ${_focusClock(ref, plannedEnd!)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
-          LinearProgressIndicator(value: progress.clamp(0, 1)),
+          if (!session.isOpenEnded) LinearProgressIndicator(value: progress.clamp(0, 1)),
           const SizedBox(height: AppSpacing.lg),
           Wrap(
             key: const ValueKey('active-focus-actions'),

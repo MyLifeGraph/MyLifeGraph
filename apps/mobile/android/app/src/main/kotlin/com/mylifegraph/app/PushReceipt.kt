@@ -2,6 +2,9 @@ package com.mylifegraph.app
 
 /** Pure receipt gate; native permission and the atomic account check remain required. */
 internal object PushReceipt {
+    private val destinations = setOf("/planner", "/insights", "/morning-calibration", "/quick-mood-check-in", "/dashboard")
+    fun allowsDestination(route: String?): Boolean = route in destinations
+
     fun accepts(data: Map<String, String>, active: Boolean, owner: String?,
                 session: String?, registration: String?, nowSeconds: Long): Boolean {
         if (!active || owner == null || session == null || registration == null ||
@@ -14,6 +17,7 @@ internal object PushReceipt {
             "deadlines" -> "/planner"
             "morning" -> "/morning-calibration"
             "evening" -> "/quick-mood-check-in"
+            "streak_10h", "streak_5h" -> "/dashboard"
             else -> return false
         }
         if (data["destination"] != expectedRoute) return false

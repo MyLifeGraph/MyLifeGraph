@@ -20,9 +20,10 @@ class FocusTimerGateway {
       'sessionId': session?.id,
       if (session != null)
         'startedAtEpochMs': session.startedAt.millisecondsSinceEpoch,
-      if (session != null)
+      if (session?.isOpenEnded == true) 'openEnded': true,
+      if (session != null && !session.isOpenEnded)
         'endsAtEpochMs': session.startedAt
-            .add(Duration(minutes: session.plannedMinutes))
+            .add(Duration(minutes: session.plannedMinutes!))
             .millisecondsSinceEpoch,
     });
   }

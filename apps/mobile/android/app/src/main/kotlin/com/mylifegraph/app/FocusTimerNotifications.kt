@@ -32,23 +32,27 @@ object FocusTimerNotifications {
         if(id==null) { clear(c,null); return }
         require(id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "Invalid Focus timer identity." }
         val start=(args["startedAtEpochMs"] as? Number)?.toLong() ?: error("Missing Focus start.")
-        val end=(args["endsAtEpochMs"] as? Number)?.toLong() ?: error("Missing Focus end.")
-        require(start>0 && end-start in 300_000..PhoneLockPolicy.MAX_TIMER_MS) { "Invalid Focus duration." }
+        val openEnded=args["openEnded"]==true
+        val end=if(openEnded) 0L else (args["endsAtEpochMs"] as? Number)?.toLong() ?: error("Missing Focus end.")
+        require(!openEnded || args["endsAtEpochMs"]==null) { "Open-end Focus has no deadline." }
+        require(start>0 && (openEnded || end-start in 300_000..PhoneLockPolicy.MAX_TIMER_MS)) { "Invalid Focus duration." }
         val p=prefs(c)
         if(p.getString("id",null)!=id) {
-            val remaining=(end-System.currentTimeMillis()).coerceIn(0,end-start)
+            val remaining=if(openEnded) 0L else (end-System.currentTimeMillis()).coerceIn(0,end-start)
             check(p.edit().putString("id",id).putLong("end",end).putLong("start",start)
                 .putLong("elapsedEnd",SystemClock.elapsedRealtime()+remaining).putInt("boot",boot(c))
+                .putBoolean("openEnded",openEnded)
+                .putLong("elapsedStart",FocusStopwatchClock.anchor(start,System.currentTimeMillis(),SystemClock.elapsedRealtime()))
                 .putBoolean("notified",false).remove("open").commit()) { "Could not save Focus timer." }
             published=""
-        } else require(p.getLong("end",0)==end && p.getLong("start",0)==start) { "Focus timer changed." }
+        } else require(p.getLong("end",0)==end && p.getLong("start",0)==start && p.getBoolean("openEnded",false)==openEnded) { "Focus timer changed." }
         sync(c)
     }
     @Synchronized fun clear(c:Context,expected:String?) {
         val p=prefs(c)
         if(expected!=null && p.getString("id",null)!=expected) return
         cancelDeadline()
-        check(p.edit().remove("id").remove("open").remove("end").remove("start").remove("elapsedEnd").remove("notified").commit())
+        check(p.edit().remove("id").remove("open").remove("end").remove("start").remove("elapsedEnd").remove("notified").remove("openEnded").remove("elapsedStart").commit())
         c.getSystemService(NotificationManager::class.java).cancel(TAG,ID)
         c.getSystemService(AlarmManager::class.java).cancel(alarm(c))
         published=""
@@ -76,10 +80,15 @@ object FocusTimerNotifications {
     @Synchronized fun sync(c:Context) {
         val p=prefs(c); val id=p.getString("id",null) ?: return
         val end=p.getLong("end",0); val duration=end-p.getLong("start",0)
-        val remaining=PhoneLockPolicy.remaining(end,p.getLong("elapsedEnd",0),duration,p.getInt("boot",-2),boot(c),System.currentTimeMillis(),SystemClock.elapsedRealtime())
+        val openEnded=p.getBoolean("openEnded",false)
+        val remaining=if(openEnded) 0L else PhoneLockPolicy.remaining(end,p.getLong("elapsedEnd",0),duration,p.getInt("boot",-2),boot(c),System.currentTimeMillis(),SystemClock.elapsedRealtime())
         if(remaining>0 && p.getInt("boot",-2)!=boot(c)) {
             check(p.edit().putInt("boot",boot(c)).putLong("elapsedEnd",SystemClock.elapsedRealtime()+remaining).commit())
         }
+        if(openEnded && p.getInt("boot",-2)!=boot(c)) {
+            check(p.edit().putInt("boot",boot(c)).putLong("elapsedStart",FocusStopwatchClock.anchor(p.getLong("start",0),System.currentTimeMillis(),SystemClock.elapsedRealtime())).commit())
+        }
+        val focused=FocusStopwatchClock.elapsed(p.getLong("start",0),p.getLong("elapsedStart",SystemClock.elapsedRealtime()),p.getInt("boot",-2),boot(c),System.currentTimeMillis(),SystemClock.elapsedRealtime())
         // Android may batch the inexact alarm even while this process is alive.
         // Keep one local deadline too; no wake lock or foreground service.
         cancelDeadline()
@@ -94,11 +103,11 @@ object FocusTimerNotifications {
         val notifications=c.getSystemService(NotificationManager::class.java)
         if(!permissionAllowed(c)) { notifications.cancel(TAG,ID); published=""; return }
         if(Build.VERSION.SDK_INT>=26) {
-            notifications.createNotificationChannel(NotificationChannel(RUNNING,"Focus countdown",NotificationManager.IMPORTANCE_LOW))
+            notifications.createNotificationChannel(NotificationChannel(RUNNING,"Focus timer",NotificationManager.IMPORTANCE_LOW))
             notifications.createNotificationChannel(NotificationChannel(ENDED,"Focus timer finished",NotificationManager.IMPORTANCE_DEFAULT))
         }
-        val done=remaining==0L
-        val key="$id:$done"
+        val done=!openEnded && remaining==0L
+        val key="$id:$done:$openEnded"
         if(published==key && notifications.activeNotifications.any { it.tag==TAG && it.id==ID }) return
         if(done && p.getBoolean("notified",false)) return
         val intent=Intent(c,MainActivity::class.java).putExtra(OPEN,id)
@@ -108,15 +117,15 @@ object FocusTimerNotifications {
         val builder=if(Build.VERSION.SDK_INT>=26) Notification.Builder(c,channel) else Notification.Builder(c)
         builder.setSmallIcon(R.drawable.app_notification_mark)
             .setLargeIcon(BitmapFactory.decodeResource(c.resources,R.drawable.app_launcher_art))
-            .setContentTitle(if(done) "Focus timer finished" else "Focus session")
+            .setContentTitle(if(done) "Focus timer finished" else if(openEnded) "Focus session · No limit" else "Focus session")
             .setContentText(if(done) "Open your session to finish or reflect." else "Remaining · Tap to open your session")
             .setContentIntent(pending).setOngoing(!done).setAutoCancel(done).setOnlyAlertOnce(true)
             .setCategory(if(done) Notification.CATEGORY_REMINDER else Notification.CATEGORY_PROGRESS)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
         if(!done) {
-            builder.setWhen(System.currentTimeMillis()+remaining).setUsesChronometer(true).setChronometerCountDown(true)
+            builder.setWhen(if(openEnded) System.currentTimeMillis()-focused else System.currentTimeMillis()+remaining).setUsesChronometer(true).setChronometerCountDown(!openEnded)
                 .setSound(null).setVibrate(longArrayOf(0)).setPriority(Notification.PRIORITY_LOW)
-            if(Build.VERSION.SDK_INT>=26) builder.setTimeoutAfter(remaining)
+            if(!openEnded && Build.VERSION.SDK_INT>=26) builder.setTimeoutAfter(remaining)
         }
         val publicBuilder=if(Build.VERSION.SDK_INT>=26) Notification.Builder(c,channel) else Notification.Builder(c)
         builder.setPublicVersion(publicBuilder.setSmallIcon(R.drawable.app_notification_mark).setContentTitle("MyLifeGraph")

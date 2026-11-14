@@ -15,6 +15,9 @@ class PushSettingsState {
     if (checkinKeys.any(s.containsKey) && !checkinKeys.every(s.containsKey)) {
       throw const FormatException('Incomplete check-in push settings');
     }
+    if (s['streak'] != null && s['streak'] is! bool) {
+      throw const FormatException('Invalid streak push setting');
+    }
     for (final kind in ['morning', 'evening']) {
       if (s.containsKey(kind) &&
           (s[kind] is! bool ||

@@ -1,5 +1,14 @@
 # UI Language And Copy Contract
 
+## No limit Focus copy
+
+Use No limit for the manual open-ended choice and badge, No time limit in setup,
+and Time focused below the elapsed timer. Keep Custom and numbered minute labels
+centered without extra symbols. A separate Phone Lock timer says Separate timer;
+a fixed Focus-linked lock still says Session timer. An old server reports that
+No limit needs an updated server instead of claiming the session started.
+
+
 Phone Lock uses `Phone lock`, `Timer or NFC`, `Choose how to unlock`, `Review lock`,
 `Ready to lock?`, `Use with Focus`, `Phone / Emergency` and `Recovery options`.
 Its start review explicitly discloses a saved backup or 15-minute background
@@ -164,7 +173,12 @@ overlap explanation in the editor. Actions retain accessible tooltips.
 
 `Push reminders` is an optional Settings surface. Use `Important reminders`,
 `Before bedtime`, `Today's deadlines`, `Important patterns`, `Morning check-in`,
-`Evening check-in` and `Quiet hours`. Check-in times are profile-local. Manual
+`Evening check-in`, `Streak reminders` and `Quiet hours`. Streak subtitle:
+`10 h and 5 h before catch-up closes.` Fixed native title: `Check-in reminder`;
+body: `About 10 hours left to catch up on missed check-ins. Open Today to finish.`
+(the second uses 5 hours). No private contents or claim that every run becomes zero.
+Limits distinguish two Streak, two check-in and two other reminders per 24h,
+with patterns once per 30 days. Check-in times are profile-local. Manual
 Capture uses `Today · Change date`, calendar `Check-in date` / `Done` / `Open`,
 and `Status unavailable · Retry` for failed history reads. Date changes preserve
 route-local drafts without confirmation; leaving still confirms unsaved answers.
@@ -173,7 +187,7 @@ The selected date remains visible throughout review. Plan removal says
 and confirmation explicitly preserves Focus history and imported source events.
 The first opt-in explicitly names Google Firebase, device linkage and generic
 copy; never describe OS permission as Cloud consent. Keep opt-out, unavailable
-APK/server states and the two-per-24-hours / monthly-pattern limits clear.
+APK/server states and the separate two-per-24-hours buckets / monthly-pattern limits clear.
 Do not promise delivery after force-stop or while offline.
 
 Health Connect uses `Connect`, `Sync now`, `Stop sharing` and `Delete imported data`.

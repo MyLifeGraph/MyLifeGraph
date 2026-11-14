@@ -720,16 +720,18 @@ def _bucket_identity(
     return key, start, date(last_year, 12, 31)
 
 
+def _focus_planned_minutes(row: dict[str, Any]) -> int | None:
+    if row.get("planned_minutes") is None and isinstance(row.get("metadata"), dict) and row["metadata"].get("contract_version") == "focus-open-end-v1":
+        return None
+    return _required_integer(row.get("planned_minutes"), minimum=5, maximum=240)
+
+
 def _focus_option(row: dict[str, Any], *, zone: ZoneInfo) -> CoachFocusContextOption:
     return CoachFocusContextOption(
         focus_session_id=UUID(str(row.get("id"))),
         status=row.get("status"),
         local_started_at=_datetime(row.get("started_at")).astimezone(zone),
-        planned_minutes=_required_integer(
-            row.get("planned_minutes"),
-            minimum=5,
-            maximum=240,
-        ),
+        planned_minutes=_focus_planned_minutes(row),
         actual_minutes=_required_integer(
             row.get("actual_minutes"),
             minimum=0,
@@ -759,11 +761,7 @@ def _focus_selection(
         focus_session_id=UUID(str(row.get("id"))),
         status=row.get("status"),
         local_started_at=_datetime(row.get("started_at")).astimezone(zone),
-        planned_minutes=_required_integer(
-            row.get("planned_minutes"),
-            minimum=5,
-            maximum=240,
-        ),
+        planned_minutes=_focus_planned_minutes(row),
         actual_minutes=_required_integer(
             row.get("actual_minutes"),
             minimum=0,

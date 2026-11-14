@@ -6,6 +6,15 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+FOCUS_OPEN_END_VERSION = "focus-open-end-v1"
+
+
+class FocusOpenEndCapabilitiesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    contract_version: Literal[FOCUS_OPEN_END_VERSION] = FOCUS_OPEN_END_VERSION
+    origin: Literal["authenticated_backend"] = "authenticated_backend"
+    available: Literal[True] = True
+
 
 FocusSourceKind = Literal[
     "manual",
@@ -64,6 +73,11 @@ class ManualFocusStartRequest(BaseModel):
         if self.label is not None and self.label != self.label.strip():
             raise ValueError("manual Focus label must be trimmed")
         return self
+
+
+class OpenEndFocusStartRequest(ManualFocusStartRequest):
+    contract_version: Literal[FOCUS_OPEN_END_VERSION]
+    planned_minutes: None = None
 
 
 class ScheduledFocusStartRequest(BaseModel):
@@ -223,6 +237,21 @@ class FocusSessionResponse(BaseModel):
             if self.schedule_source.original_recovery_minutes != self.recovery_minutes:
                 raise ValueError("Scheduled Focus recovery changed")
         return self
+
+
+class FocusOpenEndSessionResponse(FocusSessionResponse):
+    contract_version: Literal[FOCUS_OPEN_END_VERSION]
+    planned_minutes: None
+    schedule_source: None
+
+
+FocusSessionResult = FocusSessionResponse | FocusOpenEndSessionResponse
+
+
+def parse_focus_session(value: Any) -> FocusSessionResult:
+    if isinstance(value, dict) and value.get("contract_version") == FOCUS_OPEN_END_VERSION:
+        return FocusOpenEndSessionResponse.model_validate(value)
+    return FocusSessionResponse.model_validate(value)
 
 
 def _transport_uuid(value: object, field: str) -> None:

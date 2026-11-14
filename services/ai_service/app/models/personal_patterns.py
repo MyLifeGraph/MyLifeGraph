@@ -152,7 +152,7 @@ class PersonalPatternCorrelationPoint(BaseModel):
     local_started_at: datetime
     focus_quality: int = Field(ge=1, le=5)
     useful_progress: int = Field(ge=1, le=5)
-    planned_focus_minutes: int = Field(ge=5, le=240)
+    planned_focus_minutes: int | None = Field(ge=5, le=240)
     actual_focus_minutes: int = Field(ge=0, le=90 * 24 * 60)
     completed: int = Field(ge=0, le=1)
     sleep_hours: float | None = Field(default=None, gt=0, le=16)

@@ -11,6 +11,14 @@ import java.util.TimeZone
 
 class FocusProtectionCoreTest {
     @Test
+    fun openEndProtectionHasNoFabricatedDeadlineButEmergencyReleaseStillWins() {
+        val lease = LocalFocusLease("stopwatch", 1000L, 0L, openEnded = true)
+        assertTrue(lease.isActive(1000L + 5 * 24 * 60 * 60 * 1000L))
+        assertFalse(lease.copy(state = LocalFocusLease.STATE_EMERGENCY_RELEASED).isActive(2000L))
+        assertFalse(LocalFocusLease("timed", 1000L, 2000L).isActive(2000L))
+    }
+
+    @Test
     fun combinedRulesUseOrAndRoundtripWithoutChangingOtherApps() {
         val zone = TimeZone.getTimeZone("UTC")
         val night = AppBlockingRule(true, true, false, AppBlockingSchedule("weekly", setOf(1), 1320, 420))

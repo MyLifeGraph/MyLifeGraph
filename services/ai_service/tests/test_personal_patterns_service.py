@@ -665,3 +665,14 @@ def test_fingerprint_ignores_sleep_episodes_not_linked_to_a_rated_session() -> N
 
     assert first.evidence_fingerprint == second.evidence_fingerprint
     assert second.correlation_points[0].planned_focus_minutes == 45
+
+
+def test_open_end_focus_keeps_measured_learning_without_invented_plan():
+    from app.services.personal_patterns_service import _sessions, PersonalPatternsDataError
+    row = {"id": "stopwatch", "status": "completed", "started_at": "2026-07-25T09:00:00Z", "ended_at": "2026-07-25T09:37:00Z", "planned_minutes": None, "actual_minutes": 37, "metadata": {"contract_version": "focus-open-end-v1"}}
+    args = {"starts_at": NOW-timedelta(days=7), "ends_at": NOW, "zone": ZoneInfo("Europe/Berlin")}
+    session = _sessions([row], **args)[0]
+    assert session.planned_minutes is None and session.actual_minutes == 37
+    for invalid in ({**row, "metadata": {}}, {**row, "planned_minutes": 0}, {**row, "actual_minutes": 38}):
+        with pytest.raises(PersonalPatternsDataError):
+            _sessions([invalid], **args)

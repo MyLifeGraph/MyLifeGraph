@@ -17,6 +17,7 @@ class PushSettings(BaseModel):
     patterns: bool = Field(strict=True)
     morning: bool = Field(default=False, strict=True)
     evening: bool = Field(default=False, strict=True)
+    streak: bool | None = Field(default=None, strict=True)
     morning_time: str = Field(default="08:00", pattern=_CLOCK)
     evening_time: str = Field(default="20:00", pattern=_CLOCK)
     quiet_start: str = Field(pattern=_CLOCK)
@@ -56,6 +57,7 @@ class PushCommand(BaseModel):
     patterns: bool | None = Field(default=None, strict=True)
     morning: bool | None = Field(default=None, strict=True)
     evening: bool | None = Field(default=None, strict=True)
+    streak: bool | None = Field(default=None, strict=True)
     morning_time: str | None = Field(default=None, pattern=_CLOCK)
     evening_time: str | None = Field(default=None, pattern=_CLOCK)
     quiet_start: str | None = Field(default=None, pattern=_CLOCK)
@@ -68,10 +70,14 @@ class PushCommand(BaseModel):
         # Keep historical request fingerprints byte-shape compatible: adding
         # null extension keys would break exact retries across an API rollout.
         excluded = {"morning", "evening", "morning_time", "evening_time"} if self.morning is None else set()
+        if self.streak is None:
+            excluded.add("streak")
         return self.model_dump(mode="json", exclude=excluded)
 
     @model_validator(mode="after")
     def validate_command(self):
+        if self.streak is not None and self.command != "settings":
+            raise ValueError("Streak preference belongs to settings")
         checkins = (self.morning, self.evening, self.morning_time, self.evening_time)
         if any(value is not None for value in checkins):
             if self.command != "settings" or any(value is None for value in checkins):

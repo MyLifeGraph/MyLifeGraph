@@ -1,5 +1,20 @@
 # MyLifeGraph Mobile App
 
+## Local No limit Focus candidate
+
+Manual Focus supports `focus-open-end-v1` with a true elapsed stopwatch and manual
+Finish/Abandon. The equal 3×2 choices are 25/45/50, 90/No limit/Custom; large text
+wraps to fewer columns. Fixed scheduled Focus remains timed. No limit requires
+its authenticated backend capability and additive migration; an old server gives
+an honest error without a legacy write fallback. Timed V2 responses remain
+unchanged; nullable open-end rows require updated clients. Coach/Insights support
+absent planned time while retaining actual minutes. Android's optional local
+notification counts up without an expiry alarm. Phone Lock uses its independent
+Timer or NFC; emergency access is unchanged. Notification-shade resume no longer
+triggers a network reload that temporarily disables active-session controls.
+This work is local, not a published APK or live migration.
+
+
 Focus uses a compact header/start card and pull-to-refresh instead of a header
 refresh action. Duration, optional linkage, recovery and canonical start/finish
 behavior remain unchanged. Phone lock setup exposes an actionable
@@ -528,6 +543,14 @@ receipt checks the current owner/session/registration and expiry before showing
 fixed generic copy. Logout disables receipt before token cleanup; foreground
 resume refreshes registration. Force-stop/offline/OS restrictions can suppress
 delivery. The existing in-app Inbox remains a separate feature.
+The additional default-off **Streak reminders** checkbox appears only when the
+server exposes migration-backed support. It requests both ten/five-hour reminders
+before a missing day's existing catch-up deadline; master consent and Android
+permission are still required separately. Completed/unproven dates and quiet-hour
+windows are skipped; tapping the generic notification opens Today. Old servers
+hide this control; updated native receipts are required. Existing check-in tap
+routes remain supported. Quiet-hour controls wrap at narrow/large-text sizes
+without changing the ordinary row or settings semantics.
 Builds use the public Firebase client config via `FIREBASE_ANDROID_CONFIG_BASE64`
 or ignored `android/app/google-services.json`; no sender/service-account key is
 allowed in Flutter. The signed release workflow requires the matching protected

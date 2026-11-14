@@ -2,6 +2,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/features/focus/domain/focus_session.dart';
 
 void main() {
+  test('open-end rows preserve absence of a plan and measured terminal minutes', () {
+    final row = {..._activeRow(), 'planned_minutes': null, 'metadata': {'contract_version': focusOpenEndVersion}};
+    final active = FocusSession.fromRow(row);
+    expect(active.isOpenEnded, isTrue);
+    expect(active.requiresBackendLifecycle, isTrue);
+    final completed = FocusSession.fromRow({...row, 'status': 'completed', 'ended_at': '2026-07-11T10:37:00Z', 'actual_minutes': 37});
+    expect(completed.actualMinutes, 37);
+    expect(completed.plannedMinutes, isNull);
+    expect(() => FocusSession.fromRow({...row, 'metadata': {}}), throwsA(isA<FocusCommandException>()));
+    expect(() => FocusSession.fromRow({...row, 'planned_minutes': 45}), throwsA(isA<FocusCommandException>()));
+  });
+
   group('Focus enums and target options', () {
     test('status and target-kind parsers accept only exact known codes', () {
       for (final status in FocusSessionStatus.values) {

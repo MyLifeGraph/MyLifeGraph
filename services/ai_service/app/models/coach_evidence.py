@@ -79,7 +79,7 @@ class CoachFocusEvidenceSelection(BaseModel):
     focus_session_id: UUID = Field(strict=False)
     status: Literal["completed", "abandoned"]
     local_started_at: datetime = Field(strict=False)
-    planned_minutes: int = Field(ge=5, le=240)
+    planned_minutes: int | None = Field(ge=5, le=240)
     actual_minutes: int = Field(ge=0, le=90 * 24 * 60)
     focus_quality: int | None = Field(default=None, ge=1, le=5)
     useful_progress: int | None = Field(default=None, ge=1, le=5)

@@ -1,11 +1,25 @@
 # Notification Delivery V1 Contract
 
+## Local open-end Focus chronometer
+
+`focus-open-end-v1` additionally mirrors canonical No limit Focus through the
+existing optional device-local Focus notification. Explicit openEnded=true omits
+endsAtEpochMs. It counts upward, has no deadline alarm, timeout or completion
+reminder; manual Finish/Abandon clears by exact session identity. Existing timed
+payloads and completion reminders remain unchanged. Elapsed display uses a saved
+monotone anchor within one boot, rebased from canonical start after reboot. No
+per-second database writes, wake lock, foreground-service permission, push consent
+or new notification data source is added. OS notification permission/privacy still
+apply; private lock-screen content remains generic. This is local-source/JVM
+verification only, not a claim of physical background delivery.
+
+
 ## Optional Android push V1
 
 This additive transport is independent of the existing foreground V1 contract.
 `android-push-v1` uses `GET/POST /v1/push`, verified bearer owner/session identity,
 and explicit `android-push-consent-v1` consent. Settings exposes **Push reminders**:
-master opt-in/out, sleep/deadline/pattern and Morning/Evening switches, check-in
+master opt-in/out, sleep/deadline/pattern, Streak and Morning/Evening switches, check-in
 times and quiet hours. Nothing enables
 push by default. Android permission is required separately. Web can disable the
 account setting but does not register a browser or native device.
@@ -47,7 +61,7 @@ blindly retried. Old sessions cannot register, update or receive new sends.
 
 Owner-locked SQL reservations recheck consent/category, session, pending deletion,
 timezone/revision, quiet hours, owner-unique dedupe and separate rolling caps:
-**2 check-in reminders plus 2 other reminders per 24 hours**. Check-ins cannot
+**2 streak reminders, 2 check-in reminders and 2 other reminders per 24 hours**. Check-ins cannot
 consume the existing recommendation/deadline budget or vice versa. Pattern
 attempts additionally have a **30-day** cooldown. Attempts count even
 after send failure, opt-out or timezone changes. A final read rechecks the reserved
@@ -58,7 +72,7 @@ only when they still match the owner's registered token.
 Android receives data-only messages with zero queue lifetime, short expiry and
 owner/session/registration identities. Native receipt rechecks all identities,
 local enablement, OS permission and duplicate attempt ID; only fixed generic text
-and allowlisted Planner/Insights/check-in routes are displayed. Logout first disables local
+and allowlisted Planner/Insights/check-in/Today routes are displayed. Logout first disables local
 receipt and removes this feature's notifications, then deletes the Firebase token.
 Foreground/resume refreshes registration. An already dispatched message cannot be
 recalled after a remote settings change; local opt-out/account switch rejects it.
@@ -77,6 +91,47 @@ client configuration through the protected
 `pilot-release` environment secret `FIREBASE_ANDROID_CONFIG_BASE64`. This is not a
 sender credential. Installed-device, migration and deployed-worker evidence must
 be recorded separately in `verification.md` before claiming live completion.
+
+### Optional streak catch-up reminders
+
+Migration `20261114163504_streak_push_reminders.sql` adds an independent,
+default-off `streak` preference under the existing `android-push-v1` contract.
+The supporting DB GET explicitly returns false; older DB/API responses omit it
+(or return null), so new clients hide the switch. POST with an explicit streak
+field requires the migration-backed capability first. Old settings commands omit
+the field entirely, preserving both historical request fingerprints and any saved
+Streak preference. No master consent or category is enabled automatically.
+
+The existing five-minute worker checks two 15-minute windows: ten and five hours
+before the SAME profile-local day-end +48 elapsed-hour deadline used by Today.
+IANA skipped/repeated midnight rules apply. A missing date must have a preceding
+valid, timely completed streak date. Accounts without that evidence get no reminder.
+Both valid Morning and Evening projections plus immutable timely server receipts
+are required for completion. This neither credits missing days nor changes the
+streak formula, expiry or historical captures. Generic copy describes the catch-up
+deadline; it does not claim every displayed run necessarily becomes zero then.
+
+Service-only `get_streak_push_candidates_v1` reads coarse receipt/window evidence;
+the worker also reuses the existing strict Capture parser before reservation and
+immediately before send. The owner-locked reservation and final SQL check recheck
+window/date/offset, live completion, consent, revision, timezone, device/session,
+deleting-account and quiet-hour guards. Private deadline/window/receipt and
+reservation-check helpers remain invoker/service-only. There is no client ledger
+access or new definer. Two independent Streak attempts per rolling 24h do not
+consume the existing two check-in or two other slots. Date+offset dedupe survives
+worker restarts; failed/skipped reserved sends still consume their slot.
+
+Quiet hours suppress a due window rather than rescheduling or sending after it.
+An already completed date suppresses the second reminder. Unavailable/malformed
+source evidence skips the category; no fallback invents a deadline. FCM remains
+TTL 0 with a short expiry and generic fixed copy. Native `streak_10h`/`streak_5h`
+receipts permit only Today (`/dashboard`), retaining all existing receipt identity,
+permission, expiry and dedupe checks. Tap routing also preserves the earlier
+Morning/Evening destinations through the same central native allowlist.
+
+Rollout: reviewed additive migration, API, updated Android APK, then explicit user
+opt-in. Old APKs reject these new kinds. This local source/test change does not
+claim a hosted migration, enabled worker or real device delivery.
 
 ## Existing foreground V1 contract
 

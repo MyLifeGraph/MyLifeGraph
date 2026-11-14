@@ -329,3 +329,14 @@ def _rows(*, daily: list[dict]) -> CoachEvidenceRows:
         weekly_reviews=empty,
         task_lifecycle=empty,
     )
+
+
+def test_open_end_focus_context_uses_actual_time_and_rejects_unversioned_null():
+    from app.services.coach_evidence_service import _focus_option, _focus_selection, CoachEvidenceError
+    from zoneinfo import ZoneInfo
+    row = {"id": str(FOCUS_ID), "status": "completed", "started_at": "2026-07-25T09:00:00Z", "planned_minutes": None, "actual_minutes": 37, "metadata": {"contract_version": "focus-open-end-v1"}}
+    for parse in (_focus_option, _focus_selection):
+        value = parse(row, zone=ZoneInfo("UTC"))
+        assert value.planned_minutes is None and value.actual_minutes == 37
+        with pytest.raises(CoachEvidenceError, match="invalid duration"):
+            parse({**row, "metadata": {}}, zone=ZoneInfo("UTC"))

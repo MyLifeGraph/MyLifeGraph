@@ -1,3 +1,5 @@
+const focusOpenEndVersion = 'focus-open-end-v1';
+
 enum FocusSessionStatus {
   active('active'),
   completed('completed'),
@@ -191,6 +193,14 @@ class FocusSession {
   });
 
   factory FocusSession.fromV2Json(Map<String, dynamic> json) {
+    return FocusSession._fromBackend(json);
+  }
+
+  factory FocusSession.fromBackendJson(Map<String, dynamic> json) =>
+      FocusSession._fromBackend(json,
+          openEnd: json['contract_version'] == focusOpenEndVersion);
+
+  static FocusSession _fromBackend(Map<String, dynamic> json, {bool openEnd = false}) {
     _exactKeys(
       json,
       const {
@@ -213,7 +223,7 @@ class FocusSession {
       },
       'Focus session V2',
     );
-    if (json['contract_version'] != 'focus-session-v2' ||
+    if (json['contract_version'] != (openEnd ? focusOpenEndVersion : 'focus-session-v2') ||
         json['origin'] != 'authenticated_backend' ||
         json['replayed'] is! bool ||
         json['entry_date'] is! String ||
@@ -237,11 +247,15 @@ class FocusSession {
       'task_id': json['task_id'],
       'habit_id': json['habit_id'],
       'metadata': {
+        'contract_version': openEnd ? focusOpenEndVersion : 'focus-session-v2',
         'entry_date': json['entry_date'],
         if (recoveryMinutes > 0) 'recovery_minutes': recoveryMinutes,
       },
       'updated_at': json['updated_at'],
     });
+    if (openEnd && (base.plannedMinutes != null || scheduleSource != null)) {
+      throw const FocusCommandException('Open-end Focus response is invalid.');
+    }
     if (scheduleSource != null &&
         (base.targetKind != FocusTargetKind.task ||
             scheduleSource.originalRecoveryMinutes != base.recoveryMinutes)) {
@@ -279,6 +293,8 @@ class FocusSession {
     final entryDate = _optionalEntryDate(row['metadata']);
     final recoveryMinutes = _optionalRecoveryMinutes(row['metadata']);
     final plannedMinutes = _integer(row['planned_minutes']);
+    final openEnd = row['metadata'] is Map &&
+        (row['metadata'] as Map)['contract_version'] == focusOpenEndVersion;
     final endedAt = _optionalTimestamp(row['ended_at']);
     final actualMinutes = _optionalInteger(row['actual_minutes']);
     final taskId = _optionalTargetId(row['task_id']);
@@ -287,9 +303,8 @@ class FocusSession {
         status == null ||
         startedAt == null ||
         updatedAt == null ||
-        plannedMinutes == null ||
-        plannedMinutes < 5 ||
-        plannedMinutes > 240 ||
+        (openEnd ? row['planned_minutes'] != null :
+            (plannedMinutes == null || plannedMinutes < 5 || plannedMinutes > 240)) ||
         taskId != null && habitId != null) {
       throw const FocusCommandException('Focus session response is invalid.');
     }
@@ -333,7 +348,7 @@ class FocusSession {
   final FocusSessionStatus status;
   final DateTime startedAt;
   final DateTime? endedAt;
-  final int plannedMinutes;
+  final int? plannedMinutes;
   final int recoveryMinutes;
   final int? actualMinutes;
   final String? label;
@@ -345,6 +360,7 @@ class FocusSession {
   final String? entryDate;
 
   bool get isActive => status == FocusSessionStatus.active;
+  bool get isOpenEnded => plannedMinutes == null;
 
   String get snapshotEntryDate {
     final explicitEntryDate = entryDate;
@@ -425,7 +441,8 @@ class FocusSession {
 
   static bool _requiresBackendLifecycle(Object? metadata) {
     if (metadata is! Map) return false;
-    return metadata['contract_version'] == 'focus-session-v2';
+    return metadata['contract_version'] == 'focus-session-v2' ||
+        metadata['contract_version'] == focusOpenEndVersion;
   }
 
   static String? _optionalText(Object? value) {
@@ -664,7 +681,7 @@ class FocusStartDraft {
     String? label,
   })  : targetId = _normalizedTargetId(targetId),
         label = _normalizedLabel(label) {
-    if (plannedMinutes < 5 || plannedMinutes > 240) {
+    if (plannedMinutes != null && (plannedMinutes! < 5 || plannedMinutes! > 240)) {
       throw const FocusCommandException(
         'Focus duration must be between 5 and 240 minutes.',
       );
@@ -682,7 +699,7 @@ class FocusStartDraft {
     }
   }
 
-  final int plannedMinutes;
+  final int? plannedMinutes;
   final int recoveryMinutes;
   final FocusTargetKind? targetKind;
   final String? targetId;

@@ -223,31 +223,31 @@ class FocusProtectionLease {
     final sessionId = map['sessionId'];
     final startedAtMs = map['startedAtEpochMs'];
     final endsAtMs = map['endsAtEpochMs'];
+    final openEnded = map['openEnded'] == true;
     final state = FocusProtectionLeaseState.fromCode(map['state']);
     if (sessionId is! String ||
         sessionId.trim().isEmpty ||
         startedAtMs is! int ||
-        endsAtMs is! int ||
-        endsAtMs <= startedAtMs ||
+        (openEnded ? endsAtMs != null : (endsAtMs is! int || endsAtMs <= startedAtMs)) ||
         state == null) {
       throw const FormatException('Invalid focus protection lease.');
     }
     return FocusProtectionLease(
       sessionId: sessionId.trim(),
       startedAt: DateTime.fromMillisecondsSinceEpoch(startedAtMs),
-      endsAt: DateTime.fromMillisecondsSinceEpoch(endsAtMs),
+      endsAt: openEnded ? null : DateTime.fromMillisecondsSinceEpoch(endsAtMs as int),
       state: state,
     );
   }
 
   final String sessionId;
   final DateTime startedAt;
-  final DateTime endsAt;
+  final DateTime? endsAt;
   final FocusProtectionLeaseState state;
 
   bool get isActive =>
       state == FocusProtectionLeaseState.active &&
-      endsAt.isAfter(DateTime.now());
+      (endsAt == null || endsAt!.isAfter(DateTime.now()));
 }
 
 enum FocusProtectionWarning {
