@@ -40,6 +40,11 @@ reproduces three stale exact-identity assertions: the test still expects the old
 83-migration head/count/digest, whereas the complete new chain correctly has 85.
 Only those expected values (and the missing-intermediate count) are corrected;
 full digest equality, prefix, missing-history and privilege assertions remain.
+The subsequent run passes all 38 pgTAP files/766 assertions and then exposes the
+same stale 83-migration fixture in the PG17 restore precondition. Its exact
+head/count snapshot is also updated to 85; the pinned server version, role-safe
+flag, membership count, restored-source equality and real deletion replay stay
+unchanged. This is test metadata maintenance, not a relaxed recovery check.
 No production code or applied migration changes. Fresh hosted CI must pass on
 the corrected candidate before protected merge and deployment.
 
