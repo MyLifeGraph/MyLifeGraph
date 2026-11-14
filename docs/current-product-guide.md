@@ -306,7 +306,7 @@ erscheinen nur, wenn echte Werte vorhanden sind:
 | Previous-night sleep, quality, shortfall | nur eine gültige V4/V5-Schlafepisode mit exakt demselben lokalen Aufwach-/Focus-Tag und `woke_at` vor der Session |
 | Morning energy | nur wenn Morning vor Sessionstart erfasst wurde |
 | Rated focus time and completion | Tagessumme beziehungsweise Quote ausschließlich bewerteter terminaler `focus_sessions` |
-| Planned focus time | Tagessumme der an bewerteten Sessions gespeicherten geplanten Dauer |
+| Planned focus time | Tagessumme der an bewerteten Sessions gespeicherten geplanten Dauer; `No limit` bleibt ohne Planwert, ein gemischter Tag liefert dafür keine unvollständige Summe |
 | Rated focus quality and useful progress | vorhandene `focus-reflection-v1`-Bewertungen |
 
 Eine Korrelation benötigt mindestens sieben gemeinsame Tage; 7–13 Tage bleiben
@@ -373,7 +373,7 @@ Budget-, Calendar-, Plan- oder Belegungsdaten muss neu geprüft werden.
 | **Daily Briefing** | wählt deterministisch eine primäre und bis zu zwei unterstützende Aktionen; Today zeigt diese Rangfolge nicht als Nutzerentscheidung | aktueller Snapshot, ausführbare Actions, Dringlichkeit und Recovery-Schutz; keine Recommendation- oder Feedback-Quelle | `daily-briefing-v2` in `daily_briefings`; regelbasiert, nicht AI-geschrieben |
 | **Tasks** | endliche Aktionen mit Status und optionaler Deadline/Schätzung | direkte Nutzereingabe oder ein vom bestätigten Preparation Plan verwalteter Task | `tasks`; kein LLM |
 | **Habits** | wiederkehrende Routinen mit daily-, weekday- oder weekly-target-Cadence | Definition plus explizites completed/skipped/undo pro lokalem Datum | `habits`, `habit_logs`; kein LLM |
-| **Focus** | echter Timer, optional mit genau einem Task oder Habit verknüpft; gespeicherte Ritualpunkte werden vor Start lokal bestätigt/übersprungen, nach Abschluss kann ein lokaler Recovery-Countdown laufen | geplante Blockdauer oder Study Default, einmalig änderbare Dauer und gemessene verstrichene Zeit; Ritual-Häkchen werden nicht gespeichert | `focus_sessions` inklusive verwendeter Recovery-Minuten; kein eigener Pausendatensatz und kein LLM |
+| **Focus** | Timer oder manuelle `No limit`-Stoppuhr mit Finish/Abandon, optional mit genau einem Task oder Habit verknüpft; gespeicherte Ritualpunkte werden vor Start lokal bestätigt/übersprungen, nach Abschluss kann ein lokaler Recovery-Countdown laufen | geplante Blockdauer oder Study Default, bei `No limit` ausdrücklich keine geplante Endzeit; gemessene verstrichene Zeit und optionale laufende Android-Benachrichtigung; Ritual-Häkchen werden nicht gespeichert | `focus_sessions` inklusive verwendeter Recovery-Minuten; kein eigener Pausendatensatz und kein LLM |
 | **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; `planner-overview-v2` trennt aktive Habits, persistierte offene Tasks ohne positive Reservierung und noch unbestätigte Create-Previews und liefert zusätzlich aktuelle Task-Snapshots für explizit geprüfte Replans; normale Tasks können explizit den Study Rhythm verwenden, Habits nicht; freie Zeit berücksichtigt bestätigte Belegung einschließlich Recovery; eine aktive Klausur aktiviert zusätzlich den read-only 14-/7-Tage-Outlook mit hypothetisch geschütztem Schlaf | Task/Habit-Eingaben, primär Setup/manual commitments, Study-Revision, Planner/Preparation reservations, optional consented aktueller Import sowie neueste gültige Evening-/Morning-V4/V5-Schlaffakten | `planner-v1` für Mutationen; Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; Outlook speichert nichts und erzeugt weder Today-Eintrag noch Notification; kein LLM, Calendar-Write oder Auto-Replan |
 | **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus und Daily State | `weekly-review-v3` in `weekly_reviews`; kein Feedback-Fakt, kein LLM, keine Vorschlagserzeugung und keine Produktänderung |
 | **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie in `schedule_items` kopiert; im Coach nur als nicht vertrauenswürdige Snapshot-Daten, niemals als Anweisung |
@@ -410,7 +410,9 @@ Abgaben, für die jedes Vorkommen einen eigenen Preparation Plan erhalten soll.
   Cloud-Einwilligung. Garmin schreibt zunächst nach Health Connect; MyLifeGraph
   nutzt keinen direkten Garmin-Login. Imports ersetzen keine manuellen Ratings.
 - **Android Push:** separater Opt-in für wichtige Deadlines, belastbare
-  Schlafempfehlung und seltene stabile Focus-Muster. Firebase/FCM transportiert,
+  Schlafempfehlung, seltene stabile Focus-Muster sowie Morning/Evening- und
+  Streak-Erinnerungen. Streak erinnert zehn und fünf Stunden vor der bestehenden
+  Nachtragefrist; vollständige Check-ins unterdrücken den Versand. Firebase/FCM transportiert,
   die vorhandene VPS-API entscheidet regelbasiert. Quiet Hours, Kategorien und
   harte Spam-Grenzen; kein Web-Push und keine Zustellgarantie bei Force-stop/offline.
 - **Kompakte Navigation:** Inbox neben Settings, Coach-/Speech-Modelle direkt
@@ -432,7 +434,7 @@ Repository-Funktionen von der tatsächlich veröffentlichten Version.
 | **Schedule Item** | Wann bin ich jede Woche fest gebunden? | wiederkehrender Wochentag mit Start/Ende | nein | Setup; Ansicht in Today |
 | **Calendar Event** | Was stand in der importierten Datei? | konkreter importierter Zeitraum | nein, read-only | Settings → Calendar import |
 | **Preparation Block** | Wann reserviere ich einen Teil meiner Prüfungsvorbereitung? | konkretes lokales Datum im bestätigten Plan | nicht einzeln; Fortschritt kommt aus Focus | Preparation plans; Ansicht auch in Today |
-| **Focus Session** | Woran arbeite ich jetzt tatsächlich? | gemessener Timerblock | completed oder abandoned | Quick actions → Focus |
+| **Focus Session** | Woran arbeite ich jetzt tatsächlich? | gemessener Timerblock oder manuelle Stoppuhr ohne geplantes Ende | completed oder abandoned | Quick actions → Focus |
 
 ### Task
 

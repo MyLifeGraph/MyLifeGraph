@@ -1,6 +1,6 @@
 # Notification Delivery V1 Contract
 
-## Local open-end Focus chronometer
+## Device-local open-end Focus chronometer
 
 `focus-open-end-v1` additionally mirrors canonical No limit Focus through the
 existing optional device-local Focus notification. Explicit openEnded=true omits
@@ -130,8 +130,9 @@ permission, expiry and dedupe checks. Tap routing also preserves the earlier
 Morning/Evening destinations through the same central native allowlist.
 
 Rollout: reviewed additive migration, API, updated Android APK, then explicit user
-opt-in. Old APKs reject these new kinds. This local source/test change does not
-claim a hosted migration, enabled worker or real device delivery.
+opt-in. Old APKs reject these new kinds. Hosted migration, runtime and artifact
+evidence belongs in [Verification](verification.md#current-verified-baseline);
+none of it alone proves physical-device delivery.
 
 ## Existing foreground V1 contract
 

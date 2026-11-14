@@ -31,6 +31,74 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### Published RC44: No limit Focus and Streak reminders — 2026-11-14
+
+PR [77](https://github.com/MyLifeGraph/MyLifeGraph/pull/77) merged normally at
+18:26:25 UTC to `24f169d111bbbe4a870657afadd0b9e33dab2036`, with exactly the
+tested tree of `4f5e2544e629c48ea776091a62cfb5bd67f4447a`. Final required run
+[43625278189](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/43625278189)
+passes all seven gates: **2104 Flutter tests**, original reference goldens,
+**2070 backend tests passed / 2 skipped**, Android JVM/lint, web build,
+**38 pgTAP files / 766 assertions**, PG15/PG17 transition checks, full PG17
+restore/deletion replay, and **8 serial browser E2E**. The same app tree also
+passes **152 local Android JVM cases**. Initial CI exposed two stale migration
+identity test snapshots; only exact expected head/count/digest values changed.
+No assertion, golden, safety threshold, applied migration or dependency was relaxed.
+
+Annotated tag `v0.1.0-pilot.1-rc.44` names that exact Main commit. Protected signed
+build [43626697545](https://github.com/MyLifeGraph/MyLifeGraph/actions/runs/43626697545)
+passes; independent laptop `apksigner` and `aapt` confirm package
+`com.mylifegraph.app`, versionCode **10000149**, APK **153881261 bytes**, SHA-256
+`86679f233bf676fa5a283f07242409094e9883f3587384c245d882f5af40e4b2` and unchanged
+certificate `9c06793b9a5841527fd43289c338d6f23cfcc60eb471cc7fcb189a12c24de691`.
+Source SBOM SHA-256 is
+`869421fa3ff6a41ce3b36870beba2e18b4ba3bad820afd802c4e45252f0d8f87`.
+[Release 445502037](https://github.com/MyLifeGraph/MyLifeGraph/releases/tag/v0.1.0-pilot.1-rc.44)
+is published at **19:24:09 UTC**, non-draft, non-prerelease and Latest. All four
+uploaded asset sizes/digests match before publication; byte-download proof is
+required by each finalizer after publication.
+
+The production Cloud project `oscrunlndfrecjilojja` initially had 83 migrations.
+The fresh pre-rollout dry-run already finds both reviewed additive migrations
+installed; no duplicate apply is run. Applying actor/time is not established by
+this observation. The independent attestation confirms **85**, head
+`20261114163504_streak_push_reminders.sql`, identity SHA-256
+`6115290ea09c2092ebb186c5771fe8c9f55cd2d3621363d9f0234962664ea307`, unchanged
+69-entry recovery prefix and true deletion guard. **All 13 function-body SHA-256
+values** from the two migrations match the reviewed source exactly; both new RPCs
+remain service-only and the Streak preference is not automatically enabled.
+The normal local database is untouched.
+
+The existing fixed helpers prepare/seal and promote the exact tagged VPS source;
+public `/v1/health` and `/v1/ready` return 200 with RC44 source and the expected
+85-migration identity. Full project check passes with Coach ready. The analysis
+image revision remains
+`4d47a6a1688e4706587f85027a6ebc35a98041e4a15b9b92aa7401e11c067ca9`.
+No provider/configuration, OAuth/Auth callback, signing identity or unrelated
+service change is made. Automatic Vercel production
+`dpl_HSN4nKtjG5WRodyXhL7XNFcaLq4P` is READY for the same Main source; both
+existing public aliases return 200, CSP and the exact compiled source identity.
+
+The user explicitly approves removal of only the old original RC11 APK download.
+Its fresh hash matches published asset 589315746; **149714095 bytes** are removed,
+with **149721088 bytes** observed free-space increase. No other original download,
+runtime/rollback version, source, backup or signing material is removed. Laptop
+and VPS finalizers pass: each registers the verified new bundle and removes
+**154256116 bytes** of managed RC43 copies after fresh GitHub and downloaded-byte
+proof. VM finalization is still being checked before this protocol is closed.
+Initial VPS post-finalizer check passes with **16215457792 bytes** free, above the
+15-GiB reserve. Bounded Vercel cleanup refuses the in-flight target, then safely
+removes **3 obsolete app deployments** after READY; live plus two rollback
+sources and other protections remain.
+
+Evidence: ignored `.tools/release-20261114/`, separate VM release directory
+`~/.local/share/mylifegraph-release-rc44.2zLxPjy2`, and signed-source directory
+`~/.local/share/mylifegraph-rc44-signed.UcfQstWY`. This is automated/native-build,
+public identity/readiness and provider-capability evidence. Physical Samsung NFC
+RF, notification-shade/Doze, actual FCM receipt and a real authenticated Coach
+turn are not claimed. Streak reminders remain optional under Settings → Push
+reminders; both master consent and Android permission are required separately.
+
 ### RC44 release candidate and migration-identity test correction — 2026-11-14
 
 Release of the current Focus/Streak candidate is explicitly authorized. PR 77

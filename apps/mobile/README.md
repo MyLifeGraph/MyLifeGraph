@@ -1,6 +1,6 @@
 # MyLifeGraph Mobile App
 
-## Local No limit Focus candidate
+## No limit Focus
 
 Manual Focus supports `focus-open-end-v1` with a true elapsed stopwatch and manual
 Finish/Abandon. The equal 3×2 choices are 25/45/50, 90/No limit/Custom; large text
@@ -12,7 +12,9 @@ absent planned time while retaining actual minutes. Android's optional local
 notification counts up without an expiry alarm. Phone Lock uses its independent
 Timer or NFC; emergency access is unchanged. Notification-shade resume no longer
 triggers a network reload that temporarily disables active-session controls.
-This work is local, not a published APK or live migration.
+Release and hosted-migration evidence is recorded separately in
+[Verification](../../docs/verification.md#current-verified-baseline); physical
+Samsung notification/background acceptance is not inferred from those checks.
 
 
 Focus uses a compact header/start card and pull-to-refresh instead of a header

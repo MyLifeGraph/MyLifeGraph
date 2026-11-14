@@ -2,7 +2,7 @@
 
 ## Optional planned duration for No limit Focus
 
-The local `focus-open-end-v1` extension supplies measured actual time and ratings
+The optional `focus-open-end-v1` extension supplies measured actual time and ratings
 without planned_minutes. Pattern sessions validate the explicit metadata version
 before accepting null planned time. Correlation points retain that null; the client
 omits the planned-duration metric for a mixed day whose plan total would be

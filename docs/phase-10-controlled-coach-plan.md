@@ -2,7 +2,7 @@
 
 ## No limit Focus evidence compatibility
 
-For the local `focus-open-end-v1` extension, Focus context options and selected
+For the versioned `focus-open-end-v1` extension, Focus context options and selected
 Focus evidence permit null planned_minutes only for an explicitly versioned
 canonical row. They still expose measured actual minutes, status and optional
 ratings. The existing general context already preserves optional planned time.
