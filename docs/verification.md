@@ -82,10 +82,11 @@ existing public aliases return 200, CSP and the exact compiled source identity.
 The user explicitly approves removal of only the old original RC11 APK download.
 Its fresh hash matches published asset 589315746; **149714095 bytes** are removed,
 with **149721088 bytes** observed free-space increase. No other original download,
-runtime/rollback version, source, backup or signing material is removed. Laptop
-and VPS finalizers pass: each registers the verified new bundle and removes
+runtime/rollback version, source, backup or signing material is removed. Laptop,
+VM and VPS finalizers pass: each registers the verified new bundle and removes
 **154256116 bytes** of managed RC43 copies after fresh GitHub and downloaded-byte
-proof. VM finalization is still being checked before this protocol is closed.
+proof. The VM independently completes both full verification rounds before apply;
+its slower public GitHub transfer does not waive any hash, freshness or retention guard.
 Initial VPS post-finalizer check passes with **16215457792 bytes** free, above the
 15-GiB reserve. Bounded Vercel cleanup refuses the in-flight target, then safely
 removes **3 obsolete app deployments** after READY; live plus two rollback
