@@ -8,6 +8,40 @@ import 'package:my_life_graph/features/focus/domain/focus_session.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  test('existing timed start rejects an open-end response even for the same request id', () async {
+    final api = _RecordingApiClient(capabilityResponse: _capabilityResponse(), postResponse: {..._sessionResponse(), 'contract_version': focusOpenEndVersion, 'planned_minutes': null});
+    await expectLater(_source(api).startSession(sessionId: _sessionId, draft: FocusStartDraft(plannedMinutes: 25)), throwsA(isA<FocusCommandException>()));
+  });
+
+  test('No limit uses explicit capability and never invents a deadline', () async {
+    final api = _RecordingApiClient(capabilityResponse: {
+      'contract_version': focusOpenEndVersion, 'origin': 'authenticated_backend', 'available': true,
+    }, postResponse: {..._sessionResponse(), 'contract_version': focusOpenEndVersion, 'planned_minutes': null});
+    final source = _source(api);
+    final session = await source.startSession(sessionId: _sessionId, draft: FocusStartDraft(plannedMinutes: null, recoveryMinutes: 0));
+    expect(api.getPaths, ['/v1/focus/open-end/capabilities']);
+    expect(api.postPaths, ['/v1/focus/open-end/start']);
+    expect(api.lastBody!['planned_minutes'], isNull);
+    expect(api.lastBody!['contract_version'], focusOpenEndVersion);
+    expect(session.isOpenEnded, isTrue);
+    expect(session.requiresBackendLifecycle, isTrue);
+    expect(() => FocusSession.fromBackendJson({..._sessionResponse(), 'planned_minutes': null}), throwsA(isA<FocusCommandException>()));
+  });
+  for (final code in [401, 404, 500]) {
+    test('No limit capability $code never falls back to direct database writes', () async {
+      final api = _RecordingApiClient(capabilityError: AppException('unavailable', cause: ApiFailure(kind: ApiFailureKind.response, statusCode: code)));
+      await expectLater(_source(api).startSession(sessionId: _sessionId, draft: FocusStartDraft(plannedMinutes: null, recoveryMinutes: 0)), throwsA(anything));
+      expect(api.postPaths, isEmpty);
+      expect(api.getPaths, ['/v1/focus/open-end/capabilities']);
+    });
+  }
+  test('No limit refuses a timed or mismatched server response', () async {
+    for (final response in [_sessionResponse(), {..._sessionResponse(), 'contract_version': focusOpenEndVersion, 'planned_minutes': null, 'id': _blockId}]) {
+      final api = _RecordingApiClient(capabilityResponse: {'contract_version': focusOpenEndVersion, 'origin': 'authenticated_backend', 'available': true}, postResponse: response);
+      await expectLater(_source(api).startSession(sessionId: _sessionId, draft: FocusStartDraft(plannedMinutes: null, recoveryMinutes: 0)), throwsA(isA<FocusCommandException>()));
+    }
+  });
+
   test('strict capability enables the manual V2 start transport', () async {
     final api = _RecordingApiClient(
       capabilityResponse: _capabilityResponse(),

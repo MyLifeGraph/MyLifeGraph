@@ -205,13 +205,14 @@ class FocusProtectionManager(private val context: Context) {
         )
     }
 
-    fun activateLease(arguments: Map<*, *>): Map<String, Any?> {
+    fun activateLease(arguments: Map<*, *>, openEnded: Boolean = false): Map<String, Any?> {
         val sessionId = (arguments["sessionId"] as? String)?.trim().orEmpty()
         val startedAt = (arguments["startedAtEpochMs"] as? Number)?.toLong()
             ?: throw IllegalArgumentException("Missing lease start.")
-        val endsAt = (arguments["endsAtEpochMs"] as? Number)?.toLong()
+        val endsAt = if (openEnded) 0L else (arguments["endsAtEpochMs"] as? Number)?.toLong()
             ?: throw IllegalArgumentException("Missing lease end.")
-        require(sessionId.isNotEmpty() && startedAt > 0L && endsAt > startedAt) {
+        require(!openEnded || arguments["endsAtEpochMs"] == null) { "Open-end Focus has no deadline." }
+        require(sessionId.isNotEmpty() && startedAt > 0L && (openEnded || endsAt > startedAt)) {
             "Invalid Focus protection lease."
         }
         expireIfNeeded()
@@ -220,7 +221,7 @@ class FocusProtectionManager(private val context: Context) {
         val now = System.currentTimeMillis()
         store.setNativeFailure(false)
         val current = store.readLease()
-        val candidate = LocalFocusLease(sessionId, startedAt, endsAt)
+        val candidate = LocalFocusLease(sessionId, startedAt, endsAt, openEnded = openEnded)
         val reconciled = FocusProtectionDecision.reconcileActivation(
             currentLease = current,
             suppressedSessionId = store.suppressedSessionId(),
@@ -314,7 +315,7 @@ class FocusProtectionManager(private val context: Context) {
         val configuration = store.readConfiguration()
         var lease = store.readLease()
         var leaseBecameInactive = false
-        if (lease?.state == LocalFocusLease.STATE_ACTIVE && lease.endsAtEpochMs <= now) {
+        if (lease?.state == LocalFocusLease.STATE_ACTIVE && !lease.openEnded && lease.endsAtEpochMs <= now) {
             val expired = lease.copy(state = LocalFocusLease.STATE_EXPIRED)
             if (store.saveLease(expired)) {
                 lease = expired
@@ -496,6 +497,7 @@ class FocusProtectionManager(private val context: Context) {
     }
 
     private fun scheduleExpiryAlarm(lease: LocalFocusLease) {
+        if (lease.openEnded) { cancelExpiryAlarm(); return }
         handler.removeCallbacks(handlerExpiry)
         handler.postDelayed(
             handlerExpiry,
@@ -541,10 +543,11 @@ class FocusProtectionManager(private val context: Context) {
         "appRules" to appRules.mapValues { it.value.toMap() },
     )
 
-    private fun LocalFocusLease.toChannelMap(): Map<String, Any> = mapOf(
+    private fun LocalFocusLease.toChannelMap(): Map<String, Any?> = mapOf(
         "sessionId" to sessionId,
         "startedAtEpochMs" to startedAtEpochMs,
-        "endsAtEpochMs" to endsAtEpochMs,
+        "endsAtEpochMs" to (if (openEnded) null else endsAtEpochMs),
+        "openEnded" to openEnded,
         "state" to state,
     )
 

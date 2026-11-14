@@ -262,3 +262,27 @@ def test_finish_and_abandon_send_only_server_derived_terminal_intent() -> None:
                 },
             ),
         ]
+
+
+def test_open_end_api_authentication_owner_authority_and_transport():
+    from app.models.focus import FocusOpenEndSessionResponse
+    class OpenService(Service):
+        async def start_open_end(self, **kwargs):
+            self.calls.append(("open", kwargs))
+            return FocusOpenEndSessionResponse.model_validate({**_session(status="active").model_dump(), "contract_version": "focus-open-end-v1", "planned_minutes": None, "schedule_source": None})
+    async def run():
+        app = create_app()
+        service = OpenService()
+        override_dependency(app, get_token_verifier, Verifier())
+        override_dependency(app, get_focus_service, service)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            body = {"contract_version": "focus-open-end-v1", "request_id": str(SESSION_ID), "source_kind": "manual", "planned_minutes": None, "recovery_minutes": 0, "target_kind": None, "target_id": None}
+            assert (await client.get("/v1/focus/open-end/capabilities")).status_code == 401
+            headers = {"Authorization": "Bearer focus-token"}
+            assert (await client.get("/v1/focus/open-end/capabilities", headers=headers)).json()["available"] is True
+            assert (await client.post("/v1/focus/open-end/start", json={**body, "user_id": "another-owner"}, headers=headers)).status_code == 422
+            response = await client.post("/v1/focus/open-end/start", json=body, headers=headers)
+            assert response.status_code == 200, response.text
+            assert response.json()["planned_minutes"] is None
+            assert service.calls[0][1]["user_id"] == USER_ID
+    asyncio.run(run())

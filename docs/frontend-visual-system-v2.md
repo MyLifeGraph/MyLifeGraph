@@ -1,5 +1,25 @@
 # Frontend Visual System V2
 
+## Streak Push settings presentation
+
+The optional Streak reminder reuses the existing dense checkbox and subtitle in
+Push reminders; no new navigation, card or theme is introduced. Quiet-hour time
+controls keep their ordinary row, but use a wrapping layout at narrow widths or
+enlarged text so the label and both controls remain visible without overflow.
+This is responsive presentation only; consent, time selection and Save stay intact.
+
+## No limit Focus presentation
+
+Manual Focus uses equal duration cells in a 3×2 grid (25/45/50; 90/No limit/Custom)
+with centered labels and no choice icons. Selected cells use the theme primary
+fill/on-primary text; spacing, radius and borders use the existing chip system.
+Large text/narrow constraints reduce columns without clipping. The active No limit
+badge moves below its title when enlarged text needs that space. The active open-end
+card displays an elapsed timer, No limit badge and Time focused, retaining manual
+Finish/Abandon. No countdown end/progress is invented. Phone Lock's compact row
+remains and exposes independent Timer/NFC setup. All variants remain theme-owned.
+
+
 Focus uses the existing compact header, medium spacing and a dense Phone lock row
 above Start, retaining a full touch target and theme-owned material. Redundant
 header/composer prose and the refresh icon are removed; pull-to-refresh uses the

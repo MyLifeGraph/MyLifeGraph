@@ -1,5 +1,19 @@
 # Personal Learning V1 Contract
 
+## Optional planned duration for No limit Focus
+
+The local `focus-open-end-v1` extension supplies measured actual time and ratings
+without planned_minutes. Pattern sessions validate the explicit metadata version
+before accepting null planned time. Correlation points retain that null; the client
+omits the planned-duration metric for a mixed day whose plan total would be
+incomplete, rather than interpreting missing time as zero. Actual time, quality,
+useful progress, completion, sleep pairing and the existing evidence thresholds
+remain unchanged. Timed-only sessions produce the same inputs and calculations.
+Coach Focus context/evidence likewise preserves actual minutes with optional plan.
+No new learning preference, causal claim, sleep target or scheduling authority is
+introduced. The extension requires coordinated updated clients/backend/migration.
+
+
 ## Corrected Focus time
 
 Explicit completed-session correction changes the canonical elapsed interval

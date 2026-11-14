@@ -25,6 +25,80 @@ import 'package:my_life_graph/features/focus_protection/application/phone_lock_g
 import 'package:my_life_graph/features/focus_protection/domain/phone_lock.dart';
 
 void main() {
+  for (final theme in [AppTheme.dark, AppTheme.light, AppTheme.space, AppTheme.liquidGlass]) {
+    testWidgets('No limit active controls fit 320px and 200% text in ${theme.brightness}/${theme.colorScheme.primary}', (tester) async {
+      tester.view.physicalSize = const Size(320, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final start = DateTime.now().subtract(const Duration(minutes: 23));
+      final source = _OpenEndFocusSource()..active = FocusSession(id: 'open-end', status: FocusSessionStatus.active, startedAt: start, plannedMinutes: null, updatedAt: start);
+      await tester.pumpWidget(ProviderScope(overrides: [
+        appConfigProvider.overrideWithValue(_realConfig),
+        focusSessionPageDataSourceProvider.overrideWithValue(source),
+        profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
+      ], child: MaterialApp(theme: theme, builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2)), child: child!), home: const Scaffold(body: FocusSessionPage()))));
+      await tester.pumpAndSettle();
+      expect(find.text('Time focused'), findsOneWidget);
+      expect(find.text('No limit'), findsOneWidget);
+      await tester.ensureVisible(find.text('Finish focus session'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Finish focus session')).onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('No limit choices align and stopwatch survives shade, reload and manual Finish', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    if (captureUiCatalog) await loadCatalogFonts();
+    final source = _OpenEndFocusSource();
+    await tester.pumpWidget(ProviderScope(overrides: [
+      appConfigProvider.overrideWithValue(_realConfig),
+      focusProtectionPlatformSupportedProvider.overrideWithValue(true),
+      focusProtectionGatewayProvider.overrideWithValue(UnsupportedFocusProtectionGateway()),
+      phoneLockGatewayProvider.overrideWithValue(_FocusPhoneDevice()),
+      focusSessionPageDataSourceProvider.overrideWithValue(source),
+      profileLocalDateSourceProvider.overrideWithValue(const SessionProfileLocalDateSource(session: null)),
+      snapshotRefreshServiceProvider.overrideWithValue(_CountingSnapshotRefresh()),
+    ], child: MaterialApp(debugShowCheckedModeBanner: false, theme: AppTheme.liquidGlass,
+      home: const AppBackdrop(child: Scaffold(backgroundColor: Colors.transparent, body: FocusSessionPage())))));
+    await tester.pumpAndSettle();
+    final cells = [for(final n in [25,45,50,90]) find.byKey(ValueKey('focus-duration-$n')), find.byKey(const ValueKey('focus-duration-open-end')), find.widgetWithText(ChoiceChip, 'Custom')];
+    final rects = [for(final c in cells) tester.getRect(c)];
+    for(final rect in rects) {expect(rect.width, closeTo(rects.first.width, .1)); expect(rect.height, rects.first.height);}
+    expect(rects[0].top, rects[1].top); expect(rects[1].top, rects[2].top);
+    expect(rects[3].top, rects[4].top); expect(rects[4].top, rects[5].top);
+    expect(rects[0].left, rects[3].left); expect(rects[2].right, rects[5].right);
+    await tester.tap(cells[4]); await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(cells[4]).selected, isTrue);
+    if (captureUiCatalog) await captureCatalog(tester, 'focus-no-limit-setup');
+    await tester.ensureVisible(find.text('Start focus session'));
+    await tester.tap(find.text('Start focus session')); await tester.pumpAndSettle();
+    expect(source.lastDraft!.plannedMinutes, isNull);
+    expect(find.text('Time focused'), findsOneWidget);
+    expect(find.textContaining('Ends at'), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('focus-countdown'))).data, isNot('00:00'));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Finish focus session')).onPressed, isNotNull);
+    if (captureUiCatalog) { await tester.pump(const Duration(seconds: 4)); await captureCatalog(tester, 'focus-no-limit-running'); }
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text('Time focused'), findsOneWidget);
+    await tester.tap(find.text('Finish focus session')); await tester.pumpAndSettle();
+    expect(source.finished, isTrue);
+    expect(find.text('Time focused'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   for (final failOnce in [false, true]) {
     testWidgets(
       'Phone lock follows canonical Focus start and retries independently: $failOnce',
@@ -157,6 +231,31 @@ void main() {
       await captureCatalog(tester, 'focus-phone-lock-entry');
     });
   }
+  testWidgets('notification shade does not reload or disable active Focus actions', (tester) async {
+    final source = _DelayedResumeFocusSource();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        appConfigProvider.overrideWithValue(_realConfig),
+        focusSessionPageDataSourceProvider.overrideWithValue(source),
+        profileLocalDateSourceProvider.overrideWithValue(
+          const SessionProfileLocalDateSource(session: null),
+        ),
+      ],
+      child: const MaterialApp(home: Scaffold(body: FocusSessionPage())),
+    ));
+    await tester.pumpAndSettle();
+    source.pending = Completer<FocusSession?>();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(source.reads, 1);
+    expect(tester.widget<FilledButton>(find.widgetWithText(
+      FilledButton, 'Finish focus session')).onPressed, isNotNull);
+    expect(tester.widget<TextButton>(find.widgetWithText(
+      TextButton, 'Abandon')).onPressed, isNotNull);
+    expect(find.byKey(const ValueKey('focus-countdown')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
   for (final outcome in ['active', 'ended', 'error']) {
     testWidgets('resume keeps the timer visible until sync resolves: $outcome',
         (tester) async {
@@ -258,12 +357,8 @@ void main() {
     expect(find.text('No finished sessions yet.'), findsOneWidget);
     expect(source.activeLoads, 2);
     expect(
-      tester
-          .widget<SegmentedButton<int>>(
-            find.byType(SegmentedButton<int>),
-          )
-          .selected,
-      {25},
+      _selectedFocusDuration(tester),
+      25,
     );
   });
 
@@ -565,12 +660,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester
-          .widget<SegmentedButton<int>>(
-            find.byType(SegmentedButton<int>),
-          )
-          .selected,
-      {60},
+      _selectedFocusDuration(tester),
+      60,
     );
     expect(find.text('60 min focus + 15 min recovery'), findsOneWidget);
   });
@@ -598,12 +689,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester
-          .widget<SegmentedButton<int>>(
-            find.byType(SegmentedButton<int>),
-          )
-          .selected,
-      {45},
+      _selectedFocusDuration(tester),
+      45,
     );
     expect(find.text('45 min focus + 10 min recovery'), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -697,12 +784,8 @@ void main() {
       findsNothing,
     );
     expect(
-      tester
-          .widget<SegmentedButton<int>>(
-            find.byType(SegmentedButton<int>),
-          )
-          .selected,
-      {45},
+      _selectedFocusDuration(tester),
+      45,
     );
     expect(
       tester
@@ -739,12 +822,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Saved Study Setup is unavailable'), findsNothing);
     expect(
-      tester
-          .widget<SegmentedButton<int>>(
-            find.byType(SegmentedButton<int>),
-          )
-          .selected,
-      {30},
+      _selectedFocusDuration(tester),
+      30,
     );
     expect(find.textContaining('recovery'), findsNothing);
 
@@ -850,12 +929,8 @@ void main() {
     expect(find.text('Recovery break'), findsNothing);
     expect(find.text('Start a focus block'), findsOneWidget);
     expect(
-      tester
-          .widget<SegmentedButton<int>>(
-            find.byType(SegmentedButton<int>),
-          )
-          .selected,
-      {30},
+      _selectedFocusDuration(tester),
+      30,
     );
     final preferences = await SharedPreferences.getInstance();
     expect(
@@ -1006,10 +1081,8 @@ void main() {
     expect(find.textContaining('20 min remaining'), findsOneWidget);
     expect(find.text('10 min recovery is fixed by the plan.'), findsOneWidget);
     expect(
-      tester
-          .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
-          .selected,
-      {20},
+      _selectedFocusDuration(tester),
+      20,
     );
     expect(find.text('25 min'), findsNothing);
     expect(
@@ -1196,10 +1269,8 @@ void main() {
       findsOneWidget,
     );
     expect(
-      tester
-          .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
-          .selected,
-      {20},
+      _selectedFocusDuration(tester),
+      20,
     );
     expect(find.text('Custom duration'), findsOneWidget);
     expect(find.textContaining('This session starts now.'), findsNothing);
@@ -1410,6 +1481,13 @@ int? _selectedFocusDuration(WidgetTester tester) {
       return minutes;
     }
   }
+  final custom = find.widgetWithText(ChoiceChip, 'Custom');
+  if (custom.evaluate().isNotEmpty && tester.widget<ChoiceChip>(custom).selected) {
+    for (final text in tester.widgetList<Text>(find.byType(Text))) {
+      final match = RegExp(r'^(\d+) min focus').firstMatch(text.data ?? '');
+      if (match != null) return int.parse(match.group(1)!);
+    }
+  }
   return null;
 }
 
@@ -1470,10 +1548,13 @@ class _FailOnceFocusSource extends FocusSessionSupabaseDataSource {
 
 class _DelayedResumeFocusSource extends _ActiveFocusSource {
   Completer<FocusSession?>? pending;
+  int reads = 0;
 
   @override
-  Future<FocusSession?> fetchActiveSession() =>
-      pending?.future ?? super.fetchActiveSession();
+  Future<FocusSession?> fetchActiveSession() {
+    reads++;
+    return pending?.future ?? super.fetchActiveSession();
+  }
 }
 
 class _ActiveFocusSource extends FocusSessionSupabaseDataSource {
@@ -2096,5 +2177,24 @@ class _FocusPhoneDevice extends PhoneLockGateway {
       nfcAvailable: true,
       nfcEnrolled: true,
     );
+  }
+}
+
+class _OpenEndFocusSource extends _PhoneFocusSource {
+  bool finished = false;
+  @override
+  Future<FocusSession> startSession({required String sessionId, required FocusStartDraft draft}) async {
+    await super.startSession(sessionId: sessionId, draft: draft);
+    final start = DateTime.now().subtract(const Duration(minutes: 23, seconds: 41));
+    return active = FocusSession(id: sessionId, status: FocusSessionStatus.active, startedAt: start, plannedMinutes: null, updatedAt: start);
+  }
+  @override
+  Future<bool> fetchFocusReflectionPromptEnabled() async => false;
+  @override
+  Future<FocusSession> finishSession(String sessionId) async {
+    final current = active!;
+    final end = DateTime.now();
+    finished = true; active = null;
+    return FocusSession(id: current.id, status: FocusSessionStatus.completed, startedAt: current.startedAt, endedAt: end, plannedMinutes: null, actualMinutes: end.difference(current.startedAt).inMinutes, updatedAt: end);
   }
 }

@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/focus_protection.dart';
 import 'focus_protection_host.dart';
 
+abstract interface class OpenEndFocusProtectionGateway {
+  Future<FocusProtectionStatus> activateOpenEndLease({required String sessionId, required DateTime startedAt});
+}
+
 abstract interface class FocusProtectionGateway {
   Future<FocusProtectionStatus> readStatus();
   Future<List<InstalledLaunchableApp>> listLaunchableApps();
@@ -21,7 +25,7 @@ abstract interface class FocusProtectionGateway {
   Future<FocusProtectionStatus> emergencyRelease(String sessionId);
 }
 
-class MethodChannelFocusProtectionGateway implements FocusProtectionGateway {
+class MethodChannelFocusProtectionGateway implements FocusProtectionGateway, OpenEndFocusProtectionGateway {
   const MethodChannelFocusProtectionGateway({
     MethodChannel channel = const MethodChannel(
       'com.mylifegraph.app/focus_protection',
@@ -29,6 +33,10 @@ class MethodChannelFocusProtectionGateway implements FocusProtectionGateway {
   }) : _channel = channel;
 
   final MethodChannel _channel;
+
+  @override
+  Future<FocusProtectionStatus> activateOpenEndLease({required String sessionId, required DateTime startedAt}) =>
+      _status('activateOpenEndLease', {'sessionId': sessionId, 'startedAtEpochMs': startedAt.millisecondsSinceEpoch});
 
   @override
   Future<FocusProtectionStatus> readStatus() => _status('readStatus');

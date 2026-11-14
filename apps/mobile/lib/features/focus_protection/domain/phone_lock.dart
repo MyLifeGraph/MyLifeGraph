@@ -29,7 +29,7 @@ class PhoneLockOptions {
 
 class PhoneLockLaunch {
   const PhoneLockLaunch({required this.focusMinutes, this.options});
-  final int focusMinutes;
+  final int? focusMinutes;
   final PhoneLockOptions? options;
 }
 

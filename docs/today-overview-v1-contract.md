@@ -118,6 +118,14 @@ five until backfill makes seven, or expiry leaves one. Completion counts only
 dates with both timely branches; Today's Progress and save-state flags remain
 independent of this grace.
 
+Optional default-off Streak Push reminders reuse this exact deadline via the
+shared `checkin_streak.streak_deadline` helper; Today retains its existing alias
+and calculation. Ten/five-hour reminders are additional delivery, not completion
+or streak authority. They require a missing date preceded by a valid timely
+completed date, and disappear from eligibility once both captures are saved.
+See [Notification Delivery](notification-delivery-v1-contract.md) for consent,
+quiet hours, dedupe, strict evidence checks and local-versus-live limitations.
+
 ## Today's Progress
 
 The progress bar is a transparent completion count, not a readiness or

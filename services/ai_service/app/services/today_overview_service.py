@@ -47,6 +47,7 @@ from app.repositories.today_planner_read_repository import (
 from app.services.deadline_plan_service import DeadlinePlanService
 from app.services.planning_availability import recurring_commitment_applies_on
 from app.services.snapshot_daily_state import valid_explicit_capture_kinds
+from app.services.checkin_streak import streak_deadline as _streak_deadline
 from app.services.today_planner_read_context import (
     TodayPlannerReadContext,
     TodayPlannerReadContextFactory,
@@ -69,17 +70,6 @@ class PlannerOverviewReader(Protocol):
 _T = TypeVar("_T")
 _CAPTURE_PAGE_SIZE = 100
 
-
-def _streak_deadline(entry_date: date, zone: ZoneInfo) -> datetime:
-    # 48 elapsed hours after profile-local day end, including DST transitions.
-    midnight = datetime.combine(entry_date + timedelta(days=1), time.min)
-    # Some IANA zones skip or repeat midnight (or an entire calendar date).
-    # Use the earliest instant at/after the boundary, never a guessed offset.
-    boundaries = [midnight.replace(tzinfo=zone, fold=fold).astimezone(UTC)
-                  for fold in (0, 1)]
-    end = min(instant for instant in boundaries
-              if instant.astimezone(zone).replace(tzinfo=None) >= midnight)
-    return end + timedelta(hours=48)
 
 
 class TodayOverviewService:

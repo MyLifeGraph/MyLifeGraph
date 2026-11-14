@@ -364,6 +364,10 @@ class FocusBlockAccessibilityService : AccessibilityService() {
             hideOverlay()
             return
         }
+        if (lease.openEnded) {
+            blockScreen?.updateSummary("Focus active · No limit")
+            return
+        }
         val remainingMs = (lease.endsAtEpochMs - System.currentTimeMillis()).coerceAtLeast(0)
         val totalSeconds = TimeUnit.MILLISECONDS.toSeconds(remainingMs)
         val minutes = totalSeconds / 60

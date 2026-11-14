@@ -317,3 +317,42 @@ def test_terminal_service_uses_one_captured_server_instant() -> None:
             },
         ),
     ]
+
+
+def test_open_end_start_is_explicit_owner_scoped_and_validated():
+    from app.models.focus import OpenEndFocusStartRequest, FOCUS_OPEN_END_VERSION
+    class OpenRepository(Repository):
+        async def start_open_end(self, **kwargs):
+            self.calls.append(("open_end", kwargs))
+            return {**_session(active=True), "contract_version": FOCUS_OPEN_END_VERSION, "planned_minutes": None, "schedule_source": None}
+    request = OpenEndFocusStartRequest.model_validate({
+        "contract_version": FOCUS_OPEN_END_VERSION, "source_kind": "manual",
+        "request_id": str(SESSION_ID), "planned_minutes": None,
+        "recovery_minutes": 0, "target_kind": None, "target_id": None,
+    })
+    repository = OpenRepository()
+    result = asyncio.run(FocusService(repository=repository, now=lambda: NOW).start_open_end(user_id=USER_ID, request=request))
+    assert result.planned_minutes is None
+    assert result.schedule_source is None
+    call = repository.calls[0][1]
+    assert call["user_id"] == USER_ID and call["now"] == NOW
+    assert len(call["request_fingerprint"]) == 64
+    assert "planned_minutes" not in call
+    from pydantic import ValidationError
+    for change in ({"planned_minutes": 45}, {"source_kind": "planner_task_block"}, {"user_id": "another-owner"}):
+        with pytest.raises(ValidationError):
+            OpenEndFocusStartRequest.model_validate({**request.model_dump(mode="json"), **change})
+
+
+def test_open_end_rejects_old_timed_response_and_conflict():
+    from app.models.focus import OpenEndFocusStartRequest, FOCUS_OPEN_END_VERSION
+    request = OpenEndFocusStartRequest.model_validate({"contract_version": FOCUS_OPEN_END_VERSION, "source_kind": "manual", "request_id": str(SESSION_ID), "recovery_minutes": 0, "target_kind": None, "target_id": None})
+    class WrongRepository(Repository):
+        async def start_open_end(self, **kwargs):
+            if self.conflict:
+                raise FocusPersistenceConflict("active_focus_session")
+            return _session(active=True)
+    with pytest.raises(ValueError, match="does not match"):
+        asyncio.run(FocusService(repository=WrongRepository()).start_open_end(user_id=USER_ID, request=request))
+    with pytest.raises(FocusConflictError):
+        asyncio.run(FocusService(repository=WrongRepository(conflict=True)).start_open_end(user_id=USER_ID, request=request))

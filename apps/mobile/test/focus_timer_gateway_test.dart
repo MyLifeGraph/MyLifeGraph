@@ -69,6 +69,14 @@ void main() {
       expect(status.warnings, isEmpty);
     },
   );
+  test('open-end notification is count-up without an end epoch', () async {
+    const channel = MethodChannel('test/open-end-timer');
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {calls.add(call);return null;});
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+    await const FocusTimerGateway(channel: channel).reconcile(FocusSession(id: 'stopwatch', status: FocusSessionStatus.active, startedAt: start, plannedMinutes: null, updatedAt: start));
+    expect(calls.single.arguments, {'sessionId': 'stopwatch', 'startedAtEpochMs': start.millisecondsSinceEpoch, 'openEnded': true});
+  });
   test(
     'native request contains only canonical timer fields; terminal clear is ID-bound',
     () async {

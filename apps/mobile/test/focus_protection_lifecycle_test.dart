@@ -440,7 +440,7 @@ class _LifecycleFocusSource extends FocusSessionSupabaseDataSource {
     required String sessionId,
     required FocusStartDraft draft,
   }) async {
-    active = _newSession(sessionId, plannedMinutes: draft.plannedMinutes);
+    active = _newSession(sessionId, plannedMinutes: draft.plannedMinutes!);
     events.add('start');
     if (loseFirstStartResponse && !_lostResponse) {
       _lostResponse = true;

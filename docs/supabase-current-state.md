@@ -8,7 +8,31 @@ migration is recorded in [Verification](verification.md#current-verified-baselin
 including the post-apply function identity and permission checks. Inspect live
 history before future rollout; repository inventory alone is not live evidence.
 
-The latest repository migration is `20261006135421_coach_operator_sol61_standard.sql`.
+The latest local candidate migration is `20261114163504_streak_push_reminders.sql`.
+It adds default-off `streak` Push settings, two receipt kinds and service-only
+`get_streak_push_candidates_v1(uuid,text,bigint)`. Private invoker helpers resolve
+the existing streak deadline, timely receipt pairs, due windows, locked reservations
+and final dispatch checks. Existing public Push signatures/OIDs/ACLs, owner locks,
+request identities, session/quiet/deletion/revision guards and old category caps
+remain; Streak has an independent rolling two-attempt cap. Old settings saves
+preserve the extension; GET supplies false as a migration-backed capability.
+No Capture row, receipt, streak credit, RLS or client grant changes. See
+[Notification Delivery](notification-delivery-v1-contract.md) for evidence rules
+and migration/API/APK rollout. No normal local or hosted application is claimed.
+
+The preceding local candidate migration is `20261109152918_focus_open_end_v1.sql`.
+It introduces `focus-open-end-v1`: nullable `focus_sessions.planned_minutes` only
+with the explicit metadata version, a backend-only invoker guard and service-only
+`start_focus_open_end_v1`. Existing owner/request locks, owned targets, RLS, grants,
+one-active-session uniqueness and terminal/correction authority are preserved.
+The V2 serializer additionally identifies open-end rows; timed payloads remain
+unchanged. No history is rewritten. Updated clients/backend are required before
+creating these rows; old clients reject null duration rather than fabricate one.
+The repository now has 85 migration files; this inventory does not claim live
+application. Only physically isolated RAM-database verification is authorized for
+this task; no normal local or hosted database has been migrated.
+
+The previous repository migration is `20261006135421_coach_operator_sol61_standard.sql`.
 It adds the explicit operator `gpt-6.1-sol`/Standard pair while preserving legacy
 `gpt-5.5`/Fast provenance. Drift-guarded replacements retain function identities,
 ACLs, owner lock order, request replay and operator budgets. The existing request
@@ -599,7 +623,7 @@ The app table constants live in
 | `ai_insights` | Insights list. |
 | `coach_messages` | Bounded validated user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI inserts/deletes turns. Current V4 answers use `coach-response-v4`; persisted free-agent V2/V3 and fixed-mode V1 rows remain readable. |
 | `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read it. Current free-question Coach snapshots may include sanitized owner memory detail as untrusted data; the old explicit selection projection remains only for V1/V2 compatibility and never changes content ownership. |
-| `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
+| `focus_sessions` | Real one-active-session Deep Work lifecycle with timed or explicitly versioned open-end planning and measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
 | `focus_session_schedule_sources` | Immutable optional origin for a scheduled Focus session: one owned Deadline or Planner Task block plus its original Focus interval and recovery snapshot. Forced owner-read RLS; direct application DML is forbidden and source deletion is restricted until Focus/account deletion removes the provenance. |
 | `focus_session_reflections` | At most one editable `focus-reflection-v1` rating per owned terminal Focus session, with two bounded scores and up to two controlled obstacles. Forced owner RLS; account deletion cascades it. |
 | `learning_preferences` | One revisioned `learning-preferences-v1` projection per owner for prompt, analysis, and separately gated learned-Planning choices. Learned planning cannot remain enabled while analysis is disabled. |
@@ -1484,6 +1508,9 @@ Older remote databases may contain CamelCase app tables:
 | `"MemoryEntry"` | `memory_entries` |
 
 ## Migration State
+
+`20261109152918_focus_open_end_v1.sql` is the undeployed local open-end Focus
+candidate described above. See the Focus contract for transport and compatibility.
 
 `20260514183000_initial_schema.sql` creates:
 

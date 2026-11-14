@@ -323,7 +323,7 @@ class PersonalPatternCorrelationPoint {
       localDate: _localDate(json, 'local_date'),
       focusQuality: _integer(json, 'focus_quality', minimum: 1, maximum: 5),
       usefulProgress: _integer(json, 'useful_progress', minimum: 1, maximum: 5),
-      plannedFocusMinutes: _integer(
+      plannedFocusMinutes: json['planned_focus_minutes'] == null ? null : _integer(
         json,
         'planned_focus_minutes',
         minimum: 5,
@@ -344,7 +344,7 @@ class PersonalPatternCorrelationPoint {
   final DateTime localDate;
   final int focusQuality;
   final int usefulProgress;
-  final int plannedFocusMinutes;
+  final int? plannedFocusMinutes;
   final int actualFocusMinutes;
   final int completed;
   final double? sleepHours;
@@ -357,6 +357,7 @@ class _DailyCorrelationValues {
   int count = 0;
   double focusMinutes = 0;
   double plannedFocusMinutes = 0;
+  bool hasCompletePlannedTime = true;
   double focusQuality = 0;
   double usefulProgress = 0;
   double completed = 0;
@@ -368,7 +369,11 @@ class _DailyCorrelationValues {
   void add(PersonalPatternCorrelationPoint point) {
     count += 1;
     focusMinutes += point.actualFocusMinutes;
-    plannedFocusMinutes += point.plannedFocusMinutes;
+    if (point.plannedFocusMinutes == null) {
+      hasCompletePlannedTime = false;
+    } else {
+      plannedFocusMinutes += point.plannedFocusMinutes!;
+    }
     focusQuality += point.focusQuality;
     usefulProgress += point.usefulProgress;
     completed += point.completed;
@@ -385,7 +390,7 @@ class _DailyCorrelationValues {
 
   Map<String, double> get values => {
     'focus_minutes': focusMinutes,
-    'planned_focus_minutes': plannedFocusMinutes,
+    if (hasCompletePlannedTime) 'planned_focus_minutes': plannedFocusMinutes,
     'focus_quality': focusQuality / count,
     'useful_progress': usefulProgress / count,
     'focus_completion_rate': completed / count * 100,

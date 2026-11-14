@@ -50,9 +50,10 @@ class _PhoneLockPageState extends ConsumerState<PhoneLockPage>
   @override
   void initState() {
     super.initState();
-    _options = (widget.launch?.options ?? PhoneLockOptions()).copyWith(
-      minutes: widget.launch?.focusMinutes ?? 45,
-    );
+    _options = widget.launch?.options ?? PhoneLockOptions();
+    if (widget.launch?.focusMinutes case final int minutes) {
+      _options = _options.copyWith(minutes: minutes);
+    }
     WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
   }
@@ -445,7 +446,7 @@ class _PhoneLockPageState extends ConsumerState<PhoneLockPage>
                   ),
                   if (_options.mode == 'timer') ...[
                     const SizedBox(height: AppSpacing.md),
-                    if (widget.launch != null)
+                    if (widget.launch?.focusMinutes != null)
                       Text(
                         '${widget.launch!.focusMinutes} min · Focus session timer',
                       )
@@ -454,7 +455,7 @@ class _PhoneLockPageState extends ConsumerState<PhoneLockPage>
                         spacing: AppSpacing.sm,
                         runSpacing: AppSpacing.sm,
                         children: [
-                          for (final minutes in [25, 45, 60, 90, 120, 240])
+                          for (final minutes in (<int>{25, 45, 60, 90, 120, 240, _options.minutes}.toList()..sort()))
                             ChoiceChip(
                               label: Text('$minutes min'),
                               selected: _options.minutes == minutes,

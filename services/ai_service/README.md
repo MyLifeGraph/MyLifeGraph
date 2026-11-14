@@ -1,5 +1,21 @@
 # MyLifeGraph AI Service
 
+## Local Focus open-end extension
+
+`focus-open-end-v1` adds authenticated `GET /v1/focus/open-end/capabilities` and
+`POST /v1/focus/open-end/start`. The latter accepts the existing manual start
+fields with null planned_minutes and an explicit new contract; owner identity
+comes solely from the bearer principal. No client writes the new nullable mode
+directly. Service-only `start_focus_open_end_v1` retains request fingerprint,
+one-active-session and owner locks. Existing Finish/Abandon/Correct-time routes
+serialize either unchanged timed V2 or explicit open-end responses. Coach Focus
+context/evidence and personal-pattern points additionally allow absent planned
+time for versioned open-end sessions, preserving actual time/ratings. No causal
+or planning recommendation is fabricated from missing planned time. Deploy the
+new migration and backend before enabling the updated client; older clients
+cannot parse new open-end rows. This extension has not been deployed.
+
+
 The operator executor supports exactly `gpt-6.1-sol` with Standard tier
 (`service_tier="default"`, `fast_mode=false`) in addition to legacy
 `gpt-5.5`/Fast. API and executor must use the same explicit operator model.
@@ -63,6 +79,14 @@ group preserves it, while a partial group is rejected. Both flags default off.
 Check-in reminders consult saved Capture branches during reservation and the
 final dispatch check. Apply migration `20260925104758_checkin_push_reminders.sql`
 before activating this API version. Native receipt support requires an updated APK.
+The independent optional boolean `streak` additionally requires migration
+`20261114163504_streak_push_reminders.sql`; GET exposes false only with that
+capability, and explicit POST fails closed without it. Omitted fields preserve
+old retry fingerprints and preferences. The read-only service-only
+`get_streak_push_candidates_v1` supplies ten/five-hour catch-up windows; the
+existing strict Capture parser and fresh SQL reservation checks suppress saved,
+stale or unproven reminders. Independent rolling Streak caps preserve existing
+budgets. No new HTTP route or streak-calculation authority is added.
 `PUSH_DELIVERY_ENABLED` defaults off. When explicitly enabled after migration,
 the existing API lifespan runs a bounded five-minute FCM sender using
 `FCM_PROJECT_ID` and backend-only `FCM_CREDENTIALS_JSON` (redacted in configuration

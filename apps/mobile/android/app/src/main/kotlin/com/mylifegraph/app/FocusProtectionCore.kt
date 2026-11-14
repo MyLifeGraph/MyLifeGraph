@@ -67,9 +67,10 @@ data class LocalFocusLease(
     val startedAtEpochMs: Long,
     val endsAtEpochMs: Long,
     val state: String = STATE_ACTIVE,
+    val openEnded: Boolean = false,
 ) {
     fun isActive(nowEpochMs: Long): Boolean =
-        state == STATE_ACTIVE && endsAtEpochMs > nowEpochMs
+        state == STATE_ACTIVE && (openEnded || endsAtEpochMs > nowEpochMs)
 
     companion object {
         const val STATE_ACTIVE = "active"
@@ -137,7 +138,7 @@ object FocusProtectionDecision {
         candidate: LocalFocusLease,
         nowEpochMs: Long,
     ): LocalFocusLease? {
-        if (candidate.endsAtEpochMs <= nowEpochMs) {
+        if (!candidate.isActive(nowEpochMs)) {
             return currentLease?.takeIf { it.isActive(nowEpochMs) }
         }
         if (currentLease?.isActive(nowEpochMs) == true) {

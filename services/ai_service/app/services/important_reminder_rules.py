@@ -16,9 +16,9 @@ from app.models.sleep_recommendation import SleepRecommendationResponse
 
 @dataclass(frozen=True)
 class ImportantReminder:
-    kind: Literal["sleep", "deadlines", "pattern", "morning", "evening"]
+    kind: Literal["sleep", "deadlines", "pattern", "morning", "evening", "streak_10h", "streak_5h"]
     dedupe_key: str
-    destination: Literal["/insights", "/planner", "/morning-calibration", "/quick-mood-check-in"]
+    destination: Literal["/insights", "/planner", "/morning-calibration", "/quick-mood-check-in", "/dashboard"]
     title: str
     body: str
     expires_at: datetime

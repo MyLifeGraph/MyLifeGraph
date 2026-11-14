@@ -1,0 +1,33 @@
+begin;
+select no_plan();
+insert into auth.users (id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+values ('f9000000-0000-4000-8000-000000000001','authenticated','authenticated','open-end-owner@example.test','{}','{}',now(),now()),
+('f9000000-0000-4000-8000-000000000002','authenticated','authenticated','open-end-other@example.test','{}','{}',now(),now());
+update public.profiles set timezone='Europe/Berlin' where id in ('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000002');
+select ok(has_function_privilege('service_role','public.start_focus_open_end_v1(uuid,uuid,text,int,text,uuid,text,timestamptz)','execute'),'service role can start a stopwatch');
+select ok(not has_function_privilege('authenticated','public.start_focus_open_end_v1(uuid,uuid,text,int,text,uuid,text,timestamptz)','execute'),'authenticated role cannot impersonate owner at RPC');
+select ok(not has_function_privilege('anon','public.start_focus_open_end_v1(uuid,uuid,text,int,text,uuid,text,timestamptz)','execute'),'anon cannot start a stopwatch');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','f9000000-0000-4000-8000-000000000001',true);
+select throws_ok($$insert into public.focus_sessions(id,user_id,status,started_at,planned_minutes,metadata) values ('f9000000-0000-4000-8000-000000000050','f9000000-0000-4000-8000-000000000001','active',now(),null,'{"contract_version":"focus-open-end-v1"}')$$,'42501',null,'direct owner writes cannot create backend-only stopwatch');
+set local role service_role;
+select is(public.start_focus_open_end_v1('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010',repeat('a',64),5,null,null,'Study','2026-11-09T10:00:00Z')->>'contract_version','focus-open-end-v1','start returns explicit open-end contract');
+select is((select planned_minutes from public.focus_sessions where id='f9000000-0000-4000-8000-000000000010'),null::int,'no fabricated planned duration');
+select is((select metadata->>'entry_date' from public.focus_sessions where id='f9000000-0000-4000-8000-000000000010'),'2026-11-09','start captures profile-local entry date');
+select is(public.start_focus_open_end_v1('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010',repeat('a',64),5,null,null,'Study','2026-11-09T10:01:00Z')->>'replayed','true','lost start response replays same timer');
+select throws_ok($$select public.start_focus_open_end_v1('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000011',repeat('a',64),0,null,null,null,'2026-11-09T10:01:00Z')$$,'PT409','active_focus_session','one active session across starts');
+select throws_ok($$select public.start_focus_open_end_v1('f9000000-0000-4000-8000-000000000002','f9000000-0000-4000-8000-000000000010',repeat('a',64),5,null,null,'Study','2026-11-09T10:01:00Z')$$,'PT409','focus_request_conflict','request identity cannot cross owners');
+select throws_ok($$select public.start_focus_open_end_v1('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010',repeat('b',64),5,null,null,'Study','2026-11-09T10:01:00Z')$$,'PT409','focus_request_conflict','retry fingerprint cannot change');
+select throws_ok($$select public.start_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000011',repeat('b',64),'manual',null,25,0,null,null,null,'2026-11-09T10:01:00Z')$$,'PT409','active_focus_session','timed session cannot overlap stopwatch');
+select throws_ok($$select public.finish_focus_session_v2('f9000000-0000-4000-8000-000000000002','f9000000-0000-4000-8000-000000000010','completed','2026-11-09T10:37:00Z')$$,'PT404','Focus session is unavailable.','finish remains owner scoped');
+select is(public.finish_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010','completed','2026-11-09T10:37:45Z')->>'actual_minutes','37','finish records whole measured minutes');
+select is(public.finish_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010','completed','2026-11-09T10:45:00Z')->>'actual_minutes','37','terminal replay cannot extend measured time');
+select is(public.finish_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010','completed','2026-11-09T10:45:00Z')->>'contract_version','focus-open-end-v1','terminal result keeps stopwatch contract');
+select throws_ok($$select public.finish_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010','abandoned','2026-11-09T10:45:00Z')$$,'PT409','Focus session already ended differently.','cannot reinterpret completed session');
+select is(public.correct_focus_time_v1('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000010','f9000000-0000-4000-8000-000000000090',(select updated_at from public.focus_sessions where id='f9000000-0000-4000-8000-000000000010'),30)->>'actual_minutes','30','existing audited correction supports stopwatch');
+select is(public.start_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000020',repeat('c',64),'manual',null,25,0,null,null,null,'2026-11-09T11:00:00Z')->>'contract_version','focus-session-v2','timed start keeps unchanged V2 contract');
+select is(public.finish_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000020','abandoned','2026-11-09T11:02:00Z')->>'actual_minutes','2','timed abandon unchanged');
+select is(public.start_focus_open_end_v1('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000030',repeat('d',64),0,null,null,null,'2026-11-09T11:10:00Z')->>'status','active','another stopwatch starts after terminal write');
+select is(public.finish_focus_session_v2('f9000000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-000000000030','abandoned','2026-11-09T11:12:00Z')->>'actual_minutes','2','stopwatch abandon records actual elapsed time');
+select * from finish();
+rollback;

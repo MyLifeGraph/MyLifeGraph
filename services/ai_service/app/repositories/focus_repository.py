@@ -18,6 +18,11 @@ class FocusPersistenceNotFound(RuntimeError):
 
 
 class FocusRepository(Protocol):
+    async def start_open_end(self, *, user_id: str, request_id: UUID,
+                             request_fingerprint: str, recovery_minutes: int,
+                             target_kind: str | None, target_id: UUID | None,
+                             label: str | None, now: datetime) -> dict[str, Any]: ...
+
     async def correct_time(self, *, user_id: str, session_id: UUID,
                            request_id: UUID, expected_updated_at: datetime,
                            minutes: int) -> dict[str, Any]: ...
@@ -60,6 +65,18 @@ class FocusRepository(Protocol):
 class SupabaseFocusRepository:
     def __init__(self, client: SupabaseRestClient) -> None:
         self._client = client
+
+    async def start_open_end(self, *, user_id: str, request_id: UUID,
+                             request_fingerprint: str, recovery_minutes: int,
+                             target_kind: str | None, target_id: UUID | None,
+                             label: str | None, now: datetime) -> dict[str, Any]:
+        return await self._rpc("start_focus_open_end_v1", params={
+            "p_user_id": user_id, "p_request_id": str(request_id),
+            "p_request_fingerprint": request_fingerprint,
+            "p_recovery_minutes": recovery_minutes, "p_target_kind": target_kind,
+            "p_target_id": str(target_id) if target_id else None,
+            "p_label": label, "p_now": now.isoformat(),
+        })
 
     async def correct_time(self, *, user_id: str, session_id: UUID,
                            request_id: UUID, expected_updated_at: datetime,

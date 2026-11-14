@@ -1,5 +1,32 @@
 # Architecture
 
+## Optional Streak Push extension
+
+The existing API lifespan/FCM path additionally reads Streak catch-up evidence.
+The shared deadline helper is the same Today authority; reminders do not write
+Capture, receipts, streak credit or Inbox entries. Service-only SQL due windows
+plus the existing strict Capture parser feed owner-locked attempts and a fresh
+pre-send check. The optional default-off setting is additive under android-push-v1;
+no new HTTP route, external scheduler, client privilege or provider is introduced.
+An updated migration/API/APK and explicit opt-in are required. Local tests do not
+establish hosted state or physical delivery. See the Notification Delivery owner.
+
+## Local Focus stopwatch extension
+
+`focus-open-end-v1` is an explicit manual-only extension. Canonical Focus has
+nullable planned_minutes only for that metadata contract; server-owned start,
+terminal writes, actual time, owner isolation and retry authority remain in the
+existing Focus seam. Timed and scheduled V2 rows retain their wire values. The
+client requires authenticated capability before creating open-end rows and never
+direct-writes a fallback. Updated client/backend/migration rollout is coordinated;
+old clients reject null-duration rows. Today uses observed intervals, not invented
+end reservations. Coach and learning retain actual time and optional ratings while
+planned-duration evidence stays absent. Device protection uses an explicit
+unbounded lease; Phone Lock remains independent and emergency access remains.
+Android's optional chronometer counts up locally and cannot finish canonical Focus.
+This is an undeployed local candidate; source is not live-state evidence.
+
+
 Phone lock and Focus timer notifications are additive Android-local mechanisms.
 Phone lock has independent private persisted authority, separate from synced Focus,
 named plan OR rules and Discipline. Focus setup passes only a reviewed draft; its

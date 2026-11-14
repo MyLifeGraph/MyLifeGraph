@@ -53,13 +53,25 @@ class FocusProtectionReconciler {
         if (!canContinue()) return null;
       }
       if (canonicalSession != null && status.configuration.enabled) {
-        status = await _gateway.activateLease(
-          sessionId: canonicalSession.id,
-          startedAt: canonicalSession.startedAt,
-          endsAt: canonicalSession.startedAt.add(
-            Duration(minutes: canonicalSession.plannedMinutes),
-          ),
-        );
+        final gateway = _gateway;
+        if (canonicalSession.isOpenEnded) {
+          if (gateway is! OpenEndFocusProtectionGateway) {
+            throw const FormatException('Open-end protection is unavailable.');
+          }
+          status = await (gateway as OpenEndFocusProtectionGateway)
+              .activateOpenEndLease(
+                sessionId: canonicalSession.id,
+                startedAt: canonicalSession.startedAt,
+              );
+        } else {
+          status = await gateway.activateLease(
+            sessionId: canonicalSession.id,
+            startedAt: canonicalSession.startedAt,
+            endsAt: canonicalSession.startedAt.add(
+              Duration(minutes: canonicalSession.plannedMinutes!),
+            ),
+          );
+        }
         if (!canContinue()) return null;
       }
       return status;

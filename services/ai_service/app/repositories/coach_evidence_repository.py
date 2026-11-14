@@ -270,7 +270,7 @@ class SupabaseCoachEvidenceRepository:
             sessions = await self._client.select(
                 "focus_sessions",
                 params={
-                    "select": ("id,status,started_at,planned_minutes,actual_minutes"),
+                    "select": ("id,status,started_at,planned_minutes,actual_minutes,metadata"),
                     "user_id": f"eq.{user_id}",
                     "status": "in.(completed,abandoned)",
                     "order": "started_at.desc,id.asc",
@@ -315,7 +315,7 @@ class SupabaseCoachEvidenceRepository:
                 "focus_sessions",
                 params={
                     "select": (
-                        "id,status,started_at,ended_at,planned_minutes,actual_minutes"
+                        "id,status,started_at,ended_at,planned_minutes,actual_minutes,metadata"
                     ),
                     "user_id": f"eq.{user_id}",
                     "id": f"eq.{focus_session_id}",

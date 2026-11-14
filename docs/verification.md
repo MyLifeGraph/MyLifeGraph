@@ -31,6 +31,123 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### RC44 release candidate and migration-identity test correction — 2026-11-14
+
+Release of the current Focus/Streak candidate is explicitly authorized. PR 77
+starts at `6cff7a4bb9182a4e2573fcdb04da3316cf65789e` on the captured Main base
+`628aa1e234f5fbf0c0b84aef7189bc6da5f3205c`. Its first fresh CI database job
+reproduces three stale exact-identity assertions: the test still expects the old
+83-migration head/count/digest, whereas the complete new chain correctly has 85.
+Only those expected values (and the missing-intermediate count) are corrected;
+full digest equality, prefix, missing-history and privilege assertions remain.
+The subsequent run passes all 38 pgTAP files/766 assertions and then exposes the
+same stale 83-migration fixture in the PG17 restore precondition. Its exact
+head/count snapshot is also updated to 85; the pinned server version, role-safe
+flag, membership count, restored-source equality and real deletion replay stay
+unchanged. This is test metadata maintenance, not a relaxed recovery check.
+No production code or applied migration changes. Fresh hosted CI must pass on
+the corrected candidate before protected merge and deployment.
+
+### Local Streak catch-up Push extension — 2026-11-14
+
+Uncommitted local candidate on base
+`628aa1e234f5fbf0c0b84aef7189bc6da5f3205c`, preserving the preceding No limit
+Focus changes. No PR, merge, new APK, publication or production migration was
+requested for this addition. The following is local verification, not live delivery.
+
+The optional default-off Streak preference adds ten/five-hour catch-up reminders
+without changing Today streak credit or its 48 elapsed-hour deadline. Fixed copy,
+Today tap routing, old-server capability hiding, old-client fingerprint preservation,
+quiet hours, independent caps and fresh strict Capture evidence are covered.
+A narrow/large-text test also reproduced a 108px quiet-hours control overflow;
+responsive wrapping fixes it while keeping ordinary-size composition unchanged.
+
+- **92 backend tests pass** across Streak windows/evidence/worker races/settings,
+  existing Push routes and Today grace regressions; affected Ruff checks pass.
+- **13 Flutter tests pass**, including migration-gated visibility, saving without
+  enabling master consent and Liquid Glass at 320px/200% text. Flutter analysis
+  is clean; Android lint also passes without rule/baseline changes.
+- Android compiles and **152 JVM tests pass**, including both new receipt kinds,
+  owner/session/expiry rejection and the central legacy/new destination allowlist.
+- A physically separate network-disabled, read-only-root, RAM-only PG17 container
+  accepts **85 migrations** under the non-superuser migration role. **29 Streak,
+  15 existing check-in Push and 32 existing Android Push pgTAP assertions pass**.
+  They include DST/skipped/repeated midnight, service-only privileges, exact due
+  windows, no catch-up, dedupe/revision/timezone, independent rolling caps and
+  completion between reservation and dispatch. The owned container is removed;
+  normal/hosted databases and the pre-existing VM checkout are untouched.
+- Docs consistency tests/registry/98-route inventory, visual guard and diff checks
+  pass. The exact prescribed task-base affected npm selector first fails at
+  host WSL `Bash/E_ACCESSDENIED`. An approved Git Bash rerun reaches the full
+  selector: **2098 Flutter tests pass, 6 existing component reference goldens fail
+  on Windows** (dark/light/space, mobile/desktop). Those component sources and
+  reference images are unchanged by Streak. Source startup tests lack `setsid`,
+  and the workflow's `python3` resolves to the unavailable Store alias. No current
+  full-selector/Linux/E2E pass is claimed; no golden or threshold is regenerated.
+
+Evidence: ignored `.tools/streak-push-20261114/` and the separate VM test folder
+`~/.local/share/mylifegraph-streak-push.4cH5dRCx`. A shell wrapper's post-test exit
+expression was incorrectly escaped; all three test plans and no failing assertions
+were subsequently verified directly from their individual SQL logs. No product
+assertion, historical migration, rule or golden was relaxed. Physical Samsung/FCM
+background delivery, hosted migration, worker activation and production remain
+unverified for this local addition. Rollout must use migration → API → updated APK
+before explicit opt-in.
+
+### Local No limit Focus and notification-shade resume — 2026-11-09
+
+Local working-tree candidate on task base
+`628aa1e234f5fbf0c0b84aef7189bc6da5f3205c`, branch
+`codex/focus-no-limit-and-resume`. No commit, PR, signed APK, GitHub publication,
+normal-database migration or production rollout is claimed. RC43 below remains
+the published baseline. Explicit user consent permitted only a source copy to a
+separate `vm-ts` development test folder and isolated RAM-database verification.
+
+The original inactive→resumed shade regression fails before the lifecycle fix
+and passes after it; genuine background refresh, terminal identity, delayed writes
+and stale-state guards remain tested. The true `focus-open-end-v1` mode preserves
+nullable planned time, measured duration, authenticated capability/no fallback,
+request retry identity, Finish/Abandon, recovery and optional protection. Existing
+timed starts retain their strict V2 reader. Additional 320px/200%-text tests
+reproduce a 14px open-end heading/badge overflow in all four themes; the responsive
+badge layout fixes it without changing the approved ordinary-size composition.
+
+Evidence, with no weakened assertion, reference golden, threshold or dependency:
+
+- Full Linux Flutter snapshot: **2096 tests pass**, including all unchanged
+  component reference goldens; analysis is clean. Final mode-validation and
+  responsive-header deltas are subsequently covered by **164 affected Flutter
+  tests** on both the laptop and the isolated Linux VM, including all four
+  themes at 320px/200% text; final VM analysis is clean.
+- Complete isolated backend: **2036 passed, 2 skipped**, with clean Ruff and
+  unchanged hash-locked requirements in a separate test venv. The complete suite
+  and Ruff pass again after final strict timed-response validation.
+- Android compilation and **150 JVM tests pass**. Lint passes after correcting
+  the ignored, Flutter-generated local SDK path escaping and rerunning only
+  `lintAnalyzeDebug` with its documented `--rerun` option. No baseline/rule change.
+- A network-disabled, read-only-root, RAM-only Supabase PG17 container accepts
+  the entire **84-migration chain**, then passes **22 new open-end pgTAP cases**
+  and **51 unchanged scheduled Focus cases**, including owner/RPC privileges,
+  exact retry/conflict, single-active protection, measured terminal duration,
+  audited correction and deletion order. Migrations run under a separate
+  non-superuser `postgres` role; the owned test container is removed afterward.
+  Normal local/hosted databases and the existing VM checkout stay untouched.
+- Docs checker tests, the registry and 98-route inventory, the visual contract,
+  and `git diff --check` pass. The prescribed task-base affected selector was
+  attempted through npm and remains failed/closed on this Windows host:
+  WSL access is unavailable; Git Bash reaches the unchanged checks but lacks
+  `setsid` and a working `python3` entry. Original unrelated untracked output/tmp
+  also force full selection. Windows reference-image mismatches are not accepted
+  as new goldens; the complete Linux run verifies the original references.
+
+Real Flutter-renderer captures with synthetic data are locally available under
+`.tools/ui-catalog/focus-no-limit-final-20261109/`: setup and running stopwatch.
+They are actual widget renders, not ImageGen concepts or physical-device photos.
+No installed Samsung notification-shade trace, NFC RF, reboot/Doze or background
+notification delivery is claimed. There is no release-ready full-selector/E2E or
+live-service acceptance claim for this local task.
+
+
 ### Published RC43: Phone Lock setup and compact Focus — 2026-11-09
 
 PR [75](https://github.com/MyLifeGraph/MyLifeGraph/pull/75) merged normally to

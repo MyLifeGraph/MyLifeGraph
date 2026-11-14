@@ -25,7 +25,7 @@ class FocusSessionSupabaseDataSource
     if (_apiClient == null) {
       throw const FocusCommandException('Time correction unavailable.');
     }
-    final result = FocusSession.fromV2Json(
+    final result = FocusSession.fromBackendJson(
       await _apiClient.postJson(
         '/v1/focus/sessions/${session.id}/correct-time',
         headers: {'Authorization': 'Bearer ${await _requireAccessToken()}'},
@@ -359,6 +359,35 @@ class FocusSessionSupabaseDataSource
     if (!isClientUuid(sessionId)) {
       throw const FocusCommandException('Focus request identity is invalid.');
     }
+    if (draft.plannedMinutes == null) {
+      final api = _apiClient;
+      if (api == null) throw const FocusCommandException('No limit needs an updated server.');
+      final headers = {'Authorization': 'Bearer ${await _requireAccessToken()}'};
+      Map<String, dynamic> capability;
+      try {
+        capability = await api.getJson('/v1/focus/open-end/capabilities', headers: headers);
+      } catch (e) {
+        if (apiFailureFrom(e)?.statusCode == 404) {
+          throw const FocusCommandException('No limit needs an updated server.');
+        }
+        rethrow;
+      }
+      if (capability.length != 3 || capability['contract_version'] != focusOpenEndVersion ||
+          capability['origin'] != 'authenticated_backend' || capability['available'] != true) {
+        throw const FocusCommandException('No limit is currently unavailable.');
+      }
+      final session = FocusSession.fromBackendJson(await api.postJson('/v1/focus/open-end/start',
+        headers: headers, body: {
+          'contract_version': focusOpenEndVersion, 'request_id': sessionId,
+          'source_kind': 'manual', 'planned_minutes': null,
+          'recovery_minutes': draft.recoveryMinutes,
+          'target_kind': draft.targetKind?.code, 'target_id': draft.targetId, 'label': draft.label,
+        }));
+      if (session.id != sessionId || !session.isOpenEnded) {
+        throw const FocusCommandException('Open-end start returned another session.');
+      }
+      return session;
+    }
     if (_apiClient != null && await fetchFocusV2Availability()) {
       return _startV2(
         sessionId: sessionId,
@@ -513,7 +542,7 @@ class FocusSessionSupabaseDataSource
         '/v1/focus/sessions/$sessionId/$operation',
         headers: {'Authorization': 'Bearer $token'},
       );
-      final session = FocusSession.fromV2Json(json);
+      final session = FocusSession.fromBackendJson(json);
       if (session.id != sessionId || session.status != terminalStatus) {
         throw const FocusCommandException(
           'Focus session transition returned a mismatched result.',

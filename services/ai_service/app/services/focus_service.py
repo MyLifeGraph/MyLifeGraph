@@ -7,12 +7,16 @@ from typing import Callable
 from uuid import UUID
 
 from app.models.focus import (
+    FocusSessionResult,
     FocusSessionResponse,
+    FocusOpenEndSessionResponse,
     FocusStartContextResponse,
     FocusStartRequest,
     FocusTimeCorrectionRequest,
     ManualFocusStartRequest,
+    OpenEndFocusStartRequest,
     ScheduledFocusStartRequest,
+    parse_focus_session,
 )
 from app.repositories.focus_repository import (
     FocusPersistenceConflict,
@@ -30,8 +34,27 @@ class FocusNotFoundError(RuntimeError):
 
 
 class FocusService:
+    async def start_open_end(self, *, user_id: str,
+                             request: OpenEndFocusStartRequest) -> FocusSessionResult:
+        try:
+            raw = await self._repository.start_open_end(
+                user_id=user_id, request_id=request.request_id,
+                request_fingerprint=_fingerprint(request),
+                recovery_minutes=request.recovery_minutes,
+                target_kind=request.target_kind, target_id=request.target_id,
+                label=request.label, now=_utc(self._now()),
+            )
+        except FocusPersistenceNotFound as exc:
+            raise FocusNotFoundError(str(exc)) from exc
+        except FocusPersistenceConflict as exc:
+            raise FocusConflictError(str(exc)) from exc
+        result = parse_focus_session(raw)
+        if not isinstance(result, FocusOpenEndSessionResponse) or result.id != request.request_id:
+            raise ValueError("Open-end Focus response does not match request.")
+        return result
+
     async def correct_time(self, *, user_id: str, session_id: UUID,
-                           request: FocusTimeCorrectionRequest) -> FocusSessionResponse:
+                           request: FocusTimeCorrectionRequest) -> FocusSessionResult:
         try:
             raw = await self._repository.correct_time(
                 user_id=user_id, session_id=session_id, request_id=request.request_id,
@@ -41,7 +64,7 @@ class FocusService:
             raise FocusNotFoundError(str(exc)) from exc
         except FocusPersistenceConflict as exc:
             raise FocusConflictError(str(exc)) from exc
-        result = FocusSessionResponse.model_validate(raw)
+        result = parse_focus_session(raw)
         if result.id != session_id or result.actual_minutes != request.minutes or result.status != "completed":
             raise ValueError("Correction response does not match request.")
         return result
@@ -80,7 +103,7 @@ class FocusService:
         *,
         user_id: str,
         request: FocusStartRequest,
-    ) -> FocusSessionResponse:
+    ) -> FocusSessionResult:
         fingerprint = _fingerprint(request)
         if isinstance(request, ScheduledFocusStartRequest):
             source_block_id = request.source_block_id
@@ -122,7 +145,7 @@ class FocusService:
         user_id: str,
         session_id: UUID,
         terminal_status: str,
-    ) -> FocusSessionResponse:
+    ) -> FocusSessionResult:
         try:
             raw = await self._repository.finish(
                 user_id=user_id,
@@ -134,10 +157,10 @@ class FocusService:
             raise FocusNotFoundError(str(exc)) from exc
         except FocusPersistenceConflict as exc:
             raise FocusConflictError(str(exc)) from exc
-        return FocusSessionResponse.model_validate(raw)
+        return parse_focus_session(raw)
 
 
-def _fingerprint(request: FocusStartRequest) -> str:
+def _fingerprint(request: FocusStartRequest | OpenEndFocusStartRequest) -> str:
     payload = request.model_dump(mode="json")
     encoded = json.dumps(
         payload,

@@ -14,6 +14,10 @@ from app.services.important_reminder_rules import (
     important_reminders,
 )
 
+from app.services.streak_push import (
+    STREAK_HOURS, still_needs_streak_reminder, streak_reminders,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,6 +94,7 @@ async def deliver_for_owner(
 ) -> int:
     prefs = PushSettings.model_validate(row["push_settings"])
     owner, timezone = row["id"], row["timezone"]
+    injected_clock = now is not None
     now = now or datetime.now(UTC)
     local = now.astimezone(ZoneInfo(timezone))
     preferences = ReminderPreferences(
@@ -165,6 +170,11 @@ async def deliver_for_owner(
         morning_saved=False,
         evening_saved=False,
     )
+    if prefs.streak is True:
+        try:
+            candidates += await streak_reminders(client, owner, timezone, prefs.revision, now)
+        except Exception:
+            logger.warning("Streak reminder evidence unavailable; no streak candidate.")
     accepted = 0
     for candidate in candidates:
         registration = await client.rpc(
@@ -192,6 +202,11 @@ async def deliver_for_owner(
                     "p_timezone": timezone,
                 },
             )
+            if current is True and candidate.kind in STREAK_HOURS:
+                current = await still_needs_streak_reminder(
+                    client, owner, candidate, timezone,
+                    now if injected_clock else datetime.now(UTC),
+                )
             if current is True:
                 success, invalid = await sender.send(
                     registration=registration, owner=owner, reminder=candidate

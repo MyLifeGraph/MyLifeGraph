@@ -6,6 +6,15 @@ import 'package:my_life_graph/features/insights/domain/services/correlation_anal
 import 'package:my_life_graph/features/insights/domain/services/overview_observations.dart';
 
 void main() {
+  test('open-end Focus keeps actual/quality evidence but never fabricates planned totals', () {
+    final patterns = fixture(28, focus: true);
+    patterns.correlationPoints.add(PersonalPatternCorrelationPoint(localDate: DateTime(2026, 10, 1), focusQuality: 4, usefulProgress: 4, plannedFocusMinutes: null, actualFocusMinutes: 37, completed: 1, sleepHours: null, sleepTargetDeviationMinutes: null, sleepQuality: null, morningEnergy: null));
+    final day = patterns.correlationDataPoints(windowDays: 90).single.values;
+    expect(day['focus_minutes'], 62);
+    expect(day['focus_quality'], 4);
+    expect(day.containsKey('planned_focus_minutes'), isFalse);
+  });
+
   for (final count in [14, 28]) {
     test(
       '$count rated Focus days preserve every existing coefficient and ranked pair',

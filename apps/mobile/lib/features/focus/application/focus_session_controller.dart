@@ -123,6 +123,7 @@ class FocusSessionState {
     required this.startConflictMessage,
     required this.protectionStatus,
     required this.isChangingProtection,
+    this.openEnded = false,
   }) : recent = List.unmodifiable(recent),
        reflections = Map.unmodifiable(reflections),
        targets = List.unmodifiable(targets);
@@ -183,9 +184,10 @@ class FocusSessionState {
   final String? startConflictMessage;
   final FocusProtectionStatus? protectionStatus;
   final bool isChangingProtection;
+  final bool openEnded;
 
   bool get hasValidStartDuration =>
-      plannedMinutes >= 5 &&
+      openEnded ? scheduledContext == null : plannedMinutes >= 5 &&
       plannedMinutes <= 240 &&
       (scheduledContext == null ||
           plannedMinutes <= scheduledContext!.remainingMinutes);
@@ -240,6 +242,7 @@ class FocusSessionState {
     Object? startConflictMessage = _unset,
     Object? protectionStatus = _unset,
     bool? isChangingProtection,
+    bool? openEnded,
   }) {
     return FocusSessionState(
       active: identical(active, _unset) ? this.active : active as FocusSession?,
@@ -280,6 +283,7 @@ class FocusSessionState {
           ? this.protectionStatus
           : protectionStatus as FocusProtectionStatus?,
       isChangingProtection: isChangingProtection ?? this.isChangingProtection,
+      openEnded: openEnded ?? this.openEnded,
     );
   }
 }
@@ -552,7 +556,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
           if (studyResult.settings != null) {
             plannedMinutes = studyResult.settings!.focusMinutes;
           } else if (terminal.isNotEmpty) {
-            plannedMinutes = terminal.first.plannedMinutes;
+            plannedMinutes = terminal.first.plannedMinutes ?? 25;
           }
         }
       } else if (!_validPlannedMinutes(plannedMinutes)) {
@@ -670,7 +674,12 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         )) {
       return;
     }
-    state = state.copyWith(plannedMinutes: value, startConflictMessage: null);
+    state = state.copyWith(plannedMinutes: value, openEnded: false, startConflictMessage: null);
+  }
+
+  void selectOpenEnd() {
+    if (!mounted || state.isSaving || state.isLoading || state.scheduledContext != null) return;
+    state = state.copyWith(openEnded: true, startConflictMessage: null);
   }
 
   void selectTarget(String? value) {
@@ -712,7 +721,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
           ? await source.startSession(
               sessionId: requestId,
               draft: FocusStartDraft(
-                plannedMinutes: plannedMinutes,
+                plannedMinutes: state.openEnded ? null : plannedMinutes,
                 recoveryMinutes: recoveryMinutes,
                 targetKind: target?.kind,
                 targetId: target?.id,
@@ -878,6 +887,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         state = state.copyWith(
           active: null,
           selectedTargetValue: null,
+          openEnded: false,
           recent: [
             terminal,
             ...state.recent.where((session) => session.id != terminal.id),
