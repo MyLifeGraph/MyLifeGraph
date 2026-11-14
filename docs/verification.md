@@ -31,6 +31,18 @@ Local migration tests never substitute for inspecting the actual Cloud project.
 
 ## Current Verified Baseline
 
+### RC44 release candidate and migration-identity test correction — 2026-11-14
+
+Release of the current Focus/Streak candidate is explicitly authorized. PR 77
+starts at `6cff7a4bb9182a4e2573fcdb04da3316cf65789e` on the captured Main base
+`628aa1e234f5fbf0c0b84aef7189bc6da5f3205c`. Its first fresh CI database job
+reproduces three stale exact-identity assertions: the test still expects the old
+83-migration head/count/digest, whereas the complete new chain correctly has 85.
+Only those expected values (and the missing-intermediate count) are corrected;
+full digest equality, prefix, missing-history and privilege assertions remain.
+No production code or applied migration changes. Fresh hosted CI must pass on
+the corrected candidate before protected merge and deployment.
+
 ### Local Streak catch-up Push extension — 2026-11-14
 
 Uncommitted local candidate on base
